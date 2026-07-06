@@ -12,28 +12,38 @@
 
 GitHub Pages で公開: https://daisukehori.github.io/kumabe-tosou/
 
-## 構成
+## 構成（6ページ）
 
 ```
-index.html      … 1ページ構成のLP（全セクション）
-css/style.css   … デザイントークン＋全スタイル
-js/main.js      … Before/Afterスライダー・スクロール演出・ナビ
+index.html      … 00 ホーム（ヒーロー・ステートメント・3技術・カラーストリップ・2シーン）
+about.html      … 01 会社案内（市場の空白・代表・設備・会社概要・地図）
+service.html    … 02 サービス・料金（工程・3グレード・数量スライド・依頼の流れ・正直な条件）
+colors.html     … 03 色見本（8色フルポートフォリオ）
+notes.html      … 04 読みもの（塗りと色の裏側・4本）
+contact.html    … 05 相談する（見積り3変数・受付窓口）
+css/style.css   … 共通デザインシステム
+js/main.js      … ナビ現在地・スクロールリビール・モバイルメニュー
 ```
 
-静的サイト（ビルド不要）。HTML/CSS/Vanilla JS のみ。
+静的サイト（ビルド不要）。HTML / CSS / Vanilla JS のみ。
 
 ## デザイン
 
-- 基調: 塗装ブースの黒 `#0C0D0F` × 実車カラー8色（CSSでパール/メタリック質感を再現）
-- 書体: しっぽり明朝B1（見出し）/ Zen Kaku Gothic New（本文）/ IBM Plex Mono（カラーコード・工業ラベル）
-- シグネチャー: ヒーローの「しずく型デモピース」Before/Afterスライダー（左＝積層痕、右＝3コート仕上げ）
+コンセプト: **「色見本帳としてのウェブサイト」**
 
-## 更新予定（TODO)
+- 基調: プラサフグレー `#E6E6E1`（下地の色）× 紙白 × 炭。ヘアライン罫線で精密さと誠実さを表現
+- 署名要素: **ドローダウンカード（塗り板）** — 塗料業界の実物色見本の形式をCSSで再現（ノイズ・光沢・刷毛の終端）
+- 検査記録スタイルのセクション見出し（SEC.01 + 罫線 + 英ラベル）
+- 書体: Shippori Antique B1（日本語見出し）/ Zen Kaku Gothic New（本文）/ IBM Plex Mono（コード類）/ Archivo wdth125（欧文ワイド）
 
-- [ ] 問い合わせ窓口の確定（`index.html` の `#contact` セクションを差し替え）
+## 更新予定（TODO）
+
+- [ ] 問い合わせ窓口の確定（`contact.html` の `#contact` セクションを差し替え）
 - [ ] デモピース実物写真への差し替え（撮影後）
 - [ ] 実測に基づく正式価格表の公開
 - [ ] OGP画像の追加
+- [ ] 管理システム（Supabase接続によるCMS化 — notes/実績の動的配信）
+- [ ] SNS統合（Instagram / X / note）と AI による自動投稿運用
 
 ## ローカル確認
 

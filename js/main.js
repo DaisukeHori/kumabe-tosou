@@ -1,56 +1,42 @@
 /* =============================================================
-   隈部塗装 — KUMABE TOSO / main.js
-   1) Before/After しずくスライダー
+   隈部塗装 — KUMABE TOSO / main.js (v2)
+   1) 現在ページのナビ強調
    2) スクロールリビール
-   3) ヘッダーのスクロール状態
-   4) モバイルナビ
+   3) モバイルナビ
    ============================================================= */
 (function () {
   "use strict";
 
-  /* ---------- 1) Before/After スライダー ---------- */
-  var piece = document.getElementById("piece");
-  var range = document.getElementById("pieceRange");
-
-  if (piece && range) {
-    var updateSplit = function () {
-      piece.style.setProperty("--split", range.value + "%");
-    };
-    range.addEventListener("input", updateSplit);
-    updateSplit();
+  /* ---------- 1) 現在ページのナビ強調 ---------- */
+  var page = document.body.getAttribute("data-page");
+  if (page) {
+    document.querySelectorAll('.global-nav a[data-nav]').forEach(function (a) {
+      if (a.getAttribute("data-nav") === page) a.classList.add("is-current");
+    });
   }
 
   /* ---------- 2) スクロールリビール ---------- */
   var prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var revealTargets = Array.prototype.slice.call(document.querySelectorAll(".reveal"));
+  var targets = Array.prototype.slice.call(document.querySelectorAll(".reveal"));
 
   if (prefersReduced || !("IntersectionObserver" in window)) {
-    revealTargets.forEach(function (el) { el.classList.add("is-visible"); });
+    targets.forEach(function (el) { el.classList.add("is-visible"); });
   } else {
-    var observer = new IntersectionObserver(
+    var io = new IntersectionObserver(
       function (entries) {
         entries.forEach(function (entry) {
           if (entry.isIntersecting) {
             entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
+            io.unobserve(entry.target);
           }
         });
       },
-      { rootMargin: "0px 0px -10% 0px", threshold: 0.08 }
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.06 }
     );
-    revealTargets.forEach(function (el) { observer.observe(el); });
+    targets.forEach(function (el) { io.observe(el); });
   }
 
-  /* ---------- 3) ヘッダーのスクロール状態 ---------- */
-  var header = document.getElementById("siteHeader");
-  var onScroll = function () {
-    if (!header) return;
-    header.classList.toggle("is-scrolled", window.scrollY > 24);
-  };
-  window.addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
-
-  /* ---------- 4) モバイルナビ ---------- */
+  /* ---------- 3) モバイルナビ ---------- */
   var toggle = document.getElementById("navToggle");
   var nav = document.getElementById("globalNav");
 
@@ -61,12 +47,12 @@
       toggle.setAttribute("aria-label", "メニューを開く");
     };
     toggle.addEventListener("click", function () {
-      var isOpen = nav.classList.toggle("is-open");
-      toggle.setAttribute("aria-expanded", String(isOpen));
-      toggle.setAttribute("aria-label", isOpen ? "メニューを閉じる" : "メニューを開く");
+      var open = nav.classList.toggle("is-open");
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.setAttribute("aria-label", open ? "メニューを閉じる" : "メニューを開く");
     });
-    nav.querySelectorAll("a").forEach(function (link) {
-      link.addEventListener("click", closeNav);
+    nav.querySelectorAll("a").forEach(function (a) {
+      a.addEventListener("click", closeNav);
     });
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") closeNav();
