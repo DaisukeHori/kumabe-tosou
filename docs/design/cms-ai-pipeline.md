@@ -357,6 +357,18 @@ create table style_profiles (
   updated_by uuid references profiles(id),
   updated_at timestamptz not null default now()
 );
+
+-- =========================================================
+-- seed 管理 (§12.1 のロールバック用)
+-- =========================================================
+create table seed_manifest (
+  id bigint generated always as identity primary key,
+  batch_id uuid not null,                   -- seed 実行 1 回 = 1 batch
+  entity text not null,                     -- テーブル名 or 'storage:media' / 'storage:audio'
+  ref_id text not null,                     -- 行 uuid or storage_path
+  created_at timestamptz not null default now()
+);
+create index on seed_manifest (batch_id, id desc); -- 逆順ロールバック用
 ```
 
 ### 2.3 全データパターン
@@ -882,7 +894,7 @@ const stream = anthropic.messages.stream({
 - 実装は **implementer + tester ペア** をフェーズごとに配置 (メモリ規約)。1b はモジュール境界 (契約書 §1 のモジュール単位) で implementer 3 並列 + worktree 分離。
 - **全フェーズ共通の着手条件**: docs/module-contracts.md の該当契約 (Zod / facade / 依存方向) を確認してから実装。契約にない型・境界を実装内で発明しない。契約変更が必要なら契約書 §8 の手順 (文書先行) に従う。
 - 1a の成果物に ESLint 境界ルール (契約書 §2) と `contracts-ddl-parity.test.ts` を含める。
-- 全体で DDL 19 テーブル、admin 12 画面、公開新設 3 ルート。
+- 全体で DDL 18 テーブル (§2.2 の全定義: platform 1 / コンテンツ系 8 / 問い合わせ 1 / AI 4 / 配信 3 / seed 1)、admin 12 画面、公開新設 3 ルート。
 
 ---
 
@@ -977,3 +989,4 @@ const stream = anthropic.messages.stream({
 | v1.0 | 2026-07-07 | SNS API 調査反映 (X 従量課金 / IG 制約 / note API なし確定) |
 | v1.1 | 2026-07-07 | 整文ステージ (stage 1.5) 追加 (ユーザー指摘) |
 | v2.0 | 2026-07-07 | 設計厳格化 (ユーザー指摘): module-contracts.md 分離 / Zod canonical 化 / Storage・API・Vault 認可 / 周辺ライフサイクル / OAuth・SSE シーケンス / X 字数規約修正 (重み付き 280) / seed rollback / NFR / CI 方針 |
+| v2.1 | 2026-07-07 | スキーマ完了監査: 契約書 §4.8 (CRUD 入力契約) / §4.9 (facade 補助型) 追加、zRunStage から cleaning 除去 (状態機械と整合)、seed_manifest DDL 追加、テーブル数 18 に訂正 |
