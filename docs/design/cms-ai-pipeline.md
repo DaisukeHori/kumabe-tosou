@@ -267,9 +267,11 @@ create table ai_sources (
   id uuid primary key default gen_random_uuid(),
   input_type text not null check (input_type in ('audio','text')),
   audio_storage_path text,                  -- audio バケット (input_type='audio')
-  raw_text text,                            -- 直接入力 or 文字起こし結果
+  raw_text text,                            -- 直接入力 or 文字起こし結果 (原文を不変保持・監査/差分用)
+  cleaned_text text,                        -- Claude 整文後テキスト (フィラー除去・句読点・誤認識訂正)。パイプラインの実入力
+  cleaned_at timestamptz,
   transcript_status text not null default 'n/a'
-    check (transcript_status in ('n/a','pending','processing','done','failed')),
+    check (transcript_status in ('n/a','pending','processing','done','cleaning','cleaned','failed')),
   duration_seconds int,
   created_by uuid references profiles(id),
   created_at timestamptz not null default now()
@@ -491,15 +493,15 @@ scheduled → publishing → published
 ### 5.3 AI スタジオ画面フロー
 
 ```
-[1 入力]              [2 実行中]              [3 レビュー]              [4 配信]
-音声録音ボタン    →   進行ステップ表示    →   チャネル別タブ        →   チャネルごとに
-(MediaRecorder)       extracting…            ├ 差分ビュー (§10)         即時 or 日時指定
-or テキスト直書き      researching…           ├ インライン編集           note は手順ガイド
-チャネル選択           drafting… (SSE で       └ 承認 / 却下 / 再生成
-リサーチ on/off        逐次表示)
+[1 入力]           [1.5 整文確認]         [2 実行中]            [3 レビュー]           [4 配信]
+音声録音ボタン  →  Claude 整文結果を   →  進行ステップ表示  →  チャネル別タブ     →  チャネルごとに
+(MediaRecorder)    raw との差分付きで      extracting…           ├ 差分ビュー (§10)     即時 or 日時指定
+or テキスト直書き   確認・手修正            researching…          ├ インライン編集       note は手順ガイド
+チャネル選択        (誤認識をここで潰す)    drafting… (SSE で     └ 承認 / 却下 / 再生成
+リサーチ on/off                            逐次表示)
 ```
 
-- 録音: `MediaRecorder` (audio/webm;codecs=opus)。最長 15 分・50MB 上限。アップロード後に即時文字起こし、テキストを確認・修正してから実行 (誤認識をパイプラインに流さない)。
+- 録音: `MediaRecorder` (audio/webm;codecs=opus)。最長 15 分・50MB 上限。アップロード後に即時文字起こし → **Claude 整文 (stage 1.5)** → raw との差分表示付きで人間が確認・修正してから実行 (誤認識・整文の意味改変をパイプラインに流さない)。テキスト直書きの場合も整文は任意適用可 (skip 可)。
 - 再生成: 修正指示テキストを添えて該当チャネルのみ再実行。draft_revisions に ai 版として積む。
 
 ---
@@ -539,8 +541,9 @@ or テキスト直書き      researching…           ├ インライン編集
 
 | # | ステージ | 実装 | モデル/API | 入出力 |
 |---|---|---|---|---|
-| 1 | 文字起こし | `/api/transcribe` Route Handler | OpenAI Whisper | audio → raw_text (ai_sources) |
-| 2 | 要旨抽出 | `/api/ai/extract` | `claude-opus-4-8` + structured outputs | raw_text → brief {主題, トピック[], 対象読者, キーワード[], 事実主張[]} |
+| 1 | 文字起こし | `/api/transcribe` Route Handler | OpenAI `gpt-4o-transcribe` | audio → raw_text (ai_sources) |
+| 1.5 | **整文 (クリーンアップ)** | `/api/ai/clean` | `claude-opus-4-8` + structured outputs | raw_text → cleaned_text (フィラー除去・句読点付与・専門用語誤認識の訂正候補)。**意味の追加・削除は禁止と system で明示**。人間が差分確認後に確定 |
+| 2 | 要旨抽出 | `/api/ai/extract` | `claude-opus-4-8` + structured outputs | cleaned_text → brief {主題, トピック[], 対象読者, キーワード[], 事実主張[]} |
 | 3 | リサーチ (任意) | `/api/ai/research` | `claude-opus-4-8` + `web_search_20260209` server tool | brief → research_notes {補強事実[], 引用 URL[], 訂正候補[]} |
 | 4 | チャネル別脚色 | `/api/ai/draft` (チャネルごと並列) | `claude-opus-4-8` + structured outputs + streaming | brief + research + style_profile → channel content JSON |
 | 5 | 人間レビュー | /admin/studio UI | — | 差分表示 (§10) + 編集 + 承認 |
@@ -653,7 +656,8 @@ const stream = anthropic.messages.stream({
 | KMB-E402 | | Claude API 一時障害 (5xx/529) | 時間を置いて再実行 |
 | KMB-E403 | | refusal (安全性による拒否) | 表現を変えて再実行 |
 | KMB-E404 | | 生成物スキーマ/文字数制約違反 | 自動再生成 1 回 → 失敗なら手動 |
-| KMB-E405 | | Whisper 文字起こし失敗 | 音声再アップロード or テキスト入力 |
+| KMB-E405 | | 文字起こし (gpt-4o-transcribe) 失敗 | 音声再アップロード or テキスト入力 |
+| KMB-E406 | | 整文が意味改変を検出 (自己検証 NG) | raw_text のまま人間修正へフォールバック |
 | KMB-E501 | 5xx 配信 | X API エラー | detail 確認 → 手動リトライ |
 | KMB-E502 | | Instagram API エラー | 同上 |
 | KMB-E503 | | トークン失効 | チャネル再接続 |
@@ -669,7 +673,8 @@ const stream = anthropic.messages.stream({
 
 | 比較軸 | 用途 |
 |---|---|
-| 元発言 (raw_text) vs チャネル draft | AI がどこを脚色・追加したかの俯瞰 |
+| raw_text vs cleaned_text | 整文 (stage 1.5) の確認。フィラー除去・誤認識訂正が意味を変えていないかの検証 |
+| 元発言 (cleaned_text) vs チャネル draft | AI がどこを脚色・追加したかの俯瞰 |
 | draft revision N-1 vs N | 再生成・人間編集の変更点 |
 | 「AI が追加した事実」ハイライト | brief.事実主張[] に由来しない文にマーカー + research 引用の有無を表示 |
 
@@ -754,7 +759,7 @@ const stream = anthropic.messages.stream({
 |---|---|---|
 | Vercel | Hobby $0 (商用利用は Pro $20 推奨) | $0〜20 |
 | Supabase | Free (500MB DB / 1GB Storage) で当面充足、超過で Pro $25 | $0〜25 |
-| Claude API (`claude-opus-4-8` $5/$25 per MTok) | 1 実行 ≈ in 60K (キャッシュ込) + out 20K ≈ $0.8 × 30 実行 (再生成込) | ≈ $25 |
+| Claude API (`claude-opus-4-8` $5/$25 per MTok) | 1 実行 ≈ in 70K (整文含む・キャッシュ込) + out 25K ≈ $1.0 × 30 実行 (再生成込) | ≈ $30 |
 | Claude web_search | リサーチ有効時のみ。1 実行 8 検索上限 | 数 $ |
 | gpt-4o-transcribe | $0.006/分 × 5 分 × 20 本 = 100 分 | ≈ $0.6 |
 | X API (従量課金) | URL 付き投稿 $0.20/件。月 20 スレッド (各 1〜3 ツイート、先頭のみ URL) | ≈ $5〜10 |
