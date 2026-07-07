@@ -335,3 +335,55 @@
     }
   }
 })();
+
+/* =============================================================
+   v2.4 — 数字のカウントアップ
+   .stat-count[data-count] をビュー内で 0 → 目標値へ
+   ============================================================= */
+(function () {
+  "use strict";
+
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var counts = Array.prototype.slice.call(document.querySelectorAll(".stat-count[data-count]"));
+  if (counts.length === 0) return;
+
+  if (reduceMotion || !("IntersectionObserver" in window)) {
+    counts.forEach(function (el) {
+      el.textContent = el.getAttribute("data-count");
+    });
+    return;
+  }
+
+  var animate = function (el) {
+    var target = parseInt(el.getAttribute("data-count"), 10) || 0;
+    var duration = 1100;
+    var start = null;
+    var easeOut = function (t) { return 1 - Math.pow(1 - t, 3); };
+    var step = function (ts) {
+      if (start === null) start = ts;
+      var p = Math.min(1, (ts - start) / duration);
+      var val = Math.round(easeOut(p) * target);
+      el.textContent = String(val);
+      if (p < 1) {
+        window.requestAnimationFrame(step);
+      } else {
+        el.textContent = String(target);
+      }
+    };
+    window.requestAnimationFrame(step);
+  };
+
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        animate(entry.target);
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.5 });
+
+  counts.forEach(function (el) {
+    el.textContent = "0";
+    io.observe(el);
+  });
+})();
