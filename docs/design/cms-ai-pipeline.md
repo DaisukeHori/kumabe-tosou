@@ -69,6 +69,7 @@
 | BaaS | Supabase | 確定済み。Postgres + RLS + Auth + Storage + pg_cron が 1 サービスで揃う |
 | 生成 AI | Claude API `claude-opus-4-8` | 文章品質最優先。adaptive thinking + streaming + structured outputs + server-side web_search を使用 |
 | 文字起こし | OpenAI `gpt-4o-transcribe` ($0.006/分) | Claude API は音声入力非対応のため外部 STT が必要。品質優先方針により mini ではなく標準版を採用 (月 100 分でも $0.6 とコスト影響軽微)。MediaRecorder の webm を無変換で送信可 (調査確定) |
+| 通知メール | **Resend** (Free 枠) | 問い合わせ受信通知 (1c〜) + 配信失敗通知 (2d〜)。Free 3,000 通/月・100 通/日で充足。**送信ドメイン認証 (SPF/DKIM) に独自ドメイン必須** (堀さん決定 2026-07-08) |
 | 予約実行 | Supabase pg_cron (起床信号) + **Next.js Route Handler worker** | Vercel Hobby cron は日次のみのため pg_cron が毎分 /api/jobs/* を HTTP 起床。worker は 202 即応 + after() で処理 (pg_net の数秒 timeout に非依存)。**Deno Edge Function は Next.js facade を呼べないため不採用** (Codex 指摘で変更) |
 | UI 部品 | 既存 shadcn/ui (base-ui 系) | Phase 0 資産の継続。管理画面用に table / dialog / tabs / sonner 等を追加 |
 
@@ -80,6 +81,7 @@
 | Supabase | DB/Auth/Storage | Phase 1 開始時 |
 | Anthropic (Claude API) | 生成 AI | Phase 2 開始時 |
 | OpenAI | Whisper 文字起こし | Phase 2 開始時 |
+| Resend | 問い合わせ・失敗通知メール | Phase 1c (送信ドメイン認証に独自ドメインの DNS 設定が前提) |
 | X Developer | X 投稿 | Phase 2c。**新規は従量課金制** (投稿 $0.015/件、URL 付き $0.20/件) — developer.x.com で用途申請 + OAuth 2.0 クライアント設定 |
 | Meta for Developers | Instagram 投稿 | Phase 2c (Instagram をプロアカウント化) |
 
@@ -670,7 +672,7 @@ or テキスト直書き   確認・手修正            researching…         
 | shop-simulator の PRICE_TABLE 定数 | price_grades / price_options を SSR で注入 (クライアント fetch しない) |
 | layout.tsx の会社情報 / JSON-LD | site_settings.company |
 | hero.jpg / 各ページ画像 | media テーブル + Supabase Storage 公開 URL (next/image remotePatterns 追加) |
-| contact フォームの console.log | contact_inquiries INSERT (Server Action) + 完了画面 |
+| contact フォームの console.log | contact_inquiries INSERT (Server Action) + 完了画面 + **Resend で管理者へ通知メール** (ベストエフォート — 送信失敗でも問い合わせ保存は成功扱い、KMB-E902 をログ記録) |
 
 ### 6.3 SEO 継続条件
 
@@ -830,6 +832,7 @@ const stream = anthropic.messages.stream({
 | KMB-E505 | | X 月間コスト上限超過 (課金ガード) | 上限見直し or 翌月まで待機 |
 | KMB-E506 | | 配信結果不明 (timeout 等 — 投稿されたか判別不能) | manual_required へ。admin が SNS 上の実投稿を確認して手動確定 |
 | KMB-E901 | 9xx システム | 予期しない例外 | ログ (Vercel) 確認 |
+| KMB-E902 | | 通知メール送信失敗 (Resend) | ログのみ。問い合わせ保存・配信処理自体は成功扱い。ダッシュボードで未読確認 |
 
 ---
 
@@ -927,7 +930,7 @@ const stream = anthropic.messages.stream({
 |---|---|---|---|---|---|
 | **1a** | Supabase 基盤: migration / RLS / Auth / Storage / seed | 11 | login のみ | M (2-3 千行, migration+seed 中心) | Supabase アカウント |
 | **1b** | admin CRUD (works/posts/voices/prices/media/inquiries/settings) | — | 9 | L (6-8 千行) | 1a |
-| **1c** | 公開側 DB 接続 + 詳細ページ + revalidate + 受入検証 | — | 3 (詳細) | M (2-3 千行) | 1a (1b と並行可) |
+| **1c** | 公開側 DB 接続 + 詳細ページ + revalidate + contact 実配線 (INSERT + Resend 通知) + 受入検証 | — | 3 (詳細) | M (2-3 千行) | 1a (1b と並行可)、Resend アカウント + ドメイン DNS |
 | **2a** | AI スタジオ: 録音 / Whisper / extract / draft (SSE) | 4 (ai_*) | 1 (studio) | L (4-6 千行) | 1a, Anthropic/OpenAI アカウント |
 | **2b** | レビュー UI: 差分表示 / revision / 承認フロー | 2 | studio 内 | M (2-3 千行) | 2a |
 | **2c** | X / Instagram 接続 + publish-worker + note 半自動 | 2 | 1 (channels) | L (4-5 千行) | 2b, X/Meta アカウント |
@@ -954,6 +957,7 @@ const stream = anthropic.messages.stream({
 | Claude API (`claude-opus-4-8` $5/$25 per MTok) | 1 実行 ≈ in 70K (整文含む・キャッシュ込) + out 25K ≈ $1.0 × 30 実行 (再生成込) | ≈ $30 |
 | Claude web_search | リサーチ有効時のみ。1 実行 8 検索上限 | 数 $ |
 | gpt-4o-transcribe | $0.006/分 × 5 分 × 20 本 = 100 分 | ≈ $0.6 |
+| Resend (通知メール) | Free 3,000 通/月・100 通/日で充足 | $0 |
 | X API (従量課金) | URL 付き投稿 $0.20/件。月 20 スレッド (各 1〜3 ツイート、先頭のみ URL) | ≈ $5〜10 |
 | Meta Graph API | 無料 | $0 |
 
@@ -991,7 +995,7 @@ const stream = anthropic.messages.stream({
 ### 16.2 監視・通知
 
 - **ログ**: Vercel (Next.js) + Supabase (DB/Edge Fn)。エラーコード (KMB-E*) を構造化ログに必ず含め、コードで検索可能にする。
-- **失敗通知**: Phase 1〜2c はダッシュボードバッジ (配信失敗数 / 未処理問い合わせ数 / expired チャネル)。Phase 2d でメール通知 (Resend) を追加するか堀さん判断 (アカウント +1 のため)。
+- **失敗通知**: ダッシュボードバッジ (配信失敗数 / 未処理問い合わせ数 / expired チャネル) に加え、**Resend 採用確定 (堀さん決定 2026-07-08)**: 問い合わせ受信通知は Phase 1c から、配信失敗・トークン失効通知は Phase 2d から同一アカウントで送信。宛先は site_settings 'notifications'.inquiry_to (契約書 §4.2)。送信はすべてベストエフォート (失敗は KMB-E902 ログのみ、本処理を巻き込まない)。
 - **定期ジョブの死活**: pg_cron ジョブは `cron.job_run_details` を週次で admin ダッシュボードに表示 (静かな停止の検知)。
 
 ### 16.3 バックアップ・復旧
@@ -1035,4 +1039,5 @@ const stream = anthropic.messages.stream({
 | v1.1 | 2026-07-07 | 整文ステージ (stage 1.5) 追加 (ユーザー指摘) |
 | v2.0 | 2026-07-07 | 設計厳格化 (ユーザー指摘): module-contracts.md 分離 / Zod canonical 化 / Storage・API・Vault 認可 / 周辺ライフサイクル / OAuth・SSE シーケンス / X 字数規約修正 (重み付き 280) / seed rollback / NFR / CI 方針 |
 | v2.1 | 2026-07-07 | スキーマ完了監査: 契約書 §4.8 (CRUD 入力契約) / §4.9 (facade 補助型) 追加、zRunStage から cleaning 除去 (状態機械と整合)、seed_manifest DDL 追加、テーブル数 18 に訂正 |
+| v3.1 | 2026-07-08 | Resend 採用確定 (堀さん決定): 問い合わせ通知を 1c に前倒し、配信失敗通知 (2d) も同一アカウント、KMB-E902 追加、settings に 'notifications' キー追加、コスト表に Resend $0 追加 |
 | v3.0 | 2026-07-07 | Codex 外部レビュー 19 件反映: 配信 worker を Next.js Route Handler に統一 (Edge Fn 廃止)、AI 実行を advance (1 呼び出し=1 stage) + lease/heartbeat 方式に再設計、予約を draft 単位に修正、at-least-once + 人間照合モデル (E506)、claims 分離保存 (zChannelDraftOutput)、signup 無効化 + bootstrap 手順、media 原本/レンディションのバケット分離 + EXIF 除去、rate_limits テーブル、課金ガード精緻化 (コスト見積り合算)、IG 接続シーケンス、note の scheduling policy、twitter-text 採用、バックアップを GH Actions に訂正、parity テストのスコープ限定、B1 を目標 10 分に変更、DDL 19 テーブルに (rate_limits 追加) |
