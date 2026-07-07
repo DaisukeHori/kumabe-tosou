@@ -1,8 +1,9 @@
 # 隈部塗装 CMS + AI コンテンツパイプライン 設計書
 
-- 版: v1.0 (SNS API 調査反映済み)
+- 版: v2.0 (設計厳格化: モジュール契約分離 / Zod canonical / 認可拡張 / OAuth・SSE シーケンス / NFR 追加)
 - 作成日: 2026-07-07
 - 作成: Fable 5 (メインセッション直接執筆) + researcher (SNS API 調査 2026-07-07 実施)
+- **姉妹文書 (canonical 分担)**: [docs/module-contracts.md](../module-contracts.md) — モジュール境界・値契約 (Zod)・facade・イベント・依存方向・結合シーケンスの正。本書は DDL・認可・状態・画面・受入基準の正。
 - 対象リポジトリ: DaisukeHori/kumabe-tosou (`feat/nextjs-migration` ブランチ)
 - 前提: Phase 0 (Next.js 15 モックアップ) 完了済み。全 14 ルート静的生成、コンテンツは全てハードコード。
 
@@ -238,10 +239,9 @@ create table site_settings (
   updated_by uuid references profiles(id),
   updated_at timestamptz not null default now()
 );
--- value スキーマは Zod で管理 (src/lib/settings-schema.ts が単一ソース):
---   company: { name, representative, address, tel?, email?, founded?, business_hours? }
---   hero:    { media_id, heading, subheading, cta_label, cta_href }
---   seo_defaults: { title_template, description, og_media_id }
+-- value の型契約 (canonical) は module-contracts.md §4.2 の SETTINGS_SCHEMAS。
+-- key: 'company' | 'hero' | 'seo_defaults' | 'ops_limits' (課金ガード上限含む)。
+-- 実装は src/modules/settings/contracts.ts (契約書と 1:1)。
 
 -- =========================================================
 -- お問い合わせ
@@ -299,11 +299,9 @@ create table channel_drafts (
   status text not null default 'generating'
     check (status in ('generating','needs_review','approved','rejected','superseded')),
   content jsonb not null default '{}',
-  -- channel 別スキーマ (Zod 管理):
-  --   site_blog: { title, excerpt, body_md, suggested_slug, cover_media_id? }
-  --   note:      { title, body_md, hashtags[] }
-  --   x:         { thread: [{text, media_id?}] }  … 1〜n ツイート
-  --   instagram: { caption, hashtags[], media_ids[] }  … 画像必須
+  -- content の型契約 (canonical) は module-contracts.md §4.4 の CHANNEL_CONTENT_SCHEMAS。
+  -- site_blog: zSiteBlogContent / note: zNoteContent / x: zXContent (重み付き字数 280) /
+  -- instagram: zInstagramContent。Claude structured outputs の JSON Schema はここから生成。
   current_revision int not null default 1,
   reviewed_by uuid references profiles(id),
   reviewed_at timestamptz,
@@ -376,6 +374,35 @@ create table style_profiles (
 | published_at が未来 | 公開側で `published_at <= now()` filter → 予約公開として機能 | 同左 | 同左 | — | — |
 | アーカイブ済み | 公開側非表示・admin では灰色表示 | 同左 | 同左 | is_active=false 同等 | 削除は参照ゼロ時のみ可 (KMB-E301) |
 
+### 2.4 データ規約 (全カラム共通)
+
+| 規約 | 内容 |
+|---|---|
+| タイムゾーン | DB は timestamptz (UTC) 保存。表示・入力 UI・scheduled_at の解釈はすべて **Asia/Tokyo**。API 境界は ISO 8601 offset 付き文字列 (zIsoDatetime) |
+| テキスト正規化 | 保存前に **NFC 正規化 + 制御文字除去** (改行・タブは許容)。契約書 §4.1 の transform で一元適用 |
+| slug | `^[a-z0-9]+(?:-[a-z0-9]+)*$`、3〜80 字。日本語タイトルからは AI が suggested_slug (英語) を提案、手動上書き可。自動生成失敗時は `{kind}-{nanoid(8)}` |
+| 文字数上限 | title 120 / excerpt 300 / body 100,000 / alt 200 / voice body 2,000 / 問い合わせ body 5,000。**DDL の check 制約と Zod の両方に定義し、一致を結合テストで検証** (契約書 §3) |
+| 画像 | アップロード時に長辺 2560px 上限へリサイズ。表示用 WebP + **Instagram 用 JPEG レンディション**を保持。1 ファイル 10MB 上限 (KMB-E302) |
+| 音声 | webm/mp4、最長 15 分・50MB (クライアント制約)。OpenAI 送信単位は 25MB (KMB-E303) |
+| ID | 全テーブル uuid (gen_random_uuid)。外部公開 URL に連番を使わない |
+| ページネーション | offset ではなく keyset (created_at, id)。admin 一覧 50 件/頁、公開一覧 12 件/頁 |
+
+### 2.5 JSONB カラム ↔ 型契約対応表
+
+JSONB カラムは**必ず契約書 (module-contracts.md §4) のスキーマで validate してから書き込む**。生 JSON の直接書き込み禁止。
+
+| カラム | canonical スキーマ (契約書 §4) |
+|---|---|
+| site_settings.value | SETTINGS_SCHEMAS[key] (§4.2) |
+| ai_runs.brief | zBrief (§4.3) |
+| ai_runs.research_notes | zResearchNotes (§4.3) |
+| ai_runs.token_usage | zTokenUsage (§4.3) |
+| channel_drafts.content / draft_revisions.content | CHANNEL_CONTENT_SCHEMAS[channel] (§4.4) |
+| channel_posts.external_id (X) | zXExternalRef (§4.5) |
+| channel_accounts.meta | zXAccountMeta / zInstagramAccountMeta / zNoteAccountMeta (§4.5) |
+| SSE イベント | zRunProgressEvent (§4.6) |
+| API リクエスト | zTranscribeReq 他 (§4.7) |
+
 ---
 
 ## 3. 認可マトリクスと RLS
@@ -409,6 +436,42 @@ create table style_profiles (
 - admin 判定は `exists (select 1 from profiles where id = auth.uid())` を共通関数 `is_admin()` (security definer) に切り出す。
 - `contact_inquiries` の anon INSERT は **rate limit を Route Handler 側で実施** (IP ごと 5 件/時, Upstash 等は使わず Vercel KV も使わず、簡易に Postgres で直近件数カウント)。RLS はカラム制約のみ (status='new' 固定)。
 - SNS トークンは **テーブルに置かない**。Supabase Vault に保存し、Edge Function / Route Handler (service role) だけが `vault.decrypted_secrets` を読む。クライアントには auth_status のみ返す。
+
+### 3.4 Storage バケット認可
+
+| バケット | anon read | admin read | write | 削除 | 保持 |
+|---|---|---|---|---|---|
+| `media` (公開) | ✓ (公開 URL。published 参照が前提だが URL 秘匿はしない設計 — 秘匿必要な画像は置かない) | ✓ | Server Action (service role) 経由のみ。クライアント直アップロードは**署名付きアップロード URL** (TTL 5 分) で許可 | 参照ゼロ検証 (E301) 通過時のみ | 無期限 |
+| `audio` (非公開) | ✗ | 署名付き URL (TTL 60 分) のみ | 同上 (署名付きアップロード) | 自動 | **90 日で自動削除** (pg_cron 日次)。raw_text / cleaned_text は DB に永続のため失われない |
+| `backups` (非公開) | ✗ | ✗ (service のみ) | pg_cron (週次 dump) | 12 週分ローテーション | 84 日 |
+
+### 3.5 API エンドポイント認可・契約一覧
+
+Route Handlers (Server Actions 以外の HTTP 境界) の全量。リクエスト型は契約書 §4.7。
+
+| エンドポイント | Method | 認可 | リクエスト型 | 成功応答 | 主エラー |
+|---|---|---|---|---|---|
+| /api/transcribe | POST | admin セッション | zTranscribeReq | { raw_text } | E303, E405 |
+| /api/ai/clean | POST | admin | zCleanReq | zCleanedTranscript | E401-403, E406 |
+| /api/ai/runs | POST | admin | zStartRunReq | { run_id } | E101, E401 |
+| /api/ai/runs/[id]/stream | GET | admin | — | SSE (zRunProgressEvent) | E402 |
+| /api/ai/drafts/[id]/regenerate | POST | admin | zRegenerateReq | { revision } | E401-404 |
+| /api/publish/schedule | POST | admin | zScheduleReq | { post_ids } | E101, E505 |
+| /api/oauth/x/start | GET | admin | — | 302 → x.com | E201 |
+| /api/oauth/x/callback | GET | admin (+state cookie) | query (code, state) | 302 → /admin/channels | E501, E503 |
+| /api/revalidate | POST | **shared secret ヘッダ** (`x-revalidate-secret`) | zRevalidateReq | { revalidated } | 401 |
+| Edge Fn: publish-worker | — | pg_cron → `net.http_post` (service role key)。外部から呼べないよう **shared secret 必須** | — | — | E5xx |
+
+- CRUD は Server Actions (form 境界)。全 Action の先頭で `requireAdmin()` + Zod parse を必須とする (契約書 §5 の facade 経由)。
+- `contact_inquiries` の anon INSERT だけが例外 (InquiryFacade.submit + rate limit §3.3)。
+
+### 3.6 Vault アクセス規約
+
+- **書き込み**: security definer の RPC (`vault_upsert_secret(name, value)`) のみ。呼び出し元は OAuth callback (Route Handler, service role) と publish-worker (refresh 時)。
+- **読み出し**: publish-worker のみ (`vault.decrypted_secrets`)。Next.js 側では読まない (X 投稿はすべて worker 経由のため不要)。
+- **命名**: `sns_x_oauth` (JSON: access/refresh/expires_at) / `sns_instagram_token`。
+- **禁止**: トークンをログ・エラー詳細 (last_error_detail 含む)・クライアント応答に出力すること。E2E でも実トークンをフィクスチャに書かない。
+- **ローテーション**: X refresh token は使い捨て → refresh 実行は advisory lock で単一化し、新 access+refresh を同一トランザクションで上書き (契約書 §7.2)。
 
 ---
 
@@ -461,6 +524,38 @@ scheduled → publishing → published
 | `failed` | last_error_code 記録。自動リトライは **しない** (SNS の二重投稿リスク > 遅延リスク)。admin が内容確認の上、手動リトライ |
 | `manual_required` | note 用。コピペ支援画面へ誘導し、admin が「投稿済み」を手動マークすると published へ |
 | `cancelled` | 終端 |
+
+### 4.4 周辺リソースのライフサイクル
+
+**media (画像)**
+
+```
+uploaded ──→ in_use (参照 > 0) ⇄ unused (参照 0) ──→ deleted
+   │ is_placeholder=true (仮素材)
+   └─ 実写差し替え: 新 media 追加 → 参照付け替え → 旧 media 削除 (admin UI が 3 手順を一括支援、
+      付け替え完了時に参照元コンテンツのタグを一括 revalidate — 契約書 §6 media.replaced)
+```
+
+- 参照カウントは work_images / works.cover / posts.cover / voices.photo / site_settings (hero, og) を横断集計する view で算出。
+- 削除は参照ゼロ検証 (E301) + Storage オブジェクト削除を同一処理で。孤児オブジェクト (DB 行なし Storage あり) は週次 pg_cron で検出レポート。
+
+**audio (音声)**
+
+```
+uploaded → transcribed → cleaned → (90 日経過) purged
+```
+
+- purge は Storage オブジェクト削除 + ai_sources.audio_storage_path を null 化。raw_text / cleaned_text は DB に残るため、パイプライン再実行・監査は引き続き可能 (音声の再文字起こしのみ不可)。
+
+**channel_accounts (SNS 接続)**
+
+```
+disconnected → connected ⇄ expired → connected (再接続)
+                   │
+                   └→ error (API 側の恒久エラー; 手動対応)
+```
+
+- expired 検知時 (§8.2) は該当チャネルの scheduled 全件に警告フラグ。再接続後、admin が明示的に再スケジュール (自動再開しない — 古い予約の誤発射防止)。
 
 ---
 
@@ -603,6 +698,23 @@ const stream = anthropic.messages.stream({
 - 生成 (stage 2-4) は Vercel Route Handler で実行。streaming 応答のため Vercel の function 時間制限に抵触しにくいが、`maxDuration = 300` を明示 (Fluid Compute)。
 - 配信 (stage 6) は Supabase Edge Function。pg_cron `* * * * *` (毎分) → `select net.http_post(...)` で publish-worker を起動 → scheduled 到来分を処理。1 回の起動で最大 5 件処理 (X rate limit 保護)。
 
+### 7.6 SSE 生成の切断・再開意味論
+
+- **stage 単位の冪等性**: 各 stage は開始時に ai_runs.status を CAS 更新 (契約書 §7.1)。CAS が 0 行なら他プロセスが実行中とみなし、そのコネクションは監視 (delta 転送) のみ行う。
+- **切断時**: SSE 切断で Vercel Function が終了した場合、途中の stage は未 commit のためやり直し対象。クライアント再接続時にサーバが `snapshot` イベント (契約書 §4.6) で DB 上の完了済み状態を送り、pending の stage から再開実行する。
+- **watchdog**: 15 分無進捗 (updated_at 停滞) の run は pg_cron (5 分毎) が failed (KMB-E402) に倒す。UI は「再実行」導線を出す (新 run 作成、§4.2 の immutable log 原則)。
+- **並行実行**: 同一 source に対する run の並行作成は許可 (比較実験用途)。ただし UI は実行中 run がある場合に確認ダイアログを出す。
+
+### 7.7 X OAuth 2.0 (PKCE) 接続シーケンス
+
+正規シーケンスは契約書 §7.3 が canonical。本書では設計判断のみ記す:
+
+- **PKCE 必須** (調査確定: app-only トークンでは投稿不可)。scope は `tweet.read tweet.write users.read offline.access` (offline.access が refresh token 発行条件)。
+- **state / code_verifier の保管**: サーバセッションを持たないため、暗号化 httpOnly cookie (TTL 10 分, SameSite=Lax)。callback で state 不一致は KMB-E501。
+- **redirect URI**: `{NEXT_PUBLIC_SITE_URL}/api/oauth/x/callback` を X App 設定に事前登録。Preview 環境では OAuth 接続機能を無効化 (本番 URL のみ登録し、環境変数 `OAUTH_ENABLED` でガード)。
+- **refresh 戦略**: X の refresh token は使い捨て (ローテーション式)。publish-worker が有効期限 10 分前を検知したら advisory lock 下で refresh し、新ペアを同一トランザクションで Vault 上書き (§3.6)。lock 待ちのプロセスは更新後のトークンを再読して続行。
+- **Instagram**: 長期トークン (60 日) を使用。worker が期限 7 日前に自動延長 (`GET /refresh_access_token`)。延長失敗は auth_status='expired'。
+
 ---
 
 ## 8. SNS チャネル統合仕様
@@ -633,7 +745,7 @@ const stream = anthropic.messages.stream({
 
 ### 8.4 X スレッド分割規約
 
-- draft の `thread[]` は生成時点で 1 ツイート 140 字以内 (URL は 23 字換算) を Zod refinement で検証。超過は KMB-E404 で再生成。
+- draft の `thread[]` は生成時点で **X の重み付き字数** (半角 1・全角 2・URL 一律 23、上限 280 = 全角換算 140) を `weightedTweetLength()` (単体テスト付き、サロゲートペア・絵文字 weight 2 対応) で算出し、zXTweet (契約書 §4.4) の refinement で検証。超過は KMB-E404 で自動再生成 1 回。
 - 投稿は先頭から順に、前ツイートの id を `reply.in_reply_to_tweet_id` に指定。途中失敗時は **そこで停止**し、投稿済み id 群を external_id (JSON) に記録して failed へ (途中から再開できるよう attempt 情報を保持)。
 
 ---
@@ -701,6 +813,24 @@ const stream = anthropic.messages.stream({
 
 **AI 呼び出しのモック方針**: 単体・結合・E2E では実 API を呼ばない (msw で SSE 含め record/replay)。実 API を叩くのは AI 品質 regression と本番前 E2E のみ。
 
+### 11.1 フェーズ × テスト対応
+
+| フェーズ | 必須テスト (完了条件に含む) |
+|---|---|
+| 1a | migration 適用 (clean → up)、RLS マトリクス全セル (§3.2)、Storage バケット認可 (§3.4)、`contracts-ddl-parity.test.ts` (DDL check ↔ Zod 一致)、seed 照合 (A7) + ロールバック検証 (§12.1) |
+| 1b | 全 contracts 単体 (境界値・NFC・絵文字)、CRUD E2E (キーボード全項目含む)、楽観的排他 (E103)、価格プレビュー計算 |
+| 1c | 移行前後スナップショット比較 (A1)、URL 網羅 crawl (A2)、revalidateTag 反映 (A4)、予約公開の時刻境界 (JST/UTC 変換) |
+| 2a | stage 冪等性 (CAS 二重実行)、SSE 切断→再接続復元 (§7.6)、watchdog、25MB 分割 |
+| 2b | diff 単体 (§10; 巨大 diff・絵文字)、revision 履歴、承認フロー E2E、inference マーカー表示 |
+| 2c | OAuth モック (state 不一致・token 交換失敗)、refresh ローテーション競合 (advisory lock)、冪等性 (idempotency_key)、スレッド途中失敗再開 (E504)、課金ガード (E505)、`weightedTweetLength` 全境界 |
+| 2d | 予約投稿の分単位精度、期限切れトークン時の scheduled 保護 (B4)、通知バッジ集計 |
+
+### 11.2 CI 方針
+
+- **GitHub Actions**: push 時に lint + typecheck + 単体 + 結合 (supabase local を service container で起動)。E2E (Playwright) はローカル実行 (CI 時間節約。main マージ前に手元で必須実行)。
+- カバレッジ基準: contracts / 価格計算 / weightedTweetLength / 状態遷移ガードは**分岐 100%**。その他は 80% 目安 (数値はゲートにせず、レビューで判断)。
+- ※ 「GitHub Actions 不使用」は salon-pos-app 限定の規約であり本プロジェクトには適用しない。不要なら削る (堀さん判断)。
+
 ---
 
 ## 12. 移行計画と受入基準
@@ -710,6 +840,9 @@ const stream = anthropic.messages.stream({
 1. Supabase プロジェクト作成 (堀さん) → project_id 共有。
 2. migration 適用 (§2 DDL) + RLS + Vault セットアップ。
 3. **seed スクリプト** (`scripts/seed-from-legacy.ts`): Phase 0 のハードコードコンテンツ (works 6 / voices 3 / notes 7 記事 / PRICE_TABLE / 会社情報 / 画像 14 枚) をパースして DB + Storage へ投入。全件 `status='published'`、`is_placeholder=true`。
+   - **スナップショット + ロールバック** (一括書き込み規約適用): 投入は 1 トランザクション + `seed_manifest` テーブル (投入した行 id / Storage パスを記録)。`scripts/rollback-seed.ts` が manifest 逆順で削除 (DB → Storage の順)。
+   - **冪等性**: slug / storage_path の unique 衝突を検知したら該当項目を skip して報告 (上書きしない)。再実行安全。
+   - ソースはハードコード TSX を手動転記した `scripts/seed-data/*.ts` (型は契約書 §4 のスキーマで検証してから投入)。AST パースはしない (6+3+7 件は手動転記の方が確実)。
 4. 公開ページを DB fetch へ切替 (§6.2)。
 5. 受入検証 (§12.2) → merge → Vercel 本番反映。
 
@@ -746,7 +879,9 @@ const stream = anthropic.messages.stream({
 | **2c** | X / Instagram 接続 + publish-worker + note 半自動 | 2 | 1 (channels) | L (4-5 千行) | 2b, X/Meta アカウント |
 | **2d** | 予約投稿 (pg_cron) + ダッシュボード統合 + 本番 E2E | — | — | S-M (1-2 千行) | 2c |
 
-- 実装は **implementer + tester ペア** をフェーズごとに配置 (メモリ規約)。1b はモジュール境界 (コンテンツ種別) で implementer 3 並列 + worktree 分離。
+- 実装は **implementer + tester ペア** をフェーズごとに配置 (メモリ規約)。1b はモジュール境界 (契約書 §1 のモジュール単位) で implementer 3 並列 + worktree 分離。
+- **全フェーズ共通の着手条件**: docs/module-contracts.md の該当契約 (Zod / facade / 依存方向) を確認してから実装。契約にない型・境界を実装内で発明しない。契約変更が必要なら契約書 §8 の手順 (文書先行) に従う。
+- 1a の成果物に ESLint 境界ルール (契約書 §2) と `contracts-ddl-parity.test.ts` を含める。
 - 全体で DDL 19 テーブル、admin 12 画面、公開新設 3 ルート。
 
 ---
@@ -784,19 +919,61 @@ const stream = anthropic.messages.stream({
 
 ---
 
-## 16. 設計チェックリスト適合表
+## 16. 非機能要件
 
-堀さん品質基準 (必須 10 章) との対応:
+### 16.1 性能目標
 
-| チェック項目 | 本書の節 |
+| 対象 | 目標 | 計測 |
+|---|---|---|
+| 公開ページ LCP | ≤ 2.5s (モバイル 4G 想定) | Lighthouse (受入 A3 と併用) |
+| 公開ページ TTFB | ≤ 600ms (キャッシュヒット時) | Vercel Analytics |
+| admin 初期表示 | ≤ 3s | 手動計測 |
+| AI 実行 (5 分音声 → 4 チャネル) | ≤ 5 分 (B1) | ai_runs のタイムスタンプ |
+| 保存 → 公開反映 | ≤ 5s (A4) | E2E |
+
+### 16.2 監視・通知
+
+- **ログ**: Vercel (Next.js) + Supabase (DB/Edge Fn)。エラーコード (KMB-E*) を構造化ログに必ず含め、コードで検索可能にする。
+- **失敗通知**: Phase 1〜2c はダッシュボードバッジ (配信失敗数 / 未処理問い合わせ数 / expired チャネル)。Phase 2d でメール通知 (Resend) を追加するか堀さん判断 (アカウント +1 のため)。
+- **定期ジョブの死活**: pg_cron ジョブは `cron.job_run_details` を週次で admin ダッシュボードに表示 (静かな停止の検知)。
+
+### 16.3 バックアップ・復旧
+
+- 週次 `pg_dump` を Storage `backups/` に保存 (12 週ローテーション、pg_cron)。
+- 本番運用開始 (実写差し替え・実問い合わせ受付開始) と同時に **Supabase Pro へ移行し PITR 有効化を推奨**。それまでは週次 dump が唯一の復旧手段である旨を明記。
+- 復旧手順: dump からのリストア → Storage は media が公開バケットで消失リスク低 (誤削除は E301 ガードで防止)。audio は 90 日で消える設計のため復旧対象外。
+
+### 16.4 容量管理
+
+- Supabase Free 枠: DB 500MB / Storage 1GB。audio 90 日削除 (§4.4) と画像 2560px リサイズ (§2.4) で当面充足。使用量を admin ダッシュボードに月次表示し、80% 超で警告。
+
+---
+
+## 17. 設計チェックリスト適合表
+
+堀さん品質基準 (必須 10 章 + モジュール契約規約) との対応:
+
+| チェック項目 | 対応箇所 |
 |---|---|
-| 認可マトリクス | §3.2 |
-| テスト戦略表 | §11 |
-| エラーコード | §9 |
-| ライフサイクル | §4 |
-| 全データパターン | §2.3 |
+| 認可マトリクス | §3.2 (DB) + §3.4 (Storage) + §3.5 (API) + §3.6 (Vault) |
+| テスト戦略表 | §11 + §11.1 (フェーズ対応) + §11.2 (CI) |
+| エラーコード | §9 (所有は契約書 §1) |
+| ライフサイクル | §4.1〜4.3 (コンテンツ/AI/配信) + §4.4 (media/audio/アカウント) |
+| 全データパターン | §2.3 + §2.4 (データ規約) |
 | 印刷出力 | §0.3 (該当なし明記) |
-| 移行受入基準 | §12 |
+| 移行受入基準 | §12 (snapshot+rollback 含む) |
 | 規模見積り | §13 |
-| 状態意味論 | §4.1〜4.3 |
+| 状態意味論 | §4.1〜4.4 + §7.6 (SSE 再開) |
 | 差分表示仕様 | §10 |
+| **モジュール契約 (全プロジェクト規約)** | **docs/module-contracts.md** (境界/依存方向/facade/イベント/結合シーケンス) |
+| **値契約 (Zod canonical)** | 契約書 §4 + 本書 §2.5 (JSONB 対応表) |
+| 非機能要件 | §16 |
+
+### 更新履歴
+
+| 版 | 日付 | 内容 |
+|---|---|---|
+| v0.1 | 2026-07-07 | 初版 draft |
+| v1.0 | 2026-07-07 | SNS API 調査反映 (X 従量課金 / IG 制約 / note API なし確定) |
+| v1.1 | 2026-07-07 | 整文ステージ (stage 1.5) 追加 (ユーザー指摘) |
+| v2.0 | 2026-07-07 | 設計厳格化 (ユーザー指摘): module-contracts.md 分離 / Zod canonical 化 / Storage・API・Vault 認可 / 周辺ライフサイクル / OAuth・SSE シーケンス / X 字数規約修正 (重み付き 280) / seed rollback / NFR / CI 方針 |
