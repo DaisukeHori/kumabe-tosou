@@ -209,3 +209,129 @@
     }, { passive: false });
   });
 })();
+
+/* =============================================================
+   v2.2 — さらなる作り込み
+   A) ヒーロー見出しの1文字割り出し
+   C) セクションインジケータ（右端固定）
+   ============================================================= */
+(function () {
+  "use strict";
+
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- A) ヒーロー見出しの1文字割り出し ---------- */
+  var splitTarget = document.querySelector(".hero-title[data-split]");
+  if (splitTarget && !reduceMotion) {
+    var counter = { i: 0 };
+
+    /* テキストノードを1文字ずつ span.char に変換（要素はそのまま再帰） */
+    var walk = function (node) {
+      var children = Array.prototype.slice.call(node.childNodes);
+      children.forEach(function (child) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          var text = child.textContent;
+          if (!text) return;
+          var frag = document.createDocumentFragment();
+          for (var k = 0; k < text.length; k++) {
+            var ch = text[k];
+            if (ch === " " || ch === "\n" || ch === "\t") {
+              frag.appendChild(document.createTextNode(ch));
+              continue;
+            }
+            var span = document.createElement("span");
+            span.className = "char";
+            span.textContent = ch;
+            span.style.setProperty("--ci", counter.i);
+            counter.i++;
+            frag.appendChild(span);
+          }
+          node.replaceChild(frag, child);
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          walk(child);
+        }
+      });
+    };
+
+    /* .line > span の中身だけを対象に分割（.line の overflow:hidden を活かす） */
+    splitTarget.querySelectorAll(".line > span").forEach(function (span) {
+      walk(span);
+    });
+
+    /* 発火 */
+    requestAnimationFrame(function () {
+      splitTarget.classList.add("is-split");
+    });
+  }
+
+  /* ---------- C) セクションインジケータ ---------- */
+  var secMarks = Array.prototype.slice.call(document.querySelectorAll(".sec-mark"));
+  if (secMarks.length >= 2 && "IntersectionObserver" in window) {
+    /* ラベル抽出（"SEC. 01" と最後のスパン英名） */
+    var items = secMarks.map(function (mark, idx) {
+      var spans = mark.querySelectorAll("span:not(.rule)");
+      var no = spans[0] ? spans[0].textContent.replace(/[^0-9]/g, "") : String(idx + 1);
+      var name = spans[spans.length - 1] ? spans[spans.length - 1].textContent.trim() : "";
+      return { mark: mark, no: no || String(idx + 1), name: name };
+    });
+
+    var nav = document.createElement("nav");
+    nav.className = "sec-indicator";
+    nav.setAttribute("aria-hidden", "true");
+    items.forEach(function (it, idx) {
+      var item = document.createElement("div");
+      item.className = "sec-indicator-item";
+      item.dataset.index = idx;
+      var label = document.createElement("span");
+      label.className = "sec-indicator-label";
+      label.textContent = it.name || ("SEC " + it.no);
+      var dot = document.createElement("span");
+      dot.className = "sec-indicator-dot";
+      item.appendChild(label);
+      item.appendChild(dot);
+      nav.appendChild(item);
+      it.el = item;
+    });
+    document.body.appendChild(nav);
+
+    var indicatorItems = nav.querySelectorAll(".sec-indicator-item");
+    var currentIdx = -1;
+    var setCurrent = function (idx) {
+      if (idx === currentIdx) return;
+      currentIdx = idx;
+      indicatorItems.forEach(function (el, i) {
+        el.classList.toggle("is-current", i === idx);
+      });
+    };
+
+    /* スクロールで一番上に近い（通過した）見出しを現在地に */
+    var visibleSet = new Set();
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        var idx = items.findIndex(function (it) { return it.mark === entry.target; });
+        if (entry.isIntersecting) visibleSet.add(idx);
+        else visibleSet.delete(idx);
+      });
+      if (visibleSet.size > 0) {
+        var minIdx = Math.min.apply(null, Array.from(visibleSet));
+        setCurrent(minIdx);
+      }
+    }, { rootMargin: "-45% 0px -45% 0px", threshold: 0 });
+
+    items.forEach(function (it) { io.observe(it.mark); });
+
+    /* 表示/非表示: ヒーローを出たら表示、フッター手前で維持 */
+    var toggleIo = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        nav.classList.toggle("is-active", !entry.isIntersecting);
+      });
+    }, { threshold: 0 });
+    var firstSec = document.querySelector(".sec, .page-head");
+    var heroEl = document.querySelector(".hero");
+    if (heroEl) {
+      toggleIo.observe(heroEl);
+    } else {
+      nav.classList.add("is-active");
+    }
+  }
+})();

@@ -1418,3 +1418,360 @@ body::before {
   .cursor-hidden .cursor-dot,
   .cursor-hidden .cursor-ring { opacity: 0; }
 }
+
+/* =============================================================
+   v2.2 — さらなる作り込み
+   スクロール駆動 / 文字割り出し / 設計図グリッド /
+   数量バー / FAQ / マーキー / セクションインジケータ
+   ============================================================= */
+
+/* ---------- A) ヒーロー見出しの1文字割り出し ---------- */
+.hero-title[data-split] .char {
+  display: inline-block;
+  will-change: transform;
+}
+.hero-title[data-split].is-split .char {
+  transform: translateY(115%);
+  animation: char-rise 0.72s var(--ease) both;
+  animation-delay: calc(var(--ci, 0) * 0.032s);
+}
+@keyframes char-rise {
+  from { transform: translateY(115%); }
+  to   { transform: translateY(0); }
+}
+/* 分割時は塗りマーカーの発火を後ろへ */
+.hero-title[data-split].is-split .paint-mark::before {
+  animation-delay: 1.05s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-title[data-split].is-split .char { animation: none; transform: none; }
+}
+
+/* ---------- D) ヒーローの設計図グリッド＋寸法マーカー ---------- */
+.hero-grid {
+  position: absolute;
+  inset: 96px var(--gutter) 0;
+  max-width: var(--max-w);
+  margin-inline: auto;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--hair-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hair-soft) 1px, transparent 1px);
+  background-size: 100% 25%, 20% 100%;
+  -webkit-mask-image: radial-gradient(120% 90% at 78% 30%, #000 0%, rgba(0,0,0,0.35) 45%, transparent 72%);
+  mask-image: radial-gradient(120% 90% at 78% 30%, #000 0%, rgba(0,0,0,0.35) 45%, transparent 72%);
+  opacity: 0.9;
+}
+.hero-inner { position: relative; z-index: 1; }
+.hero-dim {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--carbon-soft);
+  white-space: nowrap;
+}
+.hero-dim .tick {
+  display: inline-block;
+  width: 1px; height: 8px;
+  background: var(--carbon-soft);
+}
+.hero-dim--x { top: 24%; right: 4%; }
+.hero-dim--y {
+  top: 46%; right: 20%;
+  writing-mode: vertical-rl;
+}
+.hero-dim--y .tick { width: 8px; height: 1px; }
+.hero-cross {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--carbon-soft);
+  transform: translate(-50%, -50%);
+}
+.hero-cross--tl { top: 0; left: 0; }
+.hero-cross--tr { top: 0; right: 0; transform: translate(50%, -50%); }
+.hero-cross--bl { bottom: 8%; left: 0; }
+@media (max-width: 900px) {
+  .hero-grid { display: none; }
+}
+
+/* ---------- B) スクロール駆動アニメーション（@supportsでガード） ---------- */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* B1) セクション罫線が画面に入ると左から引かれる */
+    .sec-mark .rule {
+      transform-origin: left center;
+      animation: rule-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 62%;
+    }
+    @keyframes rule-draw {
+      from { clip-path: inset(0 100% 0 0); }
+      to   { clip-path: inset(0 0 0 0); }
+    }
+
+    /* B2) colors 透かし数字の縦パララックス */
+    body[data-page="colors"] .color-entry::after {
+      animation: wm-parallax linear both;
+      animation-timeline: view();
+      animation-range: cover;
+    }
+    @keyframes wm-parallax {
+      from { transform: translateY(48px); }
+      to   { transform: translateY(-48px); }
+    }
+
+    /* B3) colors 色板がビュー内で下から塗られて登場 */
+    .color-visual .drawdown .dd-swatch {
+      animation: swatch-paint linear both;
+      animation-timeline: view();
+      animation-range: entry 6% entry 60%;
+    }
+    @keyframes swatch-paint {
+      from { clip-path: inset(100% 0 0 0); }
+      to   { clip-path: inset(0 0 0 0); }
+    }
+
+    /* B4) セクションタイトルの微パララックス上昇 */
+    .sec-title {
+      animation: title-lift linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+    @keyframes title-lift {
+      from { opacity: 0.35; transform: translateY(26px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  }
+}
+
+/* ---------- H) 色ストリップのスクロール進捗バー ---------- */
+.strip-foot {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.strip-hint { margin: 0; }
+.strip-progress {
+  flex: 1;
+  height: 2px;
+  background: var(--hair);
+  position: relative;
+  overflow: hidden;
+}
+.strip-progress-bar {
+  position: absolute;
+  inset: 0;
+  background: var(--soul);
+  transform-origin: left;
+  transform: scaleX(0.15);
+}
+@supports (animation-timeline: scroll()) {
+  .color-strip { scroll-timeline: --strip x; }
+  .strip-progress-bar {
+    transform: scaleX(0);
+    animation: strip-fill linear both;
+    animation-timeline: --strip;
+  }
+  @keyframes strip-fill {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+}
+
+/* ---------- E) 数量スライドのバー可視化 ---------- */
+.qty-slide { display: flex; flex-direction: column; gap: 16px; margin-bottom: 4px; }
+.qty-row {
+  display: grid;
+  grid-template-columns: 78px 1fr 52px;
+  align-items: center;
+  gap: 14px;
+}
+.qty-label { font-size: 13px; color: var(--carbon-mid); }
+.qty-track {
+  height: 8px;
+  background: var(--primer-deep);
+  border: 1px solid var(--hair);
+  position: relative;
+  overflow: hidden;
+}
+.qty-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: var(--w, 100%);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--carbon) 0 6px,
+    #2A2E32 6px 12px
+  );
+  transform-origin: left;
+}
+.qty-fill.is-best {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--soul) 0 6px,
+    #C4132E 6px 12px
+  );
+}
+.qty-val { font-size: 13px; text-align: right; color: var(--carbon); }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .qty-fill {
+      animation: qty-grow linear both;
+      animation-timeline: view();
+      animation-range: entry 10% entry 70%;
+    }
+    @keyframes qty-grow {
+      from { transform: scaleX(0); }
+      to   { transform: scaleX(1); }
+    }
+  }
+}
+
+/* ---------- F) FAQ（details/summary） ---------- */
+.faq {
+  border-top: 1px solid var(--hair);
+}
+.faq-item {
+  border-bottom: 1px solid var(--hair);
+}
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 4px;
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: clamp(15px, 1.9vw, 18px);
+  letter-spacing: 0.04em;
+  transition: color 0.25s var(--ease);
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary:hover { color: var(--soul); }
+.faq-q {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--carbon-soft);
+  flex: none;
+}
+.faq-item summary:hover .faq-q { color: var(--soul); }
+.faq-mark {
+  margin-left: auto;
+  flex: none;
+  position: relative;
+  width: 15px; height: 15px;
+}
+.faq-mark::before, .faq-mark::after {
+  content: "";
+  position: absolute;
+  background: var(--carbon);
+  transition: transform 0.3s var(--ease), background 0.25s var(--ease);
+}
+.faq-mark::before { top: 7px; left: 0; width: 15px; height: 1.5px; }
+.faq-mark::after  { top: 0; left: 7px; width: 1.5px; height: 15px; }
+.faq-item[open] .faq-mark::after { transform: scaleY(0); }
+.faq-item summary:hover .faq-mark::before,
+.faq-item summary:hover .faq-mark::after { background: var(--soul); }
+.faq-a {
+  overflow: hidden;
+  padding: 0 4px 26px;
+  max-width: 46em;
+}
+.faq-a p { font-size: 14px; line-height: 2.1; color: var(--carbon-mid); }
+@media (prefers-reduced-motion: no-preference) {
+  .faq-item[open] .faq-a p { animation: faq-in 0.5s var(--ease) both; }
+  @keyframes faq-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* ---------- G) フッターマーキー ---------- */
+.footer-marquee {
+  margin-top: clamp(40px, 5vw, 64px);
+  border-top: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  padding: 14px 0;
+  overflow: hidden;
+  display: flex;
+}
+.footer-marquee-track {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--carbon-mid);
+  animation: footer-marq 34s linear infinite;
+}
+.footer-marquee-track span { padding: 0 1.4em; }
+.footer-marquee-track .sep { color: var(--soul); }
+@keyframes footer-marq { to { transform: translateX(-50%); } }
+.footer-marquee:hover .footer-marquee-track { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .footer-marquee-track { animation: none; }
+}
+
+/* ---------- C) セクションインジケータ（右端固定・JS生成） ---------- */
+.sec-indicator {
+  position: fixed;
+  right: clamp(12px, 2vw, 26px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s var(--ease);
+}
+.sec-indicator.is-active { opacity: 1; }
+.sec-indicator-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.sec-indicator-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--carbon-soft);
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+  white-space: nowrap;
+}
+.sec-indicator-dot {
+  width: 7px; height: 7px;
+  border: 1px solid var(--carbon-soft);
+  border-radius: 50%;
+  flex: none;
+  transition: background 0.3s var(--ease), border-color 0.3s var(--ease), transform 0.3s var(--ease);
+}
+.sec-indicator-item.is-current .sec-indicator-dot {
+  background: var(--soul);
+  border-color: var(--soul);
+  transform: scale(1.25);
+}
+.sec-indicator-item.is-current .sec-indicator-label {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--carbon);
+}
+@media (max-width: 1100px) { .sec-indicator { display: none; } }
+
+/* ---------- 微調整: hero-spec を grid の上に ---------- */
+.hero-spec { position: relative; z-index: 1; }
