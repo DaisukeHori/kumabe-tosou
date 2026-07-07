@@ -9,9 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { SiteFooter } from "@/components/site/site-footer";
-import { SiteHeader } from "@/components/site/site-header";
-
 const CRAFTS = [
   {
     no: "CRAFT 01",
@@ -151,11 +148,8 @@ function ArrowButton({ href, children }: { href: string; children: string }) {
 
 export default function Home() {
   return (
-    <div className="flex min-h-full flex-col bg-primer text-carbon">
-      <SiteHeader />
-
-      <main className="flex-1">
-        {/* ============ HERO ============ */}
+    <>
+      {/* ============ HERO ============ */}
         <section className="mx-auto max-w-[1240px] px-5 pb-16 pt-20 sm:px-8 sm:pt-28">
           <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
             <span>INDEX 00 — HOME</span>
@@ -357,10 +351,7 @@ export default function Home() {
               </span>
             </Button>
           </div>
-        </section>
-      </main>
-
-      <SiteFooter />
-    </div>
+      </section>
+    </>
   );
 }

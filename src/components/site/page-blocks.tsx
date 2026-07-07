@@ -1,0 +1,213 @@
+import Image from "next/image";
+import Link from "next/link";
+
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+
+/* ページ冒頭 (legacy .page-head) */
+export function PageHead({
+  index,
+  en,
+  title,
+  lead,
+}: {
+  index: string;
+  en: string;
+  title: React.ReactNode;
+  lead: string;
+}) {
+  return (
+    <div className="mx-auto max-w-[1240px] px-5 pb-6 pt-20 sm:px-8 sm:pt-28">
+      <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
+        <span>{index}</span>
+        <span className="h-px w-16 bg-hair" aria-hidden="true" />
+        <span className="hidden sm:inline">{en}</span>
+      </p>
+      <h1 className="mt-8 text-[clamp(30px,5vw,56px)] font-bold leading-[1.35] tracking-[0.04em]">
+        {title}
+      </h1>
+      <p className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid">
+        {lead}
+      </p>
+    </div>
+  );
+}
+
+/* セクション枠 (legacy .sec > .sec-inner) */
+export function Section({
+  children,
+  className,
+  id,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  id?: string;
+}) {
+  return (
+    <section
+      id={id}
+      className={cn("mx-auto max-w-[1240px] px-5 py-14 sm:px-8 sm:py-20", className)}
+    >
+      {children}
+    </section>
+  );
+}
+
+/* SEC. XX — LABEL (legacy .sec-mark) */
+export function SectionMark({ no, label }: { no: string; label: string }) {
+  return (
+    <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
+      <span>{no}</span>
+      <span className="h-px w-12 bg-hair" aria-hidden="true" />
+      <span>{label}</span>
+    </p>
+  );
+}
+
+export function SecTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
+      {children}
+    </h2>
+  );
+}
+
+export function SecLead({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-6 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid">
+      {children}
+    </p>
+  );
+}
+
+/* 注記 (legacy .map-note) */
+export function MapNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-6 text-xs leading-6 text-carbon-soft">{children}</p>
+  );
+}
+
+/* 写真 figure (legacy .photo) */
+export function PhotoFigure({
+  figNo,
+  src,
+  alt,
+  capJa,
+  capEn,
+  credit,
+  aspect = "aspect-[3/2]",
+  sizes = "(max-width: 640px) 100vw, 600px",
+}: {
+  figNo: string;
+  src: string;
+  alt: string;
+  capJa: string;
+  capEn: string;
+  credit: string;
+  aspect?: string;
+  sizes?: string;
+}) {
+  return (
+    <figure className="border border-hair bg-paper p-2">
+      <span className="block px-1 py-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
+        {figNo}
+      </span>
+      <div className={cn("relative w-full overflow-hidden", aspect)}>
+        <Image src={src} alt={alt} fill sizes={sizes} className="object-cover" />
+      </div>
+      <figcaption className="flex flex-col gap-1 px-1 py-2 sm:flex-row sm:items-baseline sm:justify-between">
+        <span className="text-xs tracking-wider text-carbon-mid">
+          {capJa}
+          <span className="ml-2 font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
+            {capEn}
+          </span>
+        </span>
+        <span className="shrink-0 font-mono text-[9px] text-carbon-soft">
+          {credit}
+        </span>
+      </figcaption>
+    </figure>
+  );
+}
+
+/* 矢印付き outline ボタン */
+export function ArrowButton({
+  href,
+  children,
+}: {
+  href: string;
+  children: string;
+}) {
+  return (
+    <Button
+      variant="outline"
+      render={<Link href={href} />}
+      className="h-10 rounded-none border-carbon/40 bg-transparent px-5 tracking-[0.08em] text-carbon hover:bg-carbon hover:text-paper"
+    >
+      {children}
+      <span aria-hidden="true" className="ml-1">
+        →
+      </span>
+    </Button>
+  );
+}
+
+/* ページ末尾 CTA 帯 (legacy .cta-band) */
+export function CtaBand({
+  title,
+  note,
+  href,
+  label,
+}: {
+  title: React.ReactNode;
+  note: string;
+  href: string;
+  label: string;
+}) {
+  return (
+    <section className="bg-carbon text-paper">
+      <div className="mx-auto flex max-w-[1240px] flex-col gap-8 px-5 py-20 sm:px-8 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-[clamp(22px,3vw,34px)] font-bold leading-snug tracking-[0.04em]">
+            {title}
+          </p>
+          <p className="mt-4 text-sm leading-7 text-paper/70">{note}</p>
+        </div>
+        <Button
+          render={<Link href={href} />}
+          className="h-12 shrink-0 rounded-none bg-paper px-8 tracking-[0.12em] text-carbon hover:bg-paper/85"
+        >
+          {label}
+          <span aria-hidden="true" className="ml-1">
+            →
+          </span>
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+/* 仕様表 (legacy .spec-table) */
+export function SpecTable({
+  rows,
+}: {
+  rows: { th: string; td: React.ReactNode }[];
+}) {
+  return (
+    <table className="w-full border-t border-hair text-sm">
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.th} className="border-b border-hair">
+            <th
+              scope="row"
+              className="w-[9.5em] py-4 pr-4 text-left align-top font-medium tracking-wider sm:w-48"
+            >
+              {row.th}
+            </th>
+            <td className="py-4 leading-7 text-carbon-mid">{row.td}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
