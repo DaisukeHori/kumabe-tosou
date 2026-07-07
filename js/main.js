@@ -387,3 +387,160 @@
     io.observe(el);
   });
 })();
+
+/* =============================================================
+   v2.8 — SHOP 見積もりシミュレータ
+   価格テーブルは立ち上げ期の目安。正式価格の確定後は
+   下記 PRICE_TABLE の数値だけを差し替えれば全体に反映される。
+   ============================================================= */
+(function () {
+  "use strict";
+
+  var gradeGroup = document.getElementById("simGrade");
+  if (!gradeGroup) return; // SHOPページ以外では何もしない
+
+  // ---- 価格テーブル（1点あたり・税込・[最小, 最大]の目安レンジ）----
+  // ※ プレミアムの全体レンジが既存の目安 ¥15,000–35,000 と整合するよう設定。
+  // ※ 正式価格が確定したら、この数値のみ差し替えること。
+  var PRICE_TABLE = {
+    base:     { s: [6000, 9000],   m: [10000, 14000], l: [15000, 20000] },
+    standard: { s: [9000, 13000],  m: [14000, 20000], l: [20000, 28000] },
+    premium:  { s: [15000, 20000], m: [20000, 28000], l: [28000, 35000] }
+  };
+  var GRADE_LABEL = { base: "下地仕上げ", standard: "スタンダード", premium: "プレミアム" };
+  var SIZE_LABEL = { s: "〜100mm", m: "〜200mm", l: "〜350mm", xl: "それ以上（個別見積もり）" };
+
+  var sizeGroup = document.getElementById("simSize");
+  var qtyInput = document.getElementById("simQty");
+  var qtyMinus = document.getElementById("qtyMinus");
+  var qtyPlus = document.getElementById("qtyPlus");
+  var rushCheck = document.getElementById("simRush");
+
+  var elTotal = document.getElementById("srTotal");
+  var elPer = document.getElementById("srPer");
+  var elGrade = document.getElementById("srGrade");
+  var elSize = document.getElementById("srSize");
+  var elQty = document.getElementById("srQty");
+  var elDiscount = document.getElementById("srDiscount");
+  var elRush = document.getElementById("srRush");
+  var orderBtn = document.getElementById("srOrder");
+  var copiedMsg = document.getElementById("srCopied");
+
+  function getPressed(group) {
+    var btn = group.querySelector('.sim-opt[aria-pressed="true"]');
+    return btn ? btn.getAttribute("data-value") : null;
+  }
+
+  function setPressed(group, value) {
+    Array.prototype.forEach.call(group.querySelectorAll(".sim-opt"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-value") === value ? "true" : "false");
+    });
+  }
+
+  function clampQty(n) {
+    n = parseInt(n, 10);
+    if (isNaN(n) || n < 1) n = 1;
+    if (n > 1000) n = 1000;
+    return n;
+  }
+
+  function yen(n) {
+    return "¥" + Math.round(n).toLocaleString("ja-JP");
+  }
+
+  function calc() {
+    var grade = getPressed(gradeGroup);
+    var size = getPressed(sizeGroup);
+    var qty = clampQty(qtyInput.value);
+    qtyInput.value = qty;
+    var rush = rushCheck.checked;
+
+    elGrade.textContent = GRADE_LABEL[grade] || "—";
+    elSize.textContent = SIZE_LABEL[size] || "—";
+    elQty.textContent = qty + " 個";
+
+    var discountRate = 0;
+    if (qty >= 30) discountRate = 0.25;
+    else if (qty >= 10) discountRate = 0.15;
+    elDiscount.textContent = discountRate > 0 ? "−" + Math.round(discountRate * 100) + "%" : "適用なし（10個以上で−15%）";
+    elRush.textContent = rush ? "＋50%" : "なし";
+
+    if (size === "xl") {
+      elTotal.textContent = "個別見積もり";
+      elPer.textContent = "350mmを超える造形は、形状を確認のうえ個別にお見積もりします";
+      return { text: "個別見積もり", grade: grade, size: size, qty: qty, rush: rush };
+    }
+
+    var range = PRICE_TABLE[grade][size];
+    var factor = (1 - discountRate) * (rush ? 1.5 : 1);
+    var perMin = range[0] * factor;
+    var perMax = range[1] * factor;
+    var totalMin = perMin * qty;
+    var totalMax = perMax * qty;
+
+    elTotal.textContent = yen(totalMin) + " 〜 " + yen(totalMax);
+    elPer.textContent = "1点あたり " + yen(perMin) + " 〜 " + yen(perMax) + "（税込・目安）";
+    return {
+      text: yen(totalMin) + "〜" + yen(totalMax),
+      per: yen(perMin) + "〜" + yen(perMax),
+      grade: grade, size: size, qty: qty, rush: rush, discountRate: discountRate
+    };
+  }
+
+  // ---- イベント ----
+  [gradeGroup, sizeGroup].forEach(function (group) {
+    group.addEventListener("click", function (e) {
+      var btn = e.target.closest(".sim-opt");
+      if (!btn) return;
+      setPressed(group, btn.getAttribute("data-value"));
+      calc();
+    });
+  });
+  qtyMinus.addEventListener("click", function () { qtyInput.value = clampQty(parseInt(qtyInput.value, 10) - 1); calc(); });
+  qtyPlus.addEventListener("click", function () { qtyInput.value = clampQty(parseInt(qtyInput.value, 10) + 1); calc(); });
+  qtyInput.addEventListener("input", calc);
+  rushCheck.addEventListener("change", calc);
+
+  // サービスカードの「サイズと個数で概算」→ グレードを事前選択
+  Array.prototype.forEach.call(document.querySelectorAll("a[data-service]"), function (a) {
+    a.addEventListener("click", function () {
+      setPressed(gradeGroup, a.getAttribute("data-service"));
+      calc();
+    });
+  });
+
+  // ---- 注文（内容コピー → 相談へ）----
+  orderBtn.addEventListener("click", function () {
+    var r = calc();
+    var lines = [
+      "【隈部塗装 SHOP — 注文・相談内容】",
+      "グレード: " + (GRADE_LABEL[r.grade] || "—"),
+      "サイズ帯: " + (SIZE_LABEL[r.size] || "—"),
+      "個数: " + r.qty + " 個",
+      "特急: " + (r.rush ? "希望する（＋50%）" : "なし"),
+      "概算: " + r.text + (r.per ? "（1点あたり " + r.per + "）" : ""),
+      "※ 上記はシミュレータの目安です。素材・色・形状を添えてご相談ください。"
+    ];
+    var text = lines.join("\n");
+
+    var goContact = function () {
+      window.setTimeout(function () { window.location.href = "contact.html"; }, 1200);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        copiedMsg.textContent = "内容をコピーしました。相談ページへ移動します…";
+        goContact();
+      }, function () {
+        copiedMsg.textContent = "相談ページへ移動します…";
+        goContact();
+      });
+    } else {
+      copiedMsg.textContent = "相談ページへ移動します…";
+      goContact();
+    }
+  });
+
+  // 初期表示
+  calc();
+})();

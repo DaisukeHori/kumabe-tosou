@@ -2510,3 +2510,768 @@ figure.photo .cap-credit {
   line-height: 1.7;
   max-width: 60em;
 }
+
+/* =============================================================
+   v2.8 — ショップ（shop.html）/ 特商法（tokushoho.html）
+   ============================================================= */
+
+/* ---------- 商品カード（サービスメニュー） ---------- */
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--hair);
+  border-left: 1px solid var(--hair);
+}
+.shop-card {
+  border-right: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  background: var(--paper);
+  padding: clamp(28px, 3.4vw, 42px) clamp(22px, 2.8vw, 34px);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.shop-card.is-feature {
+  background:
+    radial-gradient(80% 60% at 85% 0%, rgba(168,15,34,0.06), transparent 60%),
+    var(--paper);
+}
+.shop-card .sc-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--soul);
+  margin-bottom: 16px;
+}
+.shop-card h3 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: clamp(18px, 2.2vw, 22px);
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.shop-card .sc-en {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--carbon-soft);
+  margin-bottom: 16px;
+}
+.shop-card .sc-desc {
+  font-size: 13px;
+  line-height: 1.95;
+  color: var(--carbon-mid);
+  flex: 1;
+}
+.shop-card .sc-includes {
+  margin: 16px 0 0;
+  padding: 14px 0 0;
+  border-top: 1px dashed var(--hair);
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--carbon-mid);
+}
+.shop-card .sc-includes li { padding-left: 16px; position: relative; }
+.shop-card .sc-includes li::before {
+  content: "＋";
+  position: absolute;
+  left: 0;
+  color: var(--soul);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.shop-card .sc-price {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hair);
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: clamp(19px, 2.2vw, 24px);
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.shop-card .sc-price small {
+  font-family: var(--font-base);
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--carbon-soft);
+  letter-spacing: 0.02em;
+}
+.shop-card .sc-cta { margin-top: 18px; }
+.shop-card .sc-cta .btn { width: 100%; justify-content: center; }
+@media (max-width: 920px) { .shop-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 620px) { .shop-grid { grid-template-columns: 1fr; } }
+
+/* ---------- 料金シミュレーター（見積り伝票風） ---------- */
+.sim-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 0.52fr) minmax(0, 0.48fr);
+  gap: clamp(20px, 3vw, 36px);
+  align-items: start;
+}
+.sim-panel {
+  border: 1px solid var(--hair);
+  background: var(--paper);
+  padding: clamp(26px, 3.2vw, 38px);
+}
+.sim-field { margin-bottom: 22px; }
+.sim-field:last-child { margin-bottom: 0; }
+.sim-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  color: var(--carbon-soft);
+  margin-bottom: 10px;
+}
+.sim-label .jp {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  color: var(--carbon);
+}
+.sim-opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.sim-opt {
+  flex: 1 1 auto;
+  min-width: 92px;
+  border: 1px solid var(--hair);
+  background: transparent;
+  padding: 11px 12px;
+  font-family: var(--font-base);
+  font-size: 12.5px;
+  letter-spacing: 0.03em;
+  color: var(--carbon-mid);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.25s var(--ease), background 0.25s var(--ease), color 0.25s var(--ease);
+}
+.sim-opt small {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--carbon-soft);
+  margin-top: 3px;
+}
+.sim-opt.is-active {
+  border-color: var(--carbon);
+  background: var(--carbon);
+  color: #fff;
+}
+.sim-opt.is-active small { color: rgba(255,255,255,0.6); }
+.sim-qty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.sim-qty input[type="range"] {
+  flex: 1;
+  accent-color: var(--soul);
+  height: 4px;
+}
+.sim-qty .qv {
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: 22px;
+  min-width: 84px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.sim-qty .qv small { font-size: 12px; color: var(--carbon-soft); font-weight: 400; }
+.sim-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--carbon-mid);
+}
+.sim-check input { accent-color: var(--soul); width: 16px; height: 16px; }
+
+/* 伝票（結果） */
+.sim-slip {
+  border: 1px solid var(--carbon);
+  background: var(--paper);
+  position: relative;
+}
+.sim-slip::before {
+  content: "";
+  position: absolute;
+  top: 8px; left: 8px; right: 8px; bottom: 8px;
+  border: 1px dashed var(--hair);
+  pointer-events: none;
+}
+.sim-slip-inner { padding: clamp(26px, 3.2vw, 38px); position: relative; }
+.sim-slip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--carbon-soft);
+  border-bottom: 1px solid var(--hair);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+.sim-slip-head .t {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.1em;
+  color: var(--carbon);
+}
+.sim-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--carbon-mid);
+  border-bottom: 1px dotted var(--hair-soft);
+}
+.sim-row .v { font-family: var(--font-mono); font-size: 12.5px; color: var(--carbon); font-variant-numeric: tabular-nums; }
+.sim-row .v.soul { color: var(--soul); }
+.sim-total {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1.5px solid var(--carbon);
+}
+.sim-total .label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--carbon-soft);
+}
+.sim-total .amount {
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: clamp(26px, 3.4vw, 38px);
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.sim-total .amount small { font-size: 14px; color: var(--carbon-soft); font-weight: 400; }
+.sim-note {
+  margin-top: 14px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--carbon-soft);
+}
+.sim-slip .sc-cta { margin-top: 18px; }
+.sim-slip .sc-cta .btn { width: 100%; justify-content: center; }
+@media (max-width: 860px) { .sim-wrap { grid-template-columns: 1fr; } }
+
+/* ---------- 塗装済み製品（出品枠） ---------- */
+.works-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(14px, 2vw, 22px);
+}
+.work-card {
+  border: 1px solid var(--hair);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.work-card .wc-visual {
+  aspect-ratio: 4 / 3;
+  position: relative;
+  background:
+    repeating-linear-gradient(-45deg, var(--primer-deep) 0 2px, transparent 2px 11px),
+    linear-gradient(160deg, #E2E2DB, #D2D2CA);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.work-card .wc-visual img {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.work-card .wc-visual .ph {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--carbon-soft);
+  text-align: center;
+  line-height: 2;
+}
+.work-card .wc-status {
+  position: absolute;
+  top: 10px; left: 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  padding: 4px 10px;
+  background: var(--carbon);
+  color: #fff;
+  z-index: 2;
+}
+.work-card .wc-status.is-sold { background: var(--carbon-soft); }
+.work-card .wc-status.is-coming { background: transparent; color: var(--carbon-soft); border: 1px solid var(--hair); }
+.work-card .wc-body { padding: 18px 18px 20px; display: flex; flex-direction: column; flex: 1; }
+.work-card h3 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 15.5px;
+  letter-spacing: 0.04em;
+}
+.work-card .wc-spec {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--carbon-soft);
+  margin: 6px 0 10px;
+}
+.work-card .wc-note { font-size: 12px; line-height: 1.8; color: var(--carbon-mid); flex: 1; }
+.work-card .wc-price {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: 19px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.work-card .wc-price small { font-size: 10px; color: var(--carbon-soft); font-weight: 400; font-family: var(--font-base); }
+.work-card.is-sold-card .wc-visual img { filter: grayscale(1) brightness(1.06); }
+.work-card.is-sold-card .wc-price { color: var(--carbon-soft); text-decoration: line-through; }
+@media (max-width: 860px) { .works-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .works-grid { grid-template-columns: 1fr; } }
+
+/* ---------- 購入の流れ（横ステップ） ---------- */
+.buy-flow {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-top: 1px solid var(--hair);
+  border-left: 1px solid var(--hair);
+}
+.buy-step {
+  border-right: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  background: var(--paper);
+  padding: 22px 18px;
+}
+.buy-step .bs-no {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--soul);
+}
+.buy-step h3 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: 0.03em;
+  margin: 8px 0 6px;
+}
+.buy-step p { font-size: 11.5px; line-height: 1.8; color: var(--carbon-mid); }
+@media (max-width: 920px) { .buy-flow { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .buy-flow { grid-template-columns: 1fr; } }
+
+/* ---------- 特商法テーブル ---------- */
+.legal-table { border-top: 1px solid var(--hair); font-size: 13.5px; width: 100%; }
+.legal-table th, .legal-table td {
+  border-bottom: 1px solid var(--hair);
+  padding: 18px 14px;
+  text-align: left;
+  vertical-align: top;
+  font-weight: 400;
+  line-height: 1.9;
+}
+.legal-table th {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  width: 220px;
+  white-space: nowrap;
+  color: var(--carbon);
+}
+.legal-table td { color: var(--carbon-mid); }
+.legal-table .pending {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--soul);
+  border: 1px solid rgba(168,15,34,0.35);
+  padding: 2px 8px;
+  border-radius: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+@media (max-width: 640px) {
+  .legal-table th { display: block; width: auto; border-bottom: 0; padding-bottom: 4px; }
+  .legal-table td { display: block; padding-top: 4px; }
+}
+
+/* =============================================================
+   v2.8 — SHOP（通販）/ 特定商取引法
+   ============================================================= */
+
+/* ---------- サービス商品カード ---------- */
+.svc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--hair);
+  border-left: 1px solid var(--hair);
+}
+.svc-card {
+  border-right: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  background: var(--paper);
+  padding: clamp(28px, 3.4vw, 42px) clamp(22px, 2.8vw, 34px);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.svc-card.is-featured {
+  background:
+    radial-gradient(80% 60% at 85% 0%, rgba(168,15,34,0.06), transparent 60%),
+    var(--paper);
+}
+.svc-card .svc-no {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--soul);
+  margin-bottom: 16px;
+}
+.svc-card h3 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: clamp(19px, 2.2vw, 23px);
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.svc-card .svc-en {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--carbon-soft);
+  margin-bottom: 18px;
+}
+.svc-card .svc-desc { font-size: 13px; line-height: 1.95; color: var(--carbon-mid); }
+.svc-card .svc-includes {
+  margin: 18px 0;
+  padding: 14px 0;
+  border-top: 1px dashed var(--hair);
+  border-bottom: 1px dashed var(--hair);
+  list-style: none;
+}
+.svc-card .svc-includes li {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--carbon-mid);
+  padding-left: 18px;
+  position: relative;
+}
+.svc-card .svc-includes li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--soul);
+}
+.svc-card .svc-price {
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: clamp(19px, 2.2vw, 24px);
+  letter-spacing: 0.02em;
+  margin-top: auto;
+}
+.svc-card .svc-price small {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--carbon-soft);
+  margin-top: 5px;
+}
+.svc-card .btn { margin-top: 18px; justify-content: center; }
+@media (max-width: 860px) { .svc-grid { grid-template-columns: 1fr; } }
+
+/* ---------- 見積もりシミュレータ ---------- */
+.sim {
+  border: 1px solid var(--hair);
+  background: var(--paper);
+  display: grid;
+  grid-template-columns: minmax(0, 0.58fr) minmax(0, 0.42fr);
+}
+.sim-form { padding: clamp(28px, 3.6vw, 46px); border-right: 1px solid var(--hair); }
+.sim-field { margin-bottom: 22px; }
+.sim-field:last-child { margin-bottom: 0; }
+.sim-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--carbon-soft);
+  margin-bottom: 9px;
+}
+.sim-opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.sim-opt {
+  border: 1px solid var(--hair);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  color: var(--carbon-mid);
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: border-color 0.25s var(--ease), color 0.25s var(--ease), background 0.25s var(--ease);
+}
+.sim-opt:hover { border-color: var(--carbon-soft); }
+.sim-opt[aria-pressed="true"] {
+  border-color: var(--soul);
+  color: var(--soul);
+  background: rgba(168,15,34,0.05);
+}
+.sim-opt small {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  color: var(--carbon-soft);
+  margin-top: 2px;
+}
+.sim-qty { display: flex; align-items: center; gap: 0; border: 1px solid var(--hair); width: fit-content; }
+.sim-qty button {
+  width: 42px; height: 42px;
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  color: var(--carbon-mid);
+  cursor: pointer;
+  transition: background 0.2s var(--ease);
+}
+.sim-qty button:hover { background: var(--primer-deep); }
+.sim-qty input {
+  width: 74px; height: 42px;
+  border: 0;
+  border-left: 1px solid var(--hair);
+  border-right: 1px solid var(--hair);
+  background: transparent;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--carbon);
+}
+.sim-qty input:focus { outline: 2px solid var(--soul); outline-offset: -2px; }
+.sim-check { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13.5px; color: var(--carbon-mid); }
+.sim-check input { width: 17px; height: 17px; accent-color: var(--soul); }
+.sim-result {
+  padding: clamp(28px, 3.6vw, 46px);
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(90% 70% at 90% 8%, rgba(168,15,34,0.05), transparent 62%),
+    var(--paper);
+}
+.sim-result .sr-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--carbon-soft);
+}
+.sim-result .sr-total {
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: clamp(26px, 3.4vw, 40px);
+  letter-spacing: 0.01em;
+  margin: 14px 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+.sim-result .sr-per {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--carbon-soft);
+}
+.sim-result .sr-lines { margin: 22px 0; border-top: 1px solid var(--hair); }
+.sim-result .sr-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hair-soft);
+  font-size: 12.5px;
+  color: var(--carbon-mid);
+}
+.sim-result .sr-line .v { font-family: var(--font-mono); color: var(--carbon); white-space: nowrap; }
+.sim-result .sr-note { font-size: 11px; line-height: 1.8; color: var(--carbon-soft); margin-bottom: 18px; }
+.sim-result .btn { justify-content: center; }
+.sim-result .sr-copied {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--soul);
+  text-align: center;
+  min-height: 16px;
+}
+@media (max-width: 820px) {
+  .sim { grid-template-columns: 1fr; }
+  .sim-form { border-right: 0; border-bottom: 1px solid var(--hair); }
+}
+
+/* ---------- 塗装済み製品カード ---------- */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(14px, 1.8vw, 22px);
+}
+.product-card {
+  border: 1px solid var(--hair);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.3s var(--ease), transform 0.3s var(--ease);
+}
+.product-card:hover { border-color: var(--carbon-soft); transform: translateY(-3px); }
+.product-visual {
+  aspect-ratio: 4 / 3;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--hair);
+  background:
+    repeating-linear-gradient(-45deg, var(--primer-deep) 0 2px, transparent 2px 12px),
+    linear-gradient(155deg, #E2E2DB, #D0D0C8);
+  display: grid;
+  place-items: center;
+}
+.product-visual .pv-swatch {
+  width: 62%;
+  aspect-ratio: 16 / 10;
+  background: linear-gradient(150deg, var(--a), var(--b) 78%);
+  border-radius: 2px;
+  box-shadow: 0 12px 30px rgba(23,25,27,0.22);
+  position: relative;
+  overflow: hidden;
+}
+.product-visual .pv-swatch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(112deg, transparent 42%, rgba(255,255,255,0.4) 50%, transparent 58%);
+}
+.product-visual img { width: 100%; height: 100%; object-fit: cover; }
+.product-visual .pv-note {
+  position: absolute;
+  bottom: 9px; left: 0; right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  color: var(--carbon-soft);
+}
+.status-badge {
+  position: absolute;
+  top: 10px; left: 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  padding: 4px 10px;
+  border-radius: 2px;
+  background: var(--carbon);
+  color: #fff;
+  z-index: 2;
+}
+.status-badge.is-soon { background: var(--carbon-mid); }
+.status-badge.is-order { background: var(--soul); }
+.status-badge.is-sold { background: transparent; color: var(--carbon-soft); border: 1px solid var(--hair); }
+.product-body { padding: 20px 20px 22px; display: flex; flex-direction: column; flex: 1; }
+.product-body h3 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.product-body .p-code {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--carbon-soft);
+  margin-bottom: 12px;
+}
+.product-body .p-desc { font-size: 12.5px; line-height: 1.85; color: var(--carbon-mid); }
+.product-body .p-price {
+  margin-top: auto;
+  padding-top: 16px;
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+.product-body .p-price small {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--carbon-soft);
+  margin-left: 8px;
+}
+@media (max-width: 860px) { .product-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .product-grid { grid-template-columns: 1fr; } }
+
+/* ---------- 購入の流れ（横スクロールしない4カラム） ---------- */
+.buy-flow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--hair);
+  border-left: 1px solid var(--hair);
+}
+.buy-flow .bf-cell {
+  border-right: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  background: var(--paper);
+  padding: 22px 20px;
+}
+.buy-flow .bf-cell .no {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--soul);
+}
+.buy-flow .bf-cell h4 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: 0.03em;
+  margin: 8px 0 6px;
+}
+.buy-flow .bf-cell p { font-size: 12px; line-height: 1.8; color: var(--carbon-mid); }
+@media (max-width: 820px) { .buy-flow { grid-template-columns: 1fr 1fr; } }
+
+/* SHOPナビ強調（ドット） */
+.global-nav a[data-nav="shop"] { position: relative; }
+.global-nav a[data-nav="shop"]::after {
+  content: "";
+  position: absolute;
+  top: -2px; right: -7px;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--soul);
+}
