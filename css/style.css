@@ -1775,3 +1775,274 @@ body::before {
 
 /* ---------- 微調整: hero-spec を grid の上に ---------- */
 .hero-spec { position: relative; z-index: 1; }
+
+/* =============================================================
+   v2.3 — コンテンツ拡充
+   素材対応 / 品質管理 / 数字 / 入稿 / 沿革
+   ============================================================= */
+
+/* ---------- 素材3分類カード ---------- */
+.method-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--hair);
+  border-left: 1px solid var(--hair);
+}
+.method-cell {
+  border-right: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  background: var(--paper);
+  padding: clamp(30px, 3.6vw, 46px) clamp(24px, 3vw, 36px);
+  display: flex;
+  flex-direction: column;
+}
+.method-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  color: var(--soul);
+  margin-bottom: 20px;
+}
+.method-cell h3 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.method-cell .method-en {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--carbon-soft);
+  margin-bottom: 18px;
+}
+.method-cell .method-desc { font-size: 13.5px; line-height: 2; color: var(--carbon-mid); }
+.method-cell .method-diff {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--hair);
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--carbon-soft);
+}
+.method-cell .method-diff strong { color: var(--carbon); font-weight: 700; }
+
+/* ---------- 素材別対応表（拡張版spec-table） ---------- */
+.mat-table { border-top: 1px solid var(--hair); font-size: 13.5px; }
+.mat-table th, .mat-table td {
+  border-bottom: 1px solid var(--hair);
+  padding: 18px 14px;
+  text-align: left;
+  vertical-align: top;
+  font-weight: 400;
+}
+.mat-table thead th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--carbon-soft);
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.mat-table tbody th {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: 0.04em;
+  width: 130px;
+  white-space: nowrap;
+}
+.mat-table tbody th small {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--carbon-soft);
+  margin-top: 4px;
+}
+.mat-table td { color: var(--carbon-mid); line-height: 1.85; }
+.mat-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 3px 9px;
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.mat-badge.is-best { border-color: var(--soul); color: var(--soul); }
+.mat-badge.is-uv { border-color: rgba(62,155,214,0.6); color: #1E6FB0; }
+@media (max-width: 760px) {
+  .mat-table, .mat-table thead, .mat-table tbody, .mat-table tr, .mat-table th, .mat-table td { display: block; }
+  .mat-table thead { display: none; }
+  .mat-table tbody th { width: auto; border-bottom: 0; padding-bottom: 4px; }
+  .mat-table td { border-bottom: 0; padding: 4px 14px; }
+  .mat-table tr { border-bottom: 1px solid var(--hair); padding: 14px 0; }
+  .mat-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    color: var(--carbon-soft);
+    margin-bottom: 2px;
+  }
+}
+
+/* ---------- 品質管理チェックリスト ---------- */
+.qc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  border-top: 1px solid var(--hair);
+  border-left: 1px solid var(--hair);
+}
+.qc-item {
+  border-right: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  background: var(--paper);
+  padding: 24px 26px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.qc-check {
+  flex: none;
+  width: 20px; height: 20px;
+  border: 1.5px solid var(--soul);
+  border-radius: 2px;
+  position: relative;
+  margin-top: 2px;
+}
+.qc-check::after {
+  content: "";
+  position: absolute;
+  left: 6px; top: 2px;
+  width: 5px; height: 10px;
+  border: solid var(--soul);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.qc-item h4 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.qc-item h4 .en {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--carbon-soft);
+  margin-left: 8px;
+}
+.qc-item p { font-size: 12.5px; line-height: 1.85; color: var(--carbon-mid); }
+@media (max-width: 680px) { .qc-grid { grid-template-columns: 1fr; } }
+
+/* ---------- 数字（実績・能力） ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--hair);
+  border-left: 1px solid var(--hair);
+}
+.stat-cell {
+  border-right: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  padding: clamp(28px, 3.4vw, 44px) clamp(20px, 2.6vw, 32px);
+  background: var(--paper);
+}
+.stat-num {
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: clamp(34px, 4.4vw, 54px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.stat-num .unit {
+  font-size: clamp(13px, 1.5vw, 17px);
+  color: var(--carbon-soft);
+  letter-spacing: 0.06em;
+}
+.stat-label {
+  margin-top: 14px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--carbon-mid);
+}
+.stat-label .en {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--carbon-soft);
+  margin-top: 4px;
+}
+@media (max-width: 860px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------- 入稿ファイル ---------- */
+.intake-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.intake-card {
+  border: 1px solid var(--hair);
+  background: var(--paper);
+  padding: clamp(28px, 3.4vw, 40px);
+}
+.intake-card .fmt {
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: 26px;
+  letter-spacing: 0.1em;
+  margin-bottom: 6px;
+}
+.intake-card .fmt small {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--carbon-soft);
+  margin-left: 10px;
+}
+.intake-card p { font-size: 13.5px; line-height: 1.95; color: var(--carbon-mid); }
+@media (max-width: 680px) { .intake-grid { grid-template-columns: 1fr; } }
+
+/* ---------- タイムライン（沿革／工程の時系列） ---------- */
+.timeline { border-left: 1px solid var(--hair); margin-left: 8px; padding-left: clamp(24px, 3vw, 40px); }
+.timeline-item { position: relative; padding-bottom: clamp(28px, 3.4vw, 44px); }
+.timeline-item:last-child { padding-bottom: 0; }
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * clamp(24px, 3vw, 40px) - 5px);
+  top: 6px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--primer);
+  border: 1.5px solid var(--soul);
+}
+.timeline-no {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--soul);
+}
+.timeline-item h4 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  margin: 8px 0 8px;
+}
+.timeline-item p { font-size: 13.5px; line-height: 1.95; color: var(--carbon-mid); max-width: 44em; }
