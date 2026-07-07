@@ -43,6 +43,17 @@ js/main.js      … ナビ現在地・リビール・文字割り出し・カス
 - 検査記録スタイルのセクション見出し（SEC.01 + 罫線 + 英ラベル）
 - 書体: Shippori Antique B1（日本語見出し）/ Zen Kaku Gothic New（本文）/ IBM Plex Mono（コード類）/ Archivo wdth125（欧文ワイド）
 
+## Vercel デプロイ手順
+
+1. https://vercel.com/new でこのリポジトリを Import
+2. Framework Preset: Next.js が自動検出される
+3. Root Directory: `./` (変更不要)
+4. Environment Variables:
+   - `NEXT_PUBLIC_SITE_URL` に実 deploy 先 URL を設定(例: `https://kumabe-tosou.vercel.app`)
+5. Deploy をクリック
+6. Preview URL / Production URL が発行される
+7. (後日) 独自ドメイン設定は Vercel Project Settings > Domains から
+
 ## 更新予定（TODO）
 
 - [ ] 問い合わせ窓口の確定（`contact.html` の `#contact` セクションを差し替え）
