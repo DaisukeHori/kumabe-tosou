@@ -124,7 +124,9 @@ export const zOpsLimits = z.object({
 }).strict();
 
 export const zNotificationSettings = z.object({
-  inquiry_to: z.string().email().max(120),   // 問い合わせ通知メールの宛先 (Resend 経由)
+  inquiry_to: z.string().email().max(120),   // 問い合わせ通知メールの宛先。/admin/settings で変更可。
+                                             // bootstrap-admin が管理者メールで初期化 (設計書 §6.3)。
+                                             // キー不存在時は送信スキップ + E902 ログ (問い合わせ保存は成功)
   on_publish_failure: z.boolean(),           // 2d〜: 配信失敗・トークン失効もメール通知するか
 }).strict();
 

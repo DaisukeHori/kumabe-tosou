@@ -474,7 +474,7 @@ JSONB カラムは**必ず契約書 (module-contracts.md §4) のスキーマで
 - 全テーブル `enable row level security`。
 - admin 判定は `exists (select 1 from profiles where id = auth.uid())` を共通関数 `is_admin()` (security definer) に切り出す。
 - `contact_inquiries` の anon INSERT は **rate limit を Server Action 側で実施** (IP ごと 5 件/時)。実装は `rate_limits` テーブル (§2.2、IP は salt 付き hash で生 IP は保持しない) + **honeypot フィールド + 送信最小時間** (表示から 3 秒未満の submit を拒否)。RLS はカラム制約のみ (status='new' 固定)。
-- **管理者ブートストラップ**: Supabase Auth の public signup は**無効化** (Dashboard 設定を 1a 手順書に含める)。管理者作成は `scripts/bootstrap-admin.ts` (service role) が auth.users + profiles を同時作成。profiles への INSERT は service のみ (RLS)。※ 仮に signup が開いていても profiles 行がなければ `is_admin()` は false であり権限昇格はしない (Codex 指摘の BLOCKER 評価は過大) が、多層防御として signup 自体を閉じる。
+- **管理者ブートストラップ**: Supabase Auth の public signup は**無効化** (Dashboard 設定を 1a 手順書に含める)。管理者作成は `scripts/bootstrap-admin.ts` (service role) が auth.users + profiles を同時作成し、**site_settings 'notifications'.inquiry_to を同メールアドレスで初期化** (§6.3 — 通知先未設定のまま運用が始まる事故を防ぐ)。profiles への INSERT は service のみ (RLS)。※ 仮に signup が開いていても profiles 行がなければ `is_admin()` は false であり権限昇格はしない (Codex 指摘の BLOCKER 評価は過大) が、多層防御として signup 自体を閉じる。
 - SNS トークンは **テーブルに置かない**。Supabase Vault に保存し、Edge Function / Route Handler (service role) だけが `vault.decrypted_secrets` を読む。クライアントには auth_status のみ返す。
 
 ### 3.4 Storage バケット認可
@@ -634,7 +634,7 @@ disconnected → connected ⇄ expired → connected (再接続)
 | 問い合わせ | /admin/inquiries | 一覧 + status 変更。スパムマーク |
 | **AI スタジオ** | /admin/studio | §7 のパイプライン UI。録音 / テキスト入力 → 実行 → レビュー → 配信予約 |
 | チャネル管理 | /admin/channels | X / Instagram の接続 (OAuth) / note ラベル管理 / style_profiles 編集 |
-| サイト設定 | /admin/settings | 会社情報 / ヒーロー / SEO 既定値のフォーム編集 |
+| サイト設定 | /admin/settings | 会社情報 / ヒーロー / SEO 既定値 / **通知設定 (問い合わせ通知の宛先メール・配信失敗通知 on/off)** / 運用上限 (X 月間コスト) のフォーム編集 |
 
 ### 5.3 AI スタジオ画面フロー
 
@@ -674,7 +674,19 @@ or テキスト直書き   確認・手修正            researching…         
 | hero.jpg / 各ページ画像 | media テーブル + Supabase Storage 公開 URL (next/image remotePatterns 追加) |
 | contact フォームの console.log | contact_inquiries INSERT (Server Action) + 完了画面 + **Resend で管理者へ通知メール** (ベストエフォート — 送信失敗でも問い合わせ保存は成功扱い、KMB-E902 をログ記録) |
 
-### 6.3 SEO 継続条件
+### 6.3 問い合わせ通知メール仕様 (Resend)
+
+| 項目 | 仕様 |
+|---|---|
+| 送信タイミング | contact_inquiries INSERT 成功直後 (同一 Server Action 内、ベストエフォート) |
+| 宛先 | settings 'notifications'.inquiry_to (**/admin/settings で変更可能**)。未設定時は送信スキップ + KMB-E902 ログ + ダッシュボードに「通知先未設定」警告 |
+| 初期値 | bootstrap-admin 実行時に管理者メールアドレスで自動初期化 (§3.3 — 未設定のまま運用が始まる事故を防ぐ) |
+| 差出人 | `no-reply@<独自ドメイン>` (Resend 認証済みドメイン) |
+| Reply-To | **問い合わせ者のメールアドレス** — 受信メールにそのまま返信すれば問い合わせ者に届く |
+| 件名 | `【隈部塗装】新しいお問い合わせ: {種別} ({お名前}様)` |
+| 本文 | 問い合わせ内容の**全文** (お名前 / メール / 電話 / 種別 / 対象品目 / 内容 / 受信日時 JST) + /admin/inquiries/{id} への直リンク。HTML + プレーンテキストの multipart |
+
+### 6.4 SEO 継続条件
 
 - 既存 14 ルートの URL は変えない。sitemap.ts は DB から動的生成に置換 (works/notes/blog の詳細 URL を追加)。
 - 詳細ページの metadata は `generateMetadata()` で DB から生成。OGP 画像は cover_media の公開 URL。
@@ -1040,4 +1052,5 @@ const stream = anthropic.messages.stream({
 | v2.0 | 2026-07-07 | 設計厳格化 (ユーザー指摘): module-contracts.md 分離 / Zod canonical 化 / Storage・API・Vault 認可 / 周辺ライフサイクル / OAuth・SSE シーケンス / X 字数規約修正 (重み付き 280) / seed rollback / NFR / CI 方針 |
 | v2.1 | 2026-07-07 | スキーマ完了監査: 契約書 §4.8 (CRUD 入力契約) / §4.9 (facade 補助型) 追加、zRunStage から cleaning 除去 (状態機械と整合)、seed_manifest DDL 追加、テーブル数 18 に訂正 |
 | v3.1 | 2026-07-08 | Resend 採用確定 (堀さん決定): 問い合わせ通知を 1c に前倒し、配信失敗通知 (2d) も同一アカウント、KMB-E902 追加、settings に 'notifications' キー追加、コスト表に Resend $0 追加 |
+| v3.2 | 2026-07-08 | 通知メール仕様の詰め (堀さん指摘): §6.3 新設 (件名/本文全文/Reply-To/宛先未設定時挙動)、/admin/settings に通知設定を明記、bootstrap で宛先を自動初期化 |
 | v3.0 | 2026-07-07 | Codex 外部レビュー 19 件反映: 配信 worker を Next.js Route Handler に統一 (Edge Fn 廃止)、AI 実行を advance (1 呼び出し=1 stage) + lease/heartbeat 方式に再設計、予約を draft 単位に修正、at-least-once + 人間照合モデル (E506)、claims 分離保存 (zChannelDraftOutput)、signup 無効化 + bootstrap 手順、media 原本/レンディションのバケット分離 + EXIF 除去、rate_limits テーブル、課金ガード精緻化 (コスト見積り合算)、IG 接続シーケンス、note の scheduling policy、twitter-text 採用、バックアップを GH Actions に訂正、parity テストのスコープ限定、B1 を目標 10 分に変更、DDL 19 テーブルに (rate_limits 追加) |
