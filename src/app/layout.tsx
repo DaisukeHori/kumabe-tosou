@@ -15,7 +15,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_URL = "https://kumabe-tosou.vercel.app";
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
 const SITE_TITLE = "隈部塗装 | 3Dプリント表面処理の専門工房 — 大分県豊後高田市";
 const SITE_DESCRIPTION =
   "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。隈部塗装(大分県豊後高田市)。";
