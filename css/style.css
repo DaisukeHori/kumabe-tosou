@@ -2258,3 +2258,147 @@ body::before {
   .global-nav { gap: clamp(15px, 1.9vw, 26px); font-size: 13px; }
   .global-nav .nav-cta { padding: 9px 18px; }
 }
+
+/* =============================================================
+   v2.5 — 工程の詳細ページ（process）
+   ============================================================= */
+
+/* ---------- 塗膜の層構造 断面図 ---------- */
+.coat-diagram {
+  border: 1px solid var(--hair);
+  background: var(--paper);
+  padding: clamp(28px, 4vw, 52px);
+  margin-top: clamp(30px, 4.5vw, 48px);
+}
+.coat-diagram svg { width: 100%; height: auto; display: block; }
+.coat-legend {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  border-top: 1px dashed var(--hair);
+  padding-top: 20px;
+}
+.coat-legend-item .cl-swatch {
+  width: 100%; height: 6px;
+  border-radius: 1px;
+  margin-bottom: 8px;
+}
+.coat-legend-item .cl-name {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+.coat-legend-item .cl-en {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--carbon-soft);
+  margin: 3px 0 6px;
+}
+.coat-legend-item .cl-desc { font-size: 11.5px; line-height: 1.7; color: var(--carbon-mid); }
+@media (max-width: 720px) { .coat-legend { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- 工程ステップ ---------- */
+.process-list { border-top: 1px solid var(--hair); }
+.process-step {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: clamp(20px, 3vw, 44px);
+  padding: clamp(30px, 4vw, 46px) 0;
+  border-bottom: 1px solid var(--hair);
+  position: relative;
+}
+.process-step .ps-no {
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: clamp(40px, 5vw, 62px);
+  line-height: 0.9;
+  color: transparent;
+  -webkit-text-stroke: 1.4px var(--carbon-soft);
+  transition: -webkit-text-stroke-color 0.3s var(--ease), color 0.3s var(--ease);
+}
+.process-step:hover .ps-no {
+  -webkit-text-stroke-color: var(--soul);
+  color: rgba(168,15,34,0.06);
+}
+.process-step .ps-body { max-width: 52em; }
+.process-step .ps-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--soul);
+}
+.process-step h3 {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: clamp(18px, 2.4vw, 24px);
+  letter-spacing: 0.04em;
+  margin: 10px 0 4px;
+}
+.process-step .ps-en {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--carbon-soft);
+  margin-bottom: 16px;
+}
+.process-step .ps-desc { font-size: 14px; line-height: 2.05; color: var(--carbon-mid); }
+.process-step .ps-why {
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: var(--primer-deep);
+  border-left: 2px solid var(--soul);
+  font-size: 12.5px;
+  line-height: 1.85;
+  color: var(--carbon-mid);
+}
+.process-step .ps-why strong { color: var(--carbon); font-weight: 700; }
+@media (max-width: 640px) {
+  .process-step { grid-template-columns: 1fr; gap: 14px; }
+  .process-step .ps-no { font-size: 44px; }
+}
+
+/* ---------- 塗装環境コラム ---------- */
+.booth-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--hair);
+  border-left: 1px solid var(--hair);
+  margin-top: clamp(30px, 4.5vw, 48px);
+}
+.booth-fact {
+  border-right: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  background: var(--paper);
+  padding: clamp(26px, 3.2vw, 38px);
+}
+.booth-fact .bf-num {
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%;
+  font-size: clamp(28px, 3.6vw, 42px);
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.booth-fact .bf-num .unit { font-size: 15px; color: var(--carbon-soft); letter-spacing: 0.04em; }
+.booth-fact .bf-label {
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--carbon-mid);
+}
+.booth-fact .bf-label .en {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--carbon-soft);
+  margin-top: 4px;
+}
+@media (max-width: 720px) { .booth-facts { grid-template-columns: 1fr; } }
