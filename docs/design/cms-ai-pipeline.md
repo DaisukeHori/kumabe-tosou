@@ -933,6 +933,9 @@ const stream = anthropic.messages.stream({
 | **2c** | X / Instagram 接続 + publish-worker + note 半自動 | 2 | 1 (channels) | L (4-5 千行) | 2b, X/Meta アカウント |
 | **2d** | 予約投稿 (pg_cron) + ダッシュボード統合 + 本番 E2E | — | — | S-M (1-2 千行) | 2c |
 
+- **フェーズは日程ではなく依存順序と品質ゲート。全フェーズを 1 日 (1 セッション) で一括実装する。** 依存が解けたフェーズは即並列開始し、各フェーズの完了条件 (テスト 2 連続 PASS) だけを直列に守る。
+- 実行計画 (wave): Wave0 = 1a (直列・基盤) → Wave1 = 1b×3 並列 + 1c 並列 (worktree 分離) → Wave2 = 2a+2b と 2c を並列 (SNS は mock 先行) → Wave3 = 統合 E2E + 受入基準 → Wave4 = Vercel deploy + 実 API 疎通。
+- 外部要因のみ日をまたぎ得る: X Developer 申請の承認、Meta App Review (必要な場合)。これらは channel_accounts.disconnected のまま出荷し、承認後に接続するだけで動く設計 (コードは 1 日で完成)。
 - 実装は **implementer + tester ペア** をフェーズごとに配置 (メモリ規約)。1b はモジュール境界 (契約書 §1 のモジュール単位) で implementer 3 並列 + worktree 分離。
 - **全フェーズ共通の着手条件**: docs/module-contracts.md の該当契約 (Zod / facade / 依存方向) を確認してから実装。契約にない型・境界を実装内で発明しない。契約変更が必要なら契約書 §8 の手順 (文書先行) に従う。
 - 1a の成果物に ESLint 境界ルール (契約書 §2) と `contracts-ddl-parity.test.ts` を含める。
