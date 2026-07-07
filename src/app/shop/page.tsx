@@ -23,6 +23,7 @@ export const metadata: Metadata = {
     title: "SHOP | 隈部塗装 — 仕上げを、通販のように買う",
     description:
       "受託サービスをサイズ×個数×グレードのシミュレータで概算し、そのまま注文相談へ。塗装済み製品の販売枠も。",
+    images: ["/img/black-car.jpg"],
   },
 };
 
@@ -125,7 +126,7 @@ export default function ShopPage() {
   return (
     <>
       <PageHead
-        index="INDEX 08 — SHOP"
+        index="INDEX 09 — SHOP"
         en="ORDER FINISHING ONLINE"
         title={
           <>

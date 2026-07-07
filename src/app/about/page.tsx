@@ -22,6 +22,7 @@ export const metadata: Metadata = {
     title: "会社案内 | 隈部塗装 — 3Dプリント表面処理の専門工房",
     description:
       "代表・隈部信之のプロフィール、工房設備、会社概要、所在地（大分県豊後高田市）。",
+    images: ["/img/airbrush-dark.jpg"],
   },
 };
 

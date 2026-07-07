@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { ContactForm } from "@/components/contact/contact-form";
 import {
   ArrowButton,
   MapNote,
@@ -21,6 +22,7 @@ export const metadata: Metadata = {
     title: "相談する | 隈部塗装 — 見積もりはサイズ×個数×グレードの3つで",
     description:
       "見積もりは「サイズ×個数×グレード」の3点で概算をお出しできます。正式な受付窓口は準備中です。",
+    images: ["/img/car-night.jpg"],
   },
 };
 
@@ -69,7 +71,7 @@ export default function ContactPage() {
   return (
     <>
       <PageHead
-        index="INDEX 09 — CONTACT"
+        index="INDEX 10 — CONTACT"
         en="SIZE × QTY × GRADE"
         title={
           <>
@@ -131,9 +133,21 @@ export default function ContactPage() {
         </div>
       </Section>
 
+      {/* ============ お問い合わせフォーム(モック) ============ */}
+      <Section>
+        <SectionMark no="SEC. 03" label="CONTACT FORM (MOCK)" />
+        <SecTitle>先行モックフォーム</SecTitle>
+        <SecLead>
+          正式受付前の先行確認用として、フォームのモックを設置しています。入力・送信の動作は確認できますが、送信内容はブラウザのコンソールに出力されるのみで、実際の送受信は行われません。
+        </SecLead>
+        <div className="mt-10">
+          <ContactForm />
+        </div>
+      </Section>
+
       {/* ============ 逆リンク ============ */}
       <Section>
-        <SectionMark no="SEC. 03" label="BEFORE YOU ASK" />
+        <SectionMark no="SEC. 04" label="BEFORE YOU ASK" />
         <SecTitle>ご相談の前に。</SecTitle>
         <SecLead>
           工程・グレード・数量スライドの詳細はサービスページに、対応色の考え方は色見本ページにまとめています。「できないこと」も先に書いています——正直さも品質のうちです。
@@ -146,7 +160,7 @@ export default function ContactPage() {
 
       {/* ============ FAQ ============ */}
       <Section>
-        <SectionMark no="SEC. 04" label="FAQ" />
+        <SectionMark no="SEC. 05" label="FAQ" />
         <SecTitle>よくあるご質問</SecTitle>
         <div className="mt-10 divide-y divide-hair border-y border-hair">
           {FAQ_ITEMS.map((item, i) => (

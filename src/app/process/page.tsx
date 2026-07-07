@@ -22,6 +22,7 @@ export const metadata: Metadata = {
     title: "工程 | 隈部塗装 — 一個が仕上がるまでの、9つの手",
     description:
       "積層痕の研磨から常温硬化・検品まで。自動車補修の工程を、塗膜の層構造とともに一手ずつ解説します。",
+    images: ["/img/sanding.jpg"],
   },
 };
 

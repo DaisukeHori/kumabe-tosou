@@ -12,6 +12,7 @@ export const metadata: Metadata = {
     title: "ストーリー | 隈部塗装 — なぜ、積層痕と戦うことにしたのか",
     description:
       "家電の量産塗装職人が、なぜ3Dプリントの表面処理専門工房を始めたのか。一本の相談から始まった、下地をめぐる物語。",
+    images: ["/img/black-car.jpg"],
   },
 };
 

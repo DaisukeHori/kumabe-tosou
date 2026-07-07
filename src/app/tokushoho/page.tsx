@@ -20,6 +20,7 @@ export const metadata: Metadata = {
     title: "特定商取引法に基づく表記 | 隈部塗装",
     description:
       "隈部塗装の特定商取引法に基づく表記。販売業者、取引条件、送料などについて記載しています。",
+    images: ["/hero.jpg"],
   },
 };
 

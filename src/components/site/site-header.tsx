@@ -21,10 +21,12 @@ export const NAV_ITEMS = [
   { no: "01", label: "ストーリー", href: "/story" },
   { no: "02", label: "会社案内", href: "/about" },
   { no: "03", label: "サービス・料金", href: "/service" },
-  { no: "04", label: "素材対応", href: "/materials" },
-  { no: "05", label: "色見本", href: "/colors" },
-  { no: "06", label: "読みもの", href: "/notes" },
-  { no: "07", label: "SHOP", href: "/shop" },
+  { no: "04", label: "施工事例", href: "/works" },
+  { no: "05", label: "お客様の声", href: "/voices" },
+  { no: "06", label: "素材対応", href: "/materials" },
+  { no: "07", label: "色見本", href: "/colors" },
+  { no: "08", label: "読みもの", href: "/notes" },
+  { no: "09", label: "SHOP", href: "/shop" },
 ] as const;
 
 export function SiteHeader() {

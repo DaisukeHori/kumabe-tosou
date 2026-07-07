@@ -22,6 +22,7 @@ export const metadata: Metadata = {
     title: "素材対応 | 隈部塗装 — 造形方式・樹脂ごとの下地の作り分け",
     description:
       "3Dプリントの造形方式ごとに、素材別の下地の作り分け、UV耐性、入稿ファイル形式まで。",
+    images: ["/img/printer-3d.jpg"],
   },
 };
 
@@ -168,7 +169,7 @@ export default function MaterialsPage() {
   return (
     <>
       <PageHead
-        index="INDEX 05 — MATERIALS"
+        index="INDEX 06 — MATERIALS"
         en="FDM / SLA / SLS"
         title={
           <>

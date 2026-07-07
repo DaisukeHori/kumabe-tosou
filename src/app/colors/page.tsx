@@ -18,6 +18,7 @@ export const metadata: Metadata = {
     title: "色見本 | 隈部塗装 — 名車の象徴色で組んだ8枚の技術証明",
     description:
       "トヨタ090ホワイトパール、マツダ46Vソウルレッドほか、名車の象徴色8色。8色中5色が3コート・高難度系。",
+    images: ["/img/car-night.jpg"],
   },
 };
 
@@ -228,7 +229,7 @@ export default function ColorsPage() {
   return (
     <>
       <PageHead
-        index="INDEX 06 — COLORS"
+        index="INDEX 07 — COLORS"
         en="8 SWATCHES / 5 ARE 3-COAT"
         title={
           <>

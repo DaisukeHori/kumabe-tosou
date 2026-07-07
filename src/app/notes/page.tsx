@@ -17,6 +17,7 @@ export const metadata: Metadata = {
     title: "読みもの | 隈部塗装 — 塗りと色の裏側",
     description:
       "センチュリーの黒が水研ぎ3回である理由、ディーラーでも同色にならない赤の構造。工程と色の裏側を言葉で残します。",
+    images: ["/img/garage-work.jpg"],
   },
 };
 
@@ -75,7 +76,7 @@ export default function NotesPage() {
   return (
     <>
       <PageHead
-        index="INDEX 07 — NOTES"
+        index="INDEX 08 — NOTES"
         en="READING ON PAINT & COLOR"
         title={
           <>

@@ -5,12 +5,14 @@ const FOOTER_NAV = [
   { no: "01", label: "ストーリー", href: "/story" },
   { no: "02", label: "会社案内", href: "/about" },
   { no: "03", label: "サービス・料金", href: "/service" },
-  { no: "04", label: "工程", href: "/process" },
-  { no: "05", label: "素材対応", href: "/materials" },
-  { no: "06", label: "色見本", href: "/colors" },
-  { no: "07", label: "読みもの", href: "/notes" },
-  { no: "08", label: "SHOP", href: "/shop" },
-  { no: "09", label: "相談する", href: "/contact" },
+  { no: "04", label: "施工事例", href: "/works" },
+  { no: "05", label: "お客様の声", href: "/voices" },
+  { no: "06", label: "工程", href: "/process" },
+  { no: "07", label: "素材対応", href: "/materials" },
+  { no: "08", label: "色見本", href: "/colors" },
+  { no: "09", label: "読みもの", href: "/notes" },
+  { no: "10", label: "SHOP", href: "/shop" },
+  { no: "11", label: "相談する", href: "/contact" },
 ] as const;
 
 export function SiteFooter() {
@@ -60,9 +62,15 @@ export function SiteFooter() {
             </p>
             <Link
               href="/tokushoho"
-              className="mt-2 inline-block text-sm text-carbon-mid transition-colors hover:text-carbon"
+              className="mt-2 block text-sm text-carbon-mid transition-colors hover:text-carbon"
             >
               特定商取引法に基づく表記
+            </Link>
+            <Link
+              href="/privacy"
+              className="mt-2 block text-sm text-carbon-mid transition-colors hover:text-carbon"
+            >
+              プライバシーポリシー
             </Link>
           </div>
         </div>
