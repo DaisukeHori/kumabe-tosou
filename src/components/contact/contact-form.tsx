@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,42 +27,49 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+import { submitContactFormAction } from "@/components/contact/actions";
+
 /*
-  Phase 0.3 モック用フォーム。
-  実送信は行わず、console.log への出力のみ(外部送信は絶対に行わない)。
-  Phase 1 で Supabase 接続に置き換える予定。
+  Phase 1c: contact_inquiries への実保存 + 通知メール (Resend) に接続済み
+  (cms-ai-pipeline.md §6.2 / §6.3)。honeypot 隠しフィールド + 送信最小時間 + IP rate limit で
+  スパムを抑止する (§3.3)。
 */
 
 const INQUIRY_TYPES = [
-  "施工依頼",
-  "見積もり相談",
-  "材料に関する質問",
-  "その他",
+  { value: "construction", label: "施工依頼" },
+  { value: "estimate", label: "見積もり相談" },
+  { value: "material", label: "材料に関する質問" },
+  { value: "other", label: "その他" },
 ] as const;
 
-const INQUIRY_TYPE_ITEMS = INQUIRY_TYPES.map((label) => ({
-  label,
-  value: label as string,
-}));
+const INQUIRY_TYPE_VALUES = INQUIRY_TYPES.map((t) => t.value);
+const INQUIRY_TYPE_ITEMS = INQUIRY_TYPES.map((t) => ({ label: t.label, value: t.value }));
+
+const PHONE_REGEX = /^0\d{1,4}-?\d{1,4}-?\d{3,4}$/;
 
 const contactFormSchema = z.object({
   name: z.string().trim().min(1, "お名前を入力してください"),
   email: z.email("正しいメールアドレスを入力してください"),
-  phone: z.string().trim(),
+  phone: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || PHONE_REGEX.test(v), "正しい電話番号の形式で入力してください"),
   inquiryType: z
     .string()
-    .refine((value) => (INQUIRY_TYPES as readonly string[]).includes(value), {
+    .refine((value) => (INQUIRY_TYPE_VALUES as readonly string[]).includes(value), {
       message: "お問い合わせ種別を選択してください",
     }),
-  targetItem: z.string().trim(),
+  targetItem: z.string().trim().max(100, "100文字以内でご記入ください"),
   message: z
     .string()
     .trim()
     .min(10, "内容は10文字以上でご記入ください")
-    .max(2000, "内容は2000文字以内でご記入ください"),
+    .max(5000, "内容は5000文字以内でご記入ください"),
   agree: z.boolean().refine((value) => value === true, {
     message: "プライバシーポリシーへの同意が必要です",
   }),
+  // honeypot: 人間には見えない隠しフィールド。bot がここに値を入れると spam 扱いにする。
+  website: z.string().trim(),
 });
 
 type ContactFormValues = z.infer<typeof contactFormSchema>;
@@ -75,40 +82,70 @@ const DEFAULT_VALUES: ContactFormValues = {
   targetItem: "",
   message: "",
   agree: false,
+  website: "",
 };
 
 export function ContactForm() {
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  // フォームが描画された時刻。送信最小時間 (3秒) の判定に使う (spam-guard.ts)。
+  const formRenderedAtRef = useRef<number>(Date.now());
   const {
     register,
     handleSubmit,
     control,
     reset,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<ContactFormValues>({
     resolver: zodResolver(contactFormSchema),
     defaultValues: DEFAULT_VALUES,
   });
 
-  function onSubmit(values: ContactFormValues) {
-    // モック送信: 外部への送信は一切行わない (Phase 1 で Supabase 接続に置き換え予定)
-    console.log("[MOCK] contact form submit", values);
-    setSubmitted(true);
-    reset(DEFAULT_VALUES);
+  async function onSubmit(values: ContactFormValues) {
+    setSubmitError(null);
+    const result = await submitContactFormAction({
+      name: values.name,
+      email: values.email,
+      phone: values.phone,
+      inquiryType: values.inquiryType,
+      targetItem: values.targetItem,
+      message: values.message,
+      agree: values.agree,
+      honeypot: values.website,
+      formRenderedAt: formRenderedAtRef.current,
+    });
+
+    if (result.status === "success") {
+      setSubmitted(true);
+      reset(DEFAULT_VALUES);
+      return;
+    }
+
+    if (result.status === "rate_limited") {
+      setSubmitError(
+        "送信回数の上限に達しました。しばらく時間をおいてから再度お試しください。",
+      );
+      return;
+    }
+
+    if (result.status === "invalid") {
+      setError("root", { message: result.message });
+      setSubmitError(result.message);
+      return;
+    }
+
+    setSubmitError("送信に失敗しました。しばらくしてから再度お試しください。");
   }
 
   if (submitted) {
     return (
       <div className="border border-hair bg-paper p-8 sm:p-10">
         <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
-          STATUS — RECEIVED (MOCK)
+          STATUS — RECEIVED
         </span>
         <p className="mt-5 text-[15px] leading-[2.1] text-carbon-mid">
-          お問い合わせを受け付けました(モック)
-        </p>
-        <p className="mt-3 text-xs leading-6 text-carbon-soft">
-          ※
-          このフォームはモック段階のため、実際の送信・保存は行われていません。正式受付開始までしばらくお待ちください。
+          お問い合わせを受け付けました。内容を確認のうえ、ご連絡いたします。
         </p>
         <Button
           type="button"
@@ -129,13 +166,28 @@ export function ContactForm() {
       className="border border-hair bg-paper p-8 sm:p-10"
     >
       <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
-        STATUS — MOCK FORM (PHASE 0.3)
+        STATUS — CONTACT FORM
       </span>
       <p className="mt-5 text-[13px] leading-7 text-carbon-soft">
-        現在はモック段階のため、送信ボタンを押しても外部への送信は行われません(送信内容はブラウザのコンソールにのみ出力されます)。
+        必要事項をご入力のうえ送信してください。内容を確認し、担当より折り返しご連絡いたします。
       </p>
 
       <FieldGroup className="mt-8">
+        {/* honeypot: 画面上には表示せず、bot による自動入力のみを拾う */}
+        <div
+          aria-hidden="true"
+          className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden"
+        >
+          <label htmlFor="contact-website">ウェブサイト</label>
+          <input
+            id="contact-website"
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            {...register("website")}
+          />
+        </div>
+
         <Field data-invalid={!!errors.name}>
           <FieldLabel htmlFor="contact-name">
             お名前 <span className="text-destructive">*</span>
@@ -204,8 +256,8 @@ export function ContactForm() {
                 <SelectContent>
                   <SelectGroup>
                     {INQUIRY_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -245,7 +297,7 @@ export function ContactForm() {
             {...register("message")}
           />
           <FieldDescription>
-            10文字以上2000文字以内でご記入ください。
+            10文字以上5000文字以内でご記入ください。
           </FieldDescription>
           <FieldError errors={errors.message ? [errors.message] : undefined} />
         </Field>
@@ -280,12 +332,16 @@ export function ContactForm() {
         />
       </FieldGroup>
 
+      {submitError ? (
+        <p className="mt-6 text-sm text-destructive">{submitError}</p>
+      ) : null}
+
       <Button
         type="submit"
         disabled={isSubmitting}
         className="mt-8 h-11 rounded-none bg-carbon px-8 tracking-[0.12em] text-paper hover:bg-carbon/85"
       >
-        送信する(モック)
+        送信する
       </Button>
     </form>
   );

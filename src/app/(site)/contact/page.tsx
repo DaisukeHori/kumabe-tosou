@@ -18,11 +18,10 @@ export const metadata: Metadata = {
     absolute: "相談する | 隈部塗装 — 見積もりはサイズ×個数×グレードの3つで",
   },
   description:
-    "隈部塗装へのご相談。見積もりは「サイズ×個数×グレード」の3点で概算をお出しできます。造形データや写真があればより正確に。正式な受付窓口は準備中です。",
+    "隈部塗装へのご相談。見積もりは「サイズ×個数×グレード」の3点で概算をお出しできます。造形データや写真があればより正確に。お問い合わせフォームから承ります。",
   openGraph: {
     title: "相談する | 隈部塗装 — 見積もりはサイズ×個数×グレードの3つで",
-    description:
-      "見積もりは「サイズ×個数×グレード」の3点で概算をお出しできます。正式な受付窓口は準備中です。",
+    description: "見積もりは「サイズ×個数×グレード」の3点で概算をお出しできます。",
     images: ["/img/car-night.jpg"],
   },
 };
@@ -117,29 +116,12 @@ export default function ContactPage() {
         </MapNote>
       </Section>
 
-      {/* ============ 受付窓口 ============ */}
+      {/* ============ お問い合わせフォーム ============ */}
       <Section>
-        <SectionMark no="SEC. 02" label="CONTACT" />
-        <Reveal as="div" className="mt-10 border border-hair bg-paper p-8 sm:p-10">
-          <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
-            STATUS — PREPARING
-          </span>
-          <p className="mt-5 text-[15px] leading-[2.1] text-carbon-mid">
-            正式な受付窓口（出品ページ・お問い合わせフォーム）は現在準備中です。
-            <br />
-            開設までの先行のご相談は、ご紹介経由で承っています。
-            <br />
-            窓口が整い次第、このページでご案内します。
-          </p>
-        </Reveal>
-      </Section>
-
-      {/* ============ お問い合わせフォーム(モック) ============ */}
-      <Section>
-        <SectionMark no="SEC. 03" label="CONTACT FORM (MOCK)" />
-        <SecTitle>先行モックフォーム</SecTitle>
+        <SectionMark no="SEC. 02" label="CONTACT FORM" />
+        <SecTitle>お問い合わせフォーム</SecTitle>
         <SecLead>
-          正式受付前の先行確認用として、フォームのモックを設置しています。入力・送信の動作は確認できますが、送信内容はブラウザのコンソールに出力されるのみで、実際の送受信は行われません。
+          下記フォームからお問い合わせいただけます。内容を確認のうえ、担当より折り返しご連絡いたします。
         </SecLead>
         <Reveal as="div" className="mt-10">
           <ContactForm />
@@ -148,7 +130,7 @@ export default function ContactPage() {
 
       {/* ============ 逆リンク ============ */}
       <Section>
-        <SectionMark no="SEC. 04" label="BEFORE YOU ASK" />
+        <SectionMark no="SEC. 03" label="BEFORE YOU ASK" />
         <SecTitle>ご相談の前に。</SecTitle>
         <SecLead>
           工程・グレード・数量スライドの詳細はサービスページに、対応色の考え方は色見本ページにまとめています。「できないこと」も先に書いています——正直さも品質のうちです。
@@ -161,7 +143,7 @@ export default function ContactPage() {
 
       {/* ============ FAQ ============ */}
       <Section>
-        <SectionMark no="SEC. 05" label="FAQ" />
+        <SectionMark no="SEC. 04" label="FAQ" />
         <SecTitle>よくあるご質問</SecTitle>
         <Reveal as="div" className="mt-10 divide-y divide-hair border-y border-hair">
           {FAQ_ITEMS.map((item, i) => (

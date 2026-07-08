@@ -3,7 +3,7 @@ import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Pagination } from "@/modules/platform/contracts";
 
-import type { InquiryInput, InquiryStatus } from "./contracts";
+import type { InquiryStatus } from "./contracts";
 
 /**
  * inquiry モジュールの repository (契約書 §3)。所有テーブル: contact_inquiries。
@@ -21,29 +21,6 @@ export type InquiryRow = {
   created_at: string;
   handled_at: string | null;
 };
-
-export async function insertInquiry(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  input: InquiryInput,
-): Promise<{ id: string }> {
-  const { data, error } = await supabase
-    .from("contact_inquiries")
-    .insert({
-      name: input.name,
-      email: input.email,
-      tel: input.tel,
-      inquiry_type: input.inquiry_type,
-      item: input.item,
-      body: input.body,
-      status: "new",
-    })
-    .select("id")
-    .single();
-  if (error || !data) {
-    throw new Error(`contact_inquiries INSERT に失敗しました: ${error?.message}`);
-  }
-  return { id: data.id };
-}
 
 /** keyset ページネーション (created_at desc, id desc)。設計書 §2.4: admin 一覧 50 件/頁 */
 export async function listInquiries(
