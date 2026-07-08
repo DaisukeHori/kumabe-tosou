@@ -7,6 +7,11 @@ import { zChannel } from "@/modules/platform/contracts";
 import { zContentStatus, zPostKind } from "@/modules/content/contracts";
 import { zPriceOptionKind } from "@/modules/pricing/contracts";
 import { zSourceInputType, zRunStatus } from "@/modules/ai-studio/contracts";
+import {
+  zAccountChannel,
+  zChannelAuthStatus,
+  zChannelPostStatus,
+} from "@/modules/distribution/contracts";
 
 /**
  * DB 接続不要の静的検証 (設計書 §11.1 1a: contracts-ddl-parity.test.ts)。
@@ -115,10 +120,28 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
     }
   });
 
+  it("channel_posts.status ↔ distribution の zChannelPostStatus (Wave2-F で追加)", () => {
+    const expected = [...zChannelPostStatus.options].sort();
+    const actual = findCheck(checks, "channel_posts", "status").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("channel_accounts.channel ↔ distribution の zAccountChannel (Wave2-F で追加)", () => {
+    const expected = [...zAccountChannel.options].sort();
+    const actual = findCheck(checks, "channel_accounts", "channel").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("channel_accounts.auth_status ↔ distribution の zChannelAuthStatus (Wave2-F で追加)", () => {
+    const expected = [...zChannelAuthStatus.options].sort();
+    const actual = findCheck(checks, "channel_accounts", "auth_status").sort();
+    expect(actual).toEqual(expected);
+  });
+
   /**
    * 以下は DB 上は enum/status だが、契約書 §4 に対応する Zod スキーマが定義されていない列。
    * (profiles.role, ai_sources.transcript_status, channel_drafts.status, draft_revisions.edited_by,
-   *  channel_posts.status, channel_accounts.channel/auth_status, contact_inquiries.status)
+   *  contact_inquiries.status)
    * これらは外部入力ではなく repository 内部の状態遷移 (設計書 §4 の状態図) で管理される値のため、
    * 契約書は意図的に Zod 化していない (§3: Zod は外部入力/JSONB の型が対象)。
    * 将来これらを Zod 化する場合は契約書 §4 を先に更新し、本テストに比較を追加する。
@@ -129,9 +152,6 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
       ["ai_sources", "transcript_status"],
       ["channel_drafts", "status"],
       ["draft_revisions", "edited_by"],
-      ["channel_posts", "status"],
-      ["channel_accounts", "channel"],
-      ["channel_accounts", "auth_status"],
       ["contact_inquiries", "status"],
     ] as const;
     for (const [table, column] of uncoveredButPresent) {

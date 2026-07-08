@@ -24,6 +24,16 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   REVALIDATE_SECRET: z.string().min(1).optional(),
   JOBS_SECRET: z.string().min(1).optional(),
+
+  // ---- SNS 配信 (Wave2-F distribution。設計書 §7.7 / §8、契約書 §7.3-7.4) ----
+  // Preview 環境では OAuth 接続機能そのものを無効化する明示スイッチ (設計書 §7.7)。
+  OAUTH_ENABLED: z.enum(["true", "false"]).optional(),
+  // state + code_verifier を暗号化 httpOnly cookie に載せる際の対称鍵の素材 (32 文字以上)。
+  OAUTH_STATE_SECRET: z.string().min(32).optional(),
+  X_CLIENT_ID: z.string().min(1).optional(),
+  X_CLIENT_SECRET: z.string().min(1).optional(),
+  META_APP_ID: z.string().min(1).optional(),
+  META_APP_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -62,4 +72,19 @@ export function isServiceRoleConfigured(): boolean {
 /** pg_cron からの起床 webhook を検証するための共有シークレットが設定済みか */
 export function isJobsSecretConfigured(): boolean {
   return Boolean(process.env.JOBS_SECRET);
+}
+
+/** OAuth 接続機能全体のスイッチ (Preview 環境では無効化する運用。設計書 §7.7) */
+export function isOAuthEnabled(): boolean {
+  return process.env.OAUTH_ENABLED === "true" && Boolean(process.env.OAUTH_STATE_SECRET);
+}
+
+/** X (Twitter) OAuth 2.0 PKCE 接続に必要な env が揃っているか */
+export function isXOAuthConfigured(): boolean {
+  return isOAuthEnabled() && Boolean(process.env.X_CLIENT_ID);
+}
+
+/** Meta (Instagram) OAuth 接続に必要な env が揃っているか */
+export function isMetaOAuthConfigured(): boolean {
+  return isOAuthEnabled() && Boolean(process.env.META_APP_ID) && Boolean(process.env.META_APP_SECRET);
 }

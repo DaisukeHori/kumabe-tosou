@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { zIsoDatetime, zShortText } from "@/modules/platform/contracts";
+import { zIsoDatetime, zShortText, type Channel } from "@/modules/platform/contracts";
 
 /**
  * canonical: docs/module-contracts.md §4.5 (distribution の外部参照・メタ)
@@ -76,3 +76,83 @@ export const zScheduleReq = z
   })
   .strict();
 export type ScheduleReq = z.infer<typeof zScheduleReq>;
+
+/**
+ * channel_posts.status (DDL の check 制約と 1:1。cms-ai-pipeline.md §2.2 / §4.3)。
+ * contracts-ddl-parity.test.ts の比較対象として追加 (Wave2-F)。
+ */
+export const zChannelPostStatus = z.enum([
+  "scheduled",
+  "publishing",
+  "published",
+  "failed",
+  "cancelled",
+  "manual_required",
+]);
+export type ChannelPostStatus = z.infer<typeof zChannelPostStatus>;
+
+/** channel_accounts.auth_status (DDL の check 制約と 1:1) */
+export const zChannelAuthStatus = z.enum(["disconnected", "connected", "expired", "error"]);
+export type ChannelAuthStatus = z.infer<typeof zChannelAuthStatus>;
+
+/** channel_accounts.channel (DDL の check 制約と 1:1。platform の zChannel とは値集合が異なる (note を含み site_blog を含まない)) */
+export const zAccountChannel = z.enum(["x", "instagram", "note"]);
+export type AccountChannel = z.infer<typeof zAccountChannel>;
+
+/**
+ * §5 に明記の無い admin 配信キュー画面 (/admin/channels) 向けの人間照合アクション。
+ * manual_required からの遷移: 「投稿済み → published (URL 入力)」/「未投稿 → scheduled に戻す」
+ * (設計書 §4.3 / §8.2)。module-contracts.md 未更新分 — オーケストレーターへ報告済み。
+ */
+export const zManualReconcileAction = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("mark_published"), external_url: z.string().url() }),
+  z.object({ kind: z.literal("reset_to_scheduled"), scheduled_at: zIsoDatetime.nullable() }),
+]);
+export type ManualReconcileAction = z.infer<typeof zManualReconcileAction>;
+
+/** /admin/channels の note アカウント管理フォーム入力 (§5 に明記無し。X/Meta は OAuth のため対象外) */
+export const zNoteAccountInput = z
+  .object({
+    account_label: zShortText(50),
+    profile_url: z.string().url().nullable(),
+  })
+  .strict();
+export type NoteAccountInput = z.infer<typeof zNoteAccountInput>;
+
+// ---- §4.9 相当の読み取りビュー型 (Zod 化せず type のみ。DB 出力の正しさは repository が保証) ----
+
+export type ChannelPostView = {
+  id: string;
+  draft_id: string;
+  channel: Channel;
+  status: ChannelPostStatus;
+  scheduled_at: string;
+  published_at: string | null;
+  external_id: string | null;
+  external_url: string | null;
+  tweet_count: number | null;
+  url_count: number | null;
+  estimated_cost_cents: number;
+  attempt_count: number;
+  last_error_code: string | null;
+  last_error_detail: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChannelAccountView = {
+  channel: AccountChannel;
+  account_label: string;
+  auth_status: ChannelAuthStatus;
+  meta: Record<string, unknown>;
+  connected_at: string | null;
+  updated_at: string;
+};
+
+export type StyleProfileView = {
+  channel: Channel;
+  tone_instructions: string;
+  format_rules: string;
+  example_output: string | null;
+  updated_at: string;
+};
