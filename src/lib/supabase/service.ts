@@ -21,9 +21,17 @@ import { getEnv } from "@/lib/env";
  * ではネイティブ WebSocket が無く即例外になる (実測確認済み)。"ws" パッケージを
  * transport として明示的に渡すことで回避する (Node 20 では必須。Node 22+ の
  * ネイティブ WebSocket でも動作に支障はない)。
+ *
+ * SUPABASE_SERVICE_ROLE_KEY は任意設定 (env.ts 参照)。未設定環境では呼び出し元が
+ * catch して KMB-E9xx 相当に degrade する前提で、ここでは明確なメッセージの例外を投げる。
  */
 export function createSupabaseServiceClient() {
   const env = getEnv();
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY が未設定です。service role 依存機能は無効化されています。",
+    );
+  }
   return createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
       autoRefreshToken: false,
