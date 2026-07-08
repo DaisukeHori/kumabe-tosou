@@ -11,6 +11,8 @@ import {
   Section,
   SectionMark,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
+import { ServiceSimLink } from "@/components/site/service-sim-link";
 import { ShopSimulator } from "@/components/site/shop-simulator";
 
 export const metadata: Metadata = {
@@ -165,7 +167,7 @@ export default function ShopPage() {
           <span className="font-mono">#1200</span>{" "}
           で水研ぎ。違いはトップコートの層数だけ——塗らずに下地で仕上げるか、ソリッド1色か、パール3層か。あなたの造形物を工房へ送るだけで、射出成形品と見分けのつかない外観になって還ります。
         </SecLead>
-        <div className="mt-10 grid gap-5 lg:grid-cols-3">
+        <Reveal as="div" className="mt-10 grid gap-5 lg:grid-cols-3">
           {/* GRADE 01 */}
           <div className="flex flex-col border border-hair bg-paper">
             <figure className="relative">
@@ -228,13 +230,13 @@ export default function ShopPage() {
                   1点あたり / サイズ別目安・税込
                 </small>
               </p>
-              <Link
-                href="#sim"
+              <ServiceSimLink
+                grade="base"
                 className="mt-5 flex items-center justify-center gap-1 border border-carbon/40 py-3 text-sm tracking-[0.08em] transition-colors hover:bg-carbon hover:text-paper"
               >
                 サイズと個数で概算
                 <span aria-hidden="true">→</span>
-              </Link>
+              </ServiceSimLink>
             </div>
           </div>
 
@@ -296,13 +298,13 @@ export default function ShopPage() {
                   1点あたり / サイズ別目安・税込
                 </small>
               </p>
-              <Link
-                href="#sim"
+              <ServiceSimLink
+                grade="standard"
                 className="mt-5 flex items-center justify-center gap-1 border border-carbon/40 py-3 text-sm tracking-[0.08em] transition-colors hover:bg-carbon hover:text-paper"
               >
                 サイズと個数で概算
                 <span aria-hidden="true">→</span>
-              </Link>
+              </ServiceSimLink>
             </div>
           </div>
 
@@ -366,16 +368,16 @@ export default function ShopPage() {
                   1点あたり / 目安・税込
                 </small>
               </p>
-              <Link
-                href="#sim"
+              <ServiceSimLink
+                grade="premium"
                 className="mt-5 flex items-center justify-center gap-1 bg-carbon py-3 text-sm tracking-[0.08em] text-paper transition-colors hover:bg-carbon/85"
               >
                 サイズと個数で概算
                 <span aria-hidden="true">→</span>
-              </Link>
+              </ServiceSimLink>
             </div>
           </div>
-        </div>
+        </Reveal>
         <p className="mt-6 text-xs leading-6 text-carbon-soft">
           ※
           価格は「サイズ帯別の基本料金＋グレード」で決まる立ち上げ期の目安です。上記は最小サイズ（〜100mm）からの参考価格で、サイズが上がると変動します。正式価格表は作業実測に基づいて確定し、このページを更新します。色番号指定（日塗工・自動車カラーコード）にも対応。
@@ -402,9 +404,9 @@ export default function ShopPage() {
           数量スライド（10個以上 −15% / 30個以上
           −25%）と特急（＋50%）も反映した概算レンジを、その場で計算します。面を埋めるほど1個あたりの手間は下がる——だから、数を出すほど有利になります。内容はワンタップでコピーして、そのまま相談に貼り付けられます。
         </SecLead>
-        <div className="mt-10">
+        <Reveal as="div" className="mt-10">
           <ShopSimulator />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ SEC.03 塗装済み製品 ============ */}
@@ -418,7 +420,7 @@ export default function ShopPage() {
         <SecLead>
           工房で仕上げた「そのまま買える」製品の販売枠です。第一弾として、画面では絶対に伝わらない粒子感・深みを手元で確かめられる、実物の色見本パネルを準備しています。掲載製品は順次追加していきます。
         </SecLead>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
+        <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-3">
           {/* 8色セット */}
           <article className="flex flex-col border border-hair bg-paper">
             <div className="relative flex aspect-[3/2] flex-col items-center justify-center gap-4 bg-primer-deep">
@@ -588,7 +590,7 @@ export default function ShopPage() {
               </p>
             </div>
           </article>
-        </div>
+        </Reveal>
         <p className="mt-6 text-xs leading-6 text-carbon-soft">
           ※
           製品ビジュアルは現在イメージ（塗り板の色をCSSで再現したもの）です。実物の写真・価格・在庫は、販売開始時にこのページで公開します。
@@ -602,7 +604,7 @@ export default function ShopPage() {
         <SecLead>
           遠く離れた工房でも、安心して預けられるように。受入から発送まで、記録を残しながら進めます。オンライン決済が整うまでは、下記のとおり相談ベースでお受けしています。
         </SecLead>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal as="div" className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {BUY_FLOW.map((cell) => (
             <div key={cell.no} className="border border-hair bg-paper p-5">
               <span className="font-mono text-[10px] tracking-[0.2em] text-soul">
@@ -619,7 +621,7 @@ export default function ShopPage() {
               </p>
             </div>
           ))}
-        </div>
+        </Reveal>
         <p className="mt-6 text-xs leading-6 text-carbon-soft">
           お支払い方法・時期、送料、返品条件などの取引条件は
           <Link href="/tokushoho" className="text-soul underline">

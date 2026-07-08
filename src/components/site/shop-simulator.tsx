@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 /*
@@ -14,9 +14,25 @@ const PRICE_TABLE: Record<Grade, Record<PricedSize, [number, number]>> = {
   premium: { s: [15000, 20000], m: [20000, 28000], l: [28000, 35000] },
 };
 
-type Grade = "base" | "standard" | "premium";
+export type Grade = "base" | "standard" | "premium";
 type PricedSize = "s" | "m" | "l";
 type Size = PricedSize | "xl";
+
+/*
+  legacy/js/main.js「サービスカードの『サイズと個数で概算』→ グレードを事前選択」の移植。
+  shop.html の各グレードカードは <a data-service="base|standard|premium" href="#sim"> で、
+  クリック時に simGrade の aria-pressed を書き換えていた。
+  本実装では ServiceSimLink (page-blocks 外の shop 専用リンク) がこのイベントを dispatch し、
+  ShopSimulator 側で拾ってグレードを事前選択する。
+*/
+export const SHOP_SELECT_GRADE_EVENT = "kt:shop-select-grade";
+
+export function dispatchShopSelectGrade(grade: Grade) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<Grade>(SHOP_SELECT_GRADE_EVENT, { detail: grade }),
+  );
+}
 
 const GRADE_LABEL: Record<Grade, string> = {
   base: "下地仕上げ",
@@ -107,6 +123,15 @@ export function ShopSimulator() {
   const [qty, setQty] = useState(1);
   const [rush, setRush] = useState(false);
   const [copied, setCopied] = useState("");
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<Grade>).detail;
+      if (detail) setGrade(detail);
+    };
+    window.addEventListener(SHOP_SELECT_GRADE_EVENT, handler);
+    return () => window.removeEventListener(SHOP_SELECT_GRADE_EVENT, handler);
+  }, []);
 
   const result = useMemo(() => {
     const discountRate = qty >= 30 ? 0.25 : qty >= 10 ? 0.15 : 0;
