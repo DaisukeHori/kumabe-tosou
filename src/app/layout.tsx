@@ -2,9 +2,6 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, Noto_Sans_JP, Shippori_Antique_B1 } from "next/font/google";
 import "./globals.css";
 
-import { SiteFooter } from "@/components/site/site-footer";
-import { SiteHeader } from "@/components/site/site-header";
-
 const notoSansJP = Noto_Sans_JP({
   variable: "--font-sans",
   subsets: ["latin"],
@@ -69,22 +66,6 @@ export const metadata: Metadata = {
   },
 };
 
-const LOCAL_BUSINESS_JSON_LD = {
-  "@context": "https://schema.org",
-  "@type": "LocalBusiness",
-  name: "隈部塗装",
-  description: SITE_DESCRIPTION,
-  url: SITE_URL,
-  address: {
-    "@type": "PostalAddress",
-    addressRegion: "大分県",
-    addressLocality: "豊後高田市",
-    addressCountry: "JP",
-  },
-  areaServed: "全国",
-  priceRange: "¥¥",
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -95,18 +76,8 @@ export default function RootLayout({
       lang="ja"
       className={`${notoSansJP.variable} ${shipporiAntiqueB1.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
-      <head>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(LOCAL_BUSINESS_JSON_LD),
-          }}
-        />
-      </head>
       <body className="flex min-h-full flex-col bg-primer text-carbon">
-        <SiteHeader />
-        <main className="flex-1">{children}</main>
-        <SiteFooter />
+        {children}
       </body>
     </html>
   );
