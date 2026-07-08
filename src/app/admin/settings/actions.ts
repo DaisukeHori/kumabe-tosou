@@ -43,8 +43,9 @@ async function submitSettingsForm<K extends SettingsKey>(
     };
   }
 
-  const expectedUpdatedAt = new Date(expectedUpdatedAtRaw || 0);
-  const result = await settingsFacade.update(key, parsed.data, expectedUpdatedAt);
+  // expectedUpdatedAtRaw は DB から読んだマイクロ秒精度の ISO 文字列 (hidden field)。
+  // Date を経由すると精度が落ちて .eq が恒久的に不一致になるため、生文字列のまま渡す。
+  const result = await settingsFacade.update(key, parsed.data, expectedUpdatedAtRaw);
 
   if (!result.ok) {
     if (result.code === "KMB-E103") {

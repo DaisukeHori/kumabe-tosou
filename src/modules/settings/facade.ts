@@ -10,11 +10,15 @@ import { getSettingRow, upsertSetting } from "./repository";
  */
 export interface SettingsFacade {
   get<K extends SettingsKey>(key: K): Promise<Result<SettingsValue<K>>>;
-  /** 楽観排他 (KMB-E103): expectedUpdatedAt が site_settings.updated_at と不一致なら失敗 */
+  /**
+   * 楽観排他 (KMB-E103): expectedUpdatedAt が site_settings.updated_at と不一致なら失敗。
+   * expectedUpdatedAt は getWithMeta で取得した updated_at の生文字列をそのまま渡すこと
+   * (Date へ変換するとマイクロ秒精度が失われ、常に conflict になる実バグを踏むため)。
+   */
   update<K extends SettingsKey>(
     key: K,
     value: SettingsValue<K>,
-    expectedUpdatedAt: Date,
+    expectedUpdatedAt: string,
   ): Promise<Result<void>>;
 }
 

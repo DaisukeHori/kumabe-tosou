@@ -5,16 +5,20 @@ import { cn } from "@/lib/utils";
 /**
  * admin 専用の白いサーフェス (カード/コンテナ)。
  *
- * globals.css の --admin-canvas (content 領域の薄いグレー背景) の上に
+ * globals.css の --admin-canvas (content 領域のグレー背景) の上に
  * 白いカードとして浮かせるための最小の見た目部品。公開サイトの
  * @/components/ui/card とは独立しており (admin scope 専用)、
  * こちらを変更しても公開サイトの見た目には影響しない。
+ *
+ * 境界線は共通の --border (薄いグレー、公開サイトのボタン等でも使われる) ではなく
+ * admin 専用の --admin-card-border (濃いめ) を使い、shadow も sm→md にして
+ * 「背景と同色で見づらい」(2026-07-09 指摘) を解消し、カードの輪郭をくっきりさせる。
  */
 export function Surface({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-card text-card-foreground shadow-sm",
+        "rounded-xl border border-admin-card-border bg-card text-card-foreground shadow-md",
         className,
       )}
       {...props}

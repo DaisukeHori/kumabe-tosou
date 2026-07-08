@@ -190,15 +190,24 @@
    ============================================================= */
 :root {
   /* content 領域の背景。公開サイトのクリーム (--primer) より一段
-     ニュートラルな薄いグレーにして「アプリらしさ」を出す。 */
-  --admin-canvas: #f6f6f5;
-  /* カード/サーフェス上でのさらに一段沈んだ面 (テーブルヘッダ等)。 */
-  --admin-canvas-deep: #ececea;
+     ニュートラルな薄いグレーにして「アプリらしさ」を出す。
+     以前の #f6f6f5 は白カード (--card: #fff) との差が小さすぎてカードが
+     浮いて見えず「背景と同じ色合いで見づらい」との指摘 (2026-07-09) を受け、
+     はっきり一段濃いグレーに調整 (before: #f6f6f5 → after: #dcdcd9)。 */
+  --admin-canvas: #dcdcd9;
+  /* カード/サーフェス上でのさらに一段沈んだ面 (テーブルヘッダ等)。
+     admin-canvas との相対関係を保ったまま同じ幅で濃くする (before: #ececea → after: #c9c9c5)。 */
+  --admin-canvas-deep: #c9c9c5;
+  /* カードの境界線・影をくっきりさせるための admin 専用トークン。
+     全体共通の --border (oklch(0.922) — 薄いグレー、公開サイトのボタン等でも
+     使われる) は変更せず、admin のカード外枠にだけ使う濃いめのグレーを別途用意する。 */
+  --admin-card-border: #c4c4c0;
 }
 
 @theme inline {
   --color-admin-canvas: var(--admin-canvas);
   --color-admin-canvas-deep: var(--admin-canvas-deep);
+  --color-admin-card-border: var(--admin-card-border);
 }
 
 @layer base {

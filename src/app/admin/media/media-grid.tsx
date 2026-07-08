@@ -139,7 +139,7 @@ export function MediaGrid({ items }: { items: MediaListItem[] }) {
             onFocus={() => setFocusedIndex(index)}
             onClick={() => setEditId(item.id)}
             className={cn(
-              "cursor-pointer rounded-xl border border-border bg-card p-2 shadow-sm outline-none transition-colors",
+              "cursor-pointer rounded-xl border border-admin-card-border bg-card p-2 shadow-md outline-none transition-colors",
               focusedIndex === index ? "ring-2 ring-primary" : "hover:bg-muted/40",
             )}
           >
