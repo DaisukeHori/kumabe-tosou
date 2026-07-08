@@ -1,15 +1,15 @@
 import { notFound } from "next/navigation";
 
 import { contentFacade } from "@/modules/content/facade";
+import { ensureMediaItems, listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 
-import { listMediaForPicker } from "../media-lookup";
 import { WorkForm } from "../WorkForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditWorkPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [result, mediaItems] = await Promise.all([contentFacade.getWorkAdmin(id), listMediaForPicker()]);
+  const [result, mediaList] = await Promise.all([contentFacade.getWorkAdmin(id), listMediaForPicker()]);
 
   if (!result.ok) {
     return (
@@ -22,6 +22,9 @@ export default async function EditWorkPage({ params }: { params: Promise<{ id: s
   }
   if (!result.value) notFound();
   const work = result.value;
+
+  // カバー/添付で選択済みの media が一覧の取得件数外に居ても必ずサムネイル表示できるよう補完する。
+  const mediaItems = await ensureMediaItems(mediaList.items, [work.cover_media_id, ...work.image_ids]);
 
   return (
     <div className="p-6">
@@ -42,6 +45,7 @@ export default async function EditWorkPage({ params }: { params: Promise<{ id: s
           sort_order: work.sort_order,
         }}
         mediaItems={mediaItems}
+        mediaNextCursor={mediaList.nextCursor}
       />
     </div>
   );

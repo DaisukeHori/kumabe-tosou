@@ -1,6 +1,6 @@
 import type { WorkInput } from "@/modules/content/contracts";
+import { listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 
-import { listMediaForPicker } from "../media-lookup";
 import { WorkForm } from "../WorkForm";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +17,16 @@ const EMPTY_WORK: WorkInput = {
 };
 
 export default async function NewWorkPage() {
-  const mediaItems = await listMediaForPicker();
+  const mediaList = await listMediaForPicker();
   return (
     <div className="p-6">
       <h1 className="mb-6 text-xl font-semibold">施工事例を新規作成</h1>
-      <WorkForm mode="create" initialValues={EMPTY_WORK} mediaItems={mediaItems} />
+      <WorkForm
+        mode="create"
+        initialValues={EMPTY_WORK}
+        mediaItems={mediaList.items}
+        mediaNextCursor={mediaList.nextCursor}
+      />
     </div>
   );
 }
