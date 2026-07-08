@@ -46,7 +46,7 @@ function parseTags(input: string): string[] {
  * useEffect でマウント直後に img.complete を確認し、その場合は即座に
  * loaded にすることでこのケースも救う。
  */
-function MediaThumbnail({ src, alt }: { src: string; alt: string }) {
+export function MediaThumbnail({ src, alt }: { src: string; alt: string }) {
   const [loaded, setLoaded] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 

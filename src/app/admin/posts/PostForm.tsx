@@ -16,11 +16,11 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { MediaPicker, type PickerMediaItem } from "@/app/admin/_ui/media-picker";
 
 import { zPostInput, type ContentStatus, type PostInput, type PostKind } from "@/modules/content/contracts";
 
 import { createPostAction, transitionPostAction, updatePostAction } from "./actions";
-import type { SimpleMediaItem } from "./media-lookup";
 
 type Props = {
   mode: "create" | "edit";
@@ -28,7 +28,8 @@ type Props = {
   status?: ContentStatus;
   updatedAt?: string;
   initialValues: PostInput;
-  mediaItems: SimpleMediaItem[];
+  mediaItems: PickerMediaItem[];
+  mediaNextCursor?: string | null;
 };
 
 const KIND_LABEL: Record<PostKind, string> = {
@@ -58,7 +59,15 @@ const TRANSITION_BUTTON_LABEL: Record<ContentStatus, string> = {
   archived: "アーカイブする",
 };
 
-export function PostForm({ mode, postId, status, updatedAt, initialValues, mediaItems }: Props) {
+export function PostForm({
+  mode,
+  postId,
+  status,
+  updatedAt,
+  initialValues,
+  mediaItems,
+  mediaNextCursor = null,
+}: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -67,16 +76,32 @@ export function PostForm({ mode, postId, status, updatedAt, initialValues, media
   const [currentStatus, setCurrentStatus] = useState<ContentStatus>(status ?? "draft");
   const [reservedPublishedAt, setReservedPublishedAt] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
+  // 初期一覧 (mediaItems) に加え、ダイアログの「もっと見る」で追加取得した分もここへマージする。
+  const [mediaCatalog, setMediaCatalog] = useState<PickerMediaItem[]>(mediaItems);
+  const [catalogNextCursor, setCatalogNextCursor] = useState<string | null>(mediaNextCursor);
+
+  function handleMediaItemsLoaded(items: PickerMediaItem[], nextCursor: string | null) {
+    setMediaCatalog((prev) => {
+      const known = new Set(prev.map((p) => p.id));
+      const additions = items.filter((item) => !known.has(item.id));
+      return additions.length > 0 ? [...prev, ...additions] : prev;
+    });
+    setCatalogNextCursor(nextCursor);
+  }
 
   const {
     register,
     handleSubmit,
+    setValue,
     watch,
     setError,
     formState: { errors },
   } = useForm<PostInput>({ resolver: zodResolver(zPostInput), defaultValues: initialValues });
 
   const body = watch("body");
+  const coverMediaId = watch("cover_media_id");
+  const coverItem = mediaCatalog.find((m) => m.id === coverMediaId) ?? null;
 
   function handleWriteError(result: { ok: false; code: string; detail?: string }) {
     if (result.code === "KMB-E102") {
@@ -251,40 +276,56 @@ export function PostForm({ mode, postId, status, updatedAt, initialValues, media
           </Field>
 
           <Field data-invalid={!!errors.cover_media_id}>
-            <FieldLabel htmlFor="post-cover-media-id">カバー画像 media_id (任意)</FieldLabel>
-            <Input
-              id="post-cover-media-id"
-              placeholder="media テーブルの id (uuid)"
-              aria-invalid={!!errors.cover_media_id}
-              {...register("cover_media_id", {
-                setValueAs: (v: string) => (v === "" ? null : v),
-              })}
-            />
+            <FieldLabel>カバー画像 (任意)</FieldLabel>
+            <div className="flex items-center gap-3">
+              {coverItem ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={coverItem.url}
+                  alt={coverItem.alt}
+                  className="h-20 w-20 shrink-0 rounded-lg border border-border object-cover"
+                />
+              ) : (
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-[11px] text-muted-foreground">
+                  未選択
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setCoverPickerOpen(true)}>
+                  画像を選択
+                </Button>
+                {coverMediaId && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setValue("cover_media_id", null, { shouldDirty: true })}
+                  >
+                    選択解除
+                  </Button>
+                )}
+              </div>
+            </div>
+            <input type="hidden" {...register("cover_media_id")} />
             <FieldError errors={errors.cover_media_id ? [errors.cover_media_id] : undefined} />
           </Field>
-
-          {mediaItems.length > 0 && (
-            <div className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-xs text-muted-foreground">
-                既存メディア一覧 (簡易版。id をコピーしてカバー画像欄に貼り付けてください)
-              </p>
-              <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
-                {mediaItems.map((m) => (
-                  <li key={m.id} className="flex items-center gap-2 font-mono">
-                    <span className="truncate">{m.id}</span>
-                    <span className="shrink-0 text-muted-foreground">{m.alt || "(alt未設定)"}</span>
-                    {m.is_placeholder && <span className="shrink-0 text-muted-foreground">[仮素材]</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </FieldGroup>
 
         <Button type="submit" disabled={isPending}>
           {mode === "create" ? "作成する" : "保存する (Cmd/Ctrl+S)"}
         </Button>
       </form>
+
+      <MediaPicker
+        open={coverPickerOpen}
+        onOpenChange={setCoverPickerOpen}
+        mode="single"
+        initialItems={mediaCatalog}
+        initialNextCursor={catalogNextCursor}
+        selectedIds={coverMediaId ? [coverMediaId] : []}
+        onConfirm={(ids) => setValue("cover_media_id", ids[0] ?? null, { shouldDirty: true })}
+        onItemsLoaded={handleMediaItemsLoaded}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { PostInput, PostKind } from "@/modules/content/contracts";
+import { listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 
-import { listMediaForPicker } from "../media-lookup";
 import { PostForm } from "../PostForm";
 
 export const dynamic = "force-dynamic";
@@ -26,12 +26,17 @@ export default async function NewPostPage({
     cover_media_id: null,
   };
 
-  const mediaItems = await listMediaForPicker();
+  const mediaList = await listMediaForPicker();
 
   return (
     <div className="p-6">
       <h1 className="mb-6 text-xl font-semibold">記事を新規作成</h1>
-      <PostForm mode="create" initialValues={initialValues} mediaItems={mediaItems} />
+      <PostForm
+        mode="create"
+        initialValues={initialValues}
+        mediaItems={mediaList.items}
+        mediaNextCursor={mediaList.nextCursor}
+      />
     </div>
   );
 }

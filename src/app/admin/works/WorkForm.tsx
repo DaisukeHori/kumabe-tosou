@@ -15,11 +15,11 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { MediaPicker, type PickerMediaItem } from "@/app/admin/_ui/media-picker";
 
 import { zWorkInput, type ContentStatus, type WorkInput } from "@/modules/content/contracts";
 
 import { createWorkAction, transitionWorkAction, updateWorkAction } from "./actions";
-import type { SimpleMediaItem } from "./media-lookup";
 
 type Props = {
   mode: "create" | "edit";
@@ -27,7 +27,8 @@ type Props = {
   status?: ContentStatus;
   updatedAt?: string;
   initialValues: WorkInput;
-  mediaItems: SimpleMediaItem[];
+  mediaItems: PickerMediaItem[];
+  mediaNextCursor?: string | null;
 };
 
 /** cms-ai-pipeline.md §4.1 の遷移図と 1:1 (ボタン活性制御用) */
@@ -52,7 +53,15 @@ const TRANSITION_BUTTON_LABEL: Record<ContentStatus, string> = {
   archived: "アーカイブする",
 };
 
-export function WorkForm({ mode, workId, status, updatedAt, initialValues, mediaItems }: Props) {
+export function WorkForm({
+  mode,
+  workId,
+  status,
+  updatedAt,
+  initialValues,
+  mediaItems,
+  mediaNextCursor = null,
+}: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -72,13 +81,31 @@ export function WorkForm({ mode, workId, status, updatedAt, initialValues, media
   } = useForm<WorkInput>({ resolver: zodResolver(zWorkInput), defaultValues: initialValues });
 
   const imageIds = watch("image_ids");
-  const [newMediaId, setNewMediaId] = useState("");
+  const coverMediaId = watch("cover_media_id");
+  // 初期一覧 (mediaItems) に加え、ダイアログの「もっと見る」で追加取得した分もここへマージする。
+  // ページング境界を跨いで選択されたメディアもプレビューできるようにするため。
+  const [mediaCatalog, setMediaCatalog] = useState<PickerMediaItem[]>(mediaItems);
+  const [catalogNextCursor, setCatalogNextCursor] = useState<string | null>(mediaNextCursor);
+  const coverItem = mediaCatalog.find((m) => m.id === coverMediaId) ?? null;
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
+  const [attachPickerOpen, setAttachPickerOpen] = useState(false);
 
-  function addImage() {
-    const trimmed = newMediaId.trim();
-    if (!trimmed || imageIds.includes(trimmed)) return;
-    setValue("image_ids", [...imageIds, trimmed], { shouldDirty: true });
-    setNewMediaId("");
+  function handleMediaItemsLoaded(items: PickerMediaItem[], nextCursor: string | null) {
+    setMediaCatalog((prev) => {
+      const known = new Set(prev.map((p) => p.id));
+      const additions = items.filter((item) => !known.has(item.id));
+      return additions.length > 0 ? [...prev, ...additions] : prev;
+    });
+    setCatalogNextCursor(nextCursor);
+  }
+
+  function addImages(ids: string[]) {
+    if (ids.length === 0) return;
+    const merged = [...imageIds];
+    for (const id of ids) {
+      if (!merged.includes(id)) merged.push(id);
+    }
+    setValue("image_ids", merged, { shouldDirty: true });
   }
 
   function removeImage(index: number) {
@@ -277,15 +304,37 @@ export function WorkForm({ mode, workId, status, updatedAt, initialValues, media
 
           <div className="grid gap-5 sm:grid-cols-2">
             <Field data-invalid={!!errors.cover_media_id}>
-              <FieldLabel htmlFor="work-cover-media-id">カバー画像 media_id (任意)</FieldLabel>
-              <Input
-                id="work-cover-media-id"
-                placeholder="media テーブルの id (uuid)"
-                aria-invalid={!!errors.cover_media_id}
-                {...register("cover_media_id", {
-                  setValueAs: (v: string) => (v === "" ? null : v),
-                })}
-              />
+              <FieldLabel>カバー画像 (任意)</FieldLabel>
+              <div className="flex items-center gap-3">
+                {coverItem ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={coverItem.url}
+                    alt={coverItem.alt}
+                    className="h-20 w-20 shrink-0 rounded-lg border border-border object-cover"
+                  />
+                ) : (
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-[11px] text-muted-foreground">
+                    未選択
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setCoverPickerOpen(true)}>
+                    画像を選択
+                  </Button>
+                  {coverMediaId && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setValue("cover_media_id", null, { shouldDirty: true })}
+                    >
+                      選択解除
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <input type="hidden" {...register("cover_media_id")} />
               <FieldError errors={errors.cover_media_id ? [errors.cover_media_id] : undefined} />
             </Field>
 
@@ -303,90 +352,99 @@ export function WorkForm({ mode, workId, status, updatedAt, initialValues, media
           </div>
 
           <Field>
-            <FieldLabel htmlFor="work-add-image">添付画像 (media_id、ドラッグ&ドロップ or ↑↓ で並べ替え)</FieldLabel>
-            <div className="flex gap-2">
-              <Input
-                id="work-add-image"
-                value={newMediaId}
-                onChange={(e) => setNewMediaId(e.target.value)}
-                placeholder="media テーブルの id (uuid) を入力して追加"
-              />
-              <Button type="button" variant="outline" onClick={addImage}>
-                追加
+            <FieldLabel>添付画像 (ドラッグ&ドロップ or ↑↓ で並べ替え)</FieldLabel>
+            <div>
+              <Button type="button" variant="outline" onClick={() => setAttachPickerOpen(true)}>
+                画像を選択して追加
               </Button>
             </div>
             {imageIds.length > 0 && (
               <ul className="mt-2 space-y-1">
-                {imageIds.map((mediaId, index) => (
-                  <li
-                    key={`${mediaId}-${index}`}
-                    draggable
-                    onDragStart={() => onDragStart(index)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => onDrop(index)}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm"
-                  >
-                    <span className="truncate font-mono text-xs">{mediaId}</span>
-                    <span className="flex shrink-0 gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="上へ移動"
-                        onClick={() => moveImage(index, -1)}
-                        disabled={index === 0}
-                      >
-                        ↑
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="下へ移動"
-                        onClick={() => moveImage(index, 1)}
-                        disabled={index === imageIds.length - 1}
-                      >
-                        ↓
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="削除"
-                        onClick={() => removeImage(index)}
-                      >
-                        ×
-                      </Button>
-                    </span>
-                  </li>
-                ))}
+                {imageIds.map((mediaId, index) => {
+                  const item = mediaCatalog.find((m) => m.id === mediaId) ?? null;
+                  return (
+                    <li
+                      key={`${mediaId}-${index}`}
+                      draggable
+                      onDragStart={() => onDragStart(index)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => onDrop(index)}
+                      className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm"
+                    >
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-border bg-muted">
+                        {item && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.url} alt={item.alt} className="h-full w-full object-cover" />
+                        )}
+                      </div>
+                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                        {item?.alt || mediaId}
+                      </span>
+                      <span className="flex shrink-0 gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="上へ移動"
+                          onClick={() => moveImage(index, -1)}
+                          disabled={index === 0}
+                        >
+                          ↑
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="下へ移動"
+                          onClick={() => moveImage(index, 1)}
+                          disabled={index === imageIds.length - 1}
+                        >
+                          ↓
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="削除"
+                          onClick={() => removeImage(index)}
+                        >
+                          ×
+                        </Button>
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
             <FieldError errors={errors.image_ids ? [errors.image_ids as { message?: string }] : undefined} />
           </Field>
-
-          {mediaItems.length > 0 && (
-            <div className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-xs text-muted-foreground">
-                既存メディア一覧 (簡易版。id をコピーして上の欄に貼り付けてください)
-              </p>
-              <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
-                {mediaItems.map((m) => (
-                  <li key={m.id} className="flex items-center gap-2 font-mono">
-                    <span className="truncate">{m.id}</span>
-                    <span className="shrink-0 text-muted-foreground">{m.alt || "(alt未設定)"}</span>
-                    {m.is_placeholder && <span className="shrink-0 text-muted-foreground">[仮素材]</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </FieldGroup>
 
         <Button type="submit" disabled={isPending}>
           {mode === "create" ? "作成する" : "保存する (Cmd/Ctrl+S)"}
         </Button>
       </form>
+
+      <MediaPicker
+        open={coverPickerOpen}
+        onOpenChange={setCoverPickerOpen}
+        mode="single"
+        initialItems={mediaCatalog}
+        initialNextCursor={catalogNextCursor}
+        selectedIds={coverMediaId ? [coverMediaId] : []}
+        onConfirm={(ids) => setValue("cover_media_id", ids[0] ?? null, { shouldDirty: true })}
+        onItemsLoaded={handleMediaItemsLoaded}
+      />
+      <MediaPicker
+        open={attachPickerOpen}
+        onOpenChange={setAttachPickerOpen}
+        mode="multiple"
+        initialItems={mediaCatalog}
+        initialNextCursor={catalogNextCursor}
+        selectedIds={[]}
+        onConfirm={addImages}
+        onItemsLoaded={handleMediaItemsLoaded}
+      />
     </div>
   );
 }

@@ -1,15 +1,15 @@
 import { notFound } from "next/navigation";
 
 import { contentFacade } from "@/modules/content/facade";
+import { ensureMediaItems, listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 
-import { listMediaForPicker } from "../media-lookup";
 import { PostForm } from "../PostForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditPostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [result, mediaItems] = await Promise.all([contentFacade.getPostAdmin(id), listMediaForPicker()]);
+  const [result, mediaList] = await Promise.all([contentFacade.getPostAdmin(id), listMediaForPicker()]);
 
   if (!result.ok) {
     return (
@@ -22,6 +22,9 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
   }
   if (!result.value) notFound();
   const post = result.value;
+
+  // カバー画像で選択済みの media が一覧の取得件数外に居ても必ずサムネイル表示できるよう補完する。
+  const mediaItems = await ensureMediaItems(mediaList.items, [post.cover_media_id]);
 
   return (
     <div className="p-6">
@@ -40,6 +43,7 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
           cover_media_id: post.cover_media_id,
         }}
         mediaItems={mediaItems}
+        mediaNextCursor={mediaList.nextCursor}
       />
     </div>
   );
