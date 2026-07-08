@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { isMetaOAuthConfigured, isXOAuthConfigured } from "@/lib/env";
 import { decryptCookiePayload } from "@/lib/oauth/state-cookie";
 import type { ChannelPostStatus, StyleProfileView } from "@/modules/distribution/contracts";
@@ -68,12 +69,10 @@ export default async function AdminChannelsPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="font-heading text-xl font-semibold">チャネル管理</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          X / Instagram の接続、note ラベル管理、チャネル別文体プロファイル、配信キューを管理します。
-        </p>
-      </div>
+      <PageHeader
+        title="チャネル管理"
+        description="X / Instagram の接続、note ラベル管理、チャネル別文体プロファイル、配信キューを管理します。"
+      />
 
       {params.x_connected && (
         <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">

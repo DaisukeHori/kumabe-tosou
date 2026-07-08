@@ -45,13 +45,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   } = await supabase.auth.getUser();
 
   return (
-    <div className="flex min-h-screen bg-muted/20">
-      <aside className="flex w-60 shrink-0 flex-col border-r bg-background p-4">
+    // admin-shell: 公開サイトのクリーム背景 (--primer) とは別の、CMS ツールらしい
+    // ニュートラルなグレー背景 (--admin-canvas, globals.css で admin 専用に定義)。
+    // 公開サイト側のトークン/見た目には一切影響しない。
+    <div className="flex min-h-screen bg-admin-canvas">
+      <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-background p-4">
         <div className="mb-6 px-2">
           <p className="font-heading text-sm font-semibold">隈部塗装 CMS</p>
         </div>
         <AdminNav />
-        <div className="mt-6 border-t pt-4">
+        <div className="mt-6 border-t border-border pt-4">
           <p className="truncate px-2 text-xs text-muted-foreground">{user?.email}</p>
           <form action={logoutAction} className="mt-2">
             <button

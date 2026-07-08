@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import { inquiryFacade } from "@/modules/inquiry/facade";
 import type { InquiryStatus } from "@/modules/inquiry/contracts";
@@ -35,12 +36,10 @@ export default async function AdminInquiriesPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-xl font-semibold">問い合わせ</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          一覧の行は ↑↓ で移動、Enter で詳細を開き、ステータス変更後 Cmd+S で保存、Esc で閉じます。
-        </p>
-      </div>
+      <PageHeader
+        title="問い合わせ"
+        description="↑↓ で移動、Enter で詳細、Cmd+S で保存、Esc で閉じます。"
+      />
 
       <div className="flex flex-wrap gap-2">
         {STATUS_FILTERS.map((f) => (

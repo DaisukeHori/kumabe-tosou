@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { contentFacade } from "@/modules/content/facade";
 import type { ContentStatus } from "@/modules/content/contracts";
 
@@ -47,16 +48,18 @@ export default async function WorksListPage({
   if (result.value.next_cursor) nextQuery.set("cursor", result.value.next_cursor);
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">施工事例</h1>
-        <Link
-          href="/admin/works/new"
-          className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80"
-        >
-          新規作成
-        </Link>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="施工事例"
+        actions={
+          <Link
+            href="/admin/works/new"
+            className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+          >
+            新規作成
+          </Link>
+        }
+      />
 
       <form method="get" className="flex flex-wrap items-center gap-3">
         <input

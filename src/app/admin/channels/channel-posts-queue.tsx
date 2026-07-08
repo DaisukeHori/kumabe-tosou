@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 
+import { Surface } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -111,6 +112,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
 
   return (
     <>
+      <Surface className="overflow-x-auto p-0">
       <Table>
         <TableHeader>
           <TableRow>
@@ -210,6 +212,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
           ))}
         </TableBody>
       </Table>
+      </Surface>
 
       <Dialog open={!!manualDialog} onOpenChange={(open) => !open && setManualDialog(null)}>
         <DialogContent>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { mediaFacade } from "@/modules/media/facade";
 
 import { MediaGrid } from "./media-grid";
@@ -20,12 +21,10 @@ export default async function AdminMediaPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-xl font-semibold">メディア</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          グリッドの項目は ↑↓←→ で移動、Enter で編集、Cmd+S で保存、Esc で閉じます。参照ゼロのメディアのみ削除できます。
-        </p>
-      </div>
+      <PageHeader
+        title="メディア"
+        description="↑↓←→ で移動、Enter で編集、Cmd+S で保存、Esc で閉じます (参照ゼロのみ削除可)。"
+      />
 
       {!result.ok && (
         <p className="text-sm text-destructive">一覧の取得に失敗しました: {result.detail ?? result.code}</p>

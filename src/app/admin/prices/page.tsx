@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { createPricingFacade } from "@/modules/pricing/facade";
 
 import { PriceTableEditor } from "./price-table-editor";
@@ -34,12 +35,10 @@ export default async function AdminPricesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-xl font-semibold">価格表管理</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          グレード・サイズ帯・価格行列・数量値引き・オプションを編集します。保存前に見積り例のプレビュー(変更前後)を確認してください。
-        </p>
-      </div>
+      <PageHeader
+        title="価格表管理"
+        description="グレード・サイズ帯・価格行列・数量値引き・オプションを編集します (保存前に見積り例をプレビュー)。"
+      />
       <PriceTableEditor initialTable={result.value} />
     </div>
   );
