@@ -24,6 +24,11 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   REVALIDATE_SECRET: z.string().min(1).optional(),
   JOBS_SECRET: z.string().min(1).optional(),
+
+  // ---- AI スタジオ (Phase 2a〜。設計書 §1.2)。未設定時は /admin/studio が
+  // 「API キー未設定」バナーを表示し、実行系ボタンを無効化する (graceful degradation)。
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  OPENAI_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -62,4 +67,13 @@ export function isServiceRoleConfigured(): boolean {
 /** pg_cron からの起床 webhook を検証するための共有シークレットが設定済みか */
 export function isJobsSecretConfigured(): boolean {
   return Boolean(process.env.JOBS_SECRET);
+}
+
+/**
+ * AI スタジオ (Claude + OpenAI STT) が両方設定済みかどうか。
+ * 未設定時は /admin/studio が「API キー未設定」バナー + 実行ボタン無効化に倒す
+ * (設計書 §1.2「必要アカウント」/ Wave2-E タスク「Graceful degradation」)。
+ */
+export function isAiStudioConfigured(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY) && Boolean(process.env.OPENAI_API_KEY);
 }

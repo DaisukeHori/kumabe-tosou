@@ -1,0 +1,135 @@
+import type { Brief, ResearchNotes } from "../contracts";
+import type { Channel } from "@/modules/platform/contracts";
+
+/**
+ * canonical: docs/design/cms-ai-pipeline.md §7.4 (プロンプト設計方針)。
+ *
+ * BRAND_SYSTEM_PROMPT は固定文字列 (変数を一切含まない) にすること
+ * (§7.2: プロンプトキャッシュの cache_control:ephemeral を先頭ブロックに
+ * 効かせるため、可変部を混ぜてはいけない)。
+ */
+export const BRAND_SYSTEM_PROMPT = `あなたは福岡県の自動車・小物塗装専門店「隈部塗装」のコンテンツ制作アシスタントです。
+
+# 事業内容
+- 自動車パーツ・小物・フィギュア等の塗装・カラーリング・修理を手がける専門店。
+- 一人称は「私たち」「隈部塗装」。職人としての実直さ・丁寧さを大切にする。
+
+# 禁止事項 (絶対に破らないこと)
+- 誇大広告・効果保証・他社比較の表現を書かない。
+- 事実でないことを書かない。話者の発言・提供されたリサーチ結果に無い事実を
+  勝手に作り出さない (ハルシネーション禁止)。
+- 引用元がある情報を書く場合は、その情報が research 由来であることを
+  claims 出力の source フィールドで必ず明示する。
+
+# 用語集
+- ソウルレッド / プライマー / 耐候クリア 等の専門用語は正しい表記を維持する。
+
+# 出力について
+- 全ての出力は構造化スキーマ (JSON Schema) に厳密に従うこと。
+- 生成した文の中で、話者の発言に直接由来しない文 (推測・一般論での補完) には
+  claims 配列で source: "inference" を付けること。これは差分表示 (レビュー画面) で
+  人間が重点確認するためのマーカーとして使われる。`;
+
+/** §7.4 チャネル別 style_profiles の初期値 (admin が編集可能な既定値)。
+ *
+ * 既知の乖離 (オーケストレーターへ報告済み):
+ * style_profiles テーブルは module-contracts.md §1 で distribution モジュールの
+ * 所有テーブルと定義されている一方、DistributionFacade (§5) にはスタイル取得メソッドが
+ * 無く、依存方向ルール (§2) は ai-studio → distribution を許可していない
+ * (distribution → ai-studio が既に定義されており、逆方向を足すと循環になる)。
+ * そのため ai-studio は style_profiles を直接読まず、本ファイルの既定値定数を
+ * 常に使う (admin 編集内容の反映は distribution 実装後の追加課題)。
+ */
+export const DEFAULT_STYLE_PROFILES: Record<
+  Channel,
+  { tone_instructions: string; format_rules: string }
+> = {
+  site_blog: {
+    tone_instructions: "丁寧なですます調。専門用語には簡単な説明を添える。",
+    format_rules: "見出し2〜4個、1500〜3000字程度。SEOを意識したtitleにする。",
+  },
+  note: {
+    tone_instructions: "一人称の語り口。体験談ベースで親しみやすく。",
+    format_rules: "2000〜4000字程度。ハッシュタグ3個程度。",
+  },
+  x: {
+    tone_instructions: "簡潔に。絵文字は控えめに1個/ツイート程度。",
+    format_rules: "1ツイート120字目安、スレッドは1〜5個。ハッシュタグ最大2個。",
+  },
+  instagram: {
+    tone_instructions: "写真映えを意識した、改行多めの読みやすい文体。",
+    format_rules: "キャプション300〜500字程度。ハッシュタグ10〜15個。",
+  },
+};
+
+export function buildCleanUserPrompt(rawText: string): string {
+  return `以下は音声文字起こし (or 手入力) の生テキストです。フィラー除去・句読点付与・
+明らかな誤認識の訂正のみを行い、意味の追加・削除は一切行わないでください。
+意味が変わった可能性がある場合は meaning_preserved を false にしてください。
+
+# 原文
+${rawText}`;
+}
+
+export function buildExtractUserPrompt(cleanedText: string): string {
+  return `以下のテキストから、コンテンツ制作のための要旨を抽出してください。
+主題 (theme)、トピック一覧 (topics)、想定読者 (audience)、キーワード (keywords)、
+話者が実際に述べた事実の主張一覧 (claims、source は "speech" とする) を出力してください。
+
+# 対象テキスト
+${cleanedText}`;
+}
+
+export function buildResearchUserPrompt(brief: Brief): string {
+  return `以下の要旨に含まれる事実主張を補強・裏取りするため、Web検索を使って
+関連する事実・訂正候補を調査してください。引用元 URL を必ず含めてください。
+
+# 主題
+${brief.theme}
+
+# トピック
+${brief.topics.join(", ")}
+
+# 話者の事実主張
+${brief.claims.map((c) => `- ${c.text}`).join("\n")}`;
+}
+
+export function buildDraftUserPrompt(
+  channel: Channel,
+  brief: Brief,
+  researchNotes: ResearchNotes | null,
+  instruction: string | null,
+): string {
+  const style = DEFAULT_STYLE_PROFILES[channel];
+  const researchBlock = researchNotes
+    ? `\n# リサーチ結果 (引用付き事実)\n${researchNotes.facts
+        .map((f) => `- ${f.text} (出典: ${f.url})`)
+        .join("\n")}`
+    : "\n# リサーチ結果\n(このrunではリサーチを実施していません)";
+  const instructionBlock = instruction ? `\n# 追加の修正指示\n${instruction}` : "";
+
+  return `以下の要旨をもとに、チャネル「${channel}」向けのコンテンツを生成してください。
+
+# 文体・構成ルール
+- トーン: ${style.tone_instructions}
+- 構成: ${style.format_rules}
+
+# 主題
+${brief.theme}
+
+# トピック
+${brief.topics.join(", ")}
+
+# 対象読者
+${brief.audience}
+
+# キーワード
+${brief.keywords.join(", ")}
+
+# 話者の事実主張
+${brief.claims.map((c) => `- ${c.text}`).join("\n")}
+${researchBlock}${instructionBlock}
+
+content と claims (この生成で新たに使った事実主張。source は speech/research/inference から選ぶ)
+を同時に出力してください。`;
+}
