@@ -1,6 +1,7 @@
 # モジュール契約書 (canonical)
 
-- 版: v2.1 (価格契約を行列モデル v2 に改訂 — Wave 0 実装で legacy 実構造との乖離が判明したため。zEstimateInput は size_key 必須・数量値引き自動適用・レンジ結果に変更)
+- 版: v2.2 (Wave 1 文書同期: facade 拡張規約を §5 に追加 / rate_limits を inquiry 所有に / ContentFacade.createBlogPostFromDraft の入力型を BlogPostContent に修正)
+- 旧版: v2.1 (価格契約を行列モデル v2 に改訂 — Wave 0 実装で legacy 実構造との乖離が判明したため。zEstimateInput は size_key 必須・数量値引き自動適用・レンジ結果に変更)
 - 旧版: v2.0 (Codex 外部レビュー反映: worker 実行面を Next.js に統一 / lease 型 stage 実行 / draft 単位予約 / at-least-once 配信モデル / IG 接続シーケンス / ai-studio facade 増補)
 - 作成日: 2026-07-07
 - 位置づけ: **本書がモジュール境界・値契約 (Zod)・facade・イベント・依存方向・エラーコード所有・テーブル所有・結合シーケンスの canonical**。実装 (`src/modules/**`) が本書と乖離した場合は本書を正とし、変更は本書を先に更新する。
@@ -16,7 +17,7 @@
 | `content` | works / posts / voices の CRUD・公開制御・slug | works, work_images, posts, voices | KMB-E101〜E103 (共有検証は platform 定義・content 主使用) | ContentFacade |
 | `media` | 画像/メディアの保管・変換・参照管理 | media (+Storage bucket: media) | KMB-E3xx (E301, E302) | MediaFacade |
 | `pricing` | 価格グレード/オプション・見積り計算 | price_grades, price_options | (E101/E103 を共用) | PricingFacade |
-| `inquiry` | お問い合わせ受付・管理 | contact_inquiries | (E101 を共用) | InquiryFacade |
+| `inquiry` | お問い合わせ受付・管理・レート制限 | contact_inquiries, rate_limits | E105 (+E101 を共用) | InquiryFacade |
 | `settings` | サイト設定 (会社情報/ヒーロー/SEO/運用上限) | site_settings | (E101/E103 を共用) | SettingsFacade |
 | `ai-studio` | 音声入力・文字起こし・整文・要旨抽出・リサーチ・チャネル別生成・レビュー | ai_sources, ai_runs, channel_drafts, draft_revisions (+Storage bucket: audio) | KMB-E303, E4xx | AiStudioFacade |
 | `distribution` | 配信予約・SNS API 実行・チャネル接続・文体プロファイル | channel_posts, channel_accounts, style_profiles | KMB-E5xx | DistributionFacade |
@@ -534,10 +535,14 @@ export type ScheduleEntry = z.infer<typeof zScheduleEntry>;
 
 戻り値はすべて `Result<T>` (§4.1)。例外をモジュール境界から漏らさない。
 
+**拡張規約 (2026-07-08 追記)**: 本節のシグネチャは「モジュール間契約として不変の主要メソッド」。各 facade は、自モジュールの admin UI が必要とする **CRUD 拡張メソッドを追加してよい** (ESLint 境界により admin 画面から repository を直接呼べないため)。拡張は facade.ts 内に「契約外拡張」コメントで明示し、**他モジュールから拡張メソッドを呼ぶことは禁止** (呼ぶ必要が生じたら本節へ昇格させる)。Wave 1 で settings/inquiry/media/content/pricing に追加済み。
+
 ```ts
 // content/facade.ts
 export interface ContentFacade {
-  createBlogPostFromDraft(input: SiteBlogContent & { source_run_id: string }): Promise<Result<{ post_id: string; slug: string }>>;
+  createBlogPostFromDraft(input: BlogPostContent & { source_run_id: string }): Promise<Result<{ post_id: string; slug: string }>>;
+  // BlogPostContent は content 側に定義する構造的同型 (zSiteBlogContent と同形)。
+  // ai-studio の型を import すると依存方向 §2 に逆流するため独立定義 (Wave 0 実装で確定)
   publish(kind: PostKind | "work" | "voice", id: string, publishedAt?: Date): Promise<Result<void>>;
   listPublished<K extends ContentKind>(kind: K, page: Pagination): Promise<Result<Paged<PublishedItem<K>>>>;
   getBySlug<K extends ContentKind>(kind: K, slug: string): Promise<Result<PublishedItem<K> | null>>;

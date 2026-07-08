@@ -487,7 +487,7 @@ JSONB カラムは**必ず契約書 (module-contracts.md §4) のスキーマで
 | テーブル | anon SELECT | anon INSERT | admin SELECT | admin INSERT/UPDATE | admin DELETE | service |
 |---|---|---|---|---|---|---|
 | profiles | ✗ | ✗ | 自分のみ | 自分のみ UPDATE | ✗ | 全権 |
-| media | published コンテンツから参照される分のみ (public bucket URL 経由) | ✗ | ✓ | ✓ | 参照ゼロのみ | 全権 |
+| media | メタデータ全行 SELECT 可 (行内容はパス/alt/寸法等の非機密のみ。実ファイル認可は §3.4 の Storage 側で制御 — RLS 適用時に確定) | ✗ | ✓ | ✓ | 参照ゼロのみ | 全権 |
 | works / posts / voices | `status='published' and published_at <= now()` のみ | ✗ | ✓ | ✓ | draft のみ (published は archive で代替) | 全権 |
 | price_grades / price_options | `is_active=true` のみ | ✗ | ✓ | ✓ | ✗ (is_active=false で代替) | 全権 |
 | site_settings | ✓ (公開情報のみのため) | ✗ | ✓ | ✓ | ✗ | 全権 |
@@ -515,6 +515,7 @@ JSONB カラムは**必ず契約書 (module-contracts.md §4) のスキーマで
 | `backups` (非公開) | ✗ | ✗ (service のみ) | GitHub Actions 週次 job (§16.3) | 12 週分ローテーション | 84 日 |
 
 ※ 未公開コンテンツの画像も公開バケットにレンディションが載る場合があるが、URL は uuid ベースで推測不能かつ一覧不可。厳密秘匿が必要な画像はそもそも扱わない前提 (コーポレートサイト用素材のみ)。原本は非公開バケットに隔離 (Codex 指摘で分離)。
+※ レンディションのパス規約 (canonical): `media` バケット直下 `{media.id}.webp` (表示用) / `{media.id}.jpg` (Instagram 用)。生成ロジックは `src/modules/media/internal/image-transform.ts` が単一ソース (seed も同関数を共用、複製禁止 — Wave 1 実装で確定)。
 
 ### 3.5 API エンドポイント認可・契約一覧
 
@@ -854,6 +855,7 @@ const stream = anthropic.messages.stream({
 | KMB-E101 | 1xx 入力検証 | Zod validation 失敗 | フォームにフィールド単位で表示 |
 | KMB-E102 | | slug/key 一意制約違反 | 別の slug を提案表示 |
 | KMB-E103 | | 楽観的排他失敗 (他者更新) | 最新版との差分を提示し選択させる |
+| KMB-E105 | | 送信レート制限超過 (公開フォーム 5 件/時) | 時間を置いて再送を案内 (※ Wave1-D は暫定で E101 転用 — Wave 3 で E105 へ置換) |
 | KMB-E201 | 2xx 認証認可 | 未認証 | /admin/login へ |
 | KMB-E202 | | RLS 拒否 (権限なし) | 権限確認の案内 |
 | KMB-E301 | 3xx メディア | 参照中メディアの削除 | 参照元一覧を表示 |
@@ -1082,4 +1084,5 @@ const stream = anthropic.messages.stream({
 | v3.1 | 2026-07-08 | Resend 採用確定 (堀さん決定): 問い合わせ通知を 1c に前倒し、配信失敗通知 (2d) も同一アカウント、KMB-E902 追加、settings に 'notifications' キー追加、コスト表に Resend $0 追加 |
 | v3.2 | 2026-07-08 | 通知メール仕様の詰め (堀さん指摘): §6.3 新設 (件名/本文全文/Reply-To/宛先未設定時挙動)、/admin/settings に通知設定を明記、bootstrap で宛先を自動初期化 |
 | v3.3 | 2026-07-08 | 価格モデル v2 (Wave 0 実装での発見): legacy 実構造 (グレード×サイズ行列レンジ+数量自動値引き+XL 個別見積もり) に合わせ price_size_classes / price_matrix / price_quantity_tiers を追加、price_grades.base_price 廃止 (migration 0007)。DDL 22 テーブルに |
+| v3.4 | 2026-07-08 | Wave 1 実装との文書同期: KMB-E105 追加、§3.2 media anon SELECT を実態 (メタデータ全行) に修正、§3.4 レンディションパス規約を明記。契約書 v2.2 (facade 拡張規約 / rate_limits を inquiry 所有 / createBlogPostFromDraft の型を BlogPostContent に) と対 |
 | v3.0 | 2026-07-07 | Codex 外部レビュー 19 件反映: 配信 worker を Next.js Route Handler に統一 (Edge Fn 廃止)、AI 実行を advance (1 呼び出し=1 stage) + lease/heartbeat 方式に再設計、予約を draft 単位に修正、at-least-once + 人間照合モデル (E506)、claims 分離保存 (zChannelDraftOutput)、signup 無効化 + bootstrap 手順、media 原本/レンディションのバケット分離 + EXIF 除去、rate_limits テーブル、課金ガード精緻化 (コスト見積り合算)、IG 接続シーケンス、note の scheduling policy、twitter-text 採用、バックアップを GH Actions に訂正、parity テストのスコープ限定、B1 を目標 10 分に変更、DDL 19 テーブルに (rate_limits 追加) |
