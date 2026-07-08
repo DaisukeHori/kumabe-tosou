@@ -14,6 +14,8 @@ import {
 import { Reveal } from "@/components/site/reveal";
 import { ServiceSimLink } from "@/components/site/service-sim-link";
 import { ShopSimulator } from "@/components/site/shop-simulator";
+import type { PriceTable } from "@/modules/pricing/contracts";
+import { createPricingFacade } from "@/modules/pricing/facade";
 
 export const metadata: Metadata = {
   title: {
@@ -124,7 +126,13 @@ const BUY_FLOW = [
   },
 ] as const;
 
-export default function ShopPage() {
+export default async function ShopPage() {
+  // §6.2: 公開ページはサーバ側で SSR fetch し、クライアント側では再フェッチしない。
+  // 取得に失敗した場合も ShopSimulator 側の「価格はお問い合わせください」fallback (§2.3) に委ねる。
+  const facade = createPricingFacade();
+  const priceTableResult = await facade.getActivePriceTable();
+  const priceTable: PriceTable | null = priceTableResult.ok ? priceTableResult.value : null;
+
   return (
     <>
       <PageHead
@@ -405,7 +413,7 @@ export default function ShopPage() {
           −25%）と特急（＋50%）も反映した概算レンジを、その場で計算します。面を埋めるほど1個あたりの手間は下がる——だから、数を出すほど有利になります。内容はワンタップでコピーして、そのまま相談に貼り付けられます。
         </SecLead>
         <Reveal as="div" className="mt-10">
-          <ShopSimulator />
+          <ShopSimulator priceTable={priceTable} />
         </Reveal>
       </Section>
 
