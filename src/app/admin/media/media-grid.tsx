@@ -18,6 +18,7 @@ import {
 import { Field, FieldContent, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import type { MediaListItem } from "@/modules/media/facade";
 
 import { completeUploadAction, deleteMediaAction, patchMediaAction, requestUploadUrlAction } from "./actions";
@@ -30,6 +31,49 @@ function parseTags(input: string): string[] {
     .map((t) => t.trim())
     .filter((t) => t.length > 0)
     .slice(0, 10);
+}
+
+/**
+ * サムネイル画像。読み込み完了までは (壊れて見えないよう) 薄いグレーの
+ * スケルトン + subtle pulse を表示し、読み込み完了で画像へフェードする。
+ * `loading="lazy"` はそのまま維持する。
+ *
+ * ブラウザキャッシュ済みの画像は img 要素マウント時点で既に complete
+ * (naturalWidth > 0) になっており、その場合 <img> の "load" イベントは
+ * (bubbling しないイベントのため) React がリスナーを付ける前に発火して
+ * 拾えず、スケルトンが表示されたまま止まってしまうことがある
+ * (実機の 2 回目以降のアクセスで実際に発生を確認)。
+ * useEffect でマウント直後に img.complete を確認し、その場合は即座に
+ * loaded にすることでこのケースも救う。
+ */
+function MediaThumbnail({ src, alt }: { src: string; alt: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    setLoaded(false);
+    if (imgRef.current?.complete) {
+      setLoaded(true);
+    }
+  }, [src]);
+
+  return (
+    <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
+      {!loaded && <div className="absolute inset-0 animate-pulse bg-muted-foreground/10" />}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        className={cn(
+          "h-full w-full object-cover transition-opacity duration-300",
+          loaded ? "opacity-100" : "opacity-0",
+        )}
+      />
+    </div>
+  );
 }
 
 export function MediaGrid({ items }: { items: MediaListItem[] }) {
@@ -94,18 +138,15 @@ export function MediaGrid({ items }: { items: MediaListItem[] }) {
             role="button"
             onFocus={() => setFocusedIndex(index)}
             onClick={() => setEditId(item.id)}
-            className={
-              "cursor-pointer rounded-xl border bg-background p-2 outline-none transition-colors " +
-              (focusedIndex === index ? "ring-2 ring-primary" : "hover:bg-muted/40")
-            }
+            className={cn(
+              "cursor-pointer rounded-xl border border-border bg-card p-2 shadow-sm outline-none transition-colors",
+              focusedIndex === index ? "ring-2 ring-primary" : "hover:bg-muted/40",
+            )}
           >
-            <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
-              {/* 公開レンディション URL (webp)。next/image の remotePatterns 未設定でも
-                  <img> ではなく next/image を使いたいが、外部ドメイン許可は他ページ (next.config.ts)
-                  の管轄外変更を避けるため、ここでは通常の img タグで代用する。 */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={item.url} alt={item.alt} className="h-full w-full object-cover" loading="lazy" />
-            </div>
+            {/* 公開レンディション URL (webp)。next/image の remotePatterns 未設定でも
+                <img> ではなく next/image を使いたいが、外部ドメイン許可は他ページ (next.config.ts)
+                の管轄外変更を避けるため、ここでは通常の img タグで代用する。 */}
+            <MediaThumbnail src={item.url} alt={item.alt} />
             <p className="mt-2 truncate text-xs">{item.alt || "(alt未設定)"}</p>
             <div className="mt-1 flex flex-wrap items-center gap-1">
               {item.is_placeholder && (

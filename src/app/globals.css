@@ -183,6 +183,24 @@
   --color-soul: var(--soul);
 }
 
+/* =============================================================
+   ADMIN (/admin/**) 専用トークン — 「クリーンな CMS ダッシュボード」用
+   公開サイト (src/app/(site)/**) の --background / --primer 等はここでは
+   一切変更しない。admin レイアウトの content 領域のみで使用するスコープ。
+   ============================================================= */
+:root {
+  /* content 領域の背景。公開サイトのクリーム (--primer) より一段
+     ニュートラルな薄いグレーにして「アプリらしさ」を出す。 */
+  --admin-canvas: #f6f6f5;
+  /* カード/サーフェス上でのさらに一段沈んだ面 (テーブルヘッダ等)。 */
+  --admin-canvas-deep: #ececea;
+}
+
+@theme inline {
+  --color-admin-canvas: var(--admin-canvas);
+  --color-admin-canvas-deep: var(--admin-canvas-deep);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

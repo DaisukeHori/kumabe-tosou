@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { inquiryFacade } from "@/modules/inquiry/facade";
 import { mediaFacade } from "@/modules/media/facade";
 
@@ -26,12 +26,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-xl font-semibold">ダッシュボード</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          未処理の問い合わせ・仮素材の残数・配信状況の概況です。
-        </p>
-      </div>
+      <PageHeader title="ダッシュボード" description="未処理の問い合わせ・仮素材の残数・配信状況の概況です。" />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link href="/admin/inquiries?status=new">

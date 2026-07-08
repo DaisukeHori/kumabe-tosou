@@ -3,6 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
 
+import { Surface } from "@/app/admin/_ui";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,7 +25,7 @@ const CHANNELS: Channel[] = ["site_blog", "note", "x", "instagram"];
 
 export function StyleProfileForms({ data }: { data: Record<Channel, StyleProfileView | null> }) {
   return (
-    <div className="rounded-xl border bg-background p-4">
+    <Surface className="p-4">
       <h2 className="font-heading text-sm font-semibold">チャネル別文体プロファイル</h2>
       <p className="mt-1 text-xs text-muted-foreground">
         AI 生成時のプロンプトに注入される文体指示・構成ルールです (設計書 §7.4)。
@@ -43,7 +44,7 @@ export function StyleProfileForms({ data }: { data: Record<Channel, StyleProfile
           </TabsContent>
         ))}
       </Tabs>
-    </div>
+    </Surface>
   );
 }
 

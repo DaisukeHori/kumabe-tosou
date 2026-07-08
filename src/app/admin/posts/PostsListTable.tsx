@@ -3,14 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { ContentStatusBadge, DataTableHeaderRow, DataTableShell, dataTableRowClassName } from "@/app/admin/_ui";
 import type { AdminPost } from "@/modules/content/contracts";
 
-const STATUS_LABEL: Record<string, string> = {
-  draft: "下書き",
-  review: "レビュー待ち",
-  published: "公開中",
-  archived: "アーカイブ",
-};
+const GRID_COLS = "grid-cols-[1fr_auto_auto_auto]";
 
 const KIND_LABEL: Record<string, string> = {
   reading: "読みもの",
@@ -48,39 +44,38 @@ export function PostsListTable({ items }: { items: AdminPost[] }) {
   }
 
   return (
-    <div
-      role="listbox"
-      aria-label="記事一覧"
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      className="divide-y divide-border rounded-lg border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-    >
-      {items.map((item, index) => (
-        <div
-          key={item.id}
-          role="option"
-          aria-selected={index === focusedIndex}
-          onClick={() => router.push(`/admin/posts/${item.id}`)}
-          onMouseEnter={() => setFocusedIndex(index)}
-          className={`grid cursor-pointer grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-4 py-3 text-sm ${
-            index === focusedIndex ? "bg-muted" : ""
-          }`}
-        >
-          <div className="min-w-0">
-            <div className="truncate font-medium">{item.title}</div>
-            <div className="truncate text-xs text-muted-foreground">{item.slug}</div>
+    <DataTableShell>
+      <DataTableHeaderRow columns={["タイトル", "種別", "状態", "更新日時"]} gridClassName={GRID_COLS} />
+      <div
+        role="listbox"
+        aria-label="記事一覧"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        className="divide-y divide-border outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+      >
+        {items.map((item, index) => (
+          <div
+            key={item.id}
+            role="option"
+            aria-selected={index === focusedIndex}
+            onClick={() => router.push(`/admin/posts/${item.id}`)}
+            onMouseEnter={() => setFocusedIndex(index)}
+            className={`grid cursor-pointer items-center gap-4 px-4 py-3 text-sm transition-colors ${GRID_COLS} ${dataTableRowClassName(index === focusedIndex)}`}
+          >
+            <div className="min-w-0">
+              <div className="truncate font-medium">{item.title}</div>
+              <div className="truncate text-xs text-muted-foreground">{item.slug}</div>
+            </div>
+            <span className="rounded-full border border-border px-2 py-0.5 text-xs whitespace-nowrap">
+              {KIND_LABEL[item.kind] ?? item.kind}
+            </span>
+            <ContentStatusBadge status={item.status} />
+            <div className="text-xs whitespace-nowrap text-muted-foreground">
+              {new Date(item.updated_at).toLocaleString("ja-JP")}
+            </div>
           </div>
-          <span className="rounded-full border border-border px-2 py-0.5 text-xs whitespace-nowrap">
-            {KIND_LABEL[item.kind] ?? item.kind}
-          </span>
-          <span className="rounded-full border border-border px-2 py-0.5 text-xs whitespace-nowrap">
-            {STATUS_LABEL[item.status] ?? item.status}
-          </span>
-          <div className="text-xs whitespace-nowrap text-muted-foreground">
-            {new Date(item.updated_at).toLocaleString("ja-JP")}
-          </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </DataTableShell>
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { contentFacade } from "@/modules/content/facade";
 import type { ContentStatus, PostKind } from "@/modules/content/contracts";
 
@@ -59,16 +60,18 @@ export default async function PostsListPage({
   if (result.value.next_cursor) nextQuery.set("cursor", result.value.next_cursor);
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">記事</h1>
-        <Link
-          href={`/admin/posts/new?kind=${kind}`}
-          className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80"
-        >
-          新規作成
-        </Link>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="記事"
+        actions={
+          <Link
+            href={`/admin/posts/new?kind=${kind}`}
+            className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+          >
+            新規作成
+          </Link>
+        }
+      />
 
       <nav className="flex gap-2 border-b border-border" aria-label="記事の種類">
         {KIND_TABS.map((tab) => (

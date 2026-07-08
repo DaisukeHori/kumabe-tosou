@@ -1,3 +1,4 @@
+import { PageHeader } from "@/app/admin/_ui";
 import { isAiStudioConfigured } from "@/lib/env";
 import { aiStudioFacade } from "@/modules/ai-studio/facade";
 
@@ -36,8 +37,8 @@ export default async function StudioPage({
   const drafts = draftsResult && draftsResult.ok ? draftsResult.value : [];
 
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-xl font-semibold">AIスタジオ</h1>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="AIスタジオ" />
       <StudioWorkspace
         aiConfigured={aiConfigured}
         sources={sources}

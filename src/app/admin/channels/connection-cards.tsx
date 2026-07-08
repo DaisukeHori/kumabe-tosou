@@ -3,6 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
 
+import { Surface } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -45,7 +46,7 @@ export function ChannelConnectionCards({
 
   return (
     <div className="grid gap-4 md:grid-cols-3">
-      <div className="rounded-xl border bg-background p-4">
+      <Surface className="p-4">
         <div className="flex items-center justify-between">
           <p className="font-heading text-sm font-semibold">X (旧 Twitter)</p>
           <Badge variant={authStatusBadgeVariant(x?.auth_status ?? "disconnected")}>
@@ -67,9 +68,9 @@ export function ChannelConnectionCards({
             接続する
           </Button>
         )}
-      </div>
+      </Surface>
 
-      <div className="rounded-xl border bg-background p-4">
+      <Surface className="p-4">
         <div className="flex items-center justify-between">
           <p className="font-heading text-sm font-semibold">Instagram</p>
           <Badge variant={authStatusBadgeVariant(instagram?.auth_status ?? "disconnected")}>
@@ -91,7 +92,7 @@ export function ChannelConnectionCards({
             接続する
           </Button>
         )}
-      </div>
+      </Surface>
 
       <NoteAccountCard note={note} />
     </div>
@@ -108,7 +109,7 @@ function NoteAccountCard({ note }: { note: ChannelAccountView | null }) {
   const profileUrl = typeof note?.meta.profile_url === "string" ? note.meta.profile_url : "";
 
   return (
-    <div className="rounded-xl border bg-background p-4">
+    <Surface className="p-4">
       <div className="flex items-center justify-between">
         <p className="font-heading text-sm font-semibold">note (半自動)</p>
         <Badge variant={authStatusBadgeVariant(note?.auth_status ?? "disconnected")}>
@@ -143,6 +144,6 @@ function NoteAccountCard({ note }: { note: ChannelAccountView | null }) {
           {isPending ? "保存中..." : "保存"}
         </Button>
       </form>
-    </div>
+    </Surface>
   );
 }

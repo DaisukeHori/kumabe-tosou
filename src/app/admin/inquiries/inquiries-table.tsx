@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { Surface } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import type { InquiryStatus } from "@/modules/inquiry/contracts";
 import type { InquiryRow } from "@/modules/inquiry/facade";
 
@@ -102,51 +104,56 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
 
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>受信日時</TableHead>
-            <TableHead>お名前</TableHead>
-            <TableHead>種別</TableHead>
-            <TableHead>メール</TableHead>
-            <TableHead>ステータス</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                該当する問い合わせはありません。
-              </TableCell>
+      <Surface className="overflow-x-auto p-0">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>受信日時</TableHead>
+              <TableHead>お名前</TableHead>
+              <TableHead>種別</TableHead>
+              <TableHead>メール</TableHead>
+              <TableHead>ステータス</TableHead>
             </TableRow>
-          )}
-          {items.map((item, index) => (
-            <TableRow
-              key={item.id}
-              ref={(el) => {
-                rowRefs.current[index] = el;
-              }}
-              tabIndex={0}
-              onFocus={() => setFocusedIndex(index)}
-              onClick={() => openDialog(item.id, item.status)}
-              aria-selected={focusedIndex === index}
-              className={
-                "cursor-pointer outline-none " + (focusedIndex === index ? "bg-muted" : "")
-              }
-            >
-              <TableCell>
-                {new Date(item.created_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
-              </TableCell>
-              <TableCell>{item.name}</TableCell>
-              <TableCell>{INQUIRY_TYPE_LABELS[item.inquiry_type] ?? item.inquiry_type}</TableCell>
-              <TableCell>{item.email}</TableCell>
-              <TableCell>
-                <Badge variant={statusBadgeVariant(item.status)}>{STATUS_LABELS[item.status]}</Badge>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {items.length === 0 && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  該当する問い合わせはありません。
+                </TableCell>
+              </TableRow>
+            )}
+            {items.map((item, index) => (
+              <TableRow
+                key={item.id}
+                ref={(el) => {
+                  rowRefs.current[index] = el;
+                }}
+                tabIndex={0}
+                onFocus={() => setFocusedIndex(index)}
+                onClick={() => openDialog(item.id, item.status)}
+                aria-selected={focusedIndex === index}
+                className={cn(
+                  "cursor-pointer border-l-4 outline-none",
+                  focusedIndex === index
+                    ? "border-l-soul bg-soul/5"
+                    : "border-l-transparent",
+                )}
+              >
+                <TableCell>
+                  {new Date(item.created_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
+                </TableCell>
+                <TableCell>{item.name}</TableCell>
+                <TableCell>{INQUIRY_TYPE_LABELS[item.inquiry_type] ?? item.inquiry_type}</TableCell>
+                <TableCell>{item.email}</TableCell>
+                <TableCell>
+                  <Badge variant={statusBadgeVariant(item.status)}>{STATUS_LABELS[item.status]}</Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Surface>
 
       <Dialog
         open={!!openItem}
