@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Noto_Sans_JP } from "next/font/google";
+import { IBM_Plex_Mono, Noto_Sans_JP, Shippori_Antique_B1 } from "next/font/google";
 import "./globals.css";
 
 import { SiteFooter } from "@/components/site/site-footer";
@@ -10,8 +10,23 @@ const notoSansJP = Noto_Sans_JP({
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+/*
+  legacy/index.html の見出しフォント (Shippori Antique B1) の移植。
+  --font-disp として globals.css から参照される。
+*/
+const shipporiAntiqueB1 = Shippori_Antique_B1({
+  variable: "--font-shippori",
+  weight: "400",
+  subsets: ["latin"],
+});
+
+/*
+  legacy/index.html の mono フォント (IBM Plex Mono) の移植。
+  --font-mono (Tailwind の font-mono ユーティリティ) として globals.css から参照される。
+*/
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: "--font-ibm-plex-mono",
+  weight: ["400", "500"],
   subsets: ["latin"],
 });
 
@@ -78,7 +93,7 @@ export default function RootLayout({
   return (
     <html
       lang="ja"
-      className={`${notoSansJP.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${notoSansJP.variable} ${shipporiAntiqueB1.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <head>
         <script

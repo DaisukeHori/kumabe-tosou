@@ -8,8 +8,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-mono: var(--font-ibm-plex-mono);
+  --font-heading: var(--font-disp);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -152,10 +152,14 @@
   --dd-46g-a: #7a8189;
   --dd-46g-b: #383d42;
 
-  /* --- type (legacy stacks; Noto Sans JP は next/font で --font-sans に注入) --- */
-  --font-disp: "Shippori Antique B1", "Hiragino Kaku Gothic ProN", sans-serif;
+  /* --- type ---
+     Noto Sans JP (本文) / Shippori Antique B1 (見出し) / IBM Plex Mono (mono) は
+     next/font/google 経由で読み込み、それぞれ --font-sans / --font-shippori / --font-ibm-plex-mono に注入。
+     Zen Kaku Gothic New (--font-body) / Archivo (--font-wide) は legacy にあったが
+     現行実装では未読み込み。フォールバックスタックのみ残す。 */
+  --font-disp: var(--font-shippori), "Hiragino Kaku Gothic ProN", sans-serif;
   --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", sans-serif;
-  --font-legacy-mono: "IBM Plex Mono", "Menlo", monospace;
+  --font-legacy-mono: var(--font-ibm-plex-mono), "Menlo", monospace;
   --font-wide: "Archivo", "Helvetica Neue", sans-serif;
 
   /* --- layout --- */
@@ -192,5 +196,156 @@
   ::selection {
     background: var(--carbon);
     color: var(--primer);
+  }
+  /* legacy: 見出し類は全て font-disp (Shippori Antique B1) */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-disp);
+  }
+}
+
+/* =============================================================
+   REVEAL — legacy/js/main.js「2) スクロールリビール」の移植
+   ============================================================= */
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.85s var(--ease),
+    transform 0.85s var(--ease);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---------- ヒーロー見出し: 行ごとのライズイン (legacy .hero-title) ---------- */
+@keyframes kt-rise {
+  to {
+    transform: translateY(0);
+  }
+}
+.kt-hero-line {
+  display: block;
+  overflow: hidden;
+}
+.kt-hero-line > span {
+  display: block;
+  transform: translateY(110%);
+  animation: kt-rise 1s var(--ease) forwards;
+}
+.kt-hero-line:nth-child(2) > span {
+  animation-delay: 0.12s;
+}
+.kt-hero-line:nth-child(3) > span {
+  animation-delay: 0.24s;
+}
+
+/* ---------- 「塗った」マーカー (legacy .paint-mark) ---------- */
+@keyframes kt-paint {
+  to {
+    transform: scaleX(1);
+  }
+}
+.kt-paint-mark {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.12em;
+  color: var(--paper);
+  z-index: 1;
+}
+.kt-paint-mark::before {
+  content: "";
+  position: absolute;
+  inset: 0.09em -0.06em 0.07em;
+  background: linear-gradient(
+    94deg,
+    var(--soul) 0%,
+    #c4132e 60%,
+    var(--soul) 100%
+  );
+  z-index: -1;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: kt-paint 0.7s var(--ease) 0.75s forwards;
+}
+
+/* ---------- マーキー (legacy .hero-spec-line / .footer-marquee 共通) ---------- */
+@keyframes kt-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.kt-marquee-track {
+  display: inline-flex;
+  flex: none;
+  animation: kt-marquee 32s linear infinite;
+}
+.kt-marquee-track--footer {
+  animation-duration: 34s;
+}
+.kt-marquee:hover .kt-marquee-track {
+  animation-play-state: paused;
+}
+
+/* ---------- パール(3コート)の虹彩 (legacy .dd-swatch.is-pearl .dd-iris) ---------- */
+.kt-pearl-iris {
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(
+    from 220deg at 46% 42%,
+    rgba(255, 214, 222, 0.35),
+    rgba(214, 226, 255, 0.3),
+    rgba(255, 244, 214, 0.32),
+    rgba(224, 214, 255, 0.28),
+    rgba(255, 214, 222, 0.35)
+  );
+  mix-blend-mode: soft-light;
+}
+/* 塗料のムラ・粒子 (legacy .dd-swatch::before) */
+.kt-swatch-noise {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+  opacity: 0.4;
+}
+/* 光の面 (legacy .dd-swatch::after) */
+.kt-swatch-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.06) 34%,
+    rgba(255, 255, 255, 0) 55%
+  );
+  transition: transform 0.7s var(--ease);
+}
+a:hover .kt-swatch-sheen {
+  transform: translateX(18%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .kt-hero-line > span {
+    transform: none;
+    animation: none;
+  }
+  .kt-paint-mark::before {
+    transform: scaleX(1);
+    animation: none;
+  }
+  .kt-marquee-track {
+    animation: none;
   }
 }
