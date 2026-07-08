@@ -60,7 +60,7 @@ src/modules/<module>/
 ```
 
 派生規則 (すべて contracts.ts が単一ソース):
-- **Claude structured outputs 用 JSON Schema**: `zod-to-json-schema` で contracts.ts から生成。手書き JSON Schema 禁止。
+- **Claude structured outputs 用 JSON Schema**: zod v4 ネイティブの **`z.toJSONSchema()`** で contracts.ts から生成し、`@anthropic-ai/sdk` の json-schema ヘルパで output_format 化。手書き JSON Schema 禁止。(※ 当初指定の `zod-to-json-schema` は zod v4 非対応で空スキーマを生成することが Wave2-E で実証されたため差し替え)
 - **フォームバリデーション**: admin UI は同じ Zod を react-hook-form resolver で使用。
 - **DB check 制約との対応**: enum/status/非負など**構造的制約のみ** DDL にも定義し、一致を結合テスト (`contracts-ddl-parity.test.ts`) で検証。文字数上限・regex 等の値制約は **Zod が唯一の正** (DDL に重複定義しない — 二重管理の乖離防止。Codex 指摘で方針確定)。
 
@@ -347,6 +347,7 @@ export const zScheduleReq = z.object({
 export const zCreateSourceReq = z.object({
   input_type: z.enum(["audio", "text"]),
   raw_text: z.string().max(50_000).nullable(), // input_type='text' のとき必須 (refine)
+  audio_storage_path: z.string().max(500).nullable(), // input_type='audio' のとき必須 — アップロード済み音声の紐付け (Wave2-E で追加)
 }).strict();
 
 export const zCreateUploadUrlReq = z.object({
@@ -571,6 +572,10 @@ export interface AiStudioFacade {
 
 // distribution/facade.ts
 export interface DistributionFacade {
+  getStyleProfiles(): Promise<Result<Record<Channel, StyleProfile>>>;
+  // ai-studio の draft 生成は本メソッドの結果を **app 層 (route handler) が取得して
+  // AiStudioFacade に引数で渡す** 合成パターンで使う (ai-studio → distribution の
+  // 依存を作らないため。Wave2-E で暫定ハードコードになっている箇所の正式解 — Wave 3 で配線)
   schedulePosts(entries: ScheduleEntry[]): Promise<Result<{ post_ids: string[] }>>; // entry = {draft_id, scheduled_at|null}
   cancel(postId: string): Promise<Result<void>>;
   markNotePublished(postId: string, externalUrl: string): Promise<Result<void>>;

@@ -323,6 +323,7 @@ create table ai_runs (
   status text not null default 'pending'
     check (status in ('pending','extracting','researching','drafting','ready_for_review','completed','failed','cancelled')),
   target_channels text[] not null,          -- {'site_blog','note','x','instagram'} の部分集合
+  research_enabled boolean not null default false, -- リサーチ stage を実行するか (zStartRunReq.research の永続化。Wave2-E で追加)
   brief jsonb,                              -- 抽出された要旨・トピック・キーワード
   research_notes jsonb,                     -- web_search の結果サマリ+引用 URL
   error_code text,                          -- §9 のエラーコード
