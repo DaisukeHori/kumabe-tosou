@@ -36,12 +36,18 @@ export type UpdateSettingResult =
  * 楽観的排他付きの upsert。
  * - 行が存在しない場合は新規 INSERT (expectedUpdatedAt は無視 — 初回保存)。
  * - 行が存在する場合は updated_at が一致する場合のみ UPDATE。不一致 (他者更新) は conflict。
+ *
+ * 注意: expectedUpdatedAt は DB から読み取った updated_at の**生文字列**をそのまま渡すこと。
+ * Postgres の timestamptz はマイクロ秒精度で保存されるが `Date.toISOString()` はミリ秒精度
+ * までしか表現できず、経由すると下 3 桁が失われ `.eq` が恒久的に不一致になる
+ * (content/repository.ts の updateWithOptimisticLock, pricing/repository.ts の upsertGrade と
+ * 同じ「生文字列比較」方式に統一する — KMB-E103 誤爆の実バグ修正)。
  */
 export async function upsertSetting(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   key: SettingsKey,
   value: unknown,
-  expectedUpdatedAt: Date,
+  expectedUpdatedAt: string,
   updatedBy: string | null,
 ): Promise<UpdateSettingResult> {
   const existing = await getSettingRow(supabase, key);
@@ -58,7 +64,7 @@ export async function upsertSetting(
     .from("site_settings")
     .update({ value, updated_by: updatedBy })
     .eq("key", key)
-    .eq("updated_at", expectedUpdatedAt.toISOString())
+    .eq("updated_at", expectedUpdatedAt)
     .select("key")
     .maybeSingle();
   if (error) throw new Error(`site_settings 更新に失敗しました (${key}): ${error.message}`);
