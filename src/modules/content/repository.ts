@@ -13,8 +13,9 @@ import { decodeCursor, encodeCursor } from "./internal/pagination";
  * repository のみ」)。facade.ts のみがここを import する。
  *
  * client には admin セッション付きの @supabase/ssr server client を渡す (RLS で認可)。
- * work_images への書込のみ、RLS 上ポリシーが一切無く service client 専用のため、
- * 該当関数は serviceClient を別引数で受け取る (cms-ai-pipeline.md §3.2 の work_images 注記)。
+ * work_images への書込も含め、全関数がこの admin server client のみで完結する
+ * (migration 20260708000012 で work_images に is_admin() の insert/update/delete ポリシーを
+ * 追加済みのため、service client は不要。旧注記「service client 専用」は廃止)。
  */
 
 // ---- DB 行の生の型 (DDL 1:1。cms-ai-pipeline.md §2.2) ----
@@ -209,7 +210,8 @@ export async function getPublishedBySlug<Row>(
   return { ok: true, value: (data as Row | null) ?? null };
 }
 
-// ---- work_images (junction table。RLS ポリシー無し。読み取りは server client、書込は service client 専用) ----
+// ---- work_images (junction table。読み取り・書込ともに admin server client。
+// migration 20260708000012 で is_admin() に insert/update/delete ポリシーを開放済み) ----
 
 export type WorkImageRow = { work_id: string; media_id: string; sort_order: number };
 
@@ -227,15 +229,15 @@ export async function listWorkImages(
 }
 
 /**
- * work_images を丸ごと入れ替える (削除→挿入)。RLS 上 admin/anon 双方に書込ポリシーが無いため
- * 必ず service client を渡す (cms-ai-pipeline.md §3.2 の work_images 注記、Wave1-B 実装指示)。
+ * work_images を丸ごと入れ替える (削除→挿入)。admin セッションの server client で完結する
+ * (migration 20260708000012 で is_admin() に insert/update/delete ポリシーを開放済み)。
  */
 export async function replaceWorkImages(
-  serviceClient: SupabaseClient,
+  client: SupabaseClient,
   workId: string,
   mediaIds: string[],
 ): Promise<Result<void>> {
-  const { error: delError } = await serviceClient.from("work_images").delete().eq("work_id", workId);
+  const { error: delError } = await client.from("work_images").delete().eq("work_id", workId);
   if (delError) return pgErrorToResult(delError);
 
   if (mediaIds.length === 0) return { ok: true, value: undefined };
@@ -245,7 +247,7 @@ export async function replaceWorkImages(
     media_id: mediaId,
     sort_order: index,
   }));
-  const { error: insError } = await serviceClient.from("work_images").insert(rows);
+  const { error: insError } = await client.from("work_images").insert(rows);
   if (insError) return pgErrorToResult(insError);
   return { ok: true, value: undefined };
 }

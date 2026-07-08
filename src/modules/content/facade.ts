@@ -5,7 +5,6 @@ import { revalidateTag } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type { Paged, Pagination, Result } from "@/modules/platform/contracts";
 
 import type {
@@ -375,7 +374,6 @@ async function getWorkAdmin(id: string): Promise<Result<AdminWork | null>> {
 
 async function createWork(input: WorkInput): Promise<Result<{ id: string }>> {
   const client = await createSupabaseServerClient();
-  const serviceClient = createSupabaseServiceClient();
   const insertResult = await repo.insertWork(client, {
     slug: input.slug,
     title: input.title,
@@ -391,7 +389,7 @@ async function createWork(input: WorkInput): Promise<Result<{ id: string }>> {
     }
     return insertResult;
   }
-  const imagesResult = await repo.replaceWorkImages(serviceClient, insertResult.value.id, input.image_ids);
+  const imagesResult = await repo.replaceWorkImages(client, insertResult.value.id, input.image_ids);
   if (!imagesResult.ok) return imagesResult;
   // 新規作成は常に status='draft' (DDL 既定) のため未公開。revalidate 不要。
   return { ok: true, value: { id: insertResult.value.id } };
@@ -403,7 +401,6 @@ async function updateWork(
   expectedUpdatedAt: string,
 ): Promise<Result<{ updated_at: string }>> {
   const client = await createSupabaseServerClient();
-  const serviceClient = createSupabaseServiceClient();
   const updateResult = await repo.updateWorkFields(
     client,
     id,
@@ -424,7 +421,7 @@ async function updateWork(
     }
     return updateResult;
   }
-  const imagesResult = await repo.replaceWorkImages(serviceClient, id, input.image_ids);
+  const imagesResult = await repo.replaceWorkImages(client, id, input.image_ids);
   if (!imagesResult.ok) return imagesResult;
   revalidateTag("works");
   return { ok: true, value: { updated_at: updateResult.value.updated_at } };
