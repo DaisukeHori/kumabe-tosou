@@ -1,4 +1,7 @@
-import twitterText from "twitter-text";
+// twitter-text は CJS パッケージのため named import は実行時に壊れる (Wave2-E/F 双方で実証)。
+// namespace import + next.config.ts の serverExternalPackages: ["twitter-text"] の
+// 組み合わせが `next start` 実機検証済みの最終形 (Wave2-F)。
+import * as twitterText from "twitter-text";
 
 /**
  * X (Twitter) の重み付き文字数。
