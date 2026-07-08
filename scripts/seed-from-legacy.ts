@@ -33,10 +33,17 @@ import { processImageForRenditions } from "@/modules/media/internal/image-transf
 import { createScriptServiceClient } from "./lib/service-client";
 import { MEDIA_SEED } from "./seed-data/media";
 import { POSTS_SEED } from "./seed-data/posts";
-import { PRICE_GRADES_SEED, PRICE_OPTIONS_SEED } from "./seed-data/pricing";
+import {
+  PRICE_GRADES_SEED,
+  PRICE_MATRIX_SEED,
+  PRICE_OPTIONS_SEED,
+  PRICE_QUANTITY_TIERS_SEED,
+  PRICE_SIZE_CLASSES_SEED,
+} from "./seed-data/pricing";
 import {
   COMPANY_SETTINGS_SEED,
   HERO_SETTINGS_SEED,
+  NOTIFICATIONS_SETTINGS_SEED,
   OPS_LIMITS_SEED,
   SEO_DEFAULTS_SEED,
 } from "./seed-data/settings";
@@ -274,7 +281,6 @@ async function seedPriceGrades(supabase: SupabaseClient, batchId: string) {
       .insert({
         key: g.key,
         label: g.label,
-        base_price: g.base_price,
         description: g.description,
         sort_order: g.sort_order,
         is_active: g.is_active,
@@ -286,6 +292,103 @@ async function seedPriceGrades(supabase: SupabaseClient, batchId: string) {
     }
     await recordManifest(supabase, batchId, "price_grades", inserted.id);
     console.log(`[created] price_grades: ${g.key}`);
+  }
+}
+
+async function seedPriceSizeClasses(supabase: SupabaseClient, batchId: string) {
+  console.log("== price_size_classes ==");
+  for (const s of PRICE_SIZE_CLASSES_SEED) {
+    const { data: existing, error: selectError } = await supabase
+      .from("price_size_classes")
+      .select("key")
+      .eq("key", s.key)
+      .maybeSingle();
+    if (selectError) {
+      throw new Error(`price_size_classes 確認に失敗 (${s.key}): ${selectError.message}`);
+    }
+    if (existing) {
+      console.log(`[skip] price_size_classes: ${s.key} は既に存在します`);
+      continue;
+    }
+
+    const { error: insertError } = await supabase.from("price_size_classes").insert({
+      key: s.key,
+      label: s.label,
+      max_mm: s.max_mm,
+      quote_only: s.quote_only,
+      sort_order: s.sort_order,
+    });
+    if (insertError) {
+      throw new Error(`price_size_classes INSERT 失敗 (${s.key}): ${insertError.message}`);
+    }
+    await recordManifest(supabase, batchId, "price_size_classes", s.key);
+    console.log(`[created] price_size_classes: ${s.key}`);
+  }
+}
+
+async function seedPriceMatrix(supabase: SupabaseClient, batchId: string) {
+  console.log("== price_matrix ==");
+  for (const m of PRICE_MATRIX_SEED) {
+    const { data: existing, error: selectError } = await supabase
+      .from("price_matrix")
+      .select("grade_key")
+      .eq("grade_key", m.grade_key)
+      .eq("size_key", m.size_key)
+      .maybeSingle();
+    if (selectError) {
+      throw new Error(
+        `price_matrix 確認に失敗 (${m.grade_key}/${m.size_key}): ${selectError.message}`,
+      );
+    }
+    if (existing) {
+      console.log(`[skip] price_matrix: ${m.grade_key}/${m.size_key} は既に存在します`);
+      continue;
+    }
+
+    const { error: insertError } = await supabase.from("price_matrix").insert({
+      grade_key: m.grade_key,
+      size_key: m.size_key,
+      price_min: m.price_min,
+      price_max: m.price_max,
+    });
+    if (insertError) {
+      throw new Error(
+        `price_matrix INSERT 失敗 (${m.grade_key}/${m.size_key}): ${insertError.message}`,
+      );
+    }
+    // price_matrix は複合主キー (grade_key, size_key) のため、ref_id は "grade_key:size_key" で
+    // 記録する (rollback-seed.ts はこの記法を前提に分割して削除する)。
+    await recordManifest(supabase, batchId, "price_matrix", `${m.grade_key}:${m.size_key}`);
+    console.log(`[created] price_matrix: ${m.grade_key}/${m.size_key}`);
+  }
+}
+
+async function seedPriceQuantityTiers(supabase: SupabaseClient, batchId: string) {
+  console.log("== price_quantity_tiers ==");
+  for (const t of PRICE_QUANTITY_TIERS_SEED) {
+    const { data: existing, error: selectError } = await supabase
+      .from("price_quantity_tiers")
+      .select("min_qty")
+      .eq("min_qty", t.min_qty)
+      .maybeSingle();
+    if (selectError) {
+      throw new Error(`price_quantity_tiers 確認に失敗 (${t.min_qty}): ${selectError.message}`);
+    }
+    if (existing) {
+      console.log(`[skip] price_quantity_tiers: ${t.min_qty} は既に存在します`);
+      continue;
+    }
+
+    const { error: insertError } = await supabase.from("price_quantity_tiers").insert({
+      min_qty: t.min_qty,
+      discount_rate: t.discount_rate,
+      label: t.label,
+    });
+    if (insertError) {
+      throw new Error(`price_quantity_tiers INSERT 失敗 (${t.min_qty}): ${insertError.message}`);
+    }
+    await recordManifest(supabase, batchId, "price_quantity_tiers", String(t.min_qty));
+    console.log(`[created] price_quantity_tiers: ${t.min_qty}`);
   }
 }
 
@@ -330,6 +433,7 @@ async function seedSettings(supabase: SupabaseClient, batchId: string) {
     { key: "hero", value: HERO_SETTINGS_SEED },
     { key: "seo_defaults", value: SEO_DEFAULTS_SEED },
     { key: "ops_limits", value: OPS_LIMITS_SEED },
+    { key: "notifications", value: NOTIFICATIONS_SETTINGS_SEED },
   ];
   for (const entry of entries) {
     const { data: existing, error: selectError } = await supabase
@@ -357,7 +461,7 @@ async function seedSettings(supabase: SupabaseClient, batchId: string) {
 }
 
 async function main() {
-  const supabase = createScriptServiceClient();
+  const supabase = await createScriptServiceClient();
   const batchId = randomUUID();
   console.log(`batch_id = ${batchId}`);
 
@@ -366,6 +470,9 @@ async function main() {
   await seedVoices(supabase, batchId);
   await seedPosts(supabase, batchId);
   await seedPriceGrades(supabase, batchId);
+  await seedPriceSizeClasses(supabase, batchId);
+  await seedPriceMatrix(supabase, batchId);
+  await seedPriceQuantityTiers(supabase, batchId);
   await seedPriceOptions(supabase, batchId);
   await seedSettings(supabase, batchId);
 

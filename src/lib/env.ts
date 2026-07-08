@@ -14,31 +14,45 @@ import { z } from "zod";
  * service role が必要な処理 (isAdmin の他者 profile 参照・署名付き URL 発行等) は
  * 個別に isServiceRoleConfigured() で確認した上で KMB-E9xx 相当に degrade する。
  */
+/**
+ * (2026-07-08 訂正 — オーケストレーターへ報告済み)
+ * .env.local / Vercel の運用では「未払い出しの機能別キー」を空文字 ("") で
+ * プレースホルダとして残す運用が実在する (例: SUPABASE_SERVICE_ROLE_KEY=)。
+ * z.string().min(1).optional() は値が undefined の場合のみ検証をバイパスし、
+ * 空文字は素通りせず min(1) 違反として弾いてしまう (optional() は「キー自体の省略」
+ * のみを許すため)。これにより空文字プレースホルダが 1 つでも存在すると
+ * getEnv() が全機能について例外を投げてしまい、graceful degradation の意図
+ * (値の有無で機能の有効/無効を判定する) が成立しない。
+ * 空文字を undefined に正規化してから optional 検証する preprocess で対処する。
+ */
+const emptyToUndefined = (value: unknown) =>
+  typeof value === "string" && value === "" ? undefined : value;
+
 const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   NEXT_PUBLIC_SITE_URL: z.string().url(),
 
   // 機能別 (任意)。フォーマットのみ緩く検証し、値の有無で機能の有効/無効を判定する。
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
-  RESEND_API_KEY: z.string().min(1).optional(),
-  REVALIDATE_SECRET: z.string().min(1).optional(),
-  JOBS_SECRET: z.string().min(1).optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  RESEND_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  REVALIDATE_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  JOBS_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 
   // ---- AI スタジオ (Phase 2a〜。設計書 §1.2)。未設定時は /admin/studio が
   // 「API キー未設定」バナーを表示し、実行系ボタンを無効化する (graceful degradation)。
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  OPENAI_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  OPENAI_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 
   // ---- SNS 配信 (Wave2-F distribution。設計書 §7.7 / §8、契約書 §7.3-7.4) ----
   // Preview 環境では OAuth 接続機能そのものを無効化する明示スイッチ (設計書 §7.7)。
-  OAUTH_ENABLED: z.enum(["true", "false"]).optional(),
+  OAUTH_ENABLED: z.preprocess(emptyToUndefined, z.enum(["true", "false"]).optional()),
   // state + code_verifier を暗号化 httpOnly cookie に載せる際の対称鍵の素材 (32 文字以上)。
-  OAUTH_STATE_SECRET: z.string().min(32).optional(),
-  X_CLIENT_ID: z.string().min(1).optional(),
-  X_CLIENT_SECRET: z.string().min(1).optional(),
-  META_APP_ID: z.string().min(1).optional(),
-  META_APP_SECRET: z.string().min(1).optional(),
+  OAUTH_STATE_SECRET: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
+  X_CLIENT_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  X_CLIENT_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  META_APP_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  META_APP_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 });
 
 export type Env = z.infer<typeof envSchema>;

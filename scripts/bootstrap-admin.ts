@@ -36,7 +36,7 @@ async function main() {
     return;
   }
 
-  const supabase = createScriptServiceClient();
+  const supabase = await createScriptServiceClient();
 
   // ---- 1. auth.users ----
   let userId: string | undefined;

@@ -16,6 +16,9 @@ const ENTITY_TABLE: Record<string, { table: string; pk: string }> = {
   voices: { table: "voices", pk: "id" },
   posts: { table: "posts", pk: "id" },
   price_grades: { table: "price_grades", pk: "id" },
+  price_size_classes: { table: "price_size_classes", pk: "key" },
+  // price_matrix は複合主キー (grade_key, size_key) のため main() 内で個別に分岐する
+  price_quantity_tiers: { table: "price_quantity_tiers", pk: "min_qty" },
   price_options: { table: "price_options", pk: "id" },
   site_settings: { table: "site_settings", pk: "key" },
 };
@@ -28,7 +31,7 @@ async function main() {
     return;
   }
 
-  const supabase = createScriptServiceClient();
+  const supabase = await createScriptServiceClient();
 
   const { data: rows, error } = await supabase
     .from("seed_manifest")
@@ -56,6 +59,15 @@ async function main() {
         const bucket = row.entity === "storage:media-originals" ? "media-originals" : "media";
         const { error: removeError } = await supabase.storage.from(bucket).remove([row.ref_id]);
         if (removeError) throw removeError;
+      } else if (row.entity === "price_matrix") {
+        // 複合主キー (grade_key, size_key) のため ref_id ("grade_key:size_key") を分割して削除する。
+        const [gradeKey, sizeKey] = row.ref_id.split(":");
+        const { error: deleteError } = await supabase
+          .from("price_matrix")
+          .delete()
+          .eq("grade_key", gradeKey)
+          .eq("size_key", sizeKey);
+        if (deleteError) throw deleteError;
       } else {
         const mapping = ENTITY_TABLE[row.entity];
         if (!mapping) {

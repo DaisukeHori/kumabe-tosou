@@ -1,6 +1,7 @@
 import {
   zCompanySettings,
   zHeroSettings,
+  zNotificationSettings,
   zOpsLimits,
   zSeoDefaults,
   type SettingsValue,
@@ -53,3 +54,27 @@ export const SEO_DEFAULTS_SEED: SettingsValue<"seo_defaults"> = zSeoDefaults.par
 export const OPS_LIMITS_SEED: SettingsValue<"ops_limits"> = zOpsLimits.parse({
   x_monthly_post_limit: 100,
 });
+
+/**
+ * 本来は scripts/bootstrap-admin.ts (service role の auth.admin API) が
+ * 管理者メールで初期化する想定 (設計書 §6.3: 通知先未設定のまま運用が始まる事故を防ぐ)。
+ * 今回は service_role キー未払い出しの admin セッション運用のため bootstrap-admin.ts
+ * (auth.admin.createUser 等が service role 必須) を実行できず、管理者アカウントは
+ * SQL で直接作成済み。そのため notifications 設定も未初期化のままだったので、
+ * bootstrap-admin.ts と同じ意味づけ (inquiry_to = 管理者メール) をここで転記する。
+ */
+function requireBootstrapAdminEmail(): string {
+  const email = process.env.BOOTSTRAP_ADMIN_EMAIL;
+  if (!email) {
+    throw new Error(
+      "BOOTSTRAP_ADMIN_EMAIL が未設定です。notifications 設定の初期化には管理者メールが必要です。",
+    );
+  }
+  return email;
+}
+
+export const NOTIFICATIONS_SETTINGS_SEED: SettingsValue<"notifications"> =
+  zNotificationSettings.parse({
+    inquiry_to: requireBootstrapAdminEmail(),
+    on_publish_failure: false,
+  });
