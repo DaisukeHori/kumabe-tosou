@@ -49,6 +49,8 @@ const eslintConfig = [
       "next-env.d.ts",
       // Legacy static site (kept for reference during migration).
       "legacy/**",
+      // Claude Code のエージェント worktree・セッション成果物 (lint 対象外)
+      ".claude/**",
     ],
   },
   {
