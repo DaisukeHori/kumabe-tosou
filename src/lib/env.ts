@@ -38,6 +38,10 @@ const envSchema = z.object({
   RESEND_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   REVALIDATE_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   JOBS_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  // 公開フォームの rate limit (contact_inquiries anon INSERT の spam 対策) で IP を hash する
+  // salt。未設定時は固定フォールバック値を使う (rate limit は spam 抑止目的であり認可境界では
+  // ないため未設定でも機能停止はしない。本番では設定を強く推奨。Wave1-D 統合分)。
+  RATE_LIMIT_IP_SALT: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 
   // ---- AI スタジオ (Phase 2a〜。設計書 §1.2)。未設定時は /admin/studio が
   // 「API キー未設定」バナーを表示し、実行系ボタンを無効化する (graceful degradation)。
@@ -91,6 +95,19 @@ export function isServiceRoleConfigured(): boolean {
 /** pg_cron からの起床 webhook を検証するための共有シークレットが設定済みか */
 export function isJobsSecretConfigured(): boolean {
   return Boolean(process.env.JOBS_SECRET);
+}
+
+/** /api/revalidate webhook (x-revalidate-secret) を検証するための共有シークレットが設定済みか */
+export function isRevalidateSecretConfigured(): boolean {
+  return Boolean(process.env.REVALIDATE_SECRET);
+}
+
+/** rate limit の IP hash 用 salt が未設定の場合のフォールバック (本番では env 設定を推奨) */
+const RATE_LIMIT_IP_SALT_FALLBACK = "kumabe-tosou-rate-limit-fallback-salt-please-set-env";
+
+/** rate limit の IP hash に使う salt。未設定時は固定フォールバックを返す */
+export function getRateLimitIpSalt(): string {
+  return process.env.RATE_LIMIT_IP_SALT || RATE_LIMIT_IP_SALT_FALLBACK;
 }
 
 /**
