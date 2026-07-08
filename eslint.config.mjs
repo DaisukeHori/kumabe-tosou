@@ -74,6 +74,25 @@ const eslintConfig = [
       ],
     },
   })),
+  // scripts/** (運用スクリプト) は tsx 直接実行のため "server-only" を経由できず
+  // (scripts/lib/service-client.ts 参照)、repository.ts 等は引き続き import できない。
+  // ただし media/internal/image-transform.ts は "server-only" 非依存の純粋な変換関数のみを
+  // 置くファイルであり、scripts/seed-from-legacy.ts がレンディション生成ロジックを
+  // 複製せず共用するために import する必要があるため、この 1 パスのみ例外的に許可する
+  // (media/repository および他モジュールの internal/** は引き続き禁止)。
+  {
+    files: ["scripts/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: restrictedModuleImportPatterns(null).filter(
+            (pattern) => !pattern.group.includes("@/modules/media/internal/*"),
+          ),
+        },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;

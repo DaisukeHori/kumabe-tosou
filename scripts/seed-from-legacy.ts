@@ -28,6 +28,8 @@ import path from "node:path";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { processImageForRenditions } from "@/modules/media/internal/image-transform";
+
 import { createScriptServiceClient } from "./lib/service-client";
 import { MEDIA_SEED } from "./seed-data/media";
 import { POSTS_SEED } from "./seed-data/posts";
@@ -83,24 +85,35 @@ async function seedMedia(supabase: SupabaseClient, batchId: string) {
     }
     await recordManifest(supabase, batchId, "storage:media-originals", m.storagePath);
 
-    // レンディション代用: sharp による WebP/JPEG 生成は Wave 1 の media モジュールで実装するため、
-    // 当面は同一バイト列を公開 media バケットへコピーして代用する (明記事項)。
-    const { error: uploadRenditionError } = await supabase.storage
+    // レンディション生成: media モジュール本体 (image-processing.ts) と同一の変換ロジック
+    // (image-transform.ts、server-only 非依存) を共用し、公開規約通り `{mediaId}.webp` /
+    // `{mediaId}.jpg` を "media" バケットへ生成する (facade.ts の renditionPathFor と同じ規約)。
+    const { webp, jpeg, width, height } = await processImageForRenditions(fileBuffer);
+    const webpPath = `${m.id}.webp`;
+    const jpegPath = `${m.id}.jpg`;
+
+    const { error: uploadWebpError } = await supabase.storage
       .from("media")
-      .upload(m.storagePath, fileBuffer, { contentType: m.mimeType, upsert: false });
-    if (uploadRenditionError) {
-      throw new Error(
-        `media (レンディション代用) アップロード失敗 (${m.storagePath}): ${uploadRenditionError.message}`,
-      );
+      .upload(webpPath, webp, { contentType: "image/webp", upsert: false });
+    if (uploadWebpError) {
+      throw new Error(`media (webp レンディション) アップロード失敗 (${webpPath}): ${uploadWebpError.message}`);
     }
-    await recordManifest(supabase, batchId, "storage:media", m.storagePath);
+    await recordManifest(supabase, batchId, "storage:media", webpPath);
+
+    const { error: uploadJpegError } = await supabase.storage
+      .from("media")
+      .upload(jpegPath, jpeg, { contentType: "image/jpeg", upsert: false });
+    if (uploadJpegError) {
+      throw new Error(`media (jpg レンディション) アップロード失敗 (${jpegPath}): ${uploadJpegError.message}`);
+    }
+    await recordManifest(supabase, batchId, "storage:media", jpegPath);
 
     const { error: insertError } = await supabase.from("media").insert({
       id: m.id,
       storage_path: m.storagePath,
       alt: m.alt,
-      width: m.width,
-      height: m.height,
+      width,
+      height,
       mime_type: m.mimeType,
       credit: m.credit,
       is_placeholder: m.isPlaceholder,
@@ -109,7 +122,7 @@ async function seedMedia(supabase: SupabaseClient, batchId: string) {
     if (insertError) throw new Error(`media INSERT 失敗 (${m.storagePath}): ${insertError.message}`);
     await recordManifest(supabase, batchId, "media", m.id);
 
-    console.log(`[created] media: ${m.storagePath}`);
+    console.log(`[created] media: ${m.storagePath} -> ${webpPath} / ${jpegPath} (${width}x${height})`);
   }
 }
 
