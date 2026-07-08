@@ -209,22 +209,50 @@ create table voices (
 );
 
 -- =========================================================
--- 価格表 (現 shop-simulator.tsx の PRICE_TABLE を正規化)
+-- 価格表 v2 (現 shop-simulator.tsx の PRICE_TABLE を正規化)
+-- 2026-07-08 改訂: legacy の実構造は「グレード × サイズ行列 (各セルが価格レンジ)
+-- + 数量自動値引き + 特急倍率 + XL は個別見積もり」であり、単一 base_price では
+-- 表現不能と Wave 0 実装で判明。行列モデルに再設計 (migration 0007)。
 -- =========================================================
 create table price_grades (
   id uuid primary key default gen_random_uuid(),
-  key text not null unique,                 -- 'solid' | 'metallic' | 'pearl' 等
+  key text not null unique,                 -- 'base' | 'standard' | 'premium' 等
   label text not null,
-  base_price int not null,                  -- 円
+  -- base_price は v2 で廃止 (価格は price_matrix が持つ)
   description text not null default '',
   sort_order int not null default 0,
   is_active boolean not null default true,
   updated_at timestamptz not null default now()
 );
 
+create table price_size_classes (
+  key text primary key,                     -- 's' | 'm' | 'l' | 'xl'
+  label text not null,                      -- '〜120mm' 等
+  max_mm int,                               -- null = 上限なし (xl)
+  quote_only boolean not null default false,-- true = 個別見積もり (金額を持たない)
+  sort_order int not null default 0
+);
+
+create table price_matrix (
+  grade_key text not null references price_grades(key) on delete cascade,
+  size_key text not null references price_size_classes(key),
+  price_min int not null check (price_min >= 0),
+  price_max int not null,
+  primary key (grade_key, size_key),
+  check (price_max >= price_min)
+);
+
+create table price_quantity_tiers (
+  min_qty int primary key check (min_qty >= 2),
+  discount_rate numeric not null check (discount_rate > 0 and discount_rate < 1), -- 0.15 = 15% 引き
+  label text not null                       -- '10個以上 -15%' 等
+);
+-- 数量値引きは quantity から自動適用 (選択式ではない)。estimate() が
+-- min_qty <= quantity の最大 tier を 1 つ適用する。
+
 create table price_options (
   id uuid primary key default gen_random_uuid(),
-  key text not null unique,                 -- 'express' | 'quantity_tier_2' 等
+  key text not null unique,                 -- 'express' 等 (任意選択オプション)
   label text not null,
   kind text not null check (kind in ('multiplier','fixed')),
   value numeric not null,                   -- multiplier: 1.5 / fixed: 3000
@@ -954,7 +982,7 @@ const stream = anthropic.messages.stream({
 - 実装は **implementer + tester ペア** をフェーズごとに配置 (メモリ規約)。1b はモジュール境界 (契約書 §1 のモジュール単位) で implementer 3 並列 + worktree 分離。
 - **全フェーズ共通の着手条件**: docs/module-contracts.md の該当契約 (Zod / facade / 依存方向) を確認してから実装。契約にない型・境界を実装内で発明しない。契約変更が必要なら契約書 §8 の手順 (文書先行) に従う。
 - 1a の成果物に ESLint 境界ルール (契約書 §2) と `contracts-ddl-parity.test.ts` を含める。
-- 全体で DDL 19 テーブル (§2.2 の全定義: platform 1 / コンテンツ系 8 / 問い合わせ 2 (rate_limits 含む) / AI 4 / 配信 3 / seed 1)、admin 12 画面、公開新設 3 ルート。
+- 全体で DDL 22 テーブル (§2.2 の全定義: platform 1 / コンテンツ系 8 / 価格 v2 で +3 (size_classes/matrix/quantity_tiers) / 問い合わせ 2 (rate_limits 含む) / AI 4 / 配信 3 / seed 1)、admin 12 画面、公開新設 3 ルート。
 
 ---
 
@@ -1053,4 +1081,5 @@ const stream = anthropic.messages.stream({
 | v2.1 | 2026-07-07 | スキーマ完了監査: 契約書 §4.8 (CRUD 入力契約) / §4.9 (facade 補助型) 追加、zRunStage から cleaning 除去 (状態機械と整合)、seed_manifest DDL 追加、テーブル数 18 に訂正 |
 | v3.1 | 2026-07-08 | Resend 採用確定 (堀さん決定): 問い合わせ通知を 1c に前倒し、配信失敗通知 (2d) も同一アカウント、KMB-E902 追加、settings に 'notifications' キー追加、コスト表に Resend $0 追加 |
 | v3.2 | 2026-07-08 | 通知メール仕様の詰め (堀さん指摘): §6.3 新設 (件名/本文全文/Reply-To/宛先未設定時挙動)、/admin/settings に通知設定を明記、bootstrap で宛先を自動初期化 |
+| v3.3 | 2026-07-08 | 価格モデル v2 (Wave 0 実装での発見): legacy 実構造 (グレード×サイズ行列レンジ+数量自動値引き+XL 個別見積もり) に合わせ price_size_classes / price_matrix / price_quantity_tiers を追加、price_grades.base_price 廃止 (migration 0007)。DDL 22 テーブルに |
 | v3.0 | 2026-07-07 | Codex 外部レビュー 19 件反映: 配信 worker を Next.js Route Handler に統一 (Edge Fn 廃止)、AI 実行を advance (1 呼び出し=1 stage) + lease/heartbeat 方式に再設計、予約を draft 単位に修正、at-least-once + 人間照合モデル (E506)、claims 分離保存 (zChannelDraftOutput)、signup 無効化 + bootstrap 手順、media 原本/レンディションのバケット分離 + EXIF 除去、rate_limits テーブル、課金ガード精緻化 (コスト見積り合算)、IG 接続シーケンス、note の scheduling policy、twitter-text 採用、バックアップを GH Actions に訂正、parity テストのスコープ限定、B1 を目標 10 分に変更、DDL 19 テーブルに (rate_limits 追加) |

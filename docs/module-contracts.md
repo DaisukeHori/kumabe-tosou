@@ -1,6 +1,7 @@
 # モジュール契約書 (canonical)
 
-- 版: v2.0 (Codex 外部レビュー反映: worker 実行面を Next.js に統一 / lease 型 stage 実行 / draft 単位予約 / at-least-once 配信モデル / IG 接続シーケンス / ai-studio facade 増補)
+- 版: v2.1 (価格契約を行列モデル v2 に改訂 — Wave 0 実装で legacy 実構造との乖離が判明したため。zEstimateInput は size_key 必須・数量値引き自動適用・レンジ結果に変更)
+- 旧版: v2.0 (Codex 外部レビュー反映: worker 実行面を Next.js に統一 / lease 型 stage 実行 / draft 単位予約 / at-least-once 配信モデル / IG 接続シーケンス / ai-studio facade 増補)
 - 作成日: 2026-07-07
 - 位置づけ: **本書がモジュール境界・値契約 (Zod)・facade・イベント・依存方向・エラーコード所有・テーブル所有・結合シーケンスの canonical**。実装 (`src/modules/**`) が本書と乖離した場合は本書を正とし、変更は本書を先に更新する。
 - DDL の canonical は `docs/design/cms-ai-pipeline.md` §2 (相互参照。テーブル定義はあちら、値契約はこちら)。
@@ -407,18 +408,41 @@ export const zStatusTransition = z.object({
   published_at: zIsoDatetime.nullable(), // published への遷移時のみ指定可 (未来 = 予約公開)
 }).strict();
 
-// pricing/contracts.ts
+// pricing/contracts.ts — v2 (2026-07-08 改訂)
+// legacy の実価格構造 = グレード × サイズ行列 (各セルが価格レンジ) + 数量自動値引き
+// + 特急倍率 + XL は個別見積もり。単一 base_price モデルでは表現不能と Wave 0 で
+// 判明したため行列モデルへ再設計 (設計書 §2.2 migration 0007 と 1:1)。
 export const zPriceGradeInput = z.object({
   key: z.string().regex(/^[a-z0-9_]{2,30}$/),
   label: zShortText(30),
-  base_price: z.number().int().min(0).max(10_000_000),
-  description: z.string().max(300),
+  description: z.string().max(300),         // base_price は v2 で廃止
   sort_order: z.number().int().min(0).max(9999),
   is_active: z.boolean(),
 }).strict();
 
+export const zPriceSizeClassInput = z.object({
+  key: z.string().regex(/^[a-z0-9_]{1,10}$/), // 's' | 'm' | 'l' | 'xl'
+  label: zShortText(30),                      // '〜120mm' 等
+  max_mm: z.number().int().positive().nullable(), // null = 上限なし (xl)
+  quote_only: z.boolean(),                    // true = 個別見積もり (金額を持たない)
+  sort_order: z.number().int().min(0).max(9999),
+}).strict();
+
+export const zPriceMatrixCellInput = z.object({
+  grade_key: z.string(),
+  size_key: z.string(),
+  price_min: z.number().int().min(0).max(10_000_000),
+  price_max: z.number().int().min(0).max(10_000_000),
+}).strict().refine(c => c.price_max >= c.price_min, "price_max は price_min 以上");
+
+export const zQuantityTierInput = z.object({
+  min_qty: z.number().int().min(2).max(9999),
+  discount_rate: z.number().gt(0).lt(1),      // 0.15 = 15% 引き。quantity から自動適用
+  label: zShortText(30),                      // '10個以上 -15%'
+}).strict();
+
 export const zPriceOptionInput = z.object({
-  key: z.string().regex(/^[a-z0-9_]{2,30}$/),
+  key: z.string().regex(/^[a-z0-9_]{2,30}$/), // 'express' 等の任意選択オプション
   label: zShortText(30),
   kind: z.enum(["multiplier", "fixed"]),
   value: z.number().positive(),
@@ -431,13 +455,17 @@ export const zPriceOptionInput = z.object({
 
 export const zEstimateInput = z.object({
   grade_key: z.string(),
+  size_key: z.string(),
   quantity: z.number().int().min(1).max(999),
-  option_keys: z.array(z.string()).max(10),
+  option_keys: z.array(z.string()).max(10),   // 'express' 等。数量値引きは含めない (自動適用)
 }).strict();
 
 export const zEstimateResult = z.object({
-  total: z.number().int().min(0),
-  breakdown: z.array(z.object({ label: z.string(), amount: z.number().int() })),
+  quote_only: z.boolean(),                    // true = 個別見積もり (total_min/max は 0)
+  total_min: z.number().int().min(0),
+  total_max: z.number().int().min(0),
+  applied_tier: z.string().nullable(),        // 自動適用された数量値引きの label
+  breakdown: z.array(z.object({ label: z.string(), factor: z.string() })), // '×0.85' '+50%' 等の表示用
 }).strict();
 
 // inquiry/contracts.ts — 公開フォーム (anon が触る唯一の書き込み入力)
@@ -488,7 +516,13 @@ export type ContentKind = "work" | "voice" | PostKind;   export type PostKind = 
 export type PublishedItem<K extends ContentKind> = /* kind 別の公開表示用射影 */ …;
 export type MediaItem = { id: string; url: string; alt: string; width: number; height: number; tags: string[]; is_placeholder: boolean };
 export type ApprovedDraft = { draft_id: string; channel: Channel; content: ChannelContent; approved_at: string };
-export type PriceTable = { grades: PriceGrade[]; options: PriceOption[] };
+export type PriceTable = {
+  grades: PriceGrade[];
+  sizes: PriceSizeClass[];
+  matrix: PriceMatrixCell[];
+  tiers: QuantityTier[];
+  options: PriceOption[];
+}; // v2: shop シミュレータと admin 価格画面の共通データ形
 export type InquiryInput = z.infer<typeof zInquiryInput>;
 export type EstimateInput = z.infer<typeof zEstimateInput>;  export type EstimateResult = z.infer<typeof zEstimateResult>;
 export type ScheduleEntry = z.infer<typeof zScheduleEntry>;
