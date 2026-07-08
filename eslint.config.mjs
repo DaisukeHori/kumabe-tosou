@@ -59,8 +59,12 @@ const eslintConfig = [
   },
   // モジュール自身の内部からは、自モジュールの internal/**・repository の import を許可する
   // (他モジュール分のみ引き続き禁止)。
+  // tests/<module>-*.test.ts も対象に含める: internal/** の純関数 (例: 状態遷移ガード) は
+  // モジュール自身の単体テストから直接検証する必要があるため (module-contracts.md の
+  // 「内部実装のテストしやすさ」を損なわない範囲での例外。他モジュールの internal は
+  // 引き続き import 不可)。
   ...MODULES.map((moduleName) => ({
-    files: [`src/modules/${moduleName}/**/*.{ts,tsx}`],
+    files: [`src/modules/${moduleName}/**/*.{ts,tsx}`, `tests/${moduleName}-*.test.ts`],
     rules: {
       "no-restricted-imports": [
         "error",
