@@ -244,15 +244,29 @@ export const zRegenerateReq = z
 /** ai_sources.input_type (DDL の check 制約と 1:1)。contracts-ddl-parity.test.ts の比較対象 */
 export const zSourceInputType = z.enum(["audio", "text"]);
 
+/**
+ * 実装時に判明した契約の抜け (オーケストレーターへ報告済み):
+ * 設計書 §4.7 の zCreateSourceReq には audio_storage_path が無く、
+ * input_type='audio' の場合に「アップロード済み音声をどの source に紐付けるか」が
+ * 表現できなかった (/api/transcribe は source_id のみを受け取る前提のため、
+ * 文字起こし実行前に ai_sources.audio_storage_path が確定している必要がある)。
+ * 後方互換な追加 (optional/nullable) として audio_storage_path を追加した。
+ * text 入力の既存利用箇所には影響しない。
+ */
 export const zCreateSourceReq = z
   .object({
     input_type: zSourceInputType,
     raw_text: z.string().max(50_000).nullable(), // input_type='text' のとき必須 (refine)
+    audio_storage_path: z.string().max(500).nullable().optional(), // input_type='audio' のとき必須 (refine)
   })
   .strict()
   .refine((v) => v.input_type !== "text" || (v.raw_text !== null && v.raw_text.length > 0), {
     message: "input_type='text' のとき raw_text は必須",
     path: ["raw_text"],
+  })
+  .refine((v) => v.input_type !== "audio" || Boolean(v.audio_storage_path), {
+    message: "input_type='audio' のとき audio_storage_path は必須",
+    path: ["audio_storage_path"],
   });
 export type CreateSourceInput = z.infer<typeof zCreateSourceReq>;
 
