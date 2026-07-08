@@ -6,6 +6,7 @@ import {
   PhotoFigure,
   Section,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -55,7 +56,8 @@ function Article({
   children: React.ReactNode;
 }) {
   return (
-    <article
+    <Reveal
+      as="article"
       id={id}
       className="scroll-mt-24 border-t border-hair py-12 first:border-t-0"
     >
@@ -68,7 +70,7 @@ function Article({
       <div className="mt-7 max-w-3xl space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid [&_strong]:font-bold [&_strong]:text-carbon">
         {children}
       </div>
-    </article>
+    </Reveal>
   );
 }
 
@@ -90,7 +92,8 @@ export default function NotesPage() {
 
       {/* ============ 目次 ============ */}
       <Section className="py-8 sm:py-10">
-        <nav
+        <Reveal
+          as="nav"
           aria-label="読みもの目次"
           className="border border-hair bg-paper p-6"
         >
@@ -109,7 +112,7 @@ export default function NotesPage() {
               </li>
             ))}
           </ul>
-        </nav>
+        </Reveal>
       </Section>
 
       {/* ============ 記事 ============ */}
@@ -286,7 +289,7 @@ export default function NotesPage() {
           </p>
         </Article>
 
-        <div className="mt-8 border border-hair bg-paper p-6">
+        <Reveal as="div" className="mt-8 border border-hair bg-paper p-6">
           <p className="font-mono text-[10.5px] tracking-[0.22em] text-carbon-soft">
             COMING SOON
           </p>
@@ -295,7 +298,7 @@ export default function NotesPage() {
             <br />
             note・X・Instagram との連携も準備中です。
           </p>
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ CTA ============ */}

@@ -11,6 +11,7 @@ import {
   Section,
   SectionMark,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -384,7 +385,7 @@ export default function ProcessPage() {
         <SecLead>
           仕上がった塗面は一枚に見えますが、実際は役割の違う層の積み重ねです。下から順に、造形物・プラサフ・ベースコート・クリア。積層痕は、下の層で吸収して消します。
         </SecLead>
-        <div className="mt-10 border border-hair bg-paper p-4 sm:p-8">
+        <Reveal as="div" className="mt-10 border border-hair bg-paper p-4 sm:p-8">
           <CoatDiagram />
           <div className="mt-6 grid gap-4 border-t border-hair-soft pt-6 sm:grid-cols-2 lg:grid-cols-4">
             {COAT_LEGEND.map((item) => (
@@ -402,7 +403,7 @@ export default function ProcessPage() {
               </div>
             ))}
           </div>
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 9工程 ============ */}
@@ -413,7 +414,7 @@ export default function ProcessPage() {
           <br />
           送り出すまで。
         </SecTitle>
-        <div className="mt-10 grid gap-5 sm:grid-cols-3">
+        <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-3">
           <PhotoFigure
             figNo="FIG.02a"
             src="/img/sanding.jpg"
@@ -441,8 +442,8 @@ export default function ProcessPage() {
             credit="Photo: cmreflections / Unsplash"
             aspect="aspect-square"
           />
-        </div>
-        <div className="mt-10 divide-y divide-hair border-y border-hair">
+        </Reveal>
+        <Reveal as="div" className="mt-10 divide-y divide-hair border-y border-hair">
           {STEPS.map((step) => (
             <div
               key={step.no}
@@ -470,7 +471,7 @@ export default function ProcessPage() {
               </div>
             </div>
           ))}
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 塗装環境 ============ */}
@@ -484,7 +485,7 @@ export default function ProcessPage() {
         <SecLead>
           塗装の大敵は、宙を舞うホコリです。だから塗装は、専用のブースの中で行います。フィルターを通した清浄な空気を上から下へ流し、オーバーミストとともに床下へ排気する——異物混入をふせぐ、目に見えない設備です。
         </SecLead>
-        <div className="mt-10 grid gap-4 sm:grid-cols-3">
+        <Reveal as="div" className="mt-10 grid gap-4 sm:grid-cols-3">
           {[
             {
               num: "5",
@@ -520,7 +521,7 @@ export default function ProcessPage() {
               </p>
             </div>
           ))}
-        </div>
+        </Reveal>
         <MapNote>
           ※
           一般的な自動車塗装ブースの仕組みです。それでも極小のゴミは付着し得るため、最終的な確認は検品工程（サービスページ参照）で行います。
@@ -534,11 +535,11 @@ export default function ProcessPage() {
         <SecLead>
           グレード別の料金や数量スライドはサービスページに、素材ごとの下地の作り分けは素材対応ページにまとめています。工程の思想を、色の実例で見たいときは色見本へ。
         </SecLead>
-        <div className="mt-8 flex flex-wrap gap-3">
+        <Reveal as="div" className="mt-8 flex flex-wrap gap-3">
           <ArrowButton href="/service">サービス・料金</ArrowButton>
           <ArrowButton href="/materials">素材対応</ArrowButton>
           <ArrowButton href="/colors">色見本</ArrowButton>
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ GALLERY ============ */}
@@ -548,7 +549,7 @@ export default function ProcessPage() {
         <SecLead>
           地味な工程の積み重ねが、量産品と見分けがつかない顔をつくります。
         </SecLead>
-        <div className="mt-10 grid gap-5 sm:grid-cols-3">
+        <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-3">
           <PhotoFigure
             figNo="FIG.03"
             src="/img/airbrush-dark.jpg"
@@ -573,7 +574,7 @@ export default function ProcessPage() {
             capEn="THE SURFACE"
             credit="Photo: apryan_cahyo / Unsplash"
           />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ CTA ============ */}

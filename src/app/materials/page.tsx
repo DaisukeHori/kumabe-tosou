@@ -11,6 +11,7 @@ import {
   Section,
   SectionMark,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -189,7 +190,7 @@ export default function MaterialsPage() {
           <br />
           それぞれの下地。
         </SecTitle>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
+        <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-3">
           {METHODS.map((method) => (
             <div key={method.tag} className="border border-hair bg-paper p-6">
               <p className="font-mono text-[10px] tracking-[0.2em] text-soul">
@@ -209,8 +210,8 @@ export default function MaterialsPage() {
               </p>
             </div>
           ))}
-        </div>
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+        </Reveal>
+        <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <PhotoFigure
             figNo="FIG.01"
             src="/img/printer-3d.jpg"
@@ -227,7 +228,7 @@ export default function MaterialsPage() {
             capEn="PRECISION MACHINE"
             credit="Photo: kadircelep / Unsplash"
           />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 素材別対応表 ============ */}
@@ -237,7 +238,7 @@ export default function MaterialsPage() {
         <SecLead>
           代表的な樹脂ごとの下地処理・注意点・耐候性の目安です。ここに無い素材も、テストピースで相性を確認してからお受けできます。
         </SecLead>
-        <div className="mt-10 overflow-x-auto">
+        <Reveal as="div" className="mt-10 overflow-x-auto">
           <table className="w-full min-w-[720px] border-t border-hair text-sm">
             <thead>
               <tr className="border-b border-hair text-left font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
@@ -289,7 +290,7 @@ export default function MaterialsPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Reveal>
         <MapNote>
           ※
           耐候性は一般的な目安です。標準レジンは紫外線で黄変・脆化が進むため、屋外長期使用には向きません。撮影・展示・商談用の高品質仕上げとしての運用を前提にしています。屋外で長く使う想定がある場合は、素材段階からご相談ください。
@@ -307,7 +308,7 @@ export default function MaterialsPage() {
         <SecLead>
           塗料の食いつき不良やムラは、塗装技術以前の「素地の準備」で起きることがほとんどです。だから、この工房は塗る前の工程に最も神経を使います。
         </SecLead>
-        <div className="mt-10 space-y-0 divide-y divide-hair border-y border-hair">
+        <Reveal as="div" className="mt-10 space-y-0 divide-y divide-hair border-y border-hair">
           {CAUSES.map((cause) => (
             <div
               key={cause.no}
@@ -326,7 +327,7 @@ export default function MaterialsPage() {
               </div>
             </div>
           ))}
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 入稿 ============ */}
@@ -337,7 +338,7 @@ export default function MaterialsPage() {
           完成した造形物を送っていただくのはもちろん、データ入稿 → 提携出力 →
           工房直送の流れにも対応します。出力先と塗装先を別々に手配する手間を省けます。
         </SecLead>
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+        <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <div className="border border-hair bg-paper p-6">
             <p className="font-mono text-2xl font-semibold tracking-[0.08em]">
               STL
@@ -361,7 +362,7 @@ export default function MaterialsPage() {
               10303）。寸法精度が重要な場合や、任意の解像度で再メッシュしたい場合に向きます。精密案件ではこちらを推奨します。
             </p>
           </div>
-        </div>
+        </Reveal>
         <MapNote>
           ※
           ご相談時に、造形方式・素材・希望色（カラーコード可）・希望納期をあわせてお知らせいただけると、概算が正確になります。未発表製品はNDA対応可。
@@ -373,7 +374,7 @@ export default function MaterialsPage() {
         <SectionMark no="GALLERY" label="BEYOND MATERIAL" />
         <SecTitle>素材の、その先。</SecTitle>
         <SecLead>素材ごとに手を変える。それが下地づくりの本質です。</SecLead>
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+        <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <PhotoFigure
             figNo="FIG.03"
             src="/img/surface.jpg"
@@ -390,7 +391,7 @@ export default function MaterialsPage() {
             capEn="THE FINISH"
             credit="Photo: avenir_visuals / Unsplash"
           />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ CTA ============ */}

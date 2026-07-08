@@ -11,6 +11,7 @@ import {
   Section,
   SectionMark,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -149,7 +150,7 @@ export default function ServicePage() {
       {/* ============ 工程 ============ */}
       <Section>
         <SectionMark no="SEC. 01" label="PROCESS — 全メニュー共通の下地" />
-        <div className="mt-10 divide-y divide-hair border-y border-hair">
+        <Reveal as="div" className="mt-10 divide-y divide-hair border-y border-hair">
           {PROCESS_ROWS.map((row) => (
             <div
               key={row.step}
@@ -165,7 +166,7 @@ export default function ServicePage() {
               <p className="text-sm leading-7 text-carbon-mid">{row.body}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
         <aside className="mt-10 border-l-2 border-soul bg-paper p-6">
           <span className="font-mono text-[11px] tracking-[0.2em] text-soul">
             なぜ鏡面磨きをしないのか
@@ -174,7 +175,7 @@ export default function ServicePage() {
             #2000〜コンパウンドの鏡面磨き工程は、あえて行いません。2液ウレタンは吹きっぱなしで自動車外板と同等の艶が出るためです。磨きに時間を使わないぶん、同じ品質で数量に応え、価格に還元します。
           </p>
         </aside>
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+        <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <PhotoFigure
             figNo="FIG.01"
             src="/img/spray-hold.jpg"
@@ -191,16 +192,16 @@ export default function ServicePage() {
             capEn="AUTOMOTIVE PAINT"
             credit="Photo: jacobsoup / Unsplash"
           />
-        </div>
-        <div className="mt-10">
+        </Reveal>
+        <Reveal as="div" className="mt-10">
           <ArrowButton href="/process">全9工程を、層構造から見る</ArrowButton>
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ グレード ============ */}
       <Section>
         <SectionMark no="SEC. 02" label="GRADE — 差分はトップコートだけ" />
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
+        <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-3">
           <div className="border border-hair bg-paper p-6">
             <span className="font-mono text-[10px] tracking-[0.2em] text-carbon-soft">
               GRADE 01
@@ -243,8 +244,8 @@ export default function ServicePage() {
               商談・展示会・クラウドファンディング掲載写真のための最上位仕上げ。
             </p>
           </div>
-        </div>
-        <div className="mt-10 grid gap-5 md:grid-cols-2">
+        </Reveal>
+        <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-2">
           <div className="border border-hair bg-paper p-6">
             <h4 className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
               QUANTITY — 数量スライド（目安）
@@ -298,12 +299,12 @@ export default function ServicePage() {
               価格は「サイズ帯別の基本料金＋グレード加算」で算出します。立ち上げ期につき実績価格でご提供中——正式価格表は作業実測に基づいて確定し、このページで公開します。
             </p>
           </div>
-        </div>
-        <div className="mt-10">
+        </Reveal>
+        <Reveal as="div" className="mt-10">
           <ArrowButton href="/shop#sim">
             SHOPのシミュレータで概算を出す
           </ArrowButton>
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 依頼の流れ ============ */}
@@ -313,7 +314,7 @@ export default function ServicePage() {
         <SecLead>
           主戦場は手のひら〜200×200mm級の小〜中型品。送料が軽微なサイズ帯なら、地方立地のハンデはありません。
         </SecLead>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal as="div" className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {FLOW_CELLS.map((cell, i) => (
             <div key={cell.title} className="border border-hair bg-paper p-5">
               <span className="font-mono text-[10px] tracking-[0.2em] text-carbon-soft">
@@ -327,7 +328,7 @@ export default function ServicePage() {
               </p>
             </div>
           ))}
-        </div>
+        </Reveal>
         <MapNote>
           ※
           進行中の写真は守秘義務の範囲で管理し、実績としての掲載は案件ごとに許諾をいただきます。NDA対応可。
@@ -338,7 +339,7 @@ export default function ServicePage() {
       <Section>
         <SectionMark no="SEC. 04" label="HONEST TERMS" />
         <SecTitle>正直に、先にお伝えします。</SecTitle>
-        <div className="mt-10 grid gap-5 md:grid-cols-2">
+        <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-2">
           <div className="border border-hair bg-paper p-6">
             <h3 className="text-lg font-bold tracking-wider">できること</h3>
             <ul className="mt-5 space-y-3 text-sm leading-7 text-carbon-mid">
@@ -379,7 +380,7 @@ export default function ServicePage() {
               ))}
             </ul>
           </div>
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 品質管理 ============ */}
@@ -389,7 +390,7 @@ export default function ServicePage() {
         <SecLead>
           自動車補修の現場で使われる検品項目を、そのまま持ち込んでいます。仕上がりは主観ではなく、チェックリストで確認してから梱包します。
         </SecLead>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal as="div" className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {QC_ITEMS.map((item) => (
             <div key={item.title} className="border border-hair bg-paper p-5">
               <span
@@ -407,7 +408,7 @@ export default function ServicePage() {
               </p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ GALLERY ============ */}
@@ -417,7 +418,7 @@ export default function ServicePage() {
         <SecLead>
           工程の一つひとつに、自動車補修で培った手が入ります。
         </SecLead>
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+        <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <PhotoFigure
             figNo="FIG.03"
             src="/img/sanding.jpg"
@@ -434,7 +435,7 @@ export default function ServicePage() {
             capEn="THE FINISH"
             credit="Photo: avenir_visuals / Unsplash"
           />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ CTA ============ */}
