@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 
 import { loginAction, type LoginState } from "./actions";
 
-const INITIAL_STATE: LoginState = { error: null };
+const INITIAL_STATE: LoginState = { error: null, email: "", attempt: 0 };
 
 export function LoginForm({ next }: { next: string }) {
   const [state, formAction, isPending] = useActionState(loginAction, INITIAL_STATE);
@@ -26,12 +26,25 @@ export function LoginForm({ next }: { next: string }) {
           <FieldGroup>
             <Field data-invalid={!!state.error}>
               <FieldLabel htmlFor="login-email">メールアドレス</FieldLabel>
+              {/*
+                React 19 の form action は送信のたびに (成功/失敗を問わず) <form> を
+                ネイティブ form.reset() でリセットする。この Input が uncontrolled の
+                ままだと、1 回目の送信でパスワードを間違えた際に email 欄まで空になり、
+                正しいパスワードだけ入力し直して再送信しても HTML5 の required 制約
+                バリデーションで無言のままブロックされ、直前のエラー表示だけが
+                残り続けて「ログインしても直らない」ように見えるバグがあった。
+                key={state.attempt} で送信ごとに再マウントさせ、
+                defaultValue={state.email} で直前に送信された値を復元することで、
+                reset で消えた値を再送信のたびに埋め直す。
+              */}
               <Input
+                key={state.attempt}
                 id="login-email"
                 name="email"
                 type="email"
                 autoComplete="email"
                 required
+                defaultValue={state.email}
                 aria-invalid={!!state.error}
               />
             </Field>

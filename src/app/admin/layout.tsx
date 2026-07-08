@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import Link from "next/link";
 
 import { Toaster } from "@/components/ui/sonner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { AdminNav } from "./admin-nav";
 import { logoutAction } from "./actions";
-import { ADMIN_NAV_ITEMS } from "./nav-items";
 
 export const metadata: Metadata = {
   title: { default: "隈部塗装 CMS", template: "%s | 隈部塗装 CMS" },
@@ -16,9 +15,14 @@ export const metadata: Metadata = {
 /**
  * /admin/** 全体のシェル (設計書 §5.1)。
  * - 左サイドナビ (§5.2 の全画面へのリンク。未実装先もリンクだけ置く)。
+ *   ナビのアクティブ判定は AdminNav (Client Component, usePathname) に委譲している
+ *   (このレイアウト自体は Server Component でクライアント遷移では再実行されないため、
+ *    x-pathname ヘッダーに基づく判定だとハイライトが前のページのまま固定される)。
  * - /admin/login はナビ無しの中央カードレイアウト
  *   (middleware.ts が x-pathname リクエストヘッダを積んでおり、ここで判定する。
- *    Server Component から usePathname は使えないための標準的な回避策)。
+ *    Server Component から usePathname は使えないための標準的な回避策。
+ *    login ページは常にフルロード/リダイレクト経由でしか到達しないため、
+ *    ここでのヘッダー参照はクライアント遷移追従の問題を起こさない)。
  * - 公開サイトとは別トーンのシンプル UI (shadcn)。
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -46,27 +50,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div className="mb-6 px-2">
           <p className="font-heading text-sm font-semibold">隈部塗装 CMS</p>
         </div>
-        <nav aria-label="管理メニュー" className="flex flex-1 flex-col gap-0.5">
-          {ADMIN_NAV_ITEMS.map((item) => {
-            const isActive =
-              item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={isActive ? "page" : undefined}
-                className={
-                  "rounded-lg px-3 py-2 text-sm transition-colors " +
-                  (isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-foreground/80 hover:bg-muted hover:text-foreground")
-                }
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <AdminNav />
         <div className="mt-6 border-t pt-4">
           <p className="truncate px-2 text-xs text-muted-foreground">{user?.email}</p>
           <form action={logoutAction} className="mt-2">
