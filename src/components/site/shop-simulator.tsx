@@ -3,60 +3,34 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-/*
-  legacy/js/main.js「v2.8 — SHOP 見積もりシミュレータ」の移植。
-  価格テーブルは立ち上げ期の目安。正式価格の確定後は
-  下記 PRICE_TABLE の数値だけを差し替えれば全体に反映される。
-*/
-const PRICE_TABLE: Record<Grade, Record<PricedSize, [number, number]>> = {
-  base: { s: [7000, 10000], m: [10000, 14000], l: [15000, 20000] },
-  standard: { s: [10000, 14000], m: [14000, 20000], l: [20000, 28000] },
-  premium: { s: [15000, 20000], m: [20000, 28000], l: [28000, 35000] },
-};
-
-export type Grade = "base" | "standard" | "premium";
-type PricedSize = "s" | "m" | "l";
-type Size = PricedSize | "xl";
+import type { PriceOption, PriceTable } from "@/modules/pricing/contracts";
+import { computeEstimate } from "@/modules/pricing/estimate";
 
 /*
-  legacy/js/main.js「サービスカードの『サイズと個数で概算』→ グレードを事前選択」の移植。
-  shop.html の各グレードカードは <a data-service="base|standard|premium" href="#sim"> で、
-  クリック時に simGrade の aria-pressed を書き換えていた。
-  本実装では ServiceSimLink (page-blocks 外の shop 専用リンク) がこのイベントを dispatch し、
-  ShopSimulator 側で拾ってグレードを事前選択する。
+  legacy/js/main.js「v2.8 — SHOP 見積もりシミュレータ」の移植 → v2 で DB 駆動化。
+  価格データ (グレード/サイズ/行列/数量値引き/オプション) は
+  src/app/(site)/shop/page.tsx が PricingFacade.getActivePriceTable() で SSR fetch した
+  PriceTable を props として受け取る (クライアント側での再フェッチはしない、設計書 §6.2)。
+  計算そのものは @/modules/pricing/estimate の computeEstimate() (副作用なしの純関数) に委譲し、
+  UI/UX・操作感は旧実装 (ハードコード PRICE_TABLE 版) と同一に保つ。
 */
+
+export type Grade = string;
+
 export const SHOP_SELECT_GRADE_EVENT = "kt:shop-select-grade";
 
 export function dispatchShopSelectGrade(grade: Grade) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent<Grade>(SHOP_SELECT_GRADE_EVENT, { detail: grade }),
-  );
+  window.dispatchEvent(new CustomEvent<Grade>(SHOP_SELECT_GRADE_EVENT, { detail: grade }));
 }
 
-const GRADE_LABEL: Record<Grade, string> = {
-  base: "下地仕上げ",
-  standard: "スタンダード",
-  premium: "プレミアム",
+// 装飾用の補助テキスト (DB が持たない UI フレーバーのみ。価格データそのものは PriceTable が正)。
+const SIZE_SUB: Record<string, string> = {
+  s: "手のひらサイズ",
+  m: "主戦場サイズ",
+  l: "大きめの造形",
+  xl: "個別見積もり",
 };
-const SIZE_LABEL: Record<Size, string> = {
-  s: "〜100mm",
-  m: "〜200mm",
-  l: "〜350mm",
-  xl: "それ以上（個別見積もり）",
-};
-
-const GRADE_OPTIONS: { value: Grade; label: string; sub: string }[] = [
-  { value: "base", label: "下地仕上げ", sub: "PRIMER-READY" },
-  { value: "standard", label: "スタンダード", sub: "SOLID + 2K CLEAR" },
-  { value: "premium", label: "プレミアム", sub: "3-COAT PEARL" },
-];
-const SIZE_OPTIONS: { value: Size; label: string; sub: string }[] = [
-  { value: "s", label: "〜100mm", sub: "手のひらサイズ" },
-  { value: "m", label: "〜200mm", sub: "主戦場サイズ" },
-  { value: "l", label: "〜350mm", sub: "大きめの造形" },
-  { value: "xl", label: "それ以上", sub: "個別見積もり" },
-];
 
 function clampQty(n: number): number {
   if (Number.isNaN(n) || n < 1) return 1;
@@ -66,6 +40,12 @@ function clampQty(n: number): number {
 
 function yen(n: number): string {
   return "¥" + Math.round(n).toLocaleString("ja-JP");
+}
+
+/** multiplier オプションの符号付きパーセント表記 ('＋50%' / '－15%') */
+function describeMultiplier(value: number): string {
+  const pct = Math.round((value - 1) * 100);
+  return pct >= 0 ? `＋${pct}%` : `－${Math.abs(pct)}%`;
 }
 
 function OptGroup<T extends string>({
@@ -81,14 +61,8 @@ function OptGroup<T extends string>({
 }) {
   return (
     <div>
-      <span className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-        {label}
-      </span>
-      <div
-        role="group"
-        aria-label={label}
-        className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"
-      >
+      <span className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">{label}</span>
+      <div role="group" aria-label={label} className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {options.map((opt) => (
           <button
             key={opt.value}
@@ -116,55 +90,111 @@ function OptGroup<T extends string>({
   );
 }
 
-export function ShopSimulator() {
+export function ShopSimulator({ priceTable }: { priceTable: PriceTable | null }) {
   const router = useRouter();
-  const [grade, setGrade] = useState<Grade>("standard");
-  const [size, setSize] = useState<Size>("m");
+
+  const grades = useMemo(
+    () =>
+      [...(priceTable?.grades ?? [])]
+        .filter((g) => g.is_active)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    [priceTable],
+  );
+  const sizes = useMemo(
+    () => [...(priceTable?.size_classes ?? [])].sort((a, b) => a.sort_order - b.sort_order),
+    [priceTable],
+  );
+  const options = useMemo(
+    () =>
+      [...(priceTable?.options ?? [])]
+        .filter((o) => o.is_active)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    [priceTable],
+  );
+  const tiers = useMemo(
+    () => [...(priceTable?.quantity_tiers ?? [])].sort((a, b) => a.min_qty - b.min_qty),
+    [priceTable],
+  );
+
+  const [gradeKey, setGradeKey] = useState(
+    () => grades.find((g) => g.key === "standard")?.key ?? grades[0]?.key ?? "",
+  );
+  const [sizeKey, setSizeKey] = useState(
+    () => sizes.find((s) => s.key === "m")?.key ?? sizes[0]?.key ?? "",
+  );
   const [qty, setQty] = useState(1);
-  const [rush, setRush] = useState(false);
+  const [selectedOptionKeys, setSelectedOptionKeys] = useState<string[]>([]);
   const [copied, setCopied] = useState("");
 
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<Grade>).detail;
-      if (detail) setGrade(detail);
+      if (detail) setGradeKey(detail);
     };
     window.addEventListener(SHOP_SELECT_GRADE_EVENT, handler);
     return () => window.removeEventListener(SHOP_SELECT_GRADE_EVENT, handler);
   }, []);
 
+  const grade = grades.find((g) => g.key === gradeKey) ?? grades[0];
+  const size = sizes.find((s) => s.key === sizeKey) ?? sizes[0];
+
   const result = useMemo(() => {
-    const discountRate = qty >= 30 ? 0.25 : qty >= 10 ? 0.15 : 0;
-    if (size === "xl") {
-      return {
-        total: "個別見積もり",
-        per: "350mmを超える造形は、形状を確認のうえ個別にお見積もりします",
-        discountRate,
-        text: "個別見積もり",
-        perText: "",
-      };
-    }
-    const range = PRICE_TABLE[grade][size];
-    const factor = (1 - discountRate) * (rush ? 1.5 : 1);
-    const perMin = range[0] * factor;
-    const perMax = range[1] * factor;
-    return {
-      total: `${yen(perMin * qty)} 〜 ${yen(perMax * qty)}`,
-      per: `1点あたり ${yen(perMin)} 〜 ${yen(perMax)}（税込・目安）`,
-      discountRate,
-      text: `${yen(perMin * qty)}〜${yen(perMax * qty)}`,
-      perText: `${yen(perMin)}〜${yen(perMax)}`,
-    };
-  }, [grade, size, qty, rush]);
+    if (!priceTable || !grade || !size) return null;
+    return computeEstimate(priceTable, {
+      grade_key: grade.key,
+      size_key: size.key,
+      quantity: qty,
+      option_keys: selectedOptionKeys,
+    });
+  }, [priceTable, grade, size, qty, selectedOptionKeys]);
+
+  if (!priceTable || grades.length === 0 || sizes.length === 0 || !grade || !size || !result) {
+    return (
+      <div className="border border-hair bg-paper p-8 text-center text-sm leading-7 text-carbon-mid sm:p-10">
+        価格はお問い合わせください。
+      </div>
+    );
+  }
+
+  const sizeIndex = sizes.findIndex((s) => s.key === size.key);
+  const prevSize = sizeIndex > 0 ? sizes[sizeIndex - 1] : null;
+  const quoteOnlyMessage = prevSize?.max_mm
+    ? `${prevSize.max_mm}mmを超える造形は、形状を確認のうえ個別にお見積もりします`
+    : "この帯の造形は、形状を確認のうえ個別にお見積もりします";
+
+  const totalText = result.quote_only
+    ? "個別見積もり"
+    : `${yen(result.total_min)} 〜 ${yen(result.total_max)}`;
+  const perText = result.quote_only
+    ? quoteOnlyMessage
+    : `1点あたり ${yen(result.total_min / qty)} 〜 ${yen(result.total_max / qty)}（税込・目安）`;
+
+  const firstTier = tiers[0] ?? null;
+  const quantitySlideText = result.applied_tier
+    ? `−${Math.round((tiers.find((t) => t.label === result.applied_tier)?.discount_rate ?? 0) * 100)}%`
+    : firstTier
+      ? `適用なし（${firstTier.label}）`
+      : "適用なし";
+
+  const optionLabelByKey = new Map(options.map((o) => [o.key, o] as const));
+  const selectedOptionLabels = selectedOptionKeys
+    .map((k) => optionLabelByKey.get(k)?.label)
+    .filter((v): v is string => Boolean(v));
+
+  const toggleOption = (option: PriceOption, checked: boolean) => {
+    setSelectedOptionKeys((prev) =>
+      checked ? [...prev, option.key] : prev.filter((k) => k !== option.key),
+    );
+  };
 
   const handleOrder = () => {
     const lines = [
       "【隈部塗装 SHOP — 注文・相談内容】",
-      `グレード: ${GRADE_LABEL[grade]}`,
-      `サイズ帯: ${SIZE_LABEL[size]}`,
+      `グレード: ${grade.label}`,
+      `サイズ帯: ${size.label}`,
       `個数: ${qty} 個`,
-      `特急: ${rush ? "希望する（＋50%）" : "なし"}`,
-      `概算: ${result.text}${result.perText ? `（1点あたり ${result.perText}）` : ""}`,
+      `オプション: ${selectedOptionLabels.length > 0 ? selectedOptionLabels.join(" / ") : "なし"}`,
+      `概算: ${totalText}${!result.quote_only ? `（1点あたり ${yen(result.total_min / qty)}〜${yen(result.total_max / qty)}）` : ""}`,
       "※ 上記はシミュレータの目安です。素材・色・形状を添えてご相談ください。",
     ];
     const text = lines.join("\n");
@@ -195,15 +225,19 @@ export function ShopSimulator() {
       <div className="space-y-8 border border-hair bg-paper p-6 sm:p-8">
         <OptGroup
           label="GRADE — グレード"
-          options={GRADE_OPTIONS}
-          value={grade}
-          onChange={setGrade}
+          options={grades.map((g) => ({ value: g.key, label: g.label, sub: g.description }))}
+          value={grade.key}
+          onChange={setGradeKey}
         />
         <OptGroup
           label="SIZE — 最長辺の目安"
-          options={SIZE_OPTIONS}
-          value={size}
-          onChange={setSize}
+          options={sizes.map((s) => ({
+            value: s.key,
+            label: s.label,
+            sub: SIZE_SUB[s.key] ?? "",
+          }))}
+          value={size.key}
+          onChange={setSizeKey}
         />
         <div>
           <span className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
@@ -238,15 +272,26 @@ export function ShopSimulator() {
             </button>
           </div>
         </div>
-        <label className="flex cursor-pointer items-center gap-3 text-sm tracking-wider">
-          <input
-            type="checkbox"
-            checked={rush}
-            onChange={(e) => setRush(e.target.checked)}
-            className="size-4 accent-[var(--soul)]"
-          />
-          特急仕上げ（＋50%）を希望する
-        </label>
+        {options.length > 0 ? (
+          <div className="space-y-2">
+            {options.map((opt) => (
+              <label
+                key={opt.key}
+                className="flex cursor-pointer items-center gap-3 text-sm tracking-wider"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedOptionKeys.includes(opt.key)}
+                  onChange={(e) => toggleOption(opt, e.target.checked)}
+                  className="size-4 accent-[var(--soul)]"
+                />
+                {opt.label}
+                （{opt.kind === "multiplier" ? describeMultiplier(opt.value) : `+¥${opt.value.toLocaleString("ja-JP")}`}
+                ）を希望する
+              </label>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -257,17 +302,17 @@ export function ShopSimulator() {
           ESTIMATED TOTAL — 概算合計（税込・目安）
         </span>
         <p className="mt-4 text-[clamp(24px,3vw,34px)] font-bold leading-tight tracking-[0.02em]">
-          {result.total}
+          {totalText}
         </p>
-        <p className="mt-2 text-[13px] leading-6 text-paper/70">{result.per}</p>
+        <p className="mt-2 text-[13px] leading-6 text-paper/70">{perText}</p>
         <div className="mt-6 divide-y divide-paper/15 border-y border-paper/15 text-[13px]">
           <div className="flex justify-between py-2.5">
             <span className="text-paper/60">グレード</span>
-            <span className="font-mono">{GRADE_LABEL[grade]}</span>
+            <span className="font-mono">{grade.label}</span>
           </div>
           <div className="flex justify-between py-2.5">
             <span className="text-paper/60">サイズ帯</span>
-            <span className="font-mono">{SIZE_LABEL[size]}</span>
+            <span className="font-mono">{size.label}</span>
           </div>
           <div className="flex justify-between py-2.5">
             <span className="text-paper/60">個数</span>
@@ -275,16 +320,20 @@ export function ShopSimulator() {
           </div>
           <div className="flex justify-between py-2.5">
             <span className="text-paper/60">数量スライド</span>
-            <span className="font-mono">
-              {result.discountRate > 0
-                ? `−${Math.round(result.discountRate * 100)}%`
-                : "適用なし（10個以上で−15%）"}
-            </span>
+            <span className="font-mono">{quantitySlideText}</span>
           </div>
-          <div className="flex justify-between py-2.5">
-            <span className="text-paper/60">特急</span>
-            <span className="font-mono">{rush ? "＋50%" : "なし"}</span>
-          </div>
+          {options.map((opt) => (
+            <div key={opt.key} className="flex justify-between py-2.5">
+              <span className="text-paper/60">{opt.label}</span>
+              <span className="font-mono">
+                {selectedOptionKeys.includes(opt.key)
+                  ? opt.kind === "multiplier"
+                    ? describeMultiplier(opt.value)
+                    : `+¥${opt.value.toLocaleString("ja-JP")}`
+                  : "なし"}
+              </span>
+            </div>
+          ))}
         </div>
         <p className="mt-5 text-[11px] leading-5 text-paper/50">
           ※

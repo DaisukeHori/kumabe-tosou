@@ -98,7 +98,14 @@ export type EstimateResult = z.infer<typeof zEstimateResult>;
 
 // ---- §4.9 facade 補助型 (pricing 分) ----
 
-/** 読み取りビュー型 (DB 出力の正しさは repository + DDL が保証) */
+/**
+ * 読み取りビュー型 (DB 出力の正しさは repository + DDL が保証)。
+ *
+ * updated_at は契約書 §4.9 の型定義に明記は無いが、price_grades/price_options の DDL
+ * (supabase/migrations/20260708000001_init_schema.sql) には実在する列であり、
+ * admin 画面 (/admin/prices) の楽観排他 (KMB-E103) に必須のため実装上追加する
+ * (integration 実装時の最小追加。オーケストレーターへ報告済み)。
+ */
 export type PriceGrade = {
   id: string;
   key: string;
@@ -106,6 +113,7 @@ export type PriceGrade = {
   description: string;
   sort_order: number;
   is_active: boolean;
+  updated_at: string;
 };
 
 export type PriceSizeClass = {
@@ -137,6 +145,7 @@ export type PriceOption = {
   value: number;
   sort_order: number;
   is_active: boolean;
+  updated_at: string;
 };
 
 export type PriceTable = {
