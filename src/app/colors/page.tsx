@@ -7,6 +7,7 @@ import {
   PhotoFigure,
   Section,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -154,17 +155,16 @@ function Drawdown({
     <div className="border border-hair bg-paper p-2">
       <div
         className="relative aspect-[4/3] w-full overflow-hidden"
-        style={{ background: `linear-gradient(160deg, ${a}, ${b})` }}
+        style={{ background: `linear-gradient(168deg, ${a}, ${b})` }}
         aria-hidden="true"
       >
+        {/* 塗料のムラ・粒子 (legacy .dd-swatch::before) */}
+        <span className="kt-swatch-noise pointer-events-none" />
+        {/* 光の面 (legacy .dd-swatch::after) */}
+        <span className="kt-swatch-sheen pointer-events-none" />
+        {/* パール専用の虹彩 (legacy .dd-iris) */}
         {pearl ? (
-          <span
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.35), transparent 55%)",
-            }}
-          />
+          <span className="kt-pearl-iris pointer-events-none" />
         ) : null}
       </div>
       <div
@@ -184,7 +184,8 @@ function Drawdown({
 
 function ColorEntry({ sw }: { sw: (typeof SWATCHES)[number] }) {
   return (
-    <article
+    <Reveal
+      as="article"
       id={sw.id}
       className="grid scroll-mt-24 gap-8 border-t border-hair py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:gap-14"
     >
@@ -221,7 +222,7 @@ function ColorEntry({ sw }: { sw: (typeof SWATCHES)[number] }) {
           {sw.story}
         </p>
       </div>
-    </article>
+    </Reveal>
   );
 }
 
