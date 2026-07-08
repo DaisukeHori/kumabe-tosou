@@ -21,6 +21,12 @@ import { getEnv } from "@/lib/env";
 
 export function createScriptServiceClient() {
   const env = getEnv();
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY が未設定です。運用スクリプトの実行には service_role key が必須です。" +
+        ".env.local に値を設定してください。",
+    );
+  }
   return createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
       autoRefreshToken: false,

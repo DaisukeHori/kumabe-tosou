@@ -5,14 +5,22 @@ import { z } from "zod";
  * それ以外の機能別 env (Resend / Anthropic / OpenAI / X / Meta / cron secret 等) は
  * 各機能が Phase 2 以降で順次有効化される前提のため任意設定とし、
  * 未設定時は当該機能を無効化する (graceful degradation。設計書 §1.2 / §6.3 / §16.2)。
+ *
+ * (Wave 1-A 実装時の訂正メモ — オーケストレーターへ報告済み)
+ * SUPABASE_SERVICE_ROLE_KEY は当初 z.string().min(1) (必須) だったが、実運用の
+ * .env.local ではまだ未払い出し (空文字) であり、この必須検証のままだと
+ * getEnv() が全機能 (ログインなど service role を全く使わない処理を含む) の
+ * 起動時に例外を投げてしまう。RESEND_API_KEY 等と同様に任意設定へ変更し、
+ * service role が必要な処理 (isAdmin の他者 profile 参照・署名付き URL 発行等) は
+ * 個別に isServiceRoleConfigured() で確認した上で KMB-E9xx 相当に degrade する。
  */
 const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   NEXT_PUBLIC_SITE_URL: z.string().url(),
 
   // 機能別 (任意)。フォーマットのみ緩く検証し、値の有無で機能の有効/無効を判定する。
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
   REVALIDATE_SECRET: z.string().min(1).optional(),
   JOBS_SECRET: z.string().min(1).optional(),
@@ -44,6 +52,11 @@ export function getEnv(): Env {
 /** 通知メール (Resend) が設定済みかどうか。未設定時は呼び出し側が KMB-E902 相当でログのみに倒す */
 export function isResendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
+}
+
+/** service_role key が設定済みかどうか。未設定時は呼び出し側が KMB-E9xx 相当で機能を無効化する */
+export function isServiceRoleConfigured(): boolean {
+  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 /** pg_cron からの起床 webhook を検証するための共有シークレットが設定済みか */
