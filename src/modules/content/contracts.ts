@@ -21,6 +21,7 @@ import {
  * (契約書 §4.8 では zStatusTransition.to にインライン定義されているのと同一の値集合)。
  */
 export const zContentStatus = z.enum(["draft", "review", "published", "archived"]);
+export type ContentStatus = z.infer<typeof zContentStatus>;
 
 /** posts.kind (DDL の check 制約と 1:1)。同上の理由で named export */
 export const zPostKind = z.enum(["reading", "news", "blog"]);
@@ -137,4 +138,66 @@ export type BlogPostContent = {
   body_md: string;
   suggested_slug: string;
   cover_media_id: string | null;
+};
+
+// ---- admin CRUD 拡張 (Wave1-B) ----
+// module-contracts.md §5 の ContentFacade は site-public 向けの読み取り + AI 産出 2 系統
+// (createBlogPostFromDraft/publish/listPublished/getBySlug) のみを定義しており、
+// /admin/works・/admin/posts・/admin/voices の CRUD 操作シグネチャは明記されていない。
+// 「テーブルへの直接クエリは所有モジュールの repository のみ」(§1) の原則に従い、admin UI からの
+// CRUD も ContentFacade 経由に統一するため、§5 の Result 型・命名精神を保ったまま本モジュール内で
+// 拡張する (要 module-contracts.md 追認 — 完了報告に契約との乖離として明記)。
+
+/** admin 一覧のフィルタ + keyset ページネーション入力 */
+export type AdminListParams = {
+  status?: ContentStatus; // 未指定 = 全件
+  search?: string; // タイトル/slug 等の部分一致
+  cursor: string | null;
+  limit?: number;
+};
+
+export type AdminWork = {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  body: string;
+  process_note: string | null;
+  cover_media_id: string | null;
+  image_ids: string[];
+  status: ContentStatus;
+  published_at: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminPost = {
+  id: string;
+  slug: string;
+  kind: PostKind;
+  title: string;
+  excerpt: string;
+  body: string;
+  cover_media_id: string | null;
+  status: ContentStatus;
+  published_at: string | null;
+  source_run_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminVoice = {
+  id: string;
+  customer_initial: string;
+  region: string;
+  rating: number;
+  body: string;
+  item: string | null;
+  photo_media_id: string | null;
+  status: ContentStatus;
+  published_at: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 };

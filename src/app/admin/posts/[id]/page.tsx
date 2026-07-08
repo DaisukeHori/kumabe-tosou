@@ -1,0 +1,46 @@
+import { notFound } from "next/navigation";
+
+import { contentFacade } from "@/modules/content/facade";
+
+import { listMediaForPicker } from "../media-lookup";
+import { PostForm } from "../PostForm";
+
+export const dynamic = "force-dynamic";
+
+export default async function EditPostPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const [result, mediaItems] = await Promise.all([contentFacade.getPostAdmin(id), listMediaForPicker()]);
+
+  if (!result.ok) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-destructive">
+          取得に失敗しました ({result.code}): {result.detail}
+        </p>
+      </div>
+    );
+  }
+  if (!result.value) notFound();
+  const post = result.value;
+
+  return (
+    <div className="p-6">
+      <h1 className="mb-6 text-xl font-semibold">記事を編集</h1>
+      <PostForm
+        mode="edit"
+        postId={post.id}
+        status={post.status}
+        updatedAt={post.updated_at}
+        initialValues={{
+          slug: post.slug,
+          kind: post.kind,
+          title: post.title,
+          excerpt: post.excerpt,
+          body: post.body,
+          cover_media_id: post.cover_media_id,
+        }}
+        mediaItems={mediaItems}
+      />
+    </div>
+  );
+}
