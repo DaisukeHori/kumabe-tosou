@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Reveal } from "@/components/site/reveal";
 
 /* ページ冒頭 (legacy .page-head) */
 export function PageHead({
@@ -53,37 +54,48 @@ export function Section({
   );
 }
 
-/* SEC. XX — LABEL (legacy .sec-mark) */
+/* SEC. XX — LABEL (legacy .sec-mark.reveal) */
 export function SectionMark({ no, label }: { no: string; label: string }) {
   return (
-    <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
+    <Reveal
+      as="p"
+      className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft"
+    >
       <span>{no}</span>
       <span className="h-px w-12 bg-hair" aria-hidden="true" />
       <span>{label}</span>
-    </p>
+    </Reveal>
   );
 }
 
 export function SecTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
+    <Reveal
+      as="h2"
+      className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
+    >
       {children}
-    </h2>
+    </Reveal>
   );
 }
 
 export function SecLead({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mt-6 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid">
+    <Reveal
+      as="p"
+      className="mt-6 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid"
+    >
       {children}
-    </p>
+    </Reveal>
   );
 }
 
-/* 注記 (legacy .map-note) */
+/* 注記 (legacy .map-note.reveal) */
 export function MapNote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mt-6 text-xs leading-6 text-carbon-soft">{children}</p>
+    <Reveal as="p" className="mt-6 text-xs leading-6 text-carbon-soft">
+      {children}
+    </Reveal>
   );
 }
 
@@ -108,7 +120,7 @@ export function PhotoFigure({
   sizes?: string;
 }) {
   return (
-    <figure className="border border-hair bg-paper p-2">
+    <Reveal as="figure" className="border border-hair bg-paper p-2">
       <span className="block px-1 py-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
         {figNo}
       </span>
@@ -126,7 +138,7 @@ export function PhotoFigure({
           {credit}
         </span>
       </figcaption>
-    </figure>
+    </Reveal>
   );
 }
 

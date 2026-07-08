@@ -11,6 +11,7 @@ import {
   SectionMark,
   SpecTable,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -50,7 +51,7 @@ export default function AboutPage() {
           <br />
           応える工房が少なかった。
         </SecTitle>
-        <div className="mt-10">
+        <Reveal as="div" className="mt-10">
           <SpecTable
             rows={[
               {
@@ -80,7 +81,7 @@ export default function AboutPage() {
               },
             ]}
           />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 代表 ============ */}
@@ -95,14 +96,14 @@ export default function AboutPage() {
               KUMABE NOBUYUKI — REPRESENTATIVE / PAINTER
             </p>
           </div>
-          <div className="space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid">
+          <Reveal as="div" className="space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid">
             <p>
               家電の量産塗装の現場で、均一な膜厚管理・治具化・段取りを積み重ねてきた自動車塗装職人。「量産の精度」を体に入れ、いまはその技術のすべてを、3Dプリントの表面処理に注いでいます。
             </p>
             <p>
               一点ものを美しく塗ることと、同じ品質で数を仕上げることは、別の技術です。量産塗装の現場は、後者を毎日要求します。だから、あなたの一点の勝負試作と、千個のブリッジ生産を、同じ品質基準で仕上げられます。
             </p>
-          </div>
+          </Reveal>
         </div>
       </Section>
 
@@ -113,7 +114,7 @@ export default function AboutPage() {
         <SecLead>
           同時処理能力は、そのまま数量対応力と価格に反映されます。面を埋めるほど1個あたりの手間は下がる——バッチ処理は、この工房の価格競争力の源泉です。
         </SecLead>
-        <div className="mt-10">
+        <Reveal as="div" className="mt-10">
           <SpecTable
             rows={[
               {
@@ -155,8 +156,8 @@ export default function AboutPage() {
               },
             ]}
           />
-        </div>
-        <div className="mt-10 grid gap-5 sm:grid-cols-3">
+        </Reveal>
+        <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-3">
           <PhotoFigure
             figNo="FIG.01"
             src="/img/airbrush-dark.jpg"
@@ -181,14 +182,14 @@ export default function AboutPage() {
             capEn="THE MACHINERY"
             credit="Photo: kadircelep / Unsplash"
           />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 会社概要 ============ */}
       <Section>
         <SectionMark no="SEC. 04" label="PROFILE" />
         <SecTitle>会社概要</SecTitle>
-        <div className="mt-10">
+        <Reveal as="div" className="mt-10">
           <SpecTable
             rows={[
               { th: "屋号", td: "隈部塗装（くまべとそう）" },
@@ -208,7 +209,7 @@ export default function AboutPage() {
               },
             ]}
           />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 地図 ============ */}
@@ -218,7 +219,7 @@ export default function AboutPage() {
         <SecLead>
           郵送受託が基本のため、地方立地のハンデはありません。送料が軽微な小〜中型品なら、全国どこからでも同じ条件でお受けできます。
         </SecLead>
-        <div className="mt-10 border border-hair bg-paper p-2">
+        <Reveal as="div" className="mt-10 border border-hair bg-paper p-2">
           <iframe
             src="https://maps.google.com/maps?q=%E5%A4%A7%E5%88%86%E7%9C%8C%E8%B1%8A%E5%BE%8C%E9%AB%98%E7%94%B0%E5%B8%82&t=m&z=10&output=embed"
             title="隈部塗装の所在地（大分県豊後高田市）"
@@ -226,7 +227,7 @@ export default function AboutPage() {
             referrerPolicy="no-referrer-when-downgrade"
             className="block aspect-[21/9] w-full border-0"
           />
-        </div>
+        </Reveal>
         <MapNote>
           ※ 工房の詳細な住所は、ご依頼確定時に発送先としてご案内します。
         </MapNote>
@@ -239,7 +240,7 @@ export default function AboutPage() {
         <SecLead>
           大分・豊後高田の工房で、造形物と一個ずつ向き合っています。
         </SecLead>
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+        <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <PhotoFigure
             figNo="FIG.04"
             src="/img/metal-work.jpg"
@@ -256,7 +257,7 @@ export default function AboutPage() {
             capEn="THE SURFACE"
             credit="Photo: apryan_cahyo / Unsplash"
           />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ CTA ============ */}

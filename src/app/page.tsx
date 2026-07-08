@@ -9,6 +9,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ArrowButton, SectionMark } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
+import { StatCount } from "@/components/site/stat-count";
+
+const TICKER_ITEMS = [
+  "#800 SANDED",
+  "PRIMER-SURFACER",
+  "#1200 WET-SANDED",
+  "2K URETHANE TOPCOAT",
+  "3-COAT PEARL READY",
+  "BATCH ×30 / 200mm CLASS",
+  "SHIPPED NATIONWIDE",
+] as const;
+
 const CRAFTS = [
   {
     no: "CRAFT 01",
@@ -62,6 +76,7 @@ const DRAWDOWNS = [
     note: "実績納品色",
     a: "var(--dd-090-a)",
     b: "var(--dd-090-b)",
+    pearl: true,
   },
   {
     id: "c-46v",
@@ -70,6 +85,7 @@ const DRAWDOWNS = [
     note: "最高難度の技術証明",
     a: "var(--dd-46v-a)",
     b: "var(--dd-46v-b)",
+    pearl: false,
   },
   {
     id: "c-4y6",
@@ -78,6 +94,7 @@ const DRAWDOWNS = [
     note: "現行クラウンの上品な茶",
     a: "var(--dd-4y6-a)",
     b: "var(--dd-4y6-b)",
+    pearl: false,
   },
   {
     id: "c-3t4",
@@ -86,6 +103,7 @@ const DRAWDOWNS = [
     note: "全国650台限定の伝説色",
     a: "var(--dd-3t4-a)",
     b: "var(--dd-3t4-b)",
+    pearl: true,
   },
   {
     id: "c-202",
@@ -94,6 +112,7 @@ const DRAWDOWNS = [
     note: "最難関ソリッド黒",
     a: "var(--dd-202-a)",
     b: "var(--dd-202-b)",
+    pearl: false,
   },
   {
     id: "c-tv2",
@@ -102,6 +121,7 @@ const DRAWDOWNS = [
     note: "R34 GT-Rの代名詞",
     a: "var(--dd-tv2-a)",
     b: "var(--dd-tv2-b)",
+    pearl: true,
   },
   {
     id: "c-am",
@@ -110,6 +130,7 @@ const DRAWDOWNS = [
     note: "英国の象徴色",
     a: "var(--dd-am-a)",
     b: "var(--dd-am-b)",
+    pearl: false,
   },
   {
     id: "c-46g",
@@ -118,239 +139,500 @@ const DRAWDOWNS = [
     note: "匠塗のもう一枚の看板",
     a: "var(--dd-46g-a)",
     b: "var(--dd-46g-b)",
+    pearl: false,
   },
 ] as const;
 
-function SectionMark({ no, label }: { no: string; label: string }) {
-  return (
-    <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-      <span>{no}</span>
-      <span className="h-px w-12 bg-hair" aria-hidden="true" />
-      <span>{label}</span>
-    </p>
-  );
-}
+const TWO_SCENES = [
+  {
+    range: "1–9",
+    unit: "PIECES / 勝負試作",
+    title: "プレミアムデザインモデルの一点仕上げ",
+    body: "企業トップへの最終プレゼン、重要商談、展示会、クラウドファンディングの掲載写真。「絶対に外せない場面」で使う高品質試作を、量産品の顔に仕上げます。",
+  },
+  {
+    range: "30–1,000",
+    unit: "PIECES / ブリッジ生産",
+    title: "金型を作らない少量生産の外観仕上げ",
+    body: "クラウドファンディングのリターン品、D2Cの初回ロット、産業機器の筐体。金型なしの少量生産を「量産品の見た目」にする最終工程を担います。",
+  },
+] as const;
 
-function ArrowButton({ href, children }: { href: string; children: string }) {
-  return (
-    <Button
-      variant="outline"
-      render={<Link href={href} />}
-      className="h-10 rounded-none border-carbon/40 bg-transparent px-5 tracking-[0.08em] text-carbon hover:bg-carbon hover:text-paper"
-    >
-      {children}
-      <span aria-hidden="true" className="ml-1">
-        →
-      </span>
-    </Button>
-  );
-}
+const STAT_GRID = [
+  {
+    num: 6,
+    unit: "本",
+    label: "バンパー同時塗装",
+    en: "SIMULTANEOUS BUMPERS",
+    note: "この同時処理能力があるから、小物なら100個超を一度に。数量対応力は、そのまま価格に還元されます。",
+  },
+  {
+    num: null,
+    display: "220–2000",
+    unit: "",
+    label: "段階研磨の番手",
+    en: "PROGRESSIVE GRIT",
+    note: "粗い番手から徐々に上げる段階研磨。海外の現場で「射出成形品と見分けがつかない」とされる面の基準です。",
+  },
+  {
+    num: 8,
+    unit: "色",
+    label: "名車の象徴色ラインナップ",
+    en: "SIGNATURE COLORS",
+    note: "うち5色が3コート・高難度系。ソウルレッドもベイサイドブルーも、塗れること自体が技術の証明です。",
+  },
+  {
+    num: null,
+    display: "1–1,000",
+    unit: "",
+    label: "対応数量（点）",
+    en: "PIECES PER ORDER",
+    note: "勝負試作の一点から、ブリッジ生産の千個まで。試作と量産を、同じ品質基準で仕上げます。",
+  },
+  {
+    num: 40,
+    unit: "時間",
+    label: "最高級の黒が下地にかける時間",
+    en: "CENTURY \"KAMUI\" BLACK",
+    note: "名車センチュリーの黒は、塗装だけで約40時間・水研ぎ3回。その下地への敬意を、すべての仕事に持ち込みます。",
+  },
+  {
+    num: null,
+    display: "5–7",
+    unit: "日",
+    label: "2液ウレタン完全硬化",
+    en: "FULL CURE",
+    note: "主剤と硬化剤の化学反応で硬く艶やかに。硬化を待ち、検品してから発送します。急がば、回る。",
+  },
+] as const;
+
+const GALLERY_PHOTOS = [
+  {
+    src: "/img/garage-work.jpg",
+    alt: "ガレージで車体を仕上げる",
+    figNo: "FIG.04",
+    capJa: "手を動かす",
+    capEn: "HANDS AT WORK",
+    credit: "Photo: claritycoat / Unsplash",
+  },
+  {
+    src: "/img/tools-rack.jpg",
+    alt: "整然と並ぶ工具",
+    figNo: "FIG.05",
+    capJa: "段取り",
+    capEn: "THE TOOLING",
+    credit: "Photo: volft / Unsplash",
+  },
+  {
+    src: "/img/machine.jpg",
+    alt: "工房の機械",
+    figNo: "FIG.06",
+    capJa: "精度",
+    capEn: "THE MACHINERY",
+    credit: "Photo: kadircelep / Unsplash",
+  },
+] as const;
 
 export default function Home() {
   return (
     <>
       {/* ============ HERO ============ */}
-        <section className="mx-auto max-w-[1240px] px-5 pb-16 pt-20 sm:px-8 sm:pt-28">
-          <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-            <span>INDEX 00 — HOME</span>
-            <span className="h-px w-16 bg-hair" aria-hidden="true" />
-            <span className="hidden sm:inline">
-              SURFACE FINISHING FOR 3D PRINTS
+      <section className="mx-auto max-w-[1240px] px-5 pb-16 pt-20 sm:px-8 sm:pt-28">
+        <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
+          <span>INDEX 00 — HOME</span>
+          <span className="h-px w-16 bg-hair" aria-hidden="true" />
+          <span className="hidden sm:inline">
+            SURFACE FINISHING FOR 3D PRINTS
+          </span>
+        </p>
+        <h1 className="mt-8 text-[clamp(34px,6.2vw,72px)] font-bold leading-[1.3] tracking-[0.04em]">
+          <span className="kt-hero-line">
+            <span>3Dプリントを、</span>
+          </span>
+          <span className="kt-hero-line">
+            <span>
+              量産品と
+              <span className="kt-paint-mark">見分けがつかない</span>
             </span>
-          </p>
-          <h1 className="mt-8 text-[clamp(34px,6.2vw,72px)] font-bold leading-[1.3] tracking-[0.04em]">
-            3Dプリントを、
-            <br />
-            量産品と
-            <span className="underline decoration-soul decoration-4 underline-offset-[10px]">
-              見分けがつかない
-            </span>
-            <br />
-            外観に。
-          </h1>
-          <p className="mt-10 max-w-2xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid">
-            積層痕を消す研磨から、自動車グレードの塗装仕上げまで。家電の量産塗装で「量産の精度」を磨いた自動車塗装職人が、勝負試作の一点からブリッジ生産の千個まで、郵送で全国からお受けします。
-          </p>
-          <div className="mt-10 flex flex-wrap gap-3">
-            <ArrowButton href="/shop">SHOPで概算を出す</ArrowButton>
-            <ArrowButton href="/colors">8色の色見本を見る</ArrowButton>
-            <ArrowButton href="/service">サービス・料金</ArrowButton>
+          </span>
+          <span className="kt-hero-line">
+            <span>外観に。</span>
+          </span>
+        </h1>
+        <p className="mt-10 max-w-2xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid">
+          積層痕を消す研磨から、自動車グレードの塗装仕上げまで。家電の量産塗装で「量産の精度」を磨いた自動車塗装職人が、勝負試作の一点からブリッジ生産の千個まで、郵送で全国からお受けします。
+        </p>
+        <div className="mt-10 flex flex-wrap gap-3">
+          <ArrowButton href="/shop">SHOPで概算を出す</ArrowButton>
+          <ArrowButton href="/colors">8色の色見本を見る</ArrowButton>
+          <ArrowButton href="/service">サービス・料金</ArrowButton>
+        </div>
+        <div
+          className="kt-marquee mt-14 overflow-hidden border-y border-hair py-2"
+          aria-hidden="true"
+        >
+          <div className="kt-marquee-track font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
+            {[0, 1].map((rep) => (
+              <span key={rep} className="flex">
+                {TICKER_ITEMS.map((item, i) => (
+                  <span key={`${rep}-${i}`} className="inline-block pr-[4.5em]">
+                    {item}
+                  </span>
+                ))}
+              </span>
+            ))}
           </div>
-          <div className="mt-14 overflow-hidden border-y border-hair py-2">
-            <p className="whitespace-nowrap font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
-              #800 SANDED — PRIMER-SURFACER — #1200 WET-SANDED — 2K URETHANE
-              TOPCOAT — 3-COAT PEARL READY — BATCH ×30 / 200mm CLASS — SHIPPED
-              NATIONWIDE
+        </div>
+      </section>
+
+      {/* ============ HERO PHOTO BAND ============ */}
+      <section className="mx-auto max-w-[1240px] px-5 sm:px-8">
+        <Reveal as="figure" className="border border-hair bg-paper p-2">
+          <span className="block px-2 py-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
+            FIG.00 — FINISH
+          </span>
+          <div className="relative aspect-[21/9] w-full overflow-hidden">
+            <Image
+              src="/hero.jpg"
+              alt="深い艶で仕上げられた黒い車体"
+              fill
+              priority
+              sizes="(max-width: 1240px) 100vw, 1240px"
+              className="object-cover"
+            />
+          </div>
+          <figcaption className="flex flex-col gap-1 px-2 py-2 sm:flex-row sm:items-baseline sm:justify-between">
+            <span className="text-xs tracking-wider text-carbon-mid">
+              自動車グレードの塗装が、造形物の最終工程になる。
+              <span className="ml-3 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
+                AUTOMOTIVE-GRADE FINISH
+              </span>
+            </span>
+            <span className="font-mono text-[10px] text-carbon-soft">
+              Photo: cmreflections / Unsplash
+            </span>
+          </figcaption>
+        </Reveal>
+      </section>
+
+      {/* ============ STATEMENT ============ */}
+      <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
+        <SectionMark no="SEC. 01" label="STATEMENT" />
+        <Reveal
+          as="p"
+          className="mt-8 text-[clamp(21px,3vw,34px)] font-bold leading-[2.05] tracking-[0.06em]"
+        >
+          デザインモデルの品質は、
+          <br />
+          表面処理で決まる。
+          <br />
+          それでも、表面処理を高い水準で
+          <br />
+          内製できる会社は、多くない。
+          <br />
+          <span className="text-soul">
+            その空白のために、この工房がある。
+          </span>
+        </Reveal>
+        <Reveal
+          as="p"
+          className="mt-8 max-w-2xl text-[15px] leading-[2.05] text-carbon-mid"
+        >
+          塗装はできても積層痕を知らない塗装店。造形はできても、仕上げは単色止まりの出力サービス。金型を作らない少量生産の最大の弱点は「積層痕のある外観」——それを解決する最終工程こそが、この市場の付加価値の在り処です。
+        </Reveal>
+        <Reveal as="div" className="mt-10 flex flex-wrap gap-3">
+          <ArrowButton href="/story">なぜこの工房を始めたのか</ArrowButton>
+        </Reveal>
+      </section>
+
+      {/* ============ CRAFT (サービス概要) ============ */}
+      <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
+        <SectionMark no="SEC. 02" label="CRAFT" />
+        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
+          3つの技術を、ひとりで持つ。
+        </h2>
+        <Reveal as="div" className="mt-12 grid gap-5 md:grid-cols-3">
+          {CRAFTS.map((craft) => (
+            <Card
+              key={craft.no}
+              className="rounded-none border-hair bg-paper shadow-none"
+            >
+              <CardHeader>
+                <p className="font-mono text-[10px] tracking-[0.2em] text-soul">
+                  {craft.no}
+                </p>
+                <CardTitle className="text-lg tracking-wider">
+                  {craft.title}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm leading-7 text-carbon-mid">
+                  {craft.body}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </Reveal>
+        <Reveal as="div" className="mt-10 flex flex-wrap gap-3">
+          <ArrowButton href="/process">全9工程を見る</ArrowButton>
+          <ArrowButton href="/about">工房と職人について</ArrowButton>
+        </Reveal>
+        <Reveal as="div" className="mt-12 grid gap-5 sm:grid-cols-3">
+          {CRAFT_PHOTOS.map((photo) => (
+            <figure
+              key={photo.figNo}
+              className="border border-hair bg-paper p-2"
+            >
+              <span className="block px-1 py-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
+                {photo.figNo}
+              </span>
+              <div className="relative aspect-[3/4] w-full overflow-hidden">
+                <Image
+                  src={photo.src}
+                  alt={photo.alt}
+                  fill
+                  sizes="(max-width: 640px) 100vw, 400px"
+                  className="object-cover"
+                />
+              </div>
+              <figcaption className="flex items-baseline justify-between px-1 py-2">
+                <span className="text-xs tracking-wider text-carbon-mid">
+                  {photo.capJa}
+                  <span className="ml-2 font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
+                    {photo.capEn}
+                  </span>
+                </span>
+                <span className="font-mono text-[9px] text-carbon-soft">
+                  {photo.credit}
+                </span>
+              </figcaption>
+            </figure>
+          ))}
+        </Reveal>
+      </section>
+
+      {/* ============ COLOR LINEUP (実績プレビュー) ============ */}
+      <section className="mx-auto max-w-[1240px] px-5 pb-24 sm:px-8 sm:pb-32">
+        <SectionMark no="SEC. 03" label="COLOR LINEUP" />
+        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
+          名車の象徴色で組んだ、
+          <br />
+          8枚の技術証明。
+        </h2>
+        <p className="mt-6 max-w-2xl text-[15px] leading-[2.05] text-carbon-mid">
+          8色中5色が3コート・高難度系。いずれも市販の調色済み補修塗料を正規の用途で使用し、「参考色」として仕上げます。
+        </p>
+        <Reveal
+          as="div"
+          className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-4"
+        >
+          {DRAWDOWNS.map((dd) => (
+            <Link
+              key={dd.id}
+              href={`/colors#${dd.id}`}
+              className="group border border-hair bg-paper p-2 transition-transform duration-[450ms] ease-out hover:-translate-y-1.5 hover:border-carbon/40 hover:shadow-[0_18px_40px_-22px_rgba(23,25,27,0.35)]"
+            >
+              <div
+                className="relative aspect-[4/3] w-full overflow-hidden"
+                style={{
+                  background: `linear-gradient(168deg, ${dd.a}, ${dd.b})`,
+                }}
+                aria-hidden="true"
+              >
+                <span className="kt-swatch-noise pointer-events-none" />
+                <span className="kt-swatch-sheen pointer-events-none" />
+                {dd.pearl ? (
+                  <span className="kt-pearl-iris pointer-events-none" />
+                ) : null}
+              </div>
+              <div className="px-1 pb-1 pt-3">
+                <p className="font-mono text-[9px] tracking-[0.14em] text-carbon-soft">
+                  {dd.code}
+                </p>
+                <p className="mt-1 text-sm font-medium tracking-wider">
+                  {dd.name}
+                </p>
+                <Badge
+                  variant="outline"
+                  className="mt-2 rounded-none border-hair font-mono text-[9px] tracking-[0.1em] text-carbon-mid"
+                >
+                  {dd.note}
+                </Badge>
+              </div>
+            </Link>
+          ))}
+        </Reveal>
+        <Reveal as="div" className="mt-10">
+          <ArrowButton href="/colors">色見本を一枚ずつ見る</ArrowButton>
+        </Reveal>
+      </section>
+
+      {/* ============ TWO SCENES ============ */}
+      <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
+        <SectionMark no="SEC. 04" label="TWO SCENES" />
+        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
+          一点の勝負にも、千個の生産にも。
+        </h2>
+        <Reveal as="div" className="mt-12">
+          <div className="grid gap-8 md:grid-cols-2 md:gap-14">
+            {TWO_SCENES.map((scene) => (
+              <div key={scene.range}>
+                <span className="flex items-baseline gap-3">
+                  <span className="text-[clamp(30px,4vw,44px)] font-bold leading-none tracking-[0.04em]">
+                    {scene.range}
+                  </span>
+                  <small className="font-mono text-[10px] tracking-[0.16em] text-carbon-soft">
+                    {scene.unit}
+                  </small>
+                </span>
+                <h3 className="mt-4 text-lg font-bold tracking-wider">
+                  {scene.title}
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-carbon-mid">
+                  {scene.body}
+                </p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-10 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid">
+            試作を仕上げたその手で、量産も仕上げる。クラウドファンディング達成の瞬間に「試作と同じ品質で数百個できます」と言える供給者は、ほとんどいません。
+          </p>
+        </Reveal>
+      </section>
+
+      {/* ============ 数字（能力） ============ */}
+      <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
+        <SectionMark no="SEC. 05" label="BY THE NUMBERS" />
+        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
+          工房の能力を、
+          <br />
+          数字で。
+        </h2>
+        <Reveal as="div" className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {STAT_GRID.map((stat) => (
+            <div key={stat.label} className="border border-hair bg-paper p-6">
+              <p className="text-[clamp(30px,4vw,44px)] font-bold leading-none tracking-[0.04em]">
+                {stat.num !== null ? (
+                  <StatCount target={stat.num} />
+                ) : (
+                  stat.display
+                )}
+                <span className="ml-1 text-base font-medium text-carbon-mid">
+                  {stat.unit}
+                </span>
+              </p>
+              <p className="mt-4 text-[13px] leading-6 text-carbon-mid">
+                {stat.label}
+                <span className="mt-1 block font-mono text-[9px] tracking-[0.16em] text-carbon-soft">
+                  {stat.en}
+                </span>
+              </p>
+              <p className="mt-3 border-t border-hair-soft pt-3 text-[12px] leading-5 text-carbon-soft">
+                {stat.note}
+              </p>
+            </div>
+          ))}
+        </Reveal>
+      </section>
+
+      {/* ============ 素材対応 導線 ============ */}
+      <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
+        <SectionMark no="SEC. 06" label="MATERIALS" />
+        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
+          FDMも、光造形も、SLSも。
+          <br />
+          素材ごとに、手を変える。
+        </h2>
+        <p className="mt-6 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid">
+          造形方式が違えば、積層痕の出方も塗料の乗り方も変わります。FDMは研磨で埋め、光造形は洗浄と二次硬化を前提にし、SLSは多孔質を作り込む。PLA・PETG・ABS・ASA、各種レジン、ナイロンまで、素材別の勘所をまとめています。
+        </p>
+        <Reveal as="div" className="mt-8 flex flex-wrap gap-3">
+          <ArrowButton href="/materials">素材別の対応を見る</ArrowButton>
+        </Reveal>
+      </section>
+
+      {/* ============ NOTES PICK ============ */}
+      <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
+        <SectionMark no="SEC. 07" label="NOTES" />
+        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
+          なぜ綺麗なのかは、
+          <br />
+          写真だけでは伝わらない。
+        </h2>
+        <p className="mt-6 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid">
+          工程と色の裏側を、読みものとして残しています。センチュリーの黒が水研ぎ3回である理由。ディーラーでも同色にならない赤の構造。専門性は、言葉にしてはじめて伝わります。
+        </p>
+        <Reveal as="div" className="mt-8 flex flex-wrap gap-3">
+          <ArrowButton href="/notes">読みものを開く</ArrowButton>
+        </Reveal>
+      </section>
+
+      {/* ============ GALLERY ============ */}
+      <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
+        <SectionMark no="GALLERY" label="IN THE WORKSHOP" />
+        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
+          工房の、手の記録。
+        </h2>
+        <p className="mt-6 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid">
+          研ぎ、吹き、仕上げる。派手さのない手仕事の断片を。
+        </p>
+        <Reveal as="div" className="mt-12 grid gap-5 sm:grid-cols-3">
+          {GALLERY_PHOTOS.map((photo) => (
+            <figure
+              key={photo.figNo}
+              className="border border-hair bg-paper p-2"
+            >
+              <span className="block px-1 py-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
+                {photo.figNo}
+              </span>
+              <div className="relative aspect-[3/4] w-full overflow-hidden">
+                <Image
+                  src={photo.src}
+                  alt={photo.alt}
+                  fill
+                  sizes="(max-width: 640px) 100vw, 400px"
+                  className="object-cover"
+                />
+              </div>
+              <figcaption className="flex items-baseline justify-between px-1 py-2">
+                <span className="text-xs tracking-wider text-carbon-mid">
+                  {photo.capJa}
+                  <span className="ml-2 font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
+                    {photo.capEn}
+                  </span>
+                </span>
+                <span className="font-mono text-[9px] text-carbon-soft">
+                  {photo.credit}
+                </span>
+              </figcaption>
+            </figure>
+          ))}
+        </Reveal>
+      </section>
+
+      {/* ============ CTA ============ */}
+      <section className="bg-carbon text-paper">
+        <div className="mx-auto flex max-w-[1240px] flex-col gap-8 px-5 py-20 sm:px-8 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[clamp(22px,3vw,34px)] font-bold leading-snug tracking-[0.04em]">
+              見積もりは、3つの数字で。
+              <br />
+              サイズ × 個数 × グレード。
+            </p>
+            <p className="mt-4 text-sm leading-7 text-paper/70">
+              造形データや写真があれば、より正確に概算をお出しできます。
             </p>
           </div>
-        </section>
-
-        {/* ============ HERO PHOTO BAND ============ */}
-        <section className="mx-auto max-w-[1240px] px-5 sm:px-8">
-          <figure className="border border-hair bg-paper p-2">
-            <span className="block px-2 py-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
-              FIG.00 — FINISH
+          <Button
+            render={<Link href="/contact" />}
+            className="h-12 shrink-0 rounded-none bg-paper px-8 tracking-[0.12em] text-carbon hover:bg-paper/85"
+          >
+            相談する
+            <span aria-hidden="true" className="ml-1">
+              →
             </span>
-            <div className="relative aspect-[21/9] w-full overflow-hidden">
-              <Image
-                src="/hero.jpg"
-                alt="深い艶で仕上げられた黒い車体"
-                fill
-                priority
-                sizes="(max-width: 1240px) 100vw, 1240px"
-                className="object-cover"
-              />
-            </div>
-            <figcaption className="flex flex-col gap-1 px-2 py-2 sm:flex-row sm:items-baseline sm:justify-between">
-              <span className="text-xs tracking-wider text-carbon-mid">
-                自動車グレードの塗装が、造形物の最終工程になる。
-                <span className="ml-3 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
-                  AUTOMOTIVE-GRADE FINISH
-                </span>
-              </span>
-              <span className="font-mono text-[10px] text-carbon-soft">
-                Photo: cmreflections / Unsplash
-              </span>
-            </figcaption>
-          </figure>
-        </section>
-
-        {/* ============ CRAFT (サービス概要) ============ */}
-        <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
-          <SectionMark no="SEC. 02" label="CRAFT" />
-          <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
-            3つの技術を、ひとりで持つ。
-          </h2>
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
-            {CRAFTS.map((craft) => (
-              <Card
-                key={craft.no}
-                className="rounded-none border-hair bg-paper shadow-none"
-              >
-                <CardHeader>
-                  <p className="font-mono text-[10px] tracking-[0.2em] text-soul">
-                    {craft.no}
-                  </p>
-                  <CardTitle className="text-lg tracking-wider">
-                    {craft.title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-7 text-carbon-mid">
-                    {craft.body}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="mt-10 flex flex-wrap gap-3">
-            <ArrowButton href="/process">全9工程を見る</ArrowButton>
-            <ArrowButton href="/about">工房と職人について</ArrowButton>
-          </div>
-          <div className="mt-12 grid gap-5 sm:grid-cols-3">
-            {CRAFT_PHOTOS.map((photo) => (
-              <figure
-                key={photo.figNo}
-                className="border border-hair bg-paper p-2"
-              >
-                <span className="block px-1 py-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
-                  {photo.figNo}
-                </span>
-                <div className="relative aspect-[3/4] w-full overflow-hidden">
-                  <Image
-                    src={photo.src}
-                    alt={photo.alt}
-                    fill
-                    sizes="(max-width: 640px) 100vw, 400px"
-                    className="object-cover"
-                  />
-                </div>
-                <figcaption className="flex items-baseline justify-between px-1 py-2">
-                  <span className="text-xs tracking-wider text-carbon-mid">
-                    {photo.capJa}
-                    <span className="ml-2 font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
-                      {photo.capEn}
-                    </span>
-                  </span>
-                  <span className="font-mono text-[9px] text-carbon-soft">
-                    {photo.credit}
-                  </span>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </section>
-
-        {/* ============ COLOR LINEUP (実績プレビュー) ============ */}
-        <section className="mx-auto max-w-[1240px] px-5 pb-24 sm:px-8 sm:pb-32">
-          <SectionMark no="SEC. 03" label="COLOR LINEUP" />
-          <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
-            名車の象徴色で組んだ、
-            <br />
-            8枚の技術証明。
-          </h2>
-          <p className="mt-6 max-w-2xl text-[15px] leading-[2.05] text-carbon-mid">
-            8色中5色が3コート・高難度系。いずれも市販の調色済み補修塗料を正規の用途で使用し、「参考色」として仕上げます。
-          </p>
-          <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {DRAWDOWNS.map((dd) => (
-              <Link
-                key={dd.id}
-                href={`/colors#${dd.id}`}
-                className="group border border-hair bg-paper p-2 transition-colors hover:border-carbon/40"
-              >
-                <div
-                  className="aspect-[4/3] w-full"
-                  style={{
-                    background: `linear-gradient(160deg, ${dd.a}, ${dd.b})`,
-                  }}
-                  aria-hidden="true"
-                />
-                <div className="px-1 pb-1 pt-3">
-                  <p className="font-mono text-[9px] tracking-[0.14em] text-carbon-soft">
-                    {dd.code}
-                  </p>
-                  <p className="mt-1 text-sm font-medium tracking-wider">
-                    {dd.name}
-                  </p>
-                  <Badge
-                    variant="outline"
-                    className="mt-2 rounded-none border-hair font-mono text-[9px] tracking-[0.1em] text-carbon-mid"
-                  >
-                    {dd.note}
-                  </Badge>
-                </div>
-              </Link>
-            ))}
-          </div>
-          <div className="mt-10">
-            <ArrowButton href="/colors">色見本を一枚ずつ見る</ArrowButton>
-          </div>
-        </section>
-
-        {/* ============ CTA ============ */}
-        <section className="bg-carbon text-paper">
-          <div className="mx-auto flex max-w-[1240px] flex-col gap-8 px-5 py-20 sm:px-8 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-[clamp(22px,3vw,34px)] font-bold leading-snug tracking-[0.04em]">
-                見積もりは、3つの数字で。
-                <br />
-                サイズ × 個数 × グレード。
-              </p>
-              <p className="mt-4 text-sm leading-7 text-paper/70">
-                造形データや写真があれば、より正確に概算をお出しできます。
-              </p>
-            </div>
-            <Button
-              render={<Link href="/contact" />}
-              className="h-12 shrink-0 rounded-none bg-paper px-8 tracking-[0.12em] text-carbon hover:bg-paper/85"
-            >
-              相談する
-              <span aria-hidden="true" className="ml-1">
-                →
-              </span>
-            </Button>
-          </div>
+          </Button>
+        </div>
       </section>
     </>
   );

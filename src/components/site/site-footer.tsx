@@ -1,5 +1,12 @@
 import Link from "next/link";
 
+const MARQUEE_ITEMS = [
+  "研磨 · 塗装 · 3Dプリント表面処理",
+  "NATIONWIDE MAIL-IN",
+  "OITA BUNGOTAKADA",
+  "試作1点 — ブリッジ生産1,000個",
+] as const;
+
 const FOOTER_NAV = [
   { no: "00", label: "ホーム", href: "/" },
   { no: "01", label: "ストーリー", href: "/story" },
@@ -75,9 +82,27 @@ export function SiteFooter() {
           </div>
         </div>
 
+        <div
+          className="kt-marquee mt-10 overflow-hidden border-y border-hair py-3.5"
+          aria-hidden="true"
+        >
+          <div className="kt-marquee-track kt-marquee-track--footer font-mono text-[11px] tracking-[0.14em] text-carbon-mid">
+            {[0, 1].map((rep) => (
+              <span key={rep} className="flex items-center">
+                {MARQUEE_ITEMS.map((item, i) => (
+                  <span key={`${rep}-${i}`} className="flex items-center">
+                    <span className="px-[1.4em]">{item}</span>
+                    <span className="px-[1.4em] text-soul">✳</span>
+                  </span>
+                ))}
+              </span>
+            ))}
+          </div>
+        </div>
+
         <p
           aria-hidden="true"
-          className="mt-14 select-none overflow-hidden whitespace-nowrap font-mono text-[clamp(40px,9vw,110px)] font-semibold leading-none tracking-[0.08em] text-carbon/10"
+          className="mt-8 select-none overflow-hidden whitespace-nowrap font-mono text-[clamp(40px,9vw,110px)] font-semibold leading-none tracking-[0.08em] text-carbon/10"
         >
           KUMABE TOSO
         </p>

@@ -6,6 +6,7 @@ import {
   Section,
   SpecTable,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -41,7 +42,7 @@ export default function TokushohoPage() {
       />
 
       <Section>
-        <div className="max-w-[860px]">
+        <Reveal as="div" className="max-w-[860px]">
           <SpecTable
             rows={[
               { th: "販売業者（屋号）", td: "隈部塗装" },
@@ -144,7 +145,7 @@ export default function TokushohoPage() {
           <MapNote>
             本表記は開業準備中の内容を含みます。正式な販売開始時に、確定した事業者情報・支払い方法・窓口へ更新します（最終更新：2026年7月）。
           </MapNote>
-        </div>
+        </Reveal>
       </Section>
     </>
   );

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CtaBand, PageHead, PhotoFigure } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -32,7 +33,7 @@ function Chapter({
   return (
     <section className="mx-auto max-w-[1240px] px-5 py-14 sm:px-8 sm:py-20">
       <div className="grid gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] md:gap-14">
-        <div>
+        <Reveal as="div">
           <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
             {no}
           </span>
@@ -42,10 +43,13 @@ function Chapter({
           <p className="mt-3 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
             {en}
           </p>
-        </div>
-        <div className="space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid [&_strong]:font-bold [&_strong]:text-carbon">
+        </Reveal>
+        <Reveal
+          as="div"
+          className="space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid [&_strong]:font-bold [&_strong]:text-carbon"
+        >
           {children}
-        </div>
+        </Reveal>
       </div>
       <div className="mt-10">{photo}</div>
     </section>
@@ -285,7 +289,8 @@ export default function StoryPage() {
       {/* ============ 代表メッセージ ============ */}
       <section className="bg-primer-deep">
         <div className="mx-auto grid max-w-[1240px] gap-10 px-5 py-16 sm:px-8 sm:py-24 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] md:gap-14">
-          <figure
+          <Reveal
+            as="figure"
             className="relative flex aspect-[3/4] max-w-sm flex-col items-center justify-center border border-hair bg-paper"
             aria-label="代表・隈部信之（近日、実際の写真に差し替え予定）"
           >
@@ -305,7 +310,7 @@ export default function StoryPage() {
             <span className="mt-6 font-mono text-[10px] tracking-[0.24em] text-carbon-soft">
               PORTRAIT — COMING SOON
             </span>
-          </figure>
+          </Reveal>
           <div>
             <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
               MESSAGE — 代表挨拶

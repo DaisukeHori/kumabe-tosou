@@ -11,6 +11,7 @@ import {
   Section,
   SectionMark,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 export const metadata: Metadata = {
   title: {
@@ -99,7 +100,7 @@ export default function ContactPage() {
       {/* ============ 3変数 ============ */}
       <Section>
         <SectionMark no="SEC. 01" label="HOW TO ESTIMATE" />
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
+        <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-3">
           {QUOTE_VARS.map((v) => (
             <div key={v.label} className="border border-hair bg-paper p-6">
               <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
@@ -109,7 +110,7 @@ export default function ContactPage() {
               <p className="mt-4 text-sm leading-7 text-carbon-mid">{v.body}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
         <MapNote>
           ※ あわせて伝えていただけると正確になる情報 — 造形方式（FDM /
           光造形など）、素材の種類、希望色（カラーコード可）、希望納期。未経験の素材はテストピース確認を挟みます。NDA対応可。
@@ -119,7 +120,7 @@ export default function ContactPage() {
       {/* ============ 受付窓口 ============ */}
       <Section>
         <SectionMark no="SEC. 02" label="CONTACT" />
-        <div className="mt-10 border border-hair bg-paper p-8 sm:p-10">
+        <Reveal as="div" className="mt-10 border border-hair bg-paper p-8 sm:p-10">
           <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
             STATUS — PREPARING
           </span>
@@ -130,7 +131,7 @@ export default function ContactPage() {
             <br />
             窓口が整い次第、このページでご案内します。
           </p>
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ お問い合わせフォーム(モック) ============ */}
@@ -140,9 +141,9 @@ export default function ContactPage() {
         <SecLead>
           正式受付前の先行確認用として、フォームのモックを設置しています。入力・送信の動作は確認できますが、送信内容はブラウザのコンソールに出力されるのみで、実際の送受信は行われません。
         </SecLead>
-        <div className="mt-10">
+        <Reveal as="div" className="mt-10">
           <ContactForm />
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ 逆リンク ============ */}
@@ -152,17 +153,17 @@ export default function ContactPage() {
         <SecLead>
           工程・グレード・数量スライドの詳細はサービスページに、対応色の考え方は色見本ページにまとめています。「できないこと」も先に書いています——正直さも品質のうちです。
         </SecLead>
-        <div className="mt-8 flex flex-wrap gap-3">
+        <Reveal as="div" className="mt-8 flex flex-wrap gap-3">
           <ArrowButton href="/service">サービス・料金</ArrowButton>
           <ArrowButton href="/colors">色見本</ArrowButton>
-        </div>
+        </Reveal>
       </Section>
 
       {/* ============ FAQ ============ */}
       <Section>
         <SectionMark no="SEC. 05" label="FAQ" />
         <SecTitle>よくあるご質問</SecTitle>
-        <div className="mt-10 divide-y divide-hair border-y border-hair">
+        <Reveal as="div" className="mt-10 divide-y divide-hair border-y border-hair">
           {FAQ_ITEMS.map((item, i) => (
             <details key={item.q} className="group">
               <summary className="flex cursor-pointer list-none items-baseline gap-4 py-5 text-[15px] font-medium tracking-wider [&::-webkit-details-marker]:hidden">
@@ -182,7 +183,7 @@ export default function ContactPage() {
               </p>
             </details>
           ))}
-        </div>
+        </Reveal>
       </Section>
     </>
   );
