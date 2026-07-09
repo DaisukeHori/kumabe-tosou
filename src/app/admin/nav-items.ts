@@ -9,6 +9,7 @@ export const ADMIN_NAV_ITEMS = [
   { href: "/admin/voices", label: "お客様の声" },
   { href: "/admin/prices", label: "価格表" },
   { href: "/admin/media", label: "メディア" },
+  { href: "/admin/visual", label: "ビジュアル編集" },
   { href: "/admin/inquiries", label: "問い合わせ" },
   { href: "/admin/studio", label: "AIスタジオ" },
   { href: "/admin/channels", label: "チャネル管理" },

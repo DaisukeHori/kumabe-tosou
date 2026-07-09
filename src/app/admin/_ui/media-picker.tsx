@@ -26,6 +26,12 @@ type MediaPickerProps = {
   onOpenChange: (open: boolean) => void;
   /** single: カバー画像 (0 or 1 件)。multiple: 添付画像への追加 (複数件) */
   mode: "single" | "multiple";
+  /**
+   * ダイアログ見出し (Issue #18: ヘッダー文言を props 化)。
+   * 既定は汎用の「画像を選ぶ」。呼び出し元の文脈が明確な場合 (works/posts のカバー画像等) は
+   * 明示的に上書きする。
+   */
+  title?: string;
   /** 呼び出し元ページ (Server Component) が MediaFacade.list 経由で渡した初期一覧 */
   initialItems: PickerMediaItem[];
   initialNextCursor: string | null;
@@ -45,6 +51,7 @@ export function MediaPicker({
   open,
   onOpenChange,
   mode,
+  title = "画像を選ぶ",
   initialItems,
   initialNextCursor,
   selectedIds,
@@ -93,7 +100,7 @@ export function MediaPicker({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{mode === "single" ? "カバー画像を選択" : "添付画像を選択"}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {mode === "single"
               ? "サムネイルをクリックして選択してください。もう一度クリックで選択解除できます。"
