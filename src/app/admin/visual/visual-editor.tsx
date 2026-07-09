@@ -14,15 +14,17 @@ import {
   listSidePanel,
   setImage,
   setSlotAlt,
+  setSlotText,
   type ContentGapItem,
   type EditableTarget,
   type SlotPanelItem,
+  type TextPanelItem,
   type WorksNavItem,
 } from "./actions";
 import { computeScale, mapChildRectToContainer } from "./coordinate-mapping";
 import { HotspotMenu } from "./hotspot-menu";
 import { SidePanel } from "./side-panel";
-import type { Hotspot, MenuState, PageTab } from "./types";
+import type { Hotspot, MenuState, PageTab, TextTarget } from "./types";
 
 export type { PageTab };
 
@@ -59,12 +61,34 @@ function genericLabel(target: EditableTarget): string {
 }
 
 /**
- * data-editable-* から EditableTarget を組み立てる (§1/§4.2/§6)。
- * ラベルは要素内の <img alt> をまず使う (SlotImage/MediaCover は alt を出力するため、
+ * data-editable-* から EditableTarget (画像) / TextTarget (テキスト) を組み立てる
+ * (§1/§4.2/§6、テキストは visual-text-editor.md §5)。
+ * 画像のラベルは要素内の <img alt> をまず使う (SlotImage/MediaCover は alt を出力するため、
  * プレースホルダも含め常に何らかの人間可読テキストが取れる想定)。無ければ種別ごとの汎用文言。
+ * テキストのラベルは slotKey をそのまま使う (画像の slot 種別と同じフォールバック方針。
+ * サイドパネル側で listTextsForAdmin 由来の label が別途表示される)。
+ *
+ * textOrdinal: 同一 slotKey が同一ページに複数回出現する場合 (shared.cta.consult がヘッダー・
+ * フッター両方に出る等) の DOM 個体識別用カウンタ。hotspot id `text:${slotKey}:${ordinal}` は
+ * 保存 target の slotKey とは独立させる (MAJOR-5)。呼び出し側 (measureNow) が走査 1 回ごとに
+ * 新しい Map を渡すことで、DOM 順序が安定していれば ordinal も再走査間で安定する。
  */
-function readHotspot(el: HTMLElement): Omit<Hotspot, "rect"> | null {
+function readHotspot(el: HTMLElement, textOrdinal: Map<string, number>): Omit<Hotspot, "rect"> | null {
   const imgAlt = el.querySelector("img")?.alt || undefined;
+
+  const textSlotKey = el.getAttribute("data-editable-text");
+  if (textSlotKey) {
+    const ordinal = textOrdinal.get(textSlotKey) ?? 0;
+    textOrdinal.set(textSlotKey, ordinal + 1);
+    const target: TextTarget = { type: "text", slotKey: textSlotKey };
+    return {
+      id: `text:${textSlotKey}:${ordinal}`,
+      target,
+      oldMediaId: null,
+      node: el,
+      label: textSlotKey,
+    };
+  }
 
   const slotKey = el.getAttribute("data-editable-slot");
   if (slotKey) {
@@ -158,10 +182,12 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
 
   const [sidePanel, setSidePanel] = useState<{
     slots: SlotPanelItem[];
+    texts: TextPanelItem[];
     contentGaps: ContentGapItem[];
     works: WorksNavItem[];
   }>({
     slots: [],
+    texts: [],
     contentGaps: [],
     works: [],
   });
@@ -173,6 +199,7 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
 
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [altValue, setAltValue] = useState("");
+  const [textValue, setTextValue] = useState("");
   const [savePending, startSaveTransition] = useTransition();
 
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -197,13 +224,17 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
     const hostRect = iframe.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     const elements = doc.querySelectorAll<HTMLElement>(
-      "[data-editable-slot],[data-editable-content],[data-editable-work-image]",
+      "[data-editable-slot],[data-editable-content],[data-editable-work-image],[data-editable-text]",
     );
+    // 同一 slotKey の DOM 個体識別用カウンタ (§5)。走査 1 回 (= measureNow 1 呼び出し) ごとにリセットする。
+    const textOrdinal = new Map<string, number>();
     const next: Hotspot[] = [];
     elements.forEach((el) => {
-      const parsed = readHotspot(el);
+      const parsed = readHotspot(el, textOrdinal);
       if (!parsed) return;
       const innerRect = el.getBoundingClientRect();
+      // zero rect (幅か高さ 0、非表示要素) は除外する (§5)
+      if (innerRect.width === 0 || innerRect.height === 0) return;
       const rect = mapChildRectToContainer(
         { top: hostRect.top, left: hostRect.left, width: hostRect.width, height: hostRect.height },
         { top: containerRect.top, left: containerRect.left, width: containerRect.width, height: containerRect.height },
@@ -282,7 +313,7 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
       const result = await listSidePanel(activeRoute);
       if (!result.ok) {
         toast.error(errorMessage(result));
-        setSidePanel({ slots: [], contentGaps: [], works: [] });
+        setSidePanel({ slots: [], texts: [], contentGaps: [], works: [] });
         setSidePanelError({ code: result.code, message: errorMessage(result) });
         return;
       }
@@ -348,8 +379,56 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
     if (hotspotId) hotspotButtonRefs.current.get(hotspotId)?.focus();
   }
 
+  /**
+   * ホットスポットクリックのエントリポイント。テキストは画像のような中間メニュー
+   * (画像を変更/alt編集/…) を経由せず、クリック直後にテキスト編集フォームを開く
+   * (§5「クリック → テキスト編集メニュー」。操作は保存/既定に戻す/キャンセルの3択のみのため)。
+   */
   function openMenuFor(hotspot: Hotspot) {
+    if (hotspot.target.type === "text") {
+      startTextEdit(hotspot);
+      return;
+    }
     setMenu({ hotspot, mode: "menu" });
+  }
+
+  /** サイドパネルの listTextsForAdmin 結果 (T2a に依存しない) から現在値を引いて編集フォームを開く (§5) */
+  function startTextEdit(hotspot: Hotspot) {
+    if (hotspot.target.type !== "text") return;
+    const slotKey = hotspot.target.slotKey;
+    const current = sidePanel.texts.find((t) => t.slotKey === slotKey);
+    setTextValue(current?.text ?? "");
+    setMenu({ hotspot, mode: "text-edit" });
+  }
+
+  function handleSaveText() {
+    if (!menu || menu.hotspot.target.type !== "text") return;
+    const slotKey = menu.hotspot.target.slotKey;
+    startSaveTransition(async () => {
+      const result = await setSlotText(slotKey, textValue);
+      if (!result.ok) {
+        toast.error(errorMessage(result));
+        return;
+      }
+      toast.success("テキストを保存しました。");
+      closeMenu();
+      reloadIframe();
+    });
+  }
+
+  function handleResetTextToDefault() {
+    if (!menu || menu.hotspot.target.type !== "text") return;
+    const slotKey = menu.hotspot.target.slotKey;
+    startSaveTransition(async () => {
+      const result = await setSlotText(slotKey, null);
+      if (!result.ok) {
+        toast.error(errorMessage(result));
+        return;
+      }
+      toast.success("既定のテキストに戻しました。");
+      closeMenu();
+      reloadIframe();
+    });
   }
 
   function startAltEdit(hotspot: Hotspot) {
@@ -407,7 +486,9 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
   }
 
   function handleChangeImage() {
-    if (!menu) return;
+    // text ホットスポットは "menu" モードを経由しない (openMenuFor が startTextEdit に分岐する) ため
+    // ここに到達することは無いが、型の絞り込みのため明示的にガードする。
+    if (!menu || menu.hotspot.target.type === "text") return;
     setPickerTarget({ target: menu.hotspot.target, oldMediaId: menu.hotspot.oldMediaId });
     setPickerOpen(true);
     setMenu(null);
@@ -446,6 +527,19 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
     setPickerOpen(true);
   }
 
+  /**
+   * サイドパネル「テキスト」行クリック (§5、画像の handleSidePanelSlotClick と同じ操作感)。
+   * 同一 slotKey が複数 DOM に出る場合 (shared.cta.consult 等) は最初に見つかったものへスクロールする。
+   * テキストは (contentGaps のような) 「DOM が無いコンテンツ」概念を持たないため、
+   * 対応 DOM が見つからない場合 (未測定・現在の route に存在しない) は何もしない。
+   */
+  function handleSidePanelTextClick(item: TextPanelItem) {
+    const hotspot = hotspots.find((h) => h.target.type === "text" && h.target.slotKey === item.slotKey);
+    if (!hotspot) return;
+    hotspot.node.scrollIntoView({ behavior: "smooth", block: "center" });
+    flashHotspot(hotspot.id);
+  }
+
   /** §5.1a: 施工事例クリック → iframe を /edit/works/{slug} (詳細ページ) に切り替える */
   function handleWorkNavClick(slug: string) {
     setWorksDetailSlug(slug);
@@ -480,6 +574,14 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
       : pickerTarget?.target.type === "work-image"
         ? "ギャラリー画像を選ぶ"
         : "画像を選ぶ";
+
+  // text-edit メニューが開いているときの対象スロットのメタ情報 (kind/maxLen/maxLines/state)。
+  // listSidePanel (T2a に依存しない) から引く。未取得なら null (HotspotMenu が「読み込み中」を表示)。
+  let activeTextMeta: TextPanelItem | null = null;
+  if (menu && menu.hotspot.target.type === "text") {
+    const slotKey = menu.hotspot.target.slotKey;
+    activeTextMeta = sidePanel.texts.find((t) => t.slotKey === slotKey) ?? null;
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -531,8 +633,13 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
               aria-label={`${hotspot.label} を編集`}
               onClick={() => openMenuFor(hotspot)}
               className={cn(
-                "absolute rounded-md border-2 border-dashed border-transparent bg-primary/0 outline-none transition-colors hover:border-primary hover:bg-primary/10 focus-visible:border-primary focus-visible:bg-primary/10",
-                flashId === hotspot.id && "border-primary bg-primary/15",
+                "absolute rounded-md border-2 border-dashed border-transparent outline-none transition-colors",
+                // テキストホットスポットは青系、画像 (primary=赤系) と視覚区別する (§5)
+                hotspot.target.type === "text"
+                  ? "bg-sky-500/0 hover:border-sky-500 hover:bg-sky-500/10 focus-visible:border-sky-500 focus-visible:bg-sky-500/10"
+                  : "bg-primary/0 hover:border-primary hover:bg-primary/10 focus-visible:border-primary focus-visible:bg-primary/10",
+                flashId === hotspot.id &&
+                  (hotspot.target.type === "text" ? "border-sky-500 bg-sky-500/15" : "border-primary bg-primary/15"),
               )}
               style={{
                 top: hotspot.rect.top,
@@ -548,6 +655,9 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
               menu={menu}
               altValue={altValue}
               onAltValueChange={setAltValue}
+              textValue={textValue}
+              onTextValueChange={setTextValue}
+              textMeta={activeTextMeta}
               savePending={savePending}
               onClose={closeMenu}
               onChangeImage={handleChangeImage}
@@ -555,18 +665,22 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
               onResetToDefault={handleResetToDefault}
               onDeleteWorkImage={handleDeleteWorkImage}
               onSaveAlt={handleSaveAlt}
+              onSaveText={handleSaveText}
+              onResetTextToDefault={handleResetTextToDefault}
             />
           )}
         </div>
 
         <SidePanel
           slots={sidePanel.slots}
+          texts={sidePanel.texts}
           contentGaps={sidePanel.contentGaps}
           works={sidePanel.works}
           activeWorkSlug={activeRoute === "/works" ? worksDetailSlug : null}
           pending={sidePanelPending}
           error={sidePanelError}
           onSlotClick={handleSidePanelSlotClick}
+          onTextClick={handleSidePanelTextClick}
           onGapClick={handleSidePanelGapClick}
           onWorkClick={handleWorkNavClick}
           onBackToWorksList={handleBackToWorksList}

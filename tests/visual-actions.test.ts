@@ -2,10 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * canonical: docs/design/visual-media-editor.md §5.5b (Server Action 実装契約) / §6 (EditableTarget) /
- * §5.4 (サイドパネル)。
+ * §5.4 (サイドパネル)。テキスト関連 (setSlotText / listSidePanel の texts) は
+ * docs/design/visual-text-editor.md §5 (Server Action 実装契約 / 失効セット / サイドパネル)。
  *
  * settings-repository.test.ts / page-media-resolver.test.ts の vi.mock 方式に倣い、
  * facade / next/cache を最小限のフェイクに差し替えて actions.ts のロジックのみ検証する。
+ * zSetTextReq (contracts.ts) はモックせず実物を使うため、slot_key には実際の TEXT_REGISTRY
+ * (text-registry.ts) に存在するキーを使う (home.craft.heading / notes.cta.heading /
+ * shared.cta.consult)。一方 pageMediaFacade からの再 export である TEXT_REGISTRY/EDITABLE_ROUTES は
+ * revalidateTextRoute (actions.ts) が失効対象を決めるための参照であり、モックの最小フィクスチャに
+ * 差し替える (画像側の SLOT_REGISTRY フィクスチャと同じ方式)。
  */
 
 const revalidatePath = vi.fn();
@@ -23,27 +29,95 @@ vi.mock("@/modules/platform/facade", () => ({
 const setSlot = vi.fn();
 const setSlotAltFn = vi.fn();
 const listForAdmin = vi.fn();
+const setTextFn = vi.fn();
+const listTextsForAdmin = vi.fn();
 
-const { HOME_HERO_SLOT } = vi.hoisted(() => ({
-  HOME_HERO_SLOT: {
-    key: "home.hero",
-    page: "home",
-    route: "/",
-    label: "トップ / ヒーロー",
-    defaultSrc: "/hero.jpg",
-    altDefault: "深い艶で仕上げられた黒い車体",
-    aspect: "hero",
-    priority: true,
-  },
-}));
+const {
+  HOME_HERO_SLOT,
+  HOME_CRAFT_TEXT_SLOT,
+  NOTES_CTA_TEXT_SLOT,
+  SHARED_CTA_TEXT_SLOT,
+  CHROME_FOOTER_COMBINED_TEXT_SLOT,
+  TEST_EDITABLE_ROUTES,
+} = vi.hoisted(() => ({
+    HOME_HERO_SLOT: {
+      key: "home.hero",
+      page: "home",
+      route: "/",
+      label: "トップ / ヒーロー",
+      defaultSrc: "/hero.jpg",
+      altDefault: "深い艶で仕上げられた黒い車体",
+      aspect: "hero",
+      priority: true,
+    },
+    // 以下 3 件は text-registry.ts の実データと同一 (zSetTextReq は実物を使うため、
+    // 存在する slot_key・maxLen・kind・affectedRoutes/affectsAllRoutes を一致させる)。
+    HOME_CRAFT_TEXT_SLOT: {
+      key: "home.craft.heading",
+      page: "home",
+      route: "/",
+      label: "トップ / CRAFT 見出し",
+      kind: "text",
+      maxLen: 24,
+      defaultText: "3つの技術を、ひとりで持つ。",
+    },
+    NOTES_CTA_TEXT_SLOT: {
+      key: "notes.cta.heading",
+      page: "notes",
+      route: "/notes",
+      label: "読みもの / CTA帯 見出し (一覧・詳細で共有)",
+      kind: "lines",
+      maxLen: 44,
+      defaultText: "読んで気になったことは、\nそのまま聞いてください。",
+      maxLines: 2,
+      affectedRoutes: ["/notes", "notes/[slug]"],
+    },
+    SHARED_CTA_TEXT_SLOT: {
+      key: "shared.cta.consult",
+      page: "shared",
+      route: "/",
+      label: "共通 / 「相談する」ボタン",
+      kind: "text",
+      maxLen: 8,
+      defaultText: "相談する",
+      affectsAllRoutes: true,
+    },
+    // affectedRoutes と affectsAllRoutes の併用ケース (実 registry には現状存在しないが、
+    // revalidateTextRoute の実装が「両方指定」でも安全 (重複 revalidatePath が害にならない)
+    // ことを確認するための合成フィクスチャ。key は zSetTextReq が実物の TEXT_REGISTRY
+    // (text-registry.ts) に対して検証するため、実在する chrome.footer.tagline
+    // (kind=multiline, maxLen=80, maxLines 未設定) を流用する。
+    CHROME_FOOTER_COMBINED_TEXT_SLOT: {
+      key: "chrome.footer.tagline",
+      page: "chrome",
+      route: "/",
+      label: "共通 / フッター事業紹介文",
+      kind: "multiline",
+      maxLen: 80,
+      defaultText:
+        "3Dプリント造形物の表面処理(研磨・塗装)専門工房。積層痕除去から自動車グレードの仕上げまで、郵送で全国からお受けします。",
+      affectedRoutes: ["/works"],
+      affectsAllRoutes: true,
+    },
+    TEST_EDITABLE_ROUTES: ["/", "/notes", "/works", "notes/[slug]", "works/[slug]", "blog/[slug]"],
+  }));
 
 vi.mock("@/modules/page-media/facade", () => ({
   pageMediaFacade: {
     setSlot: (...args: unknown[]) => setSlot(...args),
     setSlotAlt: (...args: unknown[]) => setSlotAltFn(...args),
     listForAdmin: (...args: unknown[]) => listForAdmin(...args),
+    setText: (...args: unknown[]) => setTextFn(...args),
+    listTextsForAdmin: (...args: unknown[]) => listTextsForAdmin(...args),
   },
   SLOT_REGISTRY: [HOME_HERO_SLOT],
+  TEXT_REGISTRY: [
+    HOME_CRAFT_TEXT_SLOT,
+    NOTES_CTA_TEXT_SLOT,
+    SHARED_CTA_TEXT_SLOT,
+    CHROME_FOOTER_COMBINED_TEXT_SLOT,
+  ],
+  EDITABLE_ROUTES: TEST_EDITABLE_ROUTES,
 }));
 
 const setWorkCover = vi.fn();
@@ -72,7 +146,7 @@ vi.mock("@/modules/content/facade", () => ({
   },
 }));
 
-import { listSidePanel, setImage, setSlotAlt } from "@/app/admin/visual/actions";
+import { listSidePanel, setImage, setSlotAlt, setSlotText } from "@/app/admin/visual/actions";
 
 const MEDIA_A = "11111111-1111-4111-8111-111111111111";
 const MEDIA_B = "22222222-2222-4222-8222-222222222222";
@@ -83,6 +157,8 @@ const VOICE_ID = "55555555-5555-4555-8555-555555555555";
 beforeEach(() => {
   vi.clearAllMocks();
   requireAdmin.mockResolvedValue({ ok: true, value: { userId: "admin-1" } });
+  // listSidePanel は毎回 listTextsForAdmin も呼ぶため、明示的に上書きしないテストのための既定値。
+  listTextsForAdmin.mockResolvedValue({ ok: true, value: [] });
 });
 
 describe("setImage: slot", () => {
@@ -328,12 +404,192 @@ describe("setSlotAlt", () => {
   });
 });
 
-describe("listSidePanel (§5.4 サイドパネル)", () => {
+describe("setSlotText (visual-text-editor.md §5)", () => {
+  it("TEXT_REGISTRY に存在しない slot_key は KMB-E107 を返し facade を呼ばない", async () => {
+    const result = await setSlotText("home.nonexistent", "テスト");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E107");
+    expect(setTextFn).not.toHaveBeenCalled();
+  });
+
+  it("slot_key は有効だが maxLen 超過のときは KMB-E101 を返す (E107 は slot_key 不正のみ)", async () => {
+    // home.craft.heading: maxLen=24
+    const result = await setSlotText("home.craft.heading", "あ".repeat(25));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E101");
+    expect(setTextFn).not.toHaveBeenCalled();
+  });
+
+  it("kind=text の改行は KMB-E101 を返す", async () => {
+    const result = await setSlotText("shared.cta.consult", "相談\nする");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E101");
+    expect(setTextFn).not.toHaveBeenCalled();
+  });
+
+  it("空文字列 (または空白のみ) は KMB-E101 を返す", async () => {
+    const result = await setSlotText("home.craft.heading", "   ");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E101");
+    expect(setTextFn).not.toHaveBeenCalled();
+  });
+
   it("requireAdmin 失敗時は facade を呼ばない", async () => {
+    requireAdmin.mockResolvedValue({ ok: false, code: "KMB-E201" });
+    const result = await setSlotText("home.craft.heading", "新しい見出し");
+    expect(result).toEqual({ ok: false, code: "KMB-E201" });
+    expect(setTextFn).not.toHaveBeenCalled();
+  });
+
+  it("facade がエラーを返したら revalidate せずそのまま返す", async () => {
+    setTextFn.mockResolvedValue({ ok: false, code: "KMB-E901", detail: "db down" });
+    const result = await setSlotText("home.craft.heading", "新しい見出し");
+    expect(result.ok).toBe(false);
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
+  it("成功時は pageMediaFacade.setText を呼び、route の revalidatePath + tag page_text を発火する", async () => {
+    setTextFn.mockResolvedValue({ ok: true, value: undefined });
+    const result = await setSlotText("home.craft.heading", "新しい見出し");
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(setTextFn).toHaveBeenCalledWith("home.craft.heading", "新しい見出し");
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    expect(revalidateTag).toHaveBeenCalledWith("page_text");
+  });
+
+  it("text=null (既定に戻す) も setText に渡す", async () => {
+    setTextFn.mockResolvedValue({ ok: true, value: undefined });
+    await setSlotText("home.craft.heading", null);
+    expect(setTextFn).toHaveBeenCalledWith("home.craft.heading", null);
+  });
+
+  it("CRLF は正規化 (\\n) された上で zSetTextReq 検証・facade 呼び出しが行われる", async () => {
+    setTextFn.mockResolvedValue({ ok: true, value: undefined });
+    // notes.cta.heading: kind=lines, maxLen=44, maxLines=2
+    await setSlotText("notes.cta.heading", "1行目\r\n2行目");
+    expect(setTextFn).toHaveBeenCalledWith("notes.cta.heading", "1行目\n2行目");
+  });
+
+  it("affectedRoutes を持つスロットは route に加えて追加の path も revalidate する (notes.cta.heading)", async () => {
+    setTextFn.mockResolvedValue({ ok: true, value: undefined });
+    await setSlotText("notes.cta.heading", "新しい見出し\n続き");
+    expect(revalidatePath).toHaveBeenCalledWith("/notes");
+    expect(revalidatePath).toHaveBeenCalledWith("/notes/[slug]", "page");
+    expect(revalidateTag).toHaveBeenCalledWith("page_text");
+  });
+
+  it("affectsAllRoutes を持つスロットは EDITABLE_ROUTES 全体を revalidate する (shared.cta.consult)", async () => {
+    setTextFn.mockResolvedValue({ ok: true, value: undefined });
+    await setSlotText("shared.cta.consult", "相談する");
+    for (const route of TEST_EDITABLE_ROUTES) {
+      // EDITABLE_ROUTES の動的パターンは先頭 "/" 無し表記 ("notes/[slug]" 等) のため、
+      // revalidatePath 呼び出し時の正規化後 ("/notes/[slug]") と比較する。
+      const path = route.startsWith("/") ? route : `/${route}`;
+      if (path.includes("[")) {
+        expect(revalidatePath).toHaveBeenCalledWith(path, "page");
+      } else {
+        expect(revalidatePath).toHaveBeenCalledWith(path);
+      }
+    }
+    expect(revalidateTag).toHaveBeenCalledWith("page_text");
+  });
+
+  it("affectedRoutes と affectsAllRoutes を併用するスロットは両方の失効セットを (重複含め) 呼んでもエラーにならない (chrome.footer.tagline)", async () => {
+    setTextFn.mockResolvedValue({ ok: true, value: undefined });
+    // chrome.footer.tagline: kind=multiline, maxLen=80 (v1.3 tester フィクスチャの併用ケース)
+    const result = await setSlotText("chrome.footer.tagline", "新しい事業紹介文です。");
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(setTextFn).toHaveBeenCalledWith("chrome.footer.tagline", "新しい事業紹介文です。");
+
+    // affectedRoutes ("/works") は affectsAllRoutes の EDITABLE_ROUTES 展開にも含まれる
+    // (TEST_EDITABLE_ROUTES に "/works" が入っている) ため、revalidatePath("/works") は
+    // 2 回 (affectedRoutes ループ分 + affectsAllRoutes ループ分) 呼ばれる。
+    // revalidatePath は同一パスの複数回呼び出しを許容する冪等 API のため、
+    // 「呼ばれたことがある」の確認に加え、呼び出し回数が減っていない (=両方の失効経路が
+    // 実際に実行された) ことも明示的に確認する。
+    const worksCalls = revalidatePath.mock.calls.filter(([path]) => path === "/works").length;
+    expect(worksCalls).toBeGreaterThanOrEqual(2);
+
+    // 基本の route ("/") + affectedRoutes ("/works") + affectsAllRoutes (EDITABLE_ROUTES 全体) が
+    // すべて失効対象に含まれる。
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    expect(revalidatePath).toHaveBeenCalledWith("/works");
+    for (const route of TEST_EDITABLE_ROUTES) {
+      const path = route.startsWith("/") ? route : `/${route}`;
+      if (path.includes("[")) {
+        expect(revalidatePath).toHaveBeenCalledWith(path, "page");
+      } else {
+        expect(revalidatePath).toHaveBeenCalledWith(path);
+      }
+    }
+    expect(revalidateTag).toHaveBeenCalledWith("page_text");
+  });
+});
+
+describe("listSidePanel (§5.4 サイドパネル、テキストは visual-text-editor.md §5)", () => {
+  it("requireAdmin 失敗時は facade を呼ばない (listTextsForAdmin も含む)", async () => {
     requireAdmin.mockResolvedValue({ ok: false, code: "KMB-E201" });
     const result = await listSidePanel("/");
     expect(result).toEqual({ ok: false, code: "KMB-E201" });
     expect(listForAdmin).not.toHaveBeenCalled();
+    expect(listTextsForAdmin).not.toHaveBeenCalled();
+  });
+
+  it("listTextsForAdmin がエラーを返したらそのまま返す", async () => {
+    listForAdmin.mockResolvedValue({ ok: true, value: [] });
+    listTextsForAdmin.mockResolvedValue({ ok: false, code: "KMB-E901", detail: "db down" });
+    const result = await listSidePanel("/");
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: "db down" });
+  });
+
+  it("texts は listTextsForAdmin(route) の結果を isDefault→state (default/custom) に写像する", async () => {
+    listForAdmin.mockResolvedValue({ ok: true, value: [] });
+    listTextsForAdmin.mockResolvedValue({
+      ok: true,
+      value: [
+        { slot: HOME_CRAFT_TEXT_SLOT, text: "編集済みの見出し", isDefault: false },
+        { slot: SHARED_CTA_TEXT_SLOT, text: "相談する", isDefault: true },
+      ],
+    });
+
+    const result = await listSidePanel("/");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.texts).toEqual([
+      {
+        slotKey: "home.craft.heading",
+        label: "トップ / CRAFT 見出し",
+        kind: "text",
+        maxLen: 24,
+        maxLines: null,
+        state: "custom",
+        text: "編集済みの見出し",
+      },
+      {
+        slotKey: "shared.cta.consult",
+        label: "共通 / 「相談する」ボタン",
+        kind: "text",
+        maxLen: 8,
+        maxLines: null,
+        state: "default",
+        text: "相談する",
+      },
+    ]);
+  });
+
+  it("maxLines を持つスロット (kind=lines) は maxLines をそのまま透過する", async () => {
+    listForAdmin.mockResolvedValue({ ok: true, value: [] });
+    listPostsAdmin.mockResolvedValue({ ok: true, value: { items: [], next_cursor: null } });
+    listTextsForAdmin.mockResolvedValue({
+      ok: true,
+      value: [{ slot: NOTES_CTA_TEXT_SLOT, text: "行1\n行2", isDefault: false }],
+    });
+
+    const result = await listSidePanel("/notes");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.texts[0]).toMatchObject({ slotKey: "notes.cta.heading", maxLines: 2, kind: "lines" });
   });
 
   it("slot ルートは listForAdmin(route) の結果を写像し、contentGaps は空", async () => {

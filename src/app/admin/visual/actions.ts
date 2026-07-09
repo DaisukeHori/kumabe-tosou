@@ -10,8 +10,14 @@ import {
   type AdminListParams,
   type PostKind,
 } from "@/modules/content/contracts";
-import { pageMediaFacade, SLOT_REGISTRY } from "@/modules/page-media/facade";
-import { zSetSlotAltReq, zSetSlotReq } from "@/modules/page-media/contracts";
+import {
+  EDITABLE_ROUTES,
+  pageMediaFacade,
+  SLOT_REGISTRY,
+  TEXT_REGISTRY,
+  type PageTextSlot,
+} from "@/modules/page-media/facade";
+import { zSetSlotAltReq, zSetSlotReq, zSetTextReq } from "@/modules/page-media/contracts";
 import type { PageSlotState } from "@/modules/page-media/contracts";
 import type { KmbErrorCode, Result } from "@/modules/platform/contracts";
 import { platformFacade } from "@/modules/platform/facade";
@@ -204,6 +210,66 @@ export async function setSlotAlt(slotKey: string, alt: string | null): Promise<R
 }
 
 // ---------------------------------------------------------------------------
+// page-text (ビジュアルテキストエディタ、canonical: docs/design/visual-text-editor.md §5)
+// ---------------------------------------------------------------------------
+
+/** TEXT_REGISTRY / EDITABLE_ROUTES の route 表記 ("notes/[slug]" 等、先頭 "/" 無し) を revalidatePath 用に正規化する */
+function toRevalidatePath(route: string): string {
+  return route.startsWith("/") ? route : `/${route}`;
+}
+
+/** 動的ルートパターン ([slug] を含む) は type="page" で失効する (§5 MAJOR-2) */
+function revalidateOneTextRoute(route: string): void {
+  const path = toRevalidatePath(route);
+  if (path.includes("[")) {
+    revalidatePath(path, "page");
+  } else {
+    revalidatePath(path);
+  }
+}
+
+/**
+ * setSlotText 保存後の失効セット (§5 MAJOR-2 の全展開):
+ * - 基本: 当該スロットの route + tag "page_text"
+ * - affectedRoutes: route 以外にも失効させる path (例: notes.cta.* → /notes 一覧 + notes/[slug] 詳細)
+ * - affectsAllRoutes: shared.* / chrome.* は EDITABLE_ROUTES 全体
+ *   (SLOT_REGISTRY の静的 route 全量 + works/notes/blog の [slug] 3 パターン) を失効
+ */
+function revalidateTextRoute(slotKey: string): void {
+  revalidateTag("page_text");
+  const slot = TEXT_REGISTRY.find((s) => s.key === slotKey);
+  if (!slot) return;
+  revalidateOneTextRoute(slot.route);
+  slot.affectedRoutes?.forEach(revalidateOneTextRoute);
+  if (slot.affectsAllRoutes) {
+    EDITABLE_ROUTES.forEach(revalidateOneTextRoute);
+  }
+}
+
+/**
+ * kind=text/lines/multiline のテキストスロット編集 (§5 テキスト編集メニューの保存)。
+ * text=null は「既定に戻す」(page_text 行削除)。text が defaultText と同一の場合も
+ * facade.setText 側で削除に正規化される (§3 v1.1)。
+ * Zod 検証 (registry 限定 + maxLen/kind/行数/1行文字数、CRLF 正規化) は zSetTextReq
+ * (contracts.ts → text-registry.ts の validateSlotText) に委譲する。E107/E101 の写像は
+ * setSlotImage/setSlotAlt と同じ mapSlotZodError の流儀を踏襲する (slot_key 不正のみ E107)。
+ */
+export async function setSlotText(slotKey: string, text: string | null): Promise<Result<void>> {
+  const parsed = zSetTextReq.safeParse({ slot_key: slotKey, text });
+  if (!parsed.success) {
+    return { ok: false, code: mapSlotZodError(parsed.error), detail: zodDetail(parsed.error) };
+  }
+
+  const admin = await platformFacade.requireAdmin();
+  if (!admin.ok) return admin;
+
+  const result = await pageMediaFacade.setText(parsed.data.slot_key, parsed.data.text);
+  if (!result.ok) return result;
+  revalidateTextRoute(parsed.data.slot_key);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // サイドパネル (§5.4 BLOCKER-3 対応): route ごとの slot 一覧 + 「DOM が無いコンテンツ画像」一覧
 // ---------------------------------------------------------------------------
 
@@ -228,8 +294,25 @@ export type ContentGapItem = {
  *  クリックで iframe を /edit/works/{slug} (詳細ページ) に切り替える導線に使う。 */
 export type WorksNavItem = { slug: string; title: string };
 
+/**
+ * サイドパネル「テキスト」セクションの 1 行 (visual-text-editor.md §5)。
+ * kind/maxLen/maxLines はテキスト編集メニュー (hotspot-menu.tsx) が Input/Textarea の
+ * 出し分け・文字数カウンタ・保存可否判定に使う。state は画像と異なり default/custom の 2 値のみ
+ * (page_text に「未設定」概念は無い、§1)。
+ */
+export type TextPanelItem = {
+  slotKey: string;
+  label: string;
+  kind: PageTextSlot["kind"];
+  maxLen: number;
+  maxLines: number | null;
+  state: "default" | "custom";
+  text: string;
+};
+
 export type SidePanelData = {
   slots: SlotPanelItem[];
+  texts: TextPanelItem[];
   contentGaps: ContentGapItem[];
   /** route === "/works" のときのみ非空 (§5.1a)。それ以外の route では常に空配列。 */
   works: WorksNavItem[];
@@ -297,6 +380,9 @@ export async function listSidePanel(route: string): Promise<Result<SidePanelData
   const slotsResult = await pageMediaFacade.listForAdmin(route);
   if (!slotsResult.ok) return slotsResult;
 
+  const textsResult = await pageMediaFacade.listTextsForAdmin(route);
+  if (!textsResult.ok) return textsResult;
+
   const slots: SlotPanelItem[] = slotsResult.value.map((item) => ({
     slotKey: item.slot.key,
     label: item.slot.label,
@@ -305,7 +391,17 @@ export async function listSidePanel(route: string): Promise<Result<SidePanelData
     alt: item.alt,
   }));
 
+  const texts: TextPanelItem[] = textsResult.value.map((item) => ({
+    slotKey: item.slot.key,
+    label: item.slot.label,
+    kind: item.slot.kind,
+    maxLen: item.slot.maxLen,
+    maxLines: item.slot.maxLines ?? null,
+    state: item.isDefault ? "default" : "custom",
+    text: item.text,
+  }));
+
   const contentGaps = await listContentGapsForRoute(route);
   const works = route === "/works" ? await listPublishedWorksNav() : [];
-  return { ok: true, value: { slots, contentGaps, works } };
+  return { ok: true, value: { slots, texts, contentGaps, works } };
 }
