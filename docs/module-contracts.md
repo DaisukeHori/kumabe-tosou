@@ -1,6 +1,7 @@
 # モジュール契約書 (canonical)
 
-- 版: v2.4 (2026-07-10: page_text テーブルを page-media 所有に追加、PageMediaFacade にテキストスロット 4 メソッド追加 — visual-text-editor.md v1.0)
+- 版: v2.5 (2026-07-10: ai-providers モジュール新設 (ai-studio-v2.md v1.1) — テーブル 5 本所有・E407〜E409・AI SDK 直 import 禁止・ai_runs に image_generation stage・zOpsLimits に AI 予算)
+- 旧版: v2.4 (2026-07-10: page_text テーブルを page-media 所有に追加、PageMediaFacade にテキストスロット 4 メソッド追加 — visual-text-editor.md v1.0)
 - 旧版: v2.3 (2026-07-09: page-media モジュール新設を §1/§5 に反映 / ContentFacade にビジュアルエディタ用 CAS メソッド 4 件を追加 / KMB-E107〜E109 の所有を明記)
 - 旧版: v2.1 (価格契約を行列モデル v2 に改訂 — Wave 0 実装で legacy 実構造との乖離が判明したため。zEstimateInput は size_key 必須・数量値引き自動適用・レンジ結果に変更)
 - 旧版: v2.0 (Codex 外部レビュー反映: worker 実行面を Next.js に統一 / lease 型 stage 実行 / draft 単位予約 / at-least-once 配信モデル / IG 接続シーケンス / ai-studio facade 増補)
@@ -21,7 +22,8 @@
 | `inquiry` | お問い合わせ受付・管理・レート制限 | contact_inquiries, rate_limits | E105 (+E101 を共用) | InquiryFacade |
 | `settings` | サイト設定 (会社情報/ヒーロー/SEO/運用上限) | site_settings | (E101/E103 を共用) | SettingsFacade |
 | `page-media` | 公開ページの装飾/ヒーロー画像・テキストスロット (visual-media-editor.md / visual-text-editor.md が親設計) | page_media, page_text (+view page_media_resolved) | KMB-E107 (E108/E109 は content 所有) | PageMediaFacade |
-| `ai-studio` | 音声入力・文字起こし・整文・要旨抽出・リサーチ・チャネル別生成・レビュー | ai_sources, ai_runs, channel_drafts, draft_revisions (+Storage bucket: audio) | KMB-E303, E4xx | AiStudioFacade |
+| `ai-providers` | 全 AI 呼び出しの単一入口 (キー管理/モデル検知/ルーティング/usage 記録/予算ガード) — ai-studio-v2.md が親設計 | ai_provider_keys, ai_usage_log, ai_image_generations, ai_image_generation_sources, ai_budget_months | KMB-E407, E408, E409 | AiProvidersFacade |
+| `ai-studio` | 音声入力・文字起こし・整文・要旨抽出・リサーチ・チャネル別生成・レビュー (AI 呼び出しは ai-providers 経由) | ai_sources, ai_runs, channel_drafts, draft_revisions (+Storage bucket: audio) | KMB-E303, E401〜E406 | AiStudioFacade |
 | `distribution` | 配信予約・SNS API 実行・チャネル接続・文体プロファイル | channel_posts, channel_accounts, style_profiles | KMB-E5xx | DistributionFacade |
 | `site-public` | 公開サイトの表示 (App Router ページ群) | **所有テーブルなし** (read 専用) | なし | なし (他 facade の消費者) |
 
@@ -36,7 +38,8 @@
 ```
 site-public ──→ content / media / pricing / settings / inquiry (read facade のみ)
 admin UI    ──→ 各モジュール facade
-ai-studio   ──→ media (画像候補参照) / settings (BRAND 情報) / platform
+ai-studio   ──→ ai-providers (全 AI 呼び出し) / media (画像候補参照) / settings (BRAND 情報) / platform
+ai-providers──→ platform (Vault RPC・Result) / media (生成画像の保存は facade 経由)
 ai-studio   ──→ content は「blog post 作成」1 点のみ (ContentFacade.createBlogPostFromDraft)
 distribution──→ ai-studio (承認済み draft の read) / content (site_blog 公開) / media (IG 用 JPEG URL) / settings (課金ガード上限)
 すべて      ──→ platform (認証・Result・エラー定義)
@@ -45,6 +48,7 @@ distribution──→ ai-studio (承認済み draft の read) / content (site_bl
 禁止:
 - 循環依存一切禁止 (`content → ai-studio` 等の逆流禁止)。
 - `internal/**` の跨モジュール import 禁止。
+- **AI SDK (`@anthropic-ai/sdk` / `openai` / `@google/genai`) の直 import は ai-providers/internal のみ** (ESLint 強制。usage 記録の単一入口を破らない)。
 - site-public から書き込み系 facade の import 禁止 (contact フォームの INSERT のみ InquiryFacade.submit を例外許可)。
 
 機械的強制: ESLint `no-restricted-imports` で `src/modules/*/internal/**` と repository の跨モジュール import をエラーにする (Phase 1a で設定)。
@@ -126,6 +130,8 @@ export const zSeoDefaults = z.object({
 
 export const zOpsLimits = z.object({
   x_monthly_post_limit: z.number().int().min(0).max(1000), // 課金ガード (設計書 §8.2)。初期値 100
+  ai_monthly_budget_micro_usd: z.number().int().min(0),    // AI 従量課金の月次上限 (µUSD 整数)。既定 50_000_000 = $50 (ai-studio-v2.md §1)
+  ai_monthly_image_limit: z.number().int().min(0).max(10_000), // 画像生成の月次枚数上限。既定 200
 }).strict();
 
 export const zNotificationSettings = z.object({
@@ -623,6 +629,22 @@ export interface InquiryFacade {
   //  宛先は settings 'notifications'.inquiry_to、RESEND_API_KEY は Vercel env)
   updateStatus(id: string, status: InquiryStatus): Promise<Result<void>>;
 }
+
+// ai-providers/facade.ts (ai-studio-v2.md §1 が canonical。2026-07-10 新設)
+export interface AiProvidersFacade {
+  listKeys(): Promise<Result<AiKeyMeta[]>>;
+  saveKey(input: SaveKeyInput): Promise<Result<{ id: string }>>;
+  deleteKey(id: string): Promise<Result<void>>;
+  testKey(id: string): Promise<Result<KeyTestResult>>;
+  setKeyPriority(id: string, priority: number): Promise<Result<void>>;
+  setEnabledModels(id: string, models: string[], defaultModel: string | null): Promise<Result<void>>;
+  listAvailableModels(kind: "text" | "image"): Promise<Result<DetectedModel[]>>;
+  generateText(req: GenerateTextReq): Promise<Result<TextResult>>;       // 予算予約 (E407) + usage 記録込み
+  generateImages(req: GenerateImageReq): Promise<Result<ImageResult>>;   // 同上。n=1..4
+  transcribe(req: TranscribeReq): Promise<Result<TranscribeResult>>;     // 既存 gpt-4o-transcribe 経路の移行先
+  getUsageSummary(range: { from: string; to: string }): Promise<Result<UsageSummary>>;
+}
+// ai_runs の stage に 'image_generation' を追加 (ai-studio-v2.md §7。zRunStage 更新)
 
 // pricing/facade.ts
 export interface PricingFacade {
