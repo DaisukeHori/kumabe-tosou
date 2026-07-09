@@ -3,6 +3,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { CustomCursor } from "@/components/motion/custom-cursor";
 import { SectionIndicator } from "@/components/motion/section-indicator";
+import { PaperNoise } from "@/components/motion/paper-noise";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
@@ -45,6 +46,7 @@ export default function SiteLayout({
           __html: JSON.stringify(LOCAL_BUSINESS_JSON_LD),
         }}
       />
+      <PaperNoise />
       <SiteHeader />
       <main className="flex-1">
         <PageTransition>{children}</PageTransition>

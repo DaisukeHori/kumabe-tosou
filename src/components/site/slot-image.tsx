@@ -114,7 +114,7 @@ export function SlotImage({
         fill
         priority={slot.priority}
         sizes={sizes}
-        className="kt-photo-img object-cover"
+        className="kt-photo-img kt-sd-photo object-cover"
       />
     </div>
   );

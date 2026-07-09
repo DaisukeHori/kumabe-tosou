@@ -24,7 +24,7 @@ const FOOTER_NAV = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-hair bg-primer-deep text-carbon">
+    <footer className="kt-footer-ticks border-t border-hair bg-primer-deep text-carbon">
       <div className="mx-auto max-w-[1240px] px-5 py-16 sm:px-8">
         <div className="grid gap-10 md:grid-cols-3">
           <div>
