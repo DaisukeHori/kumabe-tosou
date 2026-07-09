@@ -3,6 +3,8 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
+import { applyStoredInkVar } from "./ink-carry";
+
 /**
  * 塗りプログレスバー — legacy/js/main.js:76-99 の移植。
  * ヘッダー下端 2px をソウルレッドで塗り進める。scaleX を rAF スロットルで直接代入。
@@ -13,10 +15,19 @@ import { useEffect, useRef } from "react";
  * 実装統合計画 §3-1-2 [採用 EXTRA]: 刷毛先端モチーフのため scaleX ではなく
  * width:100% 固定 + translateX((ratio-1)*100%) で塗り進める (::after のチップが
  * scaleX だと歪むため)。判定基準 (最上部で不可視 / 最下部で全幅 / 直接追従) は不変。
+ *
+ * [Wave5 W5-A] マウントのたびに sessionStorage の直近インク色を
+ * document.documentElement の --kt-ink へ復元する (フルロード直後は JS が設定した
+ * カスタムプロパティが消えているため。CSS 側は globals.css の
+ * `background: var(--kt-ink, var(--soul))` で読む — 無指定時は従来どおり --soul)。
  */
 export function PaintProgress() {
   const barRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
+
+  useEffect(() => {
+    applyStoredInkVar();
+  }, [pathname]);
 
   useEffect(() => {
     const bar = barRef.current;

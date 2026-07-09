@@ -8,6 +8,7 @@ import {
   Section,
 } from "@/components/site/page-blocks";
 import { ColorsTilt } from "@/components/motion/colors-tilt";
+import { InkRecorder } from "@/components/motion/ink-recorder";
 import { Reveal } from "@/components/site/reveal";
 import type { ResolvedSlots } from "@/modules/page-media/contracts";
 
@@ -192,6 +193,9 @@ function ColorEntry({ sw }: { sw: (typeof SWATCHES)[number] }) {
       id={sw.id}
       className="kt-color-entry relative grid scroll-mt-24 gap-8 border-t border-hair py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:gap-14"
       style={{ "--wm": wm } as CSSProperties}
+      // [Wave5 W5-A] インク引き継ぎ (ink-recorder.tsx) が IntersectionObserver で
+      // 追跡するための data 属性。値は Drawdown の背景と同じ CSS var 参照。
+      data-ink={sw.a}
     >
       <div>
         <Drawdown
@@ -242,6 +246,9 @@ export function ColorsPageBody({
       {/* チルト+光沢追従 (fine ポインタのみ)。/edit iframe ではホットスポット
           座標計測のノイズになるため editMode では載せない */}
       {editMode ? null : <ColorsTilt />}
+      {/* [Wave5 W5-A] インク引き継ぎの記録役。colors-tilt.tsx とは別コンポーネント
+          (実装計画 §5 W5-A)。同じ理由で editMode では載せない。 */}
+      {editMode ? null : <InkRecorder />}
       <PageHead
         index="INDEX 07 — COLORS"
         en="8 SWATCHES / 5 ARE 3-COAT"
