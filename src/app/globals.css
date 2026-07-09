@@ -160,7 +160,7 @@
   --font-disp: var(--font-shippori), "Hiragino Kaku Gothic ProN", sans-serif;
   --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", sans-serif;
   --font-legacy-mono: var(--font-ibm-plex-mono), "Menlo", monospace;
-  --font-wide: "Archivo", "Helvetica Neue", sans-serif;
+  --font-wide: var(--font-archivo), "Archivo", "Helvetica Neue", sans-serif;
 
   /* --- layout --- */
   --max-w: 1240px;
