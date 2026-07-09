@@ -1,93 +1,115 @@
-# 隈部塗装 — KUMABE TOSO
+# 隈部塗装 CMS
 
-3Dプリント表面処理（研磨・塗装）専門工房「隈部塗装」の公式サイト。
+3D プリント表面処理(研磨・塗装)専門工房「隈部塗装」のコーポレートサイト + 自作 CMS + AI コンテンツパイプライン。
 
-**「3Dプリントを、量産品と見分けがつかない外観にする最終工程」の専門工房**
+- 本番: https://kumabe-tosou.vercel.app
+- 管理画面: https://kumabe-tosou.vercel.app/admin
+- 代表: 隈部 信之(大分県豊後高田市、郵送受託・全国対応)
 
-- 代表: 隈部 信之
-- 所在地: 大分県豊後高田市（郵送受託・全国対応）
-- 事業: 積層痕除去の研磨〜自動車グレード塗装仕上げ（試作1点〜ブリッジ生産1,000個）
+## 👉 新しく参加する人へ
 
-## サイト
+**まず [`HANDOFF.md`](./HANDOFF.md) を読んでください。**
+現状のインフラ・環境変数・ハマりポイント・進行中タスクを全部まとめてあります。
 
-GitHub Pages で公開: https://daisukehori.github.io/kumabe-tosou/
+## 📋 現在のタスク
 
-## 構成（11ページ）
+すべて GitHub Issues で管理:
+- [全 Open Issue 一覧](https://github.com/DaisukeHori/kumabe-tosou/issues)
+- 最優先: [Epic #1 ビジュアル画像エディタ](https://github.com/DaisukeHori/kumabe-tosou/issues/1)(要望済み・設計進行中)
+- 運用系: `label:ops`(独自ドメイン / API キー / Pro 移行 等)
+- セキュリティ: `label:security`(パスワード変更 / service_role キー)
+
+## 📁 主要ドキュメント (canonical)
+
+| ファイル | 内容 |
+|---|---|
+| [HANDOFF.md](./HANDOFF.md) | 引き継ぎ資料。**最初にこれ** |
+| [docs/design/cms-ai-pipeline.md](./docs/design/cms-ai-pipeline.md) | 全体設計 v3.4(DDL / 認可 / 状態遷移 / 受入基準) |
+| [docs/module-contracts.md](./docs/module-contracts.md) | モジュール契約 v2.2(Zod / facade / 依存方向 / 結合シーケンス) |
+| [docs/design/visual-media-editor.md](./docs/design/visual-media-editor.md) | ビジュアル画像エディタ設計 v1.2 (**進行中**、Codex レビューで残 BLOCKER 2 件) |
+| [docs/design/visual-media-editor-review-log.md](./docs/design/visual-media-editor-review-log.md) | Codex レビュー履歴(v1.0→v1.2) |
+| [docs/mock-check.md](./docs/mock-check.md) | Phase 0 手動チェックリスト |
+
+## 🛠 技術スタック
+
+- **フロント**: Next.js 15 (App Router, TypeScript, Tailwind CSS v4, shadcn/ui base-ui 系)
+- **バックエンド**: Supabase (Postgres, Auth, Storage, Vault, pg_cron)
+- **AI**: Claude API (`claude-opus-4-8`) + OpenAI (`gpt-4o-transcribe`)
+- **配信**: X API v2 (従量課金) / Instagram Graph API / note 半自動
+- **メール**: Resend
+- **ホスティング**: Vercel (Node 20 LTS, hnd1 東京リージョン)
+
+## 🏗 アーキテクチャ
+
+モジュラーモノリス。各モジュールは `src/modules/<name>/` に閉じ、`facade.ts` が公開契約、`repository.ts` が DB アクセス、`internal/` が内部実装。
 
 ```
-index.html      … 00 ホーム（ヒーロー・3技術・カラーストリップ・2シーン・数字・各ページ導線）
-story.html      … 01 ストーリー（創業物語 全5章・代表メッセージ）
-about.html      … 02 会社案内（市場の空白・代表・設備・会社概要・地図）
-service.html    … 03 サービス・料金（工程概要・3グレード・数量スライド・依頼の流れ・正直な条件・品質管理8項目）
-process.html    … 04 工程（塗膜の層構造SVG・全9工程・塗装ブース環境）
-materials.html  … 05 素材対応（FDM/光造形/SLS の3方式・素材別対応表・下地の作り分け・入稿）
-colors.html     … 06 色見本（8色フルポートフォリオ）
-notes.html      … 07 読みもの（塗りと色の裏側・技術記事7本）
-shop.html       … 08 SHOP（4セクション: サービス3グレード[写真/バッジ/工程/向いている人、プレミアムは8色スウォッチ]・見積もりシミュレータ・塗装済み製品[8色ミニスウォッチ/スペック]・購入フロー[各ステップ補足]。新セクションは設けず各要素を濃く。写真4枚）
-contact.html    … 09 相談する（見積り3変数・受付窓口・FAQ）
-tokushoho.html  … LEGAL 特定商取引法に基づく表記（取引条件明記・個人情報は開示体制つき省略規定・noindex）
-css/style.css   … 共通デザインシステム
-js/main.js      … ナビ現在地・リビール・文字割り出し・カスタムカーソル・セクションインジケータ・数字カウントアップ 等
+platform    ─── 認証・エラー・共通型
+content     ─── works / posts / voices の CRUD
+media       ─── 画像アップロード / レンディション / 参照カウント
+pricing     ─── 行列モデル + 見積もり計算 (legacy と 1 円単位で一致)
+settings    ─── サイト設定 (会社情報 / ヒーロー / SEO / 運用上限 / 通知)
+inquiry     ─── 問い合わせ + rate limit + Resend 通知
+ai-studio   ─── 録音 → 整文 → 要旨抽出 → リサーチ → チャネル別生成 (advance/lease)
+distribution─── X / Meta OAuth / 配信 worker (at-least-once + 人間照合)
 ```
 
-※ グローバルナビは主要6ページ + CTA。工程ページはサービスの詳細として、ホーム・サービスページとフッターから誘導。
+依存方向とテーブル所有は [`docs/module-contracts.md`](./docs/module-contracts.md) §1・§2 が単一ソース。
 
-静的サイト（ビルド不要）。HTML / CSS / Vanilla JS のみ。
+## 🚀 セットアップ (次の担当者向け)
 
-## デザイン
-
-コンセプト: **「色見本帳としてのウェブサイト」**
-
-- 基調: プラサフグレー `#E6E6E1`（下地の色）× 紙白 × 炭。ヘアライン罫線で精密さと誠実さを表現
-- 署名要素: **ドローダウンカード（塗り板）** — 塗料業界の実物色見本の形式をCSSで再現（ノイズ・光沢・刷毛の終端）
-- 検査記録スタイルのセクション見出し（SEC.01 + 罫線 + 英ラベル）
-- 書体: Shippori Antique B1（日本語見出し）/ Zen Kaku Gothic New（本文）/ IBM Plex Mono（コード類）/ Archivo wdth125（欧文ワイド）
-
-## Vercel デプロイ手順
-
-1. https://vercel.com/new でこのリポジトリを Import
-2. Framework Preset: Next.js が自動検出される
-3. Root Directory: `./` (変更不要)
-4. Environment Variables:
-   - `NEXT_PUBLIC_SITE_URL` に実 deploy 先 URL を設定(例: `https://kumabe-tosou.vercel.app`)
-5. Deploy をクリック
-6. Preview URL / Production URL が発行される
-7. (後日) 独自ドメイン設定は Vercel Project Settings > Domains から
-
-## 更新予定（TODO）
-
-- [ ] 問い合わせ窓口の確定（`contact.html` の `#contact` セクションを差し替え）
-- [ ] デモピース実物写真への差し替え（撮影後）
-- [ ] 実測に基づく正式価格表の公開
-- [ ] OGP画像の追加
-- [ ] 管理システム（Supabase接続によるCMS化 — notes/実績の動的配信）
-- [ ] SNS統合（Instagram / X / note）と AI による自動投稿運用
-
-## ローカル確認
+前提: Node 20 / npm / gh CLI / Vercel CLI / Supabase MCP (Claude Code 用) が入っていること。
 
 ```bash
-python3 -m http.server 8000
-# → http://localhost:8000
+git clone https://github.com/DaisukeHori/kumabe-tosou.git
+cd kumabe-tosou
+npm ci
+# .env.local を作成 (詳細は HANDOFF.md §2)
+# 特に SUPABASE_SERVICE_ROLE_KEY と BOOTSTRAP_ADMIN_* を入れる
+npm run dev  # http://localhost:3000
 ```
 
-## 画像素材について
+### 主なコマンド
 
-イメージ写真は Unsplash の商用利用可能な素材を使用し、全ページ計39箇所に配置しています（グレースケール表示・ホバーでカラー化）。作者クレジットは各写真のキャプションに明記し、`assets/img/CREDITS.json` にも記録しています。
+```bash
+npm run dev              # dev server
+npm run build            # 本番ビルド
+npm run lint             # ESLint (境界ルール含む)
+npm test                 # Vitest (156 件)
+npx tsx scripts/seed-from-legacy.ts   # 初期コンテンツ投入 (冪等)
+npx tsx scripts/rollback-seed.ts      # 逆順削除
+npx tsx scripts/bootstrap-admin.ts    # 管理者作成 (冪等)
+```
 
-**重要**: これらは仮のイメージ写真です。隈部塗装の実際の工房・設備・制作事例の写真ではありません。本番公開時には実写真への差し替えを推奨します。代表ポートレートは実在性の観点から本人写真の掲載までプレースホルダとしています。
+### Supabase migration の適用
 
-配置: ホーム7・ストーリー5・会社案内5・サービス4・工程6・素材対応4・色見本4・読みもの3・相談1。
+Vercel の GitHub 連携は **コードのみ**。migration は Supabase MCP か Dashboard SQL Editor から**手動で apply**する運用。
 
+- ローカルで開発する場合: `supabase start`(Docker 必須)
+- 本番反映: Claude Code で MCP 経由 or Supabase Dashboard から
 
-## SHOP（通販）について
+## 📜 開発ルール(要点)
 
-- 決済は準備中。各注文ボタンに `data-payment-link=""` 属性を用意しており、Stripe Payment Links を発行して URL を入れるだけで通販化できる設計。
-- それまでは「シミュレータで概算 → 内容をコピー → 相談」のフローで注文を受け付ける。
-- シミュレータの価格テーブルは `js/main.js` 内の `PRICE_TABLE`（1箇所）にまとめてあり、正式価格の確定後はこの数値のみ差し替えれば全体に反映される。数量スライド（10個以上−15% / 30個以上−25%）と特急（＋50%）は既存のサービスページの記載と整合。
-- 特定商取引法に基づく表記（tokushoho.html）は、取引条件（価格・支払・引渡・返品）を明記し、氏名詳細・住所番地・電話番号は「請求があれば遅滞なく開示」の省略規定を使用。開業時に確定情報へ更新すること。
+詳細は [HANDOFF.md §6](./HANDOFF.md) を参照。
 
+- サブエージェントは Sonnet 5(`model: "sonnet"`)、設計書は Opus 直接執筆
+- 並列 implementer は `isolation: "worktree"` 必須
+- モジュール開発は implementer + tester ペア、2 回連続 PASS で完了
+- commit メッセージは日本語(Co-Authored-By なし)
+- 設計書には Codex(`codex exec --sandbox read-only`)で外部レビュー
+- 実装完了時は Chrome MCP で E2E 確認
 
-## v2.8.2 での修正メモ
+## 📖 過去(旧静的サイト)
 
-- **金額整合**: サービスカードの表示価格（下地¥7,000〜/スタンダード¥10,000〜/プレミアム¥15,000-35,000）と、シミュレータ `PRICE_TABLE` の各グレード最安（sサイズ最小値）を一致させた。base s:[7000,10000], standard s:[10000,14000], premium s:[15000,20000]（l上限35000）。
-- **方針**: 「新セクションを増やす」のではなく「各要素を濃くする」。前バージョンで追加した4つの新セクション（8色ストリップ・数字・信頼・FAQ）は削除し、元の4セクションに戻した。8色の色使いはプレミアムカードと製品カードの中にスウォッチとして組み込み。信頼要素は購入フローの各ステップ補足に統合。FAQは相談ページへ誘導。
+Phase 0 の Next.js 移行前は素の HTML/CSS/JS 静的サイトだった(11 ページ)。ソースは [`legacy/`](./legacy/) に退避してある。
+
+- 元 URL: https://daisukehori.github.io/kumabe-tosou/ (GitHub Pages、Vercel 稼働後は使わない)
+- 参照用のみで、公開・デプロイ対象ではない
+
+## ⚖️ ライセンス
+
+内部プロジェクト(未定)。
+
+## 🙏 謝辞
+
+Phase 0 → Wave 3 まで、Claude(Opus 4.8 / Sonnet 5) と Codex CLI(GPT-5) の協働で実装。設計書はメインセッション(Opus)が直接執筆、実装は Sonnet 5 の implementer/tester を並列 worktree で運用。
