@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import {
   CtaBand,
   MapNote,
@@ -5,6 +7,7 @@ import {
   PhotoFigure,
   Section,
 } from "@/components/site/page-blocks";
+import { ColorsTilt } from "@/components/motion/colors-tilt";
 import { Reveal } from "@/components/site/reveal";
 import type { ResolvedSlots } from "@/modules/page-media/contracts";
 
@@ -137,24 +140,33 @@ function Drawdown({
   ddName: string;
 }) {
   return (
-    <div className="kt-swatch-host border border-hair bg-paper p-2">
+    <div
+      className="kt-dd kt-swatch-host border border-hair bg-paper p-2"
+      data-tilt=""
+      data-cursor="view"
+      // --dd-a: グレアの色温度連動 (EXTRA-3) が var(--dd-a) を子孫の
+      // .kt-dd-glare から参照するためのカスタムプロパティ (継承で伝播)。
+      style={{ "--dd-a": a } as CSSProperties}
+    >
       <div
-        className="relative aspect-[4/3] w-full overflow-hidden"
+        className="kt-sd-swatch relative aspect-[4/3] w-full overflow-hidden"
         style={{ background: `linear-gradient(168deg, ${a}, ${b})` }}
         aria-hidden="true"
       >
+        {/* 光沢追従グレア (legacy css:1304-1308 の radial-gradient 層を別レイヤ化) */}
+        <span className="kt-dd-glare pointer-events-none" data-tilt-glare="" />
         {/* 塗料のムラ・粒子 (legacy .dd-swatch::before) */}
         <span className="kt-swatch-noise pointer-events-none" />
-        {/* 光の面 (legacy .dd-swatch::after) */}
-        <span className="kt-swatch-sheen pointer-events-none" />
         {/* パール専用の虹彩 (legacy .dd-iris) */}
-        {pearl ? (
-          <span className="kt-pearl-iris pointer-events-none" />
-        ) : null}
+        {pearl ? <span className="kt-pearl-iris pointer-events-none" /> : null}
+        {/* 光の面 (legacy .dd-swatch::after)。旧サイトの描画順 (::after は子要素より上、
+            css:305-335) に合わせ iris より後に置く */}
+        <span className="kt-swatch-sheen pointer-events-none" />
       </div>
+      {/* 刷毛の終端 — 塗りの不規則な下端 (legacy .dd-edge css:337-341) */}
       <div
-        className="mt-1 h-2 w-full"
-        style={{ background: `linear-gradient(90deg, ${a}, ${b})` }}
+        className="kt-dd-edge w-full"
+        style={{ background: `linear-gradient(168deg, ${a}, ${b})` }}
         aria-hidden="true"
       />
       <div className="flex items-baseline justify-between px-1 pb-1 pt-3">
@@ -168,11 +180,18 @@ function Drawdown({
 }
 
 function ColorEntry({ sw }: { sw: (typeof SWATCHES)[number] }) {
+  // 透かし番号の色見本連動 (EXTRA①、統合計画 §3-5-5)。--wm を stroke の
+  // color-mix ソースにする。DD-090 (プレシャスホワイトパール) は背景
+  // (--paper #fbfbf8 / --primer #e6e6e1) とほぼ同色で連動させるとストロークが
+  // 視認不能になるため、このエントリのみ既定グレー (--carbon) にフォールバックする
+  // (受入: 淡色 DD-090 の視認性チェック)。
+  const wm = sw.id === "c-090" ? "#17191b" : sw.a;
   return (
     <Reveal
       as="article"
       id={sw.id}
-      className="grid scroll-mt-24 gap-8 border-t border-hair py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:gap-14"
+      className="kt-color-entry relative grid scroll-mt-24 gap-8 border-t border-hair py-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:gap-14"
+      style={{ "--wm": wm } as CSSProperties}
     >
       <div>
         <Drawdown
@@ -220,6 +239,9 @@ export function ColorsPageBody({
 }) {
   return (
     <>
+      {/* チルト+光沢追従 (fine ポインタのみ)。/edit iframe ではホットスポット
+          座標計測のノイズになるため editMode では載せない */}
+      {editMode ? null : <ColorsTilt />}
       <PageHead
         index="INDEX 07 — COLORS"
         en="8 SWATCHES / 5 ARE 3-COAT"
@@ -246,7 +268,7 @@ export function ColorsPageBody({
       </Section>
 
       {/* ============ 8色 ============ */}
-      <Section>
+      <Section className="kt-color-entries">
         <ColorEntry sw={SWATCHES[0]} />
         <ColorEntry sw={SWATCHES[1]} />
 
