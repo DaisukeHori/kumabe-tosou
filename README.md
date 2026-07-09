@@ -1,3 +1,23 @@
+# 🚨 このリポジトリを引き継いだ人へ — 最初に読むもの
+
+> **必読 (優先順)**:
+> 1. **[`HANDOFF.md`](./HANDOFF.md)** — 引き継ぎ資料(インフラ・環境変数・ハマりポイント 11 件・進行中タスク)
+> 2. [`docs/design/cms-ai-pipeline.md`](./docs/design/cms-ai-pipeline.md) — 全体設計 v3.4(canonical)
+> 3. [`docs/module-contracts.md`](./docs/module-contracts.md) — モジュール契約 v2.2(canonical)
+> 4. [`docs/design/visual-media-editor.md`](./docs/design/visual-media-editor.md) — 進行中の設計 v1.2(Codex 未 GO)
+
+> **進行中の作業と TODO は全て GitHub Issues に整理済み**:
+> - 📌 [全 Open Issue 一覧](https://github.com/DaisukeHori/kumabe-tosou/issues)
+> - 🎯 [Milestone: Visual Editor - 実装 GO まで](https://github.com/DaisukeHori/kumabe-tosou/milestone/1)(BLOCKER 2 件を潰したら V1 実装着手)
+> - 🚀 [Milestone: 本番運用開始準備](https://github.com/DaisukeHori/kumabe-tosou/milestone/2)(パスワード変更・独自ドメイン・API キー等)
+> - 最優先の親: [Epic #1 ビジュアル画像エディタ](https://github.com/DaisukeHori/kumabe-tosou/issues/1)
+
+> **🔐 セキュリティ最優先タスク(運用前に必ず)**:
+> - [#11 管理者パスワードが仮値 `12345678` のまま](https://github.com/DaisukeHori/kumabe-tosou/issues/11) — 破られやすいので**すぐ変更**
+> - [#12 `SUPABASE_SERVICE_ROLE_KEY` が Vercel に未投入](https://github.com/DaisukeHori/kumabe-tosou/issues/12)
+
+---
+
 # 隈部塗装 CMS
 
 3D プリント表面処理(研磨・塗装)専門工房「隈部塗装」のコーポレートサイト + 自作 CMS + AI コンテンツパイプライン。
@@ -6,27 +26,12 @@
 - 管理画面: https://kumabe-tosou.vercel.app/admin
 - 代表: 隈部 信之(大分県豊後高田市、郵送受託・全国対応)
 
-## 👉 新しく参加する人へ
-
-**まず [`HANDOFF.md`](./HANDOFF.md) を読んでください。**
-現状のインフラ・環境変数・ハマりポイント・進行中タスクを全部まとめてあります。
-
-## 📋 現在のタスク
-
-すべて GitHub Issues で管理:
-- [全 Open Issue 一覧](https://github.com/DaisukeHori/kumabe-tosou/issues)
-- 最優先: [Epic #1 ビジュアル画像エディタ](https://github.com/DaisukeHori/kumabe-tosou/issues/1)(要望済み・設計進行中)
-- 運用系: `label:ops`(独自ドメイン / API キー / Pro 移行 等)
-- セキュリティ: `label:security`(パスワード変更 / service_role キー)
-
 ## 📁 主要ドキュメント (canonical)
+
+冒頭の必読リストに加え、詳細は以下:
 
 | ファイル | 内容 |
 |---|---|
-| [HANDOFF.md](./HANDOFF.md) | 引き継ぎ資料。**最初にこれ** |
-| [docs/design/cms-ai-pipeline.md](./docs/design/cms-ai-pipeline.md) | 全体設計 v3.4(DDL / 認可 / 状態遷移 / 受入基準) |
-| [docs/module-contracts.md](./docs/module-contracts.md) | モジュール契約 v2.2(Zod / facade / 依存方向 / 結合シーケンス) |
-| [docs/design/visual-media-editor.md](./docs/design/visual-media-editor.md) | ビジュアル画像エディタ設計 v1.2 (**進行中**、Codex レビューで残 BLOCKER 2 件) |
 | [docs/design/visual-media-editor-review-log.md](./docs/design/visual-media-editor-review-log.md) | Codex レビュー履歴(v1.0→v1.2) |
 | [docs/mock-check.md](./docs/mock-check.md) | Phase 0 手動チェックリスト |
 
