@@ -254,10 +254,10 @@ export function ServicePageBody({
                   className="grid grid-cols-[5.5em_minmax(0,1fr)_4em] items-center gap-3"
                 >
                   <span className="text-[13px] tracking-wider">{row.label}</span>
-                  <span className="h-2 bg-hair-soft">
+                  <span className="kt-qty-track">
                     <span
-                      className={`block h-full ${row.best ? "bg-soul" : "bg-carbon/60"}`}
-                      style={{ width: row.w }}
+                      className={`kt-qty-fill${row.best ? " kt-qty-fill--best" : ""}`}
+                      style={{ "--w": row.w } as React.CSSProperties}
                     />
                   </span>
                   <span className="text-right font-mono text-[12px]">
@@ -310,7 +310,7 @@ export function ServicePageBody({
         <Reveal as="div" className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {FLOW_CELLS.map((cell, i) => (
             <div key={cell.title} className="border border-hair bg-paper p-5">
-              <span className="font-mono text-[10px] tracking-[0.2em] text-carbon-soft">
+              <span className="font-mono text-[11px] tracking-[0.14em] text-soul">
                 {String(i + 1).padStart(2, "0")}
               </span>
               <h3 className="mt-2 text-[15px] font-bold tracking-wider">
@@ -335,7 +335,7 @@ export function ServicePageBody({
         <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-2">
           <div className="border border-hair bg-paper p-6">
             <h3 className="text-lg font-bold tracking-wider">できること</h3>
-            <ul className="mt-5 space-y-3 text-sm leading-7 text-carbon-mid">
+            <ul className="mt-5 text-sm leading-7 text-carbon-mid">
               {[
                 "色番号指定（日塗工番号・自動車カラーコード）",
                 "同一品のバッチ仕上げ・カラーバリエーション展開",
@@ -343,9 +343,12 @@ export function ServicePageBody({
                 "大型・特殊案件の個別見積もり",
                 "未経験素材のテストピース確認",
               ].map((item) => (
-                <li key={item} className="flex gap-3">
-                  <span aria-hidden="true" className="text-carbon">
-                    ○
+                <li
+                  key={item}
+                  className="flex gap-3 border-b border-dashed border-hair-soft py-[11px] last:border-b-0"
+                >
+                  <span aria-hidden="true" className="font-mono text-[12px] text-carbon">
+                    +
                   </span>
                   {item}
                 </li>
@@ -356,7 +359,7 @@ export function ServicePageBody({
             <h3 className="text-lg font-bold tracking-wider">
               ご了承いただきたいこと
             </h3>
-            <ul className="mt-5 space-y-3 text-sm leading-7 text-carbon-mid">
+            <ul className="mt-5 text-sm leading-7 text-carbon-mid">
               {[
                 "純正色のピタリ合わせ（調色）は対象外です。市販の調色済み補修塗料による「参考色」仕上げです。",
                 "2液ウレタンの完全硬化は5〜7日。発送は硬化を確認してからになります。",
@@ -364,9 +367,12 @@ export function ServicePageBody({
                 "繁忙期は「納期◯週間待ち」を表示して受注を絞ります。品質を落とさないためです。",
                 "輸送中の破損に備え、梱包基準と保証条件を事前に明示します。",
               ].map((item) => (
-                <li key={item} className="flex gap-3">
-                  <span aria-hidden="true" className="text-soul">
-                    —
+                <li
+                  key={item}
+                  className="flex gap-3 border-b border-dashed border-hair-soft py-[11px] last:border-b-0"
+                >
+                  <span aria-hidden="true" className="font-mono text-[12px] text-soul">
+                    ※
                   </span>
                   {item}
                 </li>
@@ -386,10 +392,7 @@ export function ServicePageBody({
         <Reveal as="div" className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {QC_ITEMS.map((item) => (
             <div key={item.title} className="border border-hair bg-paper p-5">
-              <span
-                aria-hidden="true"
-                className="inline-block size-3 border border-carbon/50"
-              />
+              <span aria-hidden="true" className="kt-qc-check" />
               <h4 className="mt-3 text-[15px] font-bold tracking-wider">
                 {item.title}
                 <span className="ml-2 font-mono text-[9px] font-normal tracking-[0.16em] text-carbon-soft">

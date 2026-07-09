@@ -301,23 +301,18 @@ export function MaterialsPageBody({
         <SecLead>
           塗料の食いつき不良やムラは、塗装技術以前の「素地の準備」で起きることがほとんどです。だから、この工房は塗る前の工程に最も神経を使います。
         </SecLead>
-        <Reveal as="div" className="mt-10 space-y-0 divide-y divide-hair border-y border-hair">
+        <Reveal as="div" className="kt-timeline mt-10">
           {CAUSES.map((cause) => (
-            <div
-              key={cause.no}
-              className="grid gap-3 py-7 sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-10"
-            >
-              <span className="font-mono text-[11px] tracking-[0.2em] text-soul">
+            <div key={cause.no} className="kt-timeline-item">
+              <span className="font-mono text-[10.5px] tracking-[0.14em] text-soul">
                 {cause.no}
               </span>
-              <div>
-                <h4 className="text-lg font-bold tracking-wider">
-                  {cause.title}
-                </h4>
-                <p className="mt-3 text-sm leading-7 text-carbon-mid">
-                  {cause.body}
-                </p>
-              </div>
+              <h4 className="mt-2 text-[17px] font-bold tracking-[0.04em]">
+                {cause.title}
+              </h4>
+              <p className="mt-2 max-w-[44em] text-[13.5px] leading-[1.95] text-carbon-mid">
+                {cause.body}
+              </p>
             </div>
           ))}
         </Reveal>

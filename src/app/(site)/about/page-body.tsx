@@ -78,16 +78,21 @@ export function AboutPageBody({
       {/* ============ 代表 ============ */}
       <Section>
         <SectionMark no="SEC. 02" label="CRAFTSMAN" />
-        <div className="mt-10 grid gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] md:gap-14">
-          <div>
-            <p className="text-[clamp(28px,4vw,44px)] font-bold tracking-[0.1em]">
+        <div className="mt-10 grid gap-8 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:items-end md:gap-[clamp(32px,5vw,72px)]">
+          <Reveal as="div">
+            {/* [採用 EXTRA] 代表名の原寸復元 (legacy css:631-637): clamp(48px,7.6vw,96px) /
+                letter-spacing 0.12em — 1.1fr/1fr + 下揃えの構図で旧サイトの迫力を再現する。 */}
+            <p className="text-[clamp(48px,7.6vw,96px)] font-bold tracking-[0.12em]">
               隈部 信之
             </p>
             <p className="mt-3 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
               KUMABE NOBUYUKI — REPRESENTATIVE / PAINTER
             </p>
-          </div>
-          <Reveal as="div" className="space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid">
+          </Reveal>
+          <Reveal
+            as="div"
+            className="space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid"
+          >
             <p>
               家電の量産塗装の現場で、均一な膜厚管理・治具化・段取りを積み重ねてきた自動車塗装職人。「量産の精度」を体に入れ、いまはその技術のすべてを、3Dプリントの表面処理に注いでいます。
             </p>
@@ -213,7 +218,7 @@ export function AboutPageBody({
         <SecLead>
           郵送受託が基本のため、地方立地のハンデはありません。送料が軽微な小〜中型品なら、全国どこからでも同じ条件でお受けできます。
         </SecLead>
-        <Reveal as="div" className="mt-10 border border-hair bg-paper p-2">
+        <Reveal as="div" className="kt-map-frame mt-10 border border-hair bg-paper p-2">
           <iframe
             src="https://maps.google.com/maps?q=%E5%A4%A7%E5%88%86%E7%9C%8C%E8%B1%8A%E5%BE%8C%E9%AB%98%E7%94%B0%E5%B8%82&t=m&z=10&output=embed"
             title="隈部塗装の所在地（大分県豊後高田市）"
