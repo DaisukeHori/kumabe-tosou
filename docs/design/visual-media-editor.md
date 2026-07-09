@@ -30,7 +30,7 @@
 
 | 種別 | 対象 | 識別 data 属性 | 保存先 |
 |---|---|---|---|
-| **ページスロット** | 固定 40 枚 + hero + 新規 4 枠 (story.portrait / shop.product.1-3) = **計 45** | `data-editable-slot="home.hero"` | `page_media` テーブル (§2) |
+| **ページスロット** | 固定 40 枚 (home.hero 含む) + 新規 4 枠 (story.portrait / shop.product.1-3) = **計 44** | `data-editable-slot="home.hero"` | `page_media` テーブル (§2) |
 | **コンテンツ画像 (単一)** | works.cover / voices.photo / posts.cover | `data-editable-content="{kind}:{id}:cover"` | 既存コンテンツテーブルの media FK |
 | **コンテンツ画像 (join 行 = ギャラリー)** | work_images (施工事例詳細のギャラリー) | `data-editable-work-image="{work_id}:{media_id}"` | work_images 行の置換 (delete + insert) |
 
@@ -157,15 +157,15 @@ export type PageSlot = {
   aspect: "hero" | "card32" | "card34" | "square" | "band219";
   priority?: boolean;     // home.hero のみ true
 };
-export const SLOT_REGISTRY: readonly PageSlot[] = [ /* 45 スロット: 41 既存写真 + 4 未来枠 */ ];
+export const SLOT_REGISTRY: readonly PageSlot[] = [ /* 44 スロット: 40 既存写真 (home.hero 含む) + 4 未来枠 */ ];
 ```
 
 登録スロット (棚卸しより): home.hero / home.craft.1-3 / home.gallery.1-3 / about.facility.1-3 / about.gallery.1-2 / colors.hero / colors.band.1-3 / contact.hero / materials.methods.1-2 / materials.gallery.1-2 / process.steps.1-3 / process.gallery.1-3 / service.process.1-2 / service.gallery.1-2 / story.chapter.1-5 / shop.hero / shop.grade.1-3 / **story.portrait (新規)** / **shop.product.1-3 (新規、3 枠)**。
 
-**確定件数 = 45 (§1 と一致)**:
-- 既存写真スロット 41: home.hero (1) + home.craft (3) + home.gallery (3) + about.facility (3) + about.gallery (2) + colors.hero (1) + colors.band (3) + contact.hero (1) + materials.methods (2) + materials.gallery (2) + process.steps (3) + process.gallery (3) + service.process (2) + service.gallery (2) + story.chapter (5) + shop.hero (1) + shop.grade (3)
+**確定件数 = 44 (§1 と一致。v1.4 実装時の実ページ突合で確定 — v1.2〜v1.4 の「45」は home.hero を「固定 40」と別枠で二重計上した誤り)**:
+- 既存写真スロット 40: home.hero (1) + home.craft (3) + home.gallery (3) + about.facility (3) + about.gallery (2) + colors.hero (1) + colors.band (3) + contact.hero (1) + materials.methods (2) + materials.gallery (2) + process.steps (3) + process.gallery (3) + service.process (2) + service.gallery (2) + story.chapter (5) + shop.hero (1) + shop.grade (3)
 - 新規プレースホルダ枠 4: story.portrait (1) + shop.product (3)
-- 合計 41 + 4 = **45**
+- 合計 40 + 4 = **44** (home.hero は上記 40 の内数)
 
 ---
 
