@@ -379,6 +379,237 @@ a:hover .kt-swatch-sheen {
 /* === motion: signature === */
 /* === /motion: signature === */
 /* === motion: hover-suite === */
+/* M2 班 (G5/G6/G8/G9/G13 + B1/B2/B3)。パラメータ正典: docs/design/motion-gap-report.md §5。
+   旧実装対応: legacy/css/style.css 254-283, 596-620, 1093-1106, 1187-1205,
+   1311-1318, 1343-1359, 2409-2424。
+   注意: この kt-* 群は非レイヤー CSS のため Tailwind ユーティリティ(@layer)より常に勝つ。
+   同一要素の transition/filter/transform を Tailwind 側で変えても効かない (仕様)。 */
+
+/* ---------- G13 + B3: smooth scroll (legacy css:46) ---------- */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ---------- G5: ボタン刷毛ストローク (legacy css:254-283 + 1343-1359) ---------- */
+.kt-btn-brush {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    color 0.35s var(--ease),
+    border-color 0.35s var(--ease);
+}
+.kt-btn-brush::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  width: calc(100% + 34px);
+  background: var(--carbon);
+  transform: translateX(-104%) skewX(-14deg);
+  transform-origin: left center;
+  transition: transform 0.42s var(--ease);
+  z-index: -1;
+  pointer-events: none;
+  /* [採用 EXTRA] 刷毛の掠れエッジ: dd-edge (legacy css:337-341) の不規則な
+     ぼろ布ジグザグを 90° 回転して右端 (帯の先端) に適用。上下の角は隣接ボタンとの
+     境目を汚さないよう flush (欠けなし) に残し、中間の高さ帯だけ数 px 掠れさせる。
+     静的な形状指定のため reduce/hover ガードは不要 (アニメーションではない)。 */
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    calc(100% - 4px) 6%,
+    calc(100% - 9px) 14%,
+    calc(100% - 3px) 23%,
+    calc(100% - 10px) 32%,
+    calc(100% - 4px) 41%,
+    calc(100% - 11px) 50%,
+    calc(100% - 3px) 59%,
+    calc(100% - 10px) 68%,
+    calc(100% - 4px) 77%,
+    calc(100% - 11px) 86%,
+    calc(100% - 3px) 94%,
+    100% 100%,
+    0 100%
+  );
+}
+/* CTA 帯上は赤刷毛 (legacy css:619 .cta-band .btn::before) */
+.kt-btn-brush--soul::before {
+  background: var(--soul);
+}
+/* ヘッダー CTA 変種 (legacy .nav-cta: 帯幅 +26px / 0.38s / 停止位置 -13px。css:1352-1359) */
+.kt-btn-brush--cta::before {
+  width: calc(100% + 26px);
+  transition-duration: 0.38s;
+}
+.kt-btn-arrow {
+  display: inline-block;
+  transition: transform 0.3s var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .kt-btn-brush:hover::before {
+    transform: translateX(-16px) skewX(-14deg);
+  }
+  .kt-btn-brush--cta:hover::before {
+    transform: translateX(-13px) skewX(-14deg);
+  }
+  .kt-btn-brush:hover .kt-btn-arrow {
+    transform: translateX(5px);
+  }
+}
+/* キーボード操作でも同じ演出 (旧サイトに無い a11y 追補。パラメータは正典と同一) */
+.kt-btn-brush:focus-visible::before {
+  transform: translateX(-16px) skewX(-14deg);
+}
+.kt-btn-brush--cta:focus-visible::before {
+  transform: translateX(-13px) skewX(-14deg);
+}
+.kt-btn-brush:focus-visible .kt-btn-arrow {
+  transform: translateX(5px);
+}
+
+/* ---------- G8: 写真 grayscale→カラー + ズーム (legacy css:2409-2424) ---------- */
+.kt-photo-img {
+  filter: grayscale(0.9) contrast(1.05) brightness(0.99);
+  transition:
+    filter 0.7s var(--ease),
+    transform 1s var(--ease);
+  will-change: transform;
+}
+@media (hover: hover) and (pointer: fine) {
+  .kt-photo:hover .kt-photo-img {
+    filter: grayscale(0.1) contrast(1.05);
+    transform: scale(1.04);
+  }
+}
+
+/* ---------- G9: footer-giant 塗り込み (legacy css:1093-1106 + 1311-1318) ---------- */
+.kt-footer-giant {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(23, 25, 27, 0.3);
+  background: linear-gradient(90deg, var(--carbon), var(--carbon)) no-repeat left
+    center / 0% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  transition: background-size 1.1s var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .kt-footer-giant:hover {
+    background-size: 100% 100%;
+  }
+}
+@media (max-width: 560px) {
+  /* legacy css:1180 */
+  .kt-footer-giant {
+    -webkit-text-stroke-width: 0.6px;
+  }
+}
+/* [採用 EXTRA] footer-giant のスクロール駆動塗り (hover:none 環境限定)。
+   hover 環境で view() の fill を併用すると、hover の background-size 遷移と
+   競合してロックし合うため (統合計画 §3-2-3)、タッチ等の hover 不能環境だけに限定し、
+   viewport 進入時に一度だけ 0%→100% を塗る。二重ガード: @supports 検知 +
+   @media (hover: none)。reduce は no-preference 条件で自然に除外される (§1.5 準拠)。 */
+@supports (animation-timeline: view()) {
+  @media (hover: none) and (prefers-reduced-motion: no-preference) {
+    .kt-footer-giant {
+      animation: kt-footer-fill-view linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 40%;
+    }
+  }
+}
+@keyframes kt-footer-fill-view {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
+}
+@media print {
+  /* view() timeline は印刷コンテキストで解決されず from 状態に固まるため個別に殺す (§1.5) */
+  .kt-footer-giant {
+    animation: none;
+  }
+}
+
+/* ---------- B2: 一覧カード浮上 (legacy css:287-297 a.drawdown:hover) ---------- */
+.kt-card-lift {
+  transition:
+    transform 0.45s var(--ease),
+    box-shadow 0.45s var(--ease),
+    border-color 0.25s var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .kt-card-lift:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 18px 40px -22px rgba(23, 25, 27, 0.35);
+  }
+}
+
+/* ---------- B1: colors の sheen ホバー復活 ----------
+   既存 `a:hover .kt-swatch-sheen` (globals.css:354) は home の Link カード用に残す。
+   /colors の Drawdown は a 祖先を持たない div のため、.kt-swatch-host で拾う。 */
+@media (hover: hover) and (pointer: fine) {
+  .kt-swatch-host:hover .kt-swatch-sheen {
+    transform: translateX(18%);
+  }
+}
+
+/* ---------- G6: ページ遷移 (legacy css:1187-1205 と同値) ----------
+   App Router の Link 遷移は soft navigation のためクロスドキュメント VT は発火しない。
+   soft nav は PageTransition (src/components/motion/page-transition.tsx, WAAPI) が担い、
+   以下はフルロード遷移 (外部リンク流入・JS 無効時など) のみに効く進歩的強化。 */
+@view-transition {
+  navigation: auto;
+}
+::view-transition-old(root) {
+  animation: kt-vt-out 0.28s var(--ease) both;
+}
+::view-transition-new(root) {
+  animation: kt-vt-in 0.44s var(--ease) both;
+}
+@keyframes kt-vt-out {
+  to {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+@keyframes kt-vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+/* ヘッダーは遷移中も静止 (legacy css:1205。site-header.tsx が kt-vt-header を付与) */
+.kt-vt-header {
+  view-transition-name: site-header;
+}
+
+/* ---------- hover-suite 一括キルスイッチ (旧 css:1130-1136 方式) ----------
+   重要: 上の `html { scroll-behavior: smooth }` は既存 reduce ブロック
+   (globals.css:358-361) より後に位置するため、ここで auto を再宣言しないと
+   reduce 環境で smooth が後勝ちしてしまう。削除禁止。 */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .kt-btn-brush,
+  .kt-btn-brush::before,
+  .kt-btn-arrow,
+  .kt-photo-img,
+  .kt-footer-giant,
+  .kt-card-lift,
+  .kt-swatch-sheen {
+    transition: none;
+  }
+  @view-transition {
+    navigation: none;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
 /* === /motion: hover-suite === */
 /* === motion: scroll-texture === */
 /* === /motion: scroll-texture === */

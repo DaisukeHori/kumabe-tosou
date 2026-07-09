@@ -104,14 +104,17 @@ export function SlotImage({
   }
 
   return (
-    <div className={cn("relative w-full overflow-hidden", aspectClass, className)} {...editableAttrs}>
+    <div
+      className={cn("kt-photo relative w-full overflow-hidden", aspectClass, className)}
+      {...editableAttrs}
+    >
       <Image
         src={resolved.src}
         alt={resolved.alt}
         fill
         priority={slot.priority}
         sizes={sizes}
-        className="object-cover"
+        className="kt-photo-img object-cover"
       />
     </div>
   );

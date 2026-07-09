@@ -31,7 +31,7 @@ export const NAV_ITEMS = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-hair bg-primer/80 backdrop-blur-md">
+    <header className="kt-vt-header sticky top-0 z-50 border-b border-hair bg-primer/80 backdrop-blur-md">
       <div className="mx-auto flex h-[72px] max-w-[1240px] items-center justify-between gap-6 px-5 sm:px-8">
         <Link href="/" className="flex items-baseline gap-3 leading-none">
           <span className="text-xl font-bold tracking-[0.16em] text-carbon">
@@ -62,8 +62,9 @@ export function SiteHeader() {
             </NavigationMenuList>
           </NavigationMenu>
           <Button
+            variant="outline"
             render={<Link href="/contact" />}
-            className="ml-2 rounded-none bg-carbon px-4 tracking-[0.12em] text-paper hover:bg-carbon/85"
+            className="kt-btn-brush kt-btn-brush--cta ml-2 rounded-none border-carbon bg-transparent px-4 tracking-[0.12em] text-carbon hover:bg-transparent hover:text-paper focus-visible:text-paper"
           >
             相談する
           </Button>

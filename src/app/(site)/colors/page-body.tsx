@@ -137,7 +137,7 @@ function Drawdown({
   ddName: string;
 }) {
   return (
-    <div className="border border-hair bg-paper p-2">
+    <div className="kt-swatch-host border border-hair bg-paper p-2">
       <div
         className="relative aspect-[4/3] w-full overflow-hidden"
         style={{ background: `linear-gradient(168deg, ${a}, ${b})` }}

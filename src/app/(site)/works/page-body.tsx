@@ -13,6 +13,7 @@ import {
   Section,
   SectionMark,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 
 import type { PublicWorkListItem } from "@/app/_lib/public-content";
 
@@ -52,32 +53,37 @@ export function WorksPageBody({
           <>
             <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {works.map((work) => (
-                <Link key={work.id} href={`/works/${work.slug}`} className="group block">
-                  <Card className="gap-0 overflow-hidden rounded-none border-hair bg-paper py-0 shadow-none transition-colors group-hover:border-carbon/40">
-                    <MediaCover
-                      src={work.cover?.url ?? null}
-                      alt={work.cover?.alt ?? work.title}
-                      editMode={editMode}
-                      kind="work"
-                      id={work.id}
-                      mediaId={work.cover?.id ?? null}
-                    />
-                    <CardHeader className="gap-2 px-5 pt-5">
-                      <Badge
-                        variant="outline"
-                        className="w-fit rounded-none border-hair font-mono text-[9px] tracking-[0.14em] text-carbon-mid"
-                      >
-                        {work.category}
-                      </Badge>
-                      <CardTitle className="text-base tracking-wider">{work.title}</CardTitle>
-                    </CardHeader>
-                    {work.processNote ? (
-                      <CardContent className="px-5 pb-5">
-                        <p className="text-xs leading-6 text-carbon-mid">{work.processNote}</p>
-                      </CardContent>
-                    ) : null}
-                  </Card>
-                </Link>
+                <Reveal key={work.id} as="div">
+                  <Link
+                    href={`/works/${work.slug}`}
+                    className="group block kt-card-lift kt-photo"
+                  >
+                    <Card className="gap-0 overflow-hidden rounded-none border-hair bg-paper py-0 shadow-none group-hover:border-carbon/40">
+                      <MediaCover
+                        src={work.cover?.url ?? null}
+                        alt={work.cover?.alt ?? work.title}
+                        editMode={editMode}
+                        kind="work"
+                        id={work.id}
+                        mediaId={work.cover?.id ?? null}
+                      />
+                      <CardHeader className="gap-2 px-5 pt-5">
+                        <Badge
+                          variant="outline"
+                          className="w-fit rounded-none border-hair font-mono text-[9px] tracking-[0.14em] text-carbon-mid"
+                        >
+                          {work.category}
+                        </Badge>
+                        <CardTitle className="text-base tracking-wider">{work.title}</CardTitle>
+                      </CardHeader>
+                      {work.processNote ? (
+                        <CardContent className="px-5 pb-5">
+                          <p className="text-xs leading-6 text-carbon-mid">{work.processNote}</p>
+                        </CardContent>
+                      ) : null}
+                    </Card>
+                  </Link>
+                </Reveal>
               ))}
             </div>
             {hasPlaceholderPhotos ? (

@@ -1,3 +1,4 @@
+import { PageTransition } from "@/components/motion/page-transition";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 
@@ -43,7 +44,9 @@ export default function SiteLayout({
         }}
       />
       <SiteHeader />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1">
+        <PageTransition>{children}</PageTransition>
+      </main>
       <SiteFooter />
     </>
   );
