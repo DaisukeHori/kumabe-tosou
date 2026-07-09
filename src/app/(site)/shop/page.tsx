@@ -23,6 +23,8 @@ export const metadata: Metadata = {
 export default async function ShopPage() {
   const slotsResult = await pageMediaFacade.resolveAll();
   const slots = slotsResult.ok ? slotsResult.value : {};
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
 
   // §6.2: 公開ページはサーバ側で SSR fetch し、クライアント側では再フェッチしない。
   // 取得に失敗した場合も ShopSimulator 側の「価格はお問い合わせください」fallback (§2.3) に委ねる。
@@ -30,5 +32,5 @@ export default async function ShopPage() {
   const priceTableResult = await facade.getActivePriceTable();
   const priceTable: PriceTable | null = priceTableResult.ok ? priceTableResult.value : null;
 
-  return <ShopPageBody slots={slots} editMode={false} priceTable={priceTable} />;
+  return <ShopPageBody slots={slots} texts={texts} editMode={false} priceTable={priceTable} />;
 }

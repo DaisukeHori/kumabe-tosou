@@ -5,17 +5,21 @@ import { EmptyState } from "@/components/site/empty-state";
 import { MediaCover } from "@/components/site/media-cover";
 import { CtaBand, PageHead, Section, SectionMark } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
+import { SlotText } from "@/components/site/slot-text";
 
 import { formatNoteNo, noteNumberOf } from "@/app/_lib/note-nav";
 import type { PublicPostListItem } from "@/app/_lib/public-content";
+import type { ResolvedTexts } from "@/modules/page-media/contracts";
 
 import { LegacyNoteAnchorRedirect } from "./_legacy-anchor-redirect";
 
 export function NotesPageBody({
   posts,
+  texts,
   editMode,
 }: {
   posts: PublicPostListItem[];
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -25,13 +29,20 @@ export function NotesPageBody({
         index="INDEX 08 — NOTES"
         en="READING ON PAINT & COLOR"
         title={
-          <>
-            なぜ綺麗なのかは、
-            <br />
-            写真だけでは伝わらない。
-          </>
+          <SlotText
+            slotKey="notes.hero.heading"
+            resolved={texts["notes.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="工程と色の裏側を、言葉で残しています。専門性は、言語化してはじめて伝わる——それがこの工房の考え方です。"
+        lead={
+          <SlotText
+            slotKey="notes.hero.lead"
+            resolved={texts["notes.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       <Section className="pt-6 sm:pt-8">
@@ -118,13 +129,19 @@ export function NotesPageBody({
 
       <CtaBand
         title={
-          <>
-            読んで気になったことは、
-            <br />
-            そのまま聞いてください。
-          </>
+          <SlotText
+            slotKey="notes.cta.heading"
+            resolved={texts["notes.cta.heading"]}
+            editMode={editMode}
+          />
         }
-        note="工程・色・素材の相性、どんな質問でも。"
+        note={
+          <SlotText
+            slotKey="notes.cta.note"
+            resolved={texts["notes.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
         label="相談する"
       />

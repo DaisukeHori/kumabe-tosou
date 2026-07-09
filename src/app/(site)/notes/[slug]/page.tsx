@@ -7,6 +7,7 @@ import {
   listPublishedReadingSlugs,
 } from "@/app/_lib/public-content";
 import { buildNoteNav } from "@/app/_lib/note-nav";
+import { pageMediaFacade } from "@/modules/page-media/facade";
 
 import { NoteDetailPageBody } from "./page-body";
 
@@ -49,6 +50,8 @@ export default async function NoteDetailPage({
   ]);
   if (!post) notFound();
   const nav = buildNoteNav(posts, slug);
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
 
-  return <NoteDetailPageBody post={post} nav={nav} editMode={false} />;
+  return <NoteDetailPageBody post={post} nav={nav} texts={texts} editMode={false} />;
 }

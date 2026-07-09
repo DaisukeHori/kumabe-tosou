@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { getPublishedReadingPosts } from "@/app/_lib/public-content";
+import { pageMediaFacade } from "@/modules/page-media/facade";
 
 import { NotesPageBody } from "./page-body";
 
@@ -19,5 +20,7 @@ export const metadata: Metadata = {
 
 export default async function NotesPage() {
   const posts = await getPublishedReadingPosts();
-  return <NotesPageBody posts={posts} editMode={false} />;
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
+  return <NotesPageBody posts={posts} texts={texts} editMode={false} />;
 }

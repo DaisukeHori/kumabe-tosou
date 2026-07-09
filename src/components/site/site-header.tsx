@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/sheet";
 import { MotionNavLink } from "@/components/motion/nav-link";
 import { PaintProgress } from "@/components/motion/paint-progress";
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedText } from "@/modules/page-media/contracts";
 
 export const NAV_ITEMS = [
   { no: "01", label: "ストーリー", href: "/story" },
@@ -30,7 +32,18 @@ export const NAV_ITEMS = [
   { no: "09", label: "SHOP", href: "/shop" },
 ] as const;
 
-export function SiteHeader() {
+/**
+ * shared.cta.consult (route 横断の共有スロット) の配線 (canonical:
+ * docs/design/visual-text-editor.md §4.1 MAJOR-1)。デスクトップ nav・モバイル nav の
+ * 両方に同一スロットが登場するため、hotspot id はエディタ側 (T2b) が ordinal で分離する。
+ */
+export function SiteHeader({
+  ctaText,
+  editMode,
+}: {
+  ctaText: ResolvedText;
+  editMode: boolean;
+}) {
   return (
     <header className="kt-vt-header kt-header-edge sticky top-0 z-50 border-b border-hair bg-primer/80 backdrop-blur-md">
       <div className="mx-auto flex h-[72px] max-w-[1240px] items-center justify-between gap-6 px-5 sm:px-8">
@@ -67,7 +80,7 @@ export function SiteHeader() {
             render={<Link href="/contact" />}
             className="kt-btn-brush kt-btn-brush--cta ml-2 rounded-none border-carbon bg-transparent px-4 tracking-[0.12em] text-carbon hover:bg-transparent hover:text-paper focus-visible:text-paper"
           >
-            相談する
+            <SlotText slotKey="shared.cta.consult" resolved={ctaText} editMode={editMode} />
           </Button>
         </div>
 
@@ -112,7 +125,7 @@ export function SiteHeader() {
                 render={<Link href="/contact" />}
                 className="mt-4 flex items-center justify-center bg-carbon py-3 text-sm tracking-[0.12em] text-paper"
               >
-                相談する
+                <SlotText slotKey="shared.cta.consult" resolved={ctaText} editMode={editMode} />
               </SheetClose>
             </nav>
           </SheetContent>

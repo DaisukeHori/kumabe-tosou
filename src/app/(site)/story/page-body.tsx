@@ -1,7 +1,8 @@
 import { CtaBand, PageHead, PhotoFigure } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
 import { SlotImage } from "@/components/site/slot-image";
-import type { ResolvedSlots } from "@/modules/page-media/contracts";
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
 function Chapter({
   no,
@@ -73,9 +74,11 @@ export function StoryPortraitPlaceholder() {
 
 export function StoryPageBody({
   slots,
+  texts,
   editMode,
 }: {
   slots: ResolvedSlots;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -84,13 +87,20 @@ export function StoryPageBody({
         index="INDEX 01 — STORY"
         en="WHY THIS WORKSHOP EXISTS"
         title={
-          <>
-            なぜ、積層痕と
-            <br />
-            戦うことにしたのか。
-          </>
+          <SlotText
+            slotKey="story.hero.heading"
+            resolved={texts["story.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="家電の量産塗装で長年腕を磨いた職人が、どうして3Dプリントの表面処理という、まだ名前もない仕事に専念することにしたのか。一本の相談から始まった、下地をめぐる物語です。"
+        lead={
+          <SlotText
+            slotKey="story.hero.lead"
+            resolved={texts["story.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       {/* ============ 第一章 ============ */}
@@ -322,11 +332,13 @@ export function StoryPageBody({
             <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
               MESSAGE — 代表挨拶
             </span>
-            <h2 className="mt-5 text-[clamp(24px,3.2vw,38px)] font-bold leading-snug tracking-[0.04em]">
-              「見えなくなる仕事」に、
-              <br />
-              誇りを持っています。
-            </h2>
+            <SlotText
+              as="h2"
+              className="mt-5 text-[clamp(24px,3.2vw,38px)] font-bold leading-snug tracking-[0.04em]"
+              slotKey="story.message.heading"
+              resolved={texts["story.message.heading"]}
+              editMode={editMode}
+            />
             <div className="mt-8 space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid [&_strong]:font-bold [&_strong]:text-carbon">
               <p>
                 私は、塗装職人です。長く家電の量産塗装に携わり、来る日も来る日も、同じ色を同じ艶で塗ってきました。その中で身についたのは、「同じ品質で、数を仕上げる」という、量産の精度です。
@@ -358,13 +370,19 @@ export function StoryPageBody({
       {/* ============ CTA ============ */}
       <CtaBand
         title={
-          <>
-            物語の続きは、
-            <br />
-            あなたの造形物で。
-          </>
+          <SlotText
+            slotKey="story.cta.heading"
+            resolved={texts["story.cta.heading"]}
+            editMode={editMode}
+          />
         }
-        note="「絶対に外せない一個」を、量産品の顔に。まずはお気軽にご相談ください。"
+        note={
+          <SlotText
+            slotKey="story.cta.note"
+            resolved={texts["story.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
         label="相談する"
       />

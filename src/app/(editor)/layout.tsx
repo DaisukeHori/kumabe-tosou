@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { PaperNoise } from "@/components/motion/paper-noise";
+import { pageMediaFacade } from "@/modules/page-media/facade";
+import type { ResolvedText } from "@/modules/page-media/contracts";
 
 /**
  * `/edit/**` (編集プレビュー専用ルート) のレイアウト。
@@ -17,17 +19,27 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function EditorLayout({
+/**
+ * shared.cta.consult / chrome.footer.tagline の配線 (canonical:
+ * docs/design/visual-text-editor.md §4.1 MAJOR-1)。/edit は resolveAllTextsFresh()
+ * (キャッシュ非経由) を editMode=true で SiteHeader/SiteFooter に渡す。
+ */
+export default async function EditorLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const textsResult = await pageMediaFacade.resolveAllTextsFresh();
+  const texts = textsResult.ok ? textsResult.value : {};
+  const ctaText: ResolvedText = texts["shared.cta.consult"];
+  const footerTagline: ResolvedText = texts["chrome.footer.tagline"];
+
   return (
     <>
       <PaperNoise />
-      <SiteHeader />
+      <SiteHeader ctaText={ctaText} editMode={true} />
       <main className="flex-1">{children}</main>
-      <SiteFooter />
+      <SiteFooter footerTagline={footerTagline} editMode={true} />
     </>
   );
 }

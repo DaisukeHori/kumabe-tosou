@@ -6,7 +6,13 @@ import { Reveal } from "@/components/site/reveal";
 import { SlotImage } from "@/components/site/slot-image";
 import type { ResolvedSlot } from "@/modules/page-media/contracts";
 
-/* ページ冒頭 (legacy .page-head) */
+/**
+ * ページ冒頭 (legacy .page-head)。
+ * `lead` は既定では string (旧実装どおり <p> でそのまま描画)。visual-text-editor 対応の
+ * 呼び出し側 (registry を持つ 9 ページ) は kind=multiline の `<SlotText>` を渡す —
+ * multiline の root は常に div (docs/design/visual-text-editor.md §4.1 MAJOR-4) のため、
+ * その場合は `<p>` で包まず SlotText の出力をそのまま描画する (`<p><div>` の不正 HTML を回避)。
+ */
 export function PageHead({
   index,
   en,
@@ -16,7 +22,7 @@ export function PageHead({
   index: string;
   en: string;
   title: React.ReactNode;
-  lead: string;
+  lead: React.ReactNode;
 }) {
   return (
     <div className="mx-auto max-w-[1240px] px-5 pb-6 pt-20 sm:px-8 sm:pt-28">
@@ -28,9 +34,13 @@ export function PageHead({
       <h1 className="mt-8 text-[clamp(30px,5vw,56px)] font-bold leading-[1.35] tracking-[0.04em]">
         {title}
       </h1>
-      <p className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid">
-        {lead}
-      </p>
+      {typeof lead === "string" ? (
+        <p className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid">
+          {lead}
+        </p>
+      ) : (
+        lead
+      )}
     </div>
   );
 }
@@ -168,7 +178,12 @@ export function ArrowButton({
   );
 }
 
-/* ページ末尾 CTA 帯 (legacy .cta-band) */
+/**
+ * ページ末尾 CTA 帯 (legacy .cta-band)。
+ * `note` は kind=text の `<SlotText>` (span) を受け取れるよう ReactNode 化。
+ * `<p>{note}</p>` 内に span を差し込むだけなので (multiline のような HTML 不正化はない)、
+ * `title` 同様に分岐は不要。`label` (ボタン文言) は registry 対象外のため据え置き。
+ */
 export function CtaBand({
   title,
   note,
@@ -176,7 +191,7 @@ export function CtaBand({
   label,
 }: {
   title: React.ReactNode;
-  note: string;
+  note: React.ReactNode;
   href: string;
   label: string;
 }) {

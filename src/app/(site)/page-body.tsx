@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,8 +14,9 @@ import { SplitChars } from "@/components/motion/split-chars";
 import { ArrowButton, SectionMark } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
 import { SlotImage } from "@/components/site/slot-image";
+import { SlotText } from "@/components/site/slot-text";
 import { StatCount } from "@/components/site/stat-count";
-import type { ResolvedSlots } from "@/modules/page-media/contracts";
+import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
 /**
  * トップページのページボディ (docs/design/visual-media-editor.md §4.2)。
@@ -35,16 +37,19 @@ const TICKER_ITEMS = [
 const CRAFTS = [
   {
     no: "CRAFT 01",
+    slotKey: "home.craft.card.1.title",
     title: "積層痕を消す研磨",
     body: "3Dプリント特有の縞を #800 まで面で研ぎ落とし、プラサフで埋め、#1200 で仕上げる。塗装の出来の大半は、この下地で決まります。",
   },
   {
     no: "CRAFT 02",
+    slotKey: "home.craft.card.2.title",
     title: "自動車グレードの艶",
     body: "2液ウレタンクリアは、吹きっぱなしで自動車外板と同等の艶が出ます。鏡面磨きに時間を使わないから、品質を揺らさずに数を仕上げられます。",
   },
   {
     no: "CRAFT 03",
+    slotKey: "home.craft.card.3.title",
     title: "3コートパールの意匠",
     body: "ベース＋パール＋クリアの3層構造。ホワイトパールやソウルレッドなど、経験がそのまま出る高難度の意匠塗装に対応します。",
   },
@@ -153,12 +158,14 @@ const TWO_SCENES = [
   {
     range: "1–9",
     unit: "PIECES / 勝負試作",
+    slotKey: "home.twoscenes.scene.1.title",
     title: "プレミアムデザインモデルの一点仕上げ",
     body: "企業トップへの最終プレゼン、重要商談、展示会、クラウドファンディングの掲載写真。「絶対に外せない場面」で使う高品質試作を、量産品の顔に仕上げます。",
   },
   {
     range: "30–1,000",
     unit: "PIECES / ブリッジ生産",
+    slotKey: "home.twoscenes.scene.2.title",
     title: "金型を作らない少量生産の外観仕上げ",
     body: "クラウドファンディングのリターン品、D2Cの初回ロット、産業機器の筐体。金型なしの少量生産を「量産品の見た目」にする最終工程を担います。",
   },
@@ -238,9 +245,11 @@ const GALLERY_PHOTOS = [
 
 export function HomePageBody({
   slots,
+  texts,
   editMode,
 }: {
   slots: ResolvedSlots;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -349,17 +358,25 @@ export function HomePageBody({
           as="p"
           className="mt-8 text-[clamp(21px,3vw,34px)] font-bold leading-[2.05] tracking-[0.06em]"
         >
-          デザインモデルの品質は、
-          <br />
-          表面処理で決まる。
-          <br />
-          それでも、表面処理を高い水準で
-          <br />
-          内製できる会社は、多くない。
-          <br />
-          <span className="text-soul">
-            その空白のために、この工房がある。
-          </span>
+          <SlotText
+            slotKey="home.statement.heading"
+            resolved={texts["home.statement.heading"]}
+            editMode={editMode}
+            renderLines={(lines) => (
+              <>
+                {lines.map((line, i) => (
+                  <Fragment key={i}>
+                    {i > 0 ? <br /> : null}
+                    {i === lines.length - 1 ? (
+                      <span className="text-soul">{line}</span>
+                    ) : (
+                      line
+                    )}
+                  </Fragment>
+                ))}
+              </>
+            )}
+          />
         </Reveal>
         <Reveal
           as="p"
@@ -375,9 +392,13 @@ export function HomePageBody({
       {/* ============ CRAFT (サービス概要) ============ */}
       <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
         <SectionMark no="SEC. 02" label="CRAFT" />
-        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
-          3つの技術を、ひとりで持つ。
-        </h2>
+        <SlotText
+          as="h2"
+          className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
+          slotKey="home.craft.heading"
+          resolved={texts["home.craft.heading"]}
+          editMode={editMode}
+        />
         <Reveal as="div" className="mt-12 grid gap-5 md:grid-cols-3">
           {CRAFTS.map((craft) => (
             <Card
@@ -389,7 +410,11 @@ export function HomePageBody({
                   {craft.no}
                 </p>
                 <CardTitle className="text-lg tracking-wider">
-                  {craft.title}
+                  <SlotText
+                    slotKey={craft.slotKey}
+                    resolved={texts[craft.slotKey]}
+                    editMode={editMode}
+                  />
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -437,11 +462,13 @@ export function HomePageBody({
       {/* ============ COLOR LINEUP (実績プレビュー) ============ */}
       <section className="mx-auto max-w-[1240px] px-5 pb-24 sm:px-8 sm:pb-32">
         <SectionMark no="SEC. 03" label="COLOR LINEUP" />
-        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
-          名車の象徴色で組んだ、
-          <br />
-          8枚の技術証明。
-        </h2>
+        <SlotText
+          as="h2"
+          className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
+          slotKey="home.colorlineup.heading"
+          resolved={texts["home.colorlineup.heading"]}
+          editMode={editMode}
+        />
         <p className="mt-6 max-w-2xl text-[15px] leading-[2.05] text-carbon-mid">
           8色中5色が3コート・高難度系。いずれも市販の調色済み補修塗料を正規の用途で使用し、「参考色」として仕上げます。
         </p>
@@ -498,9 +525,13 @@ export function HomePageBody({
       {/* ============ TWO SCENES ============ */}
       <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
         <SectionMark no="SEC. 04" label="TWO SCENES" />
-        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
-          一点の勝負にも、千個の生産にも。
-        </h2>
+        <SlotText
+          as="h2"
+          className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
+          slotKey="home.twoscenes.heading"
+          resolved={texts["home.twoscenes.heading"]}
+          editMode={editMode}
+        />
         <Reveal as="div" className="mt-12">
           <div className="grid gap-8 md:grid-cols-2 md:gap-14">
             {TWO_SCENES.map((scene) => (
@@ -513,9 +544,13 @@ export function HomePageBody({
                     {scene.unit}
                   </small>
                 </span>
-                <h3 className="mt-4 text-lg font-bold tracking-wider">
-                  {scene.title}
-                </h3>
+                <SlotText
+                  as="h3"
+                  className="mt-4 text-lg font-bold tracking-wider"
+                  slotKey={scene.slotKey}
+                  resolved={texts[scene.slotKey]}
+                  editMode={editMode}
+                />
                 <p className="mt-3 text-sm leading-7 text-carbon-mid">
                   {scene.body}
                 </p>
@@ -531,11 +566,13 @@ export function HomePageBody({
       {/* ============ 数字（能力） ============ */}
       <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
         <SectionMark no="SEC. 05" label="BY THE NUMBERS" />
-        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
-          工房の能力を、
-          <br />
-          数字で。
-        </h2>
+        <SlotText
+          as="h2"
+          className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
+          slotKey="home.stats.heading"
+          resolved={texts["home.stats.heading"]}
+          editMode={editMode}
+        />
         <Reveal as="div" className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {STAT_GRID.map((stat) => (
             <div key={stat.label} className="border border-hair bg-paper p-6">
@@ -566,11 +603,13 @@ export function HomePageBody({
       {/* ============ 素材対応 導線 ============ */}
       <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
         <SectionMark no="SEC. 06" label="MATERIALS" />
-        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
-          FDMも、光造形も、SLSも。
-          <br />
-          素材ごとに、手を変える。
-        </h2>
+        <SlotText
+          as="h2"
+          className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
+          slotKey="home.materials.heading"
+          resolved={texts["home.materials.heading"]}
+          editMode={editMode}
+        />
         <p className="mt-6 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid">
           造形方式が違えば、積層痕の出方も塗料の乗り方も変わります。FDMは研磨で埋め、光造形は洗浄と二次硬化を前提にし、SLSは多孔質を作り込む。PLA・PETG・ABS・ASA、各種レジン、ナイロンまで、素材別の勘所をまとめています。
         </p>
@@ -582,11 +621,13 @@ export function HomePageBody({
       {/* ============ NOTES PICK ============ */}
       <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
         <SectionMark no="SEC. 07" label="NOTES" />
-        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
-          なぜ綺麗なのかは、
-          <br />
-          写真だけでは伝わらない。
-        </h2>
+        <SlotText
+          as="h2"
+          className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
+          slotKey="home.notes.heading"
+          resolved={texts["home.notes.heading"]}
+          editMode={editMode}
+        />
         <p className="mt-6 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid">
           工程と色の裏側を、読みものとして残しています。センチュリーの黒が水研ぎ3回である理由。ディーラーでも同色にならない赤の構造。専門性は、言葉にしてはじめて伝わります。
         </p>
@@ -598,9 +639,13 @@ export function HomePageBody({
       {/* ============ GALLERY ============ */}
       <section className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
         <SectionMark no="GALLERY" label="IN THE WORKSHOP" />
-        <h2 className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]">
-          工房の、手の記録。
-        </h2>
+        <SlotText
+          as="h2"
+          className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
+          slotKey="home.gallery.heading"
+          resolved={texts["home.gallery.heading"]}
+          editMode={editMode}
+        />
         <p className="mt-6 max-w-3xl text-[15px] leading-[2.05] text-carbon-mid">
           研ぎ、吹き、仕上げる。派手さのない手仕事の断片を。
         </p>
@@ -638,14 +683,20 @@ export function HomePageBody({
       <section className="bg-carbon text-paper">
         <div className="mx-auto flex max-w-[1240px] flex-col gap-8 px-5 py-20 sm:px-8 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-[clamp(22px,3vw,34px)] font-bold leading-snug tracking-[0.04em]">
-              見積もりは、3つの数字で。
-              <br />
-              サイズ × 個数 × グレード。
-            </p>
-            <p className="mt-4 text-sm leading-7 text-paper/70">
-              造形データや写真があれば、より正確に概算をお出しできます。
-            </p>
+            <SlotText
+              as="p"
+              className="text-[clamp(22px,3vw,34px)] font-bold leading-snug tracking-[0.04em]"
+              slotKey="home.cta.heading"
+              resolved={texts["home.cta.heading"]}
+              editMode={editMode}
+            />
+            <SlotText
+              as="p"
+              className="mt-4 text-sm leading-7 text-paper/70"
+              slotKey="home.cta.note"
+              resolved={texts["home.cta.note"]}
+              editMode={editMode}
+            />
           </div>
           <Button
             render={<Link href="/contact" />}

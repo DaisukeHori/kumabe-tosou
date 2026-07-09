@@ -13,7 +13,8 @@ import { Reveal } from "@/components/site/reveal";
 import { ServiceSimLink } from "@/components/site/service-sim-link";
 import { ShopSimulator } from "@/components/site/shop-simulator";
 import { SlotImage } from "@/components/site/slot-image";
-import type { ResolvedSlots } from "@/modules/page-media/contracts";
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 import type { PriceTable } from "@/modules/pricing/contracts";
 
 const DD = {
@@ -186,10 +187,12 @@ const BUY_FLOW = [
 
 export function ShopPageBody({
   slots,
+  texts,
   editMode,
   priceTable,
 }: {
   slots: ResolvedSlots;
+  texts: ResolvedTexts;
   editMode: boolean;
   priceTable: PriceTable | null;
 }) {
@@ -199,13 +202,20 @@ export function ShopPageBody({
         index="INDEX 09 — SHOP"
         en="ORDER FINISHING ONLINE"
         title={
-          <>
-            仕上げを、
-            <br />
-            通販のように買う。
-          </>
+          <SlotText
+            slotKey="shop.hero.heading"
+            resolved={texts["shop.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="受託の表面仕上げを、商品のように選べるようにしました。グレードを選び、サイズと個数で概算を出し、そのまま注文のご相談へ。オンライン決済は現在準備中のため、いまは「注文の意思表示 → 相談 → 正式見積もり → お支払い」の流れでお受けしています。手のひらの造形物を送るだけで、量産品の顔になって還ってきます。"
+        lead={
+          <SlotText
+            slotKey="shop.hero.lead"
+            resolved={texts["shop.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       <Section className="pb-0 pt-6 sm:pb-0 sm:pt-8">
@@ -224,9 +234,11 @@ export function ShopPageBody({
       <Section>
         <SectionMark no="SEC. 01" label="FINISHING SERVICES — 受託仕上げ" />
         <SecTitle>
-          3つのグレードから、
-          <br />
-          選ぶ。
+          <SlotText
+            slotKey="shop.grades.heading"
+            resolved={texts["shop.grades.heading"]}
+            editMode={editMode}
+          />
         </SecTitle>
         <SecLead>
           下地はどのグレードも共通です。<span className="font-mono">#800</span>{" "}
@@ -451,16 +463,22 @@ export function ShopPageBody({
       <Section id="sim" className="scroll-mt-20">
         <SectionMark no="SEC. 02" label="ESTIMATE SIMULATOR" />
         <SecTitle>
-          サイズ × 個数 × グレード。
-          <br />
-          3つ選べば、概算が出る。
+          <SlotText
+            slotKey="shop.simulator.heading"
+            resolved={texts["shop.simulator.heading"]}
+            editMode={editMode}
+          />
         </SecTitle>
         <SecLead>
           数量スライド（10個以上 −15% / 30個以上
           −25%）と特急（＋50%）も反映した概算レンジを、その場で計算します。面を埋めるほど1個あたりの手間は下がる——だから、数を出すほど有利になります。内容はワンタップでコピーして、そのまま相談に貼り付けられます。
         </SecLead>
         <Reveal as="div" className="mt-10">
-          <ShopSimulator priceTable={priceTable} />
+          <ShopSimulator
+            priceTable={priceTable}
+            ctaText={texts["shop.simulator.cta"]}
+            editMode={editMode}
+          />
         </Reveal>
       </Section>
 
@@ -468,9 +486,11 @@ export function ShopPageBody({
       <Section>
         <SectionMark no="SEC. 03" label="READY-MADE — 塗装済み製品" />
         <SecTitle>
-          手に取れる製品も、
-          <br />
-          ここに並びます。
+          <SlotText
+            slotKey="shop.products.heading"
+            resolved={texts["shop.products.heading"]}
+            editMode={editMode}
+          />
         </SecTitle>
         <SecLead>
           工房で仕上げた「そのまま買える」製品の販売枠です。第一弾として、画面では絶対に伝わらない粒子感・深みを手元で確かめられる、実物の色見本パネルを準備しています。掲載製品は順次追加していきます。
@@ -641,7 +661,13 @@ export function ShopPageBody({
       {/* ============ SEC.04 購入の流れ ============ */}
       <Section>
         <SectionMark no="SEC. 04" label="HOW TO ORDER" />
-        <SecTitle>注文から、お届けまで。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="shop.flow.heading"
+            resolved={texts["shop.flow.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
           遠く離れた工房でも、安心して預けられるように。受入から発送まで、記録を残しながら進めます。オンライン決済が整うまでは、下記のとおり相談ベースでお受けしています。
         </SecLead>
@@ -679,13 +705,19 @@ export function ShopPageBody({
       {/* ============ CTA ============ */}
       <CtaBand
         title={
-          <>
-            概算が出たら、
-            <br />
-            あとは送るだけ。
-          </>
+          <SlotText
+            slotKey="shop.cta.heading"
+            resolved={texts["shop.cta.heading"]}
+            editMode={editMode}
+          />
         }
-        note="シミュレータの内容をコピーして、そのまま貼り付けてご相談ください。"
+        note={
+          <SlotText
+            slotKey="shop.cta.note"
+            resolved={texts["shop.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
         label="相談する"
       />

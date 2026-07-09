@@ -9,6 +9,8 @@ import { HomePageBody } from "./page-body";
 export default async function Home() {
   const slotsResult = await pageMediaFacade.resolveAll();
   const slots = slotsResult.ok ? slotsResult.value : {};
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
 
-  return <HomePageBody slots={slots} editMode={false} />;
+  return <HomePageBody slots={slots} texts={texts} editMode={false} />;
 }

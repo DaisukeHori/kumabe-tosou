@@ -10,7 +10,8 @@ import {
 import { ColorsTilt } from "@/components/motion/colors-tilt";
 import { InkRecorder } from "@/components/motion/ink-recorder";
 import { Reveal } from "@/components/site/reveal";
-import type { ResolvedSlots } from "@/modules/page-media/contracts";
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
 const SWATCHES = [
   {
@@ -236,9 +237,11 @@ function ColorEntry({ sw }: { sw: (typeof SWATCHES)[number] }) {
 
 export function ColorsPageBody({
   slots,
+  texts,
   editMode,
 }: {
   slots: ResolvedSlots;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -253,13 +256,20 @@ export function ColorsPageBody({
         index="INDEX 07 — COLORS"
         en="8 SWATCHES / 5 ARE 3-COAT"
         title={
-          <>
-            名車の象徴色で組んだ、
-            <br />
-            8枚の技術証明。
-          </>
+          <SlotText
+            slotKey="colors.hero.heading"
+            resolved={texts["colors.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="見る人に一瞬で技術レベルを伝えるための、色見本ラインナップです。8色中5色が3コート・高難度系。いずれも市販の調色済み補修塗料を正規の用途で使用し、「参考色」として仕上げます。実物の色見本パネル（対辺70mmの六角形・裏面カラーコード刻印）は、郵送でお貸し出しできるよう準備中です。"
+        lead={
+          <SlotText
+            slotKey="colors.hero.lead"
+            resolved={texts["colors.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       <Section className="pb-0 pt-6 sm:pb-0 sm:pt-8">
@@ -333,13 +343,19 @@ export function ColorsPageBody({
       {/* ============ CTA ============ */}
       <CtaBand
         title={
-          <>
-            この8色以外も、
-            <br />
-            色番号でご指定いただけます。
-          </>
+          <SlotText
+            slotKey="colors.cta.heading"
+            resolved={texts["colors.cta.heading"]}
+            editMode={editMode}
+          />
         }
-        note="日塗工番号・自動車カラーコードに対応。まずはサイズ×個数×グレードでご相談ください。"
+        note={
+          <SlotText
+            slotKey="colors.cta.note"
+            resolved={texts["colors.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
         label="相談する"
       />

@@ -20,6 +20,8 @@ export const metadata: Metadata = {
 export default async function ContactPage() {
   const slotsResult = await pageMediaFacade.resolveAll();
   const slots = slotsResult.ok ? slotsResult.value : {};
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
 
-  return <ContactPageBody slots={slots} editMode={false} />;
+  return <ContactPageBody slots={slots} texts={texts} editMode={false} />;
 }
