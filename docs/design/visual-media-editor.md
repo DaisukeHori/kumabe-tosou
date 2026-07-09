@@ -234,6 +234,15 @@ type ResolvedSlots = Record<string, ResolvedSlot>; // slotKey → slot。JSON-sa
 └─────────────────────────────────────┘  └─────────────────┘
 ```
 
+### 5.1a 動的詳細ページへの導線 (v1.5 — V2b 検証で判明した仕様の空白を補完)
+
+ページ選択タブは EDITABLE_ROUTES のうち**静的 route のみ**を出す (動的パターン `works/[slug]` 等はタブにならない)。work_images (ギャラリー) は施工事例**詳細ページにしか出ない**ため、次の 2 段ナビで到達させる:
+
+- `/works` タブ選択時、サイドパネルに **公開済み施工事例のリスト**を追加表示する (slug + タイトル)。
+- 事例クリック → iframe を `/edit/works/{slug}` に切り替え、その詳細ページ上で cover / ギャラリー (work_images) のホットスポット編集を行う。
+- notes/blog の詳細ページ導線は**当面付けない** (posts.cover は一覧ページのカードでも編集可能なため。将来必要なら同方式で拡張)。
+- voices は一覧ページで photo 編集が完結する (詳細ページなし)。
+
 ### 5.2 動作シーケンス
 ```
 1. /admin/visual (admin gated) で page を選択 → iframe src = /edit/{route} (§5.3)

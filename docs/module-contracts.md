@@ -1,6 +1,6 @@
 # モジュール契約書 (canonical)
 
-- 版: v2.2 (Wave 1 文書同期: facade 拡張規約を §5 に追加 / rate_limits を inquiry 所有に / ContentFacade.createBlogPostFromDraft の入力型を BlogPostContent に修正)
+- 版: v2.3 (2026-07-09: page-media モジュール新設を §1/§5 に反映 / ContentFacade にビジュアルエディタ用 CAS メソッド 4 件を追加 / KMB-E107〜E109 の所有を明記)
 - 旧版: v2.1 (価格契約を行列モデル v2 に改訂 — Wave 0 実装で legacy 実構造との乖離が判明したため。zEstimateInput は size_key 必須・数量値引き自動適用・レンジ結果に変更)
 - 旧版: v2.0 (Codex 外部レビュー反映: worker 実行面を Next.js に統一 / lease 型 stage 実行 / draft 単位予約 / at-least-once 配信モデル / IG 接続シーケンス / ai-studio facade 増補)
 - 作成日: 2026-07-07
@@ -14,11 +14,12 @@
 | モジュール | 責務 | 所有テーブル | 所有エラーコード | 公開 facade |
 |---|---|---|---|---|
 | `platform` | 認証・管理者判定・共通 Result 型・エラー定義 | profiles | KMB-E2xx, KMB-E9xx | `requireAdmin()`, `isAdmin()` |
-| `content` | works / posts / voices の CRUD・公開制御・slug | works, work_images, posts, voices | KMB-E101〜E103 (共有検証は platform 定義・content 主使用) | ContentFacade |
+| `content` | works / posts / voices の CRUD・公開制御・slug | works, work_images, posts, voices | KMB-E101〜E103, E108, E109 (共有検証は platform 定義・content 主使用) | ContentFacade |
 | `media` | 画像/メディアの保管・変換・参照管理 | media (+Storage bucket: media) | KMB-E3xx (E301, E302) | MediaFacade |
 | `pricing` | 価格グレード/オプション・見積り計算 | price_grades, price_options | (E101/E103 を共用) | PricingFacade |
 | `inquiry` | お問い合わせ受付・管理・レート制限 | contact_inquiries, rate_limits | E105 (+E101 を共用) | InquiryFacade |
 | `settings` | サイト設定 (会社情報/ヒーロー/SEO/運用上限) | site_settings | (E101/E103 を共用) | SettingsFacade |
+| `page-media` | 公開ページの装飾/ヒーロー画像スロット (visual-media-editor.md が親設計) | page_media (+view page_media_resolved) | KMB-E107 (E108/E109 は content 所有) | PageMediaFacade |
 | `ai-studio` | 音声入力・文字起こし・整文・要旨抽出・リサーチ・チャネル別生成・レビュー | ai_sources, ai_runs, channel_drafts, draft_revisions (+Storage bucket: audio) | KMB-E303, E4xx | AiStudioFacade |
 | `distribution` | 配信予約・SNS API 実行・チャネル接続・文体プロファイル | channel_posts, channel_accounts, style_profiles | KMB-E5xx | DistributionFacade |
 | `site-public` | 公開サイトの表示 (App Router ページ群) | **所有テーブルなし** (read 専用) | なし | なし (他 facade の消費者) |
@@ -547,6 +548,24 @@ export interface ContentFacade {
   publish(kind: PostKind | "work" | "voice", id: string, publishedAt?: Date): Promise<Result<void>>;
   listPublished<K extends ContentKind>(kind: K, page: Pagination): Promise<Result<Paged<PublishedItem<K>>>>;
   getBySlug<K extends ContentKind>(kind: K, slug: string): Promise<Result<PublishedItem<K> | null>>;
+
+  // ビジュアル画像エディタ用 (visual-media-editor.md §6 で追加、2026-07-09)。
+  // old_media_id は CAS の楽観排他期待値 (is not distinct from 意味論)。0 行更新 = KMB-E109。
+  // revalidate は呼び出し側 Server Action の責務 (visual-media-editor.md §5.5b で一元管理)。
+  setWorkCover(workId: string, oldMediaId: string | null, newMediaId: string | null): Promise<Result<void>>;
+  setVoicePhoto(voiceId: string, oldMediaId: string | null, newMediaId: string | null): Promise<Result<void>>;
+  setPostCover(postId: string, oldMediaId: string | null, newMediaId: string | null): Promise<Result<void>>;
+  setWorkImage(workId: string, oldMediaId: string, newMediaId: string | null): Promise<Result<void>>;
+  // ↑ work_images 1 行の atomic 置換 (RPC replace_work_image、migration 0013)。E108=重複 / E109=対象なし
+}
+
+// page-media/facade.ts (visual-media-editor.md §6 が canonical。2026-07-09 新設)
+export interface PageMediaFacade {
+  resolveAll(): Promise<Result<ResolvedSlots>>;      // 公開 SSR 用。unstable_cache tag "page_media"。ResolvedSlots は Record (JSON-safe、Map 禁止)
+  resolveAllFresh(): Promise<Result<ResolvedSlots>>; // /edit プレビュー用 (キャッシュ非経由)
+  listForAdmin(route?: string): Promise<Result<PageSlotState[]>>;
+  setSlot(slotKey: string, mediaId: string | null): Promise<Result<void>>;   // registry 外 slot_key は KMB-E107
+  setSlotAlt(slotKey: string, alt: string | null): Promise<Result<void>>;
 }
 
 // media/facade.ts
