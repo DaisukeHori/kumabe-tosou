@@ -1,7 +1,7 @@
 # ビジュアル画像エディタ 設計書
 
-- 版: v1.1 (Codex 外部レビュー 12 件反映)
-- 作成日: 2026-07-08 (v1.0) → 2026-07-09 (v1.1)
+- 版: v1.2 (Codex 再レビューで v1.1 の残 BLOCKER/MAJOR を潰す)
+- 作成日: 2026-07-08 (v1.0) → 2026-07-09 (v1.1 → v1.2)
 - 作成: Opus 4.8 (メインセッション直接執筆)
 - 対象: DaisukeHori/kumabe-tosou (`main`)
 - 親設計: [cms-ai-pipeline.md](./cms-ai-pipeline.md) / 契約: [module-contracts.md](../module-contracts.md)
@@ -59,33 +59,32 @@ create trigger handle_updated_at before update on page_media
   for each row execute procedure extensions.moddatetime (updated_at);
 
 alter table page_media enable row level security;
--- MINOR-2 対応: anon SELECT は必要列だけの public view で公開し、updated_by は隠す
--- (RLS で anon が全行 SELECT できるが、view から updated_by を除外して露出を抑える)
-create policy page_media_admin_select on page_media for select using (public.is_admin());
+
+-- BLOCKER-v1.2 対応: RPC + security definer による RLS 回避は撤回。
+-- 正しい設計: page_media テーブル自体に anon SELECT を許可し (write は admin のみ)、
+-- 露出列を絞る目的で anon には view 経由でだけアクセスさせる (直接 grant はしない)。
+create policy page_media_anon_select on page_media for select using (true);
 create policy page_media_admin_insert on page_media for insert with check (public.is_admin());
 create policy page_media_admin_update on page_media for update using (public.is_admin()) with check (public.is_admin());
 create policy page_media_admin_delete on page_media for delete using (public.is_admin());
 
-create or replace view public.page_media_public
+-- 公開 (anon) は view 経由のみ。security_invoker=true で page_media の anon_select が効く。
+-- MAJOR-v1.2 対応: resolver が 1 クエリで alt/URL 材料を得られるよう media を join。
+create or replace view public.page_media_resolved
 with (security_invoker = true) as
-  select slot_key, media_id, alt_override, updated_at from page_media;
+select
+  pm.slot_key,
+  pm.media_id,
+  pm.alt_override,
+  m.alt as media_alt,
+  m.storage_path as media_storage_path -- 参考用 (公開 URL は {SUPABASE_URL}/storage/v1/object/public/media/{media_id}.webp)
+from page_media pm
+left join media m on m.id = pm.media_id;
 
--- 公開 SSR (anon) 用: view には RLS が働かない (security_invoker) ため、
--- 元テーブルのポリシーを回避する目的で view SELECT を anon にも許可する
-grant select on public.page_media_public to anon, authenticated;
--- ※ view は security_invoker=true のため、anon で呼ぶと page_media 本体の
---    SELECT ポリシー (admin のみ) に阻まれる。resolver は SECURITY DEFINER の
---    RPC 経由で読み出す (下記 rpc_get_page_media_all)。
-create or replace function public.rpc_get_page_media_all()
-returns setof public.page_media_public
-language sql
-security definer
-stable
-set search_path = public
-as $$
-  select slot_key, media_id, alt_override, updated_at from page_media
-$$;
-grant execute on function public.rpc_get_page_media_all() to anon, authenticated;
+grant select on public.page_media_resolved to anon, authenticated;
+-- ※ 本テーブル page_media は anon が直接 SELECT できるが、
+--    アプリ層では常に view 経由で読む (露出列の一貫性のため)。
+--    updated_by は view に含めず、admin 画面のみ本テーブル直接クエリで取得する。
 
 -- BLOCKER-1 対応: site_settings の hero.media_id を廃止 (テキストのみに縮退)。
 -- 既存行があれば value から media_id を除去。
@@ -95,7 +94,7 @@ update site_settings
    and value ? 'media_id';
 ```
 
-`page_media` は **差分のみ保持**(upsert)。「既定に戻す」= その行を削除 or media_id=null。DDL 追加テーブルは 1 (page_media) + 1 view (page_media_public) + 1 RPC (rpc_get_page_media_all)。migration 連番は既存の続き (0013)。
+`page_media` は **差分のみ保持**(upsert)。「既定に戻す」= その行を削除 or media_id=null。DDL 追加は **1 テーブル (page_media) + 1 view (page_media_resolved) のみ**。migration 連番は既存の続き (0013)。RPC は使わない (v1.1 の rpc_get_page_media_all は撤回)。
 
 BLOCKER-3 対応の DB 変更はなし (空スロット可視化は admin UI 側で吸収、§5.5)。
 MAJOR-8 対応で **RLS の `media_admin_delete` ポリシー (0002)** と **`media_reference_summary` view (0008)** の両方を 0013 で置き換える (page_media 参照を加算)。
@@ -135,17 +134,22 @@ export type PageSlot = {
   aspect: "hero" | "card32" | "card34" | "square" | "band219";
   priority?: boolean;     // home.hero のみ true
 };
-export const SLOT_REGISTRY: readonly PageSlot[] = [ /* 棚卸し §固定画像一覧の 40 + hero + 2 未来枠 */ ];
+export const SLOT_REGISTRY: readonly PageSlot[] = [ /* 45 スロット: 41 既存写真 + 4 未来枠 */ ];
 ```
 
-登録スロット (棚卸しより): home.hero / home.craft.1-3 / home.gallery.1-3 / about.facility.1-3 / about.gallery.1-2 / colors.hero / colors.band.1-3 / contact.hero / materials.methods.1-2 / materials.gallery.1-2 / process.steps.1-3 / process.gallery.1-3 / service.process.1-2 / service.gallery.1-2 / story.chapter.1-5 / shop.hero / shop.grade.1-3 / **story.portrait (新規)** / **shop.product.1-3 (新規)**。計 40 + 4 = 約 44 スロット。
+登録スロット (棚卸しより): home.hero / home.craft.1-3 / home.gallery.1-3 / about.facility.1-3 / about.gallery.1-2 / colors.hero / colors.band.1-3 / contact.hero / materials.methods.1-2 / materials.gallery.1-2 / process.steps.1-3 / process.gallery.1-3 / service.process.1-2 / service.gallery.1-2 / story.chapter.1-5 / shop.hero / shop.grade.1-3 / **story.portrait (新規)** / **shop.product.1-3 (新規、3 枠)**。
+
+**確定件数 = 45 (§1 と一致)**:
+- 既存写真スロット 41: home.hero (1) + home.craft (3) + home.gallery (3) + about.facility (3) + about.gallery (2) + colors.hero (1) + colors.band (3) + contact.hero (1) + materials.methods (2) + materials.gallery (2) + process.steps (3) + process.gallery (3) + service.process (2) + service.gallery (2) + story.chapter (5) + shop.hero (1) + shop.grade (3)
+- 新規プレースホルダ枠 4: story.portrait (1) + shop.product (3)
+- 合計 41 + 4 = **45**
 
 ---
 
 ## 4. 公開ページ側の実装
 
-### 4.1 リゾルバ (MAJOR-2/MAJOR-5 対応)
-`resolvePageMedia(): Promise<Map<slotKey, ResolvedSlot>>` (SSR, anon client, `unstable_cache` tag `page_media`)。
+### 4.1 リゾルバ (MAJOR-2/MAJOR-5/v1.2 対応)
+`resolvePageMedia(): Promise<Map<slotKey, ResolvedSlot>>` (SSR, anon client 経由で `page_media_resolved` view を 1 回 SELECT、`unstable_cache` tag `page_media`)。
 
 ```ts
 type ResolvedSlot = {
@@ -157,9 +161,12 @@ type ResolvedSlot = {
 };
 ```
 
-- `unstable_cache` の keyParts に `["page_media", REGISTRY_HASH]` を入れる (`REGISTRY_HASH` は build 時に registry の JSON 内容を sha1 で計算した定数)。**registry のコード変更がキャッシュに残らない**ようにする。
-- 保存後の反映は `revalidatePath(route)` (対象ページのみ) + `revalidateTag("page_media")` (使用箇所横断のフォールバック) の両方を行う。iframe 側は保存成功後に `iframe.contentWindow.location.reload()` で確実に最新を取得。
-- 実装は 1 クエリで全行取得 → registry を走査してマップ生成。エラー時は全 slot を `isDefault=true` で返し、公開ページが落ちない。
+- **1 クエリで完結** (v1.2): `select slot_key, media_id, alt_override, media_alt from page_media_resolved` を全行取得し、registry を走査して各 slot の ResolvedSlot を組み立てる (v1.1 の RPC は廃止)。
+- alt 決定順は §2.2 準拠: `alt_override ?? media_alt ?? registry.altDefault`。
+- src は media_id があれば `{SUPABASE_URL}/storage/v1/object/public/media/{media_id}.webp` (レンディション規約、cms §3.4 と一致)。無ければ `registry.defaultSrc`、それも null なら null (プレースホルダ)。
+- `unstable_cache` の keyParts に `["page_media", REGISTRY_HASH]` を入れる。`REGISTRY_HASH` は build 時に registry の JSON 内容を sha1 で計算した定数 (registry.ts に `export const REGISTRY_HASH = ...` として出力)。**registry のコード変更がキャッシュに残らない**。
+- 反映は §5.6 で厳密に境界を規定する (順序と失効タグの拡張)。
+- エラー時は全 slot を `isDefault=true` で返し、公開ページが落ちない。
 
 ### 4.2 画像コンポーネント (MAJOR-4/MAJOR-7 対応)
 - 新規 `SlotImage`(`src/components/site/slot-image.tsx`): props `slotKey` + `resolved: ResolvedSlot`。**context は使わない** (RSC で不可)。Server Component として親から props で resolved を渡す。registry から aspect/sizes/priority を引き `<Image>` を描画。
@@ -211,12 +218,24 @@ type ResolvedSlot = {
    で反映を即確認 (MAJOR-3 対応)
 ```
 
-### 5.3 セキュリティモデル (MAJOR-4 明確化)
-- **通常の公開閲覧では data-editable-* を出さない** (§4.2)。slot 構造・media_id・content UUID は匿名閲覧者に一切露出しない。
-- edit モードの成立条件は AND で 2 つ: (a) admin セッションの edit-token cookie 有効、(b) URL に `?__edit=1`。両方揃わないと data 属性は出ない。
+### 5.3 セキュリティモデル (MAJOR-v1.2 で正確化)
+- **通常の公開閲覧では data-editable-* を出さない** (§4.2)。**表現の厳密化**: 「公開ページの HTML に data 属性が出るのは admin cookie 保持者が `?__edit=1` を付けてアクセスしたときのみ」。それ以外の匿名アクセスや admin cookie のみ (URL に `?__edit=1` なし) の閲覧では出ない。「匿名閲覧者に一切露出しない」は成立するが、**admin 自身が誤って `?__edit=1` 付き URL を第三者に共有すればその 1 リクエストの HTML には出る**点を運用注意として明記。
+
+- **edit cookie の厳密仕様**:
+  - 名前: `kmb-edit-token`
+  - 値: 32 バイト rand + admin user_id を HMAC-SHA256 で署名した文字列
+  - 属性: `HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=1800` (30 分の短命)
+  - 発行: `/admin/visual` を admin セッションで開いた瞬間の Server Component で `cookies().set(...)` (30 分ごとにローテーション)
+  - 検証: SlotImage の Server Component で `cookies().get('kmb-edit-token')` → HMAC 検証 → 現行 admin セッションの user_id と一致 → edit モード有効
+  - 破棄: `/admin/visual` から離れる Server Action で `cookies().delete()` (idle でも 30 分で自然失効)
+
+- **cache 分離**: edit モードは URL に `?__edit=1` が付くため、Next.js の Route Cache キーが自然に別になる (query が cache key の一部)。無印 URL と `?__edit=1` は別エントリ扱いになり、admin が edit モードで見た HTML が公開キャッシュに漏れない。
+  - 補助として SlotImage の親 Server Component で edit モード時は `unstable_noStore()` を呼び、Route Cache を明示的に無効化する。
+
 - 脅威モデル:
-  - 攻撃者が `?__edit=1` を付けてもトークンがなければ通常表示。
-  - cookie を持つ admin 自身が iframe 内で悪意ある JS を混入させる余地はない (同一オリジンだが iframe 内で任意 JS を実行させない = 親が読むだけ)。
+  - 攻撃者が `?__edit=1` を付けてもトークンがなければ通常表示 (Server 判定でスキップ)。
+  - トークン推測は 32 バイト rand + HMAC で計算的に不可能。
+  - iframe 内で任意 JS を実行させない (親が DOM 座標を読むだけ)。
   - 保存の最終防御は RLS。data 属性の値を偽装しても write は admin RLS で拒否。
 - CSP: `/admin/visual` は `frame-ancestors 'self'` のみ許可。iframe に読ませる公開ルートは通常の CSP (公開閲覧と同じ)。
 
@@ -226,6 +245,20 @@ type ResolvedSlot = {
   - コンテンツ画像側で null (`voices.photo=null` の声 / `posts.cover=null` の記事) → 公開ページに DOM が出ないので iframe 内には映らない。サイドパネルからだけ設定できる。
   - `story.portrait` / `shop.product.*` (未来枠) → プレースホルダ DOM は出るが、サイドパネルにも重複掲載して確実にたどれるように。
 - サイドパネル行をクリック → 対応する DOM が iframe にあればスクロールしてハイライト、無ければ直接 MediaPicker を開く。
+
+### 5.5b 保存境界と cache 失効の順序 (MAJOR-v1.2 対応)
+
+Server Action の実装契約:
+1. Zod parse → 権限確認 (requireAdmin)
+2. **DB commit まで完了** (page_media upsert / ContentFacade 経由の works/voices/posts 更新 / work_images RPC の atomic 更新)
+3. **revalidate を await で完了させてから 200 応答**:
+   - ページスロット保存: `revalidatePath(route)` + `revalidateTag("page_media")`
+   - works.cover / work_images 保存: `revalidatePath("/works/[slug]", "page")` + `revalidatePath(route)` + `revalidateTag("works")`
+   - voices.photo 保存: `revalidatePath("/voices")` + `revalidateTag("voices")`
+   - posts.cover 保存: `revalidatePath("/notes/[slug]", "page")` + `revalidatePath("/notes")` + `revalidatePath("/blog/[slug]", "page")` + `revalidatePath("/blog")` + `revalidateTag("posts:reading")` + `revalidateTag("posts:blog")` + `revalidateTag("posts:news")`
+4. Server Action の Result を返却 → **クライアントは 200 を受け取ってから** `iframe.contentWindow.location.reload()` を呼ぶ (revalidate 完了保証のため順序が重要)。
+
+**タグと path の両方を叩く根拠**: `unstable_cache` は tag ベース、Route Cache は path ベースで独立管理のため。片方だけだと片方が古いまま残る。
 
 ### 5.5 メディア削除ガード拡張 (E301 / MAJOR-8)
 migration 0013 で **同時に更新**する 3 箇所:
@@ -247,12 +280,12 @@ export interface PageMediaFacade {
   setSlotAlt(slotKey: string, alt: string | null): Promise<Result<void>>;
 }
 
-// ContentFacade への追加 (BLOCKER-2 対応):
+// ContentFacade への追加 (BLOCKER-2 / MAJOR-v1.2 対応):
 //   setWorkCover(workId, mediaId|null)
 //   setVoicePhoto(voiceId, mediaId|null)
 //   setPostCover(postId, mediaId|null)
-//   setWorkImage(workId, oldMediaId, newMediaId|null) ← work_images ギャラリー 1 行の置換
-//     newMediaId=null は「その 1 行を削除」。sort_order は元の行の値を維持。
+//   setWorkImage(workId, oldMediaId, newMediaId|null)
+//     ← work_images ギャラリー 1 行の置換。以下の atomic RPC を呼ぶ (§7 の replace_work_image)
 //   楽観排他: 上位の works/voices/posts の updated_at 込みで既存踏襲
 ```
 
@@ -268,10 +301,81 @@ Server Action シグネチャ (`src/app/admin/visual/actions.ts`):
 
 ---
 
+## 6.1 work_images 置換の atomic 契約 (MAJOR-v1.2 対応)
+
+`data-editable-work-image-sort` はクライアント値のため信用しない。**sort_order は Server で読み直して維持**する。以下の RPC を migration 0013 で追加し、setWorkImage はこの RPC のみを呼ぶ:
+
+```sql
+create or replace function public.replace_work_image(
+  p_work_id uuid,
+  p_old_media_id uuid,
+  p_new_media_id uuid   -- null は「削除」
+)
+returns void
+language plpgsql
+security invoker  -- admin RLS を適用する (worker が呼ぶ場合も admin セッションで)
+set search_path = public
+as $$
+declare
+  v_sort_order int;
+begin
+  -- 1) 対象行を FOR UPDATE でロック取得。存在しなければエラー
+  select sort_order into v_sort_order
+  from work_images
+  where work_id = p_work_id and media_id = p_old_media_id
+  for update;
+
+  if not found then
+    raise exception 'KMB-E404: work_images(%, %) not found', p_work_id, p_old_media_id;
+  end if;
+
+  -- 2) 削除ケース
+  if p_new_media_id is null then
+    delete from work_images where work_id = p_work_id and media_id = p_old_media_id;
+    return;
+  end if;
+
+  -- 3) 同一 work_id に new_media_id が既に存在すると PK (work_id, media_id) 一意違反。
+  --    409 相当のエラーで返し、UI が「既に追加されている画像です」と表示。
+  if exists (
+    select 1 from work_images
+    where work_id = p_work_id and media_id = p_new_media_id
+  ) then
+    raise exception 'KMB-E108: work_images(%, %) already exists', p_work_id, p_new_media_id;
+  end if;
+
+  -- 4) delete + insert を同一トランザクションで (関数全体が 1 tx)
+  delete from work_images where work_id = p_work_id and media_id = p_old_media_id;
+  insert into work_images (work_id, media_id, sort_order)
+  values (p_work_id, p_new_media_id, v_sort_order);
+end;
+$$;
+
+revoke execute on function public.replace_work_image(uuid, uuid, uuid) from public, anon;
+grant execute on function public.replace_work_image(uuid, uuid, uuid) to authenticated;
+-- 実行は admin セッションを想定。RLS は work_images への is_admin() 書き込みポリシー (migration 0012) で担保。
+```
+
+エラー扱い:
+- 対象行なし → **KMB-E404** (画面リロードで最新化を促す)。
+- new_media_id が同一 work に既存 → **KMB-E108** (新設、下記)。
+- insert 失敗のその他 → 例外がそのままトランザクションを rollback。
+
+Zod (`content/contracts.ts`):
+```ts
+export const zSetWorkImageReq = z.object({
+  work_id: z.string().uuid(),
+  old_media_id: z.string().uuid(),
+  new_media_id: z.string().uuid().nullable(),
+}).strict();
+```
+
 ## 7. エラーコード (追加)
 | コード | 意味 | 復旧 |
 |---|---|---|
 | KMB-E107 | 未知の slot_key (registry 外) | 再読み込み。registry と DB の整合を確認 |
+| KMB-E108 | work_images 追加時に同一 work に同 media が既存 | 別の画像を選ぶか、既存画像を先に削除 |
+| KMB-E404 | 対象行/コンテンツが見つからない (置換対象など) | 画面再読み込みで最新化 |
 | (E301 拡張) | page_media 参照中 media の削除 | 参照元 (ページ名) を提示 |
 
 ---
@@ -290,7 +394,7 @@ Server Action シグネチャ (`src/app/admin/visual/actions.ts`):
 | wave | 内容 | 並列 | 依存 |
 |---|---|---|---|
 | V1 | page_media DDL (0013) + registry + seed + resolver + facade + Zod。E301/view 拡張 | 単独 | — |
-| V2a | 公開ページ: SlotImage / PhotoFigure / MediaCover の data 属性化 + 固定 40 枚置換 + hero 接続 + 未来枠 2 種追加 | 並列 (ページ群で分割可) | V1 |
+| V2a | 公開ページ: SlotImage / PhotoFigure / MediaCover の data 属性化 + 固定 40 枚置換 + hero 接続 + 未来枠 4 スロット追加 | 並列 (ページ群で分割可) | V1 |
 | V2b | /admin/visual エディタ (iframe overlay + ホットスポット + メニュー + MediaPicker 連携 + Server Actions) | 並列 | V1 (data 属性の契約だけ先に固定) |
 | V3 | 統合 + Codex レビュー + 実機 E2E (実ブラウザで差し替え→反映) + 見た目非影響スナップショット | 単独 | V2a+V2b |
 
@@ -324,8 +428,19 @@ Server Action シグネチャ (`src/app/admin/visual/actions.ts`):
 | E301 の RLS ポリシー本体も更新対象 | MAJOR-8 | §5.5 RLS + view + reference count を 1 migration で atomic 更新 |
 | 数の食い違い (44 vs 45) / nav 未追加 / MediaPicker 文言 | MINOR | §1 で 45 に統一、§10 で nav 追加と汎用化 |
 
+## 11.1 Codex 再レビュー v1.1 → v1.2 対応表
+| 指摘 | 重大度 | 対応節 |
+|---|---|---|
+| rpc_get_page_media_all の security definer が RLS 回避 | BLOCKER | §2 で RPC 撤回、anon SELECT ポリシー + view (page_media_resolved) に変更 |
+| edit cookie 仕様 / cache 分離が未定義 | MAJOR | §5.3 に kmb-edit-token の HMAC 署名 / HttpOnly / SameSite=Strict / Max-Age 1800 と ?__edit=1 の Route Cache 分離 + unstable_noStore |
+| work_images 置換の atomic 契約が粗い | MAJOR | §6.1 に replace_work_image RPC (FOR UPDATE + sort_order Server 側維持 + PK 衝突 → E108 + not found → E404) を新設 |
+| resolver が alt/URL 材料を RPC から取れていない | MAJOR | §2 view に media.alt を join、§4.1 は 1 クエリで完結、RPC は不使用 |
+| revalidate 順序と失効タグ拡張 | MAJOR | §5.5b に「DB commit → revalidate(await) → 200 応答 → client reload」の境界と、content 系失効タグ (works/voices/posts:*) を列挙 |
+| 数の食い違い (44 vs 45) | MINOR | §3 に 41 既存写真 + 4 未来枠 = 45 の内訳を明記、他箇所も統一 |
+
 ## 12. 更新履歴
 | 版 | 日付 | 内容 |
 |---|---|---|
 | v1.0 | 2026-07-08 | 初版 |
 | v1.1 | 2026-07-09 | Codex 外部レビュー 12 件反映 (BLOCKER 3 / MAJOR 8 / MINOR 1) |
+| v1.2 | 2026-07-09 | Codex 再レビュー 6 件反映 (BLOCKER 1 / MAJOR 4 / MINOR 1)。実装 GO 判断待ち |
