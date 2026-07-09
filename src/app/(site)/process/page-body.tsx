@@ -438,9 +438,9 @@ export function ProcessPageBody({
           {STEPS.map((step) => (
             <div
               key={step.no}
-              className="grid gap-4 py-8 sm:grid-cols-[80px_minmax(0,1fr)] sm:gap-10"
+              className="kt-process-step grid gap-4 py-8 sm:grid-cols-[96px_minmax(0,1fr)] sm:gap-10"
             >
-              <span className="font-mono text-3xl font-semibold text-carbon-soft">
+              <span className="kt-ps-no" aria-hidden="true">
                 {step.no}
               </span>
               <div>

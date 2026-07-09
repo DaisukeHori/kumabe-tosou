@@ -17,63 +17,52 @@ function Chapter({
   photo: React.ReactNode;
 }) {
   return (
-    <section className="mx-auto max-w-[1240px] px-5 py-14 sm:px-8 sm:py-20">
-      <div className="grid gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] md:gap-14">
-        <Reveal as="div">
-          <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
-            {no}
-          </span>
-          <h2 className="mt-4 text-[clamp(24px,3.2vw,38px)] font-bold leading-snug tracking-[0.04em]">
-            {title}
-          </h2>
-          <p className="mt-3 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-            {en}
-          </p>
-        </Reveal>
-        <Reveal
-          as="div"
-          className="space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid [&_strong]:font-bold [&_strong]:text-carbon"
-        >
-          {children}
-        </Reveal>
+    <section className="kt-story-chapter">
+      <div className="mx-auto max-w-[1240px] px-5 sm:px-8">
+        <div className="grid items-start gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] md:gap-14">
+          <Reveal as="div" className="kt-story-head">
+            <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
+              {no}
+            </span>
+            <h2 className="mt-4 text-[clamp(24px,3.2vw,38px)] font-bold leading-snug tracking-[0.04em]">
+              {title}
+            </h2>
+            <p className="mt-3 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
+              {en}
+            </p>
+          </Reveal>
+          <Reveal
+            as="div"
+            className="kt-story-body space-y-6 text-[15px] leading-[2.1] tracking-[0.02em] text-carbon-mid [&_strong]:font-bold [&_strong]:text-carbon"
+          >
+            {children}
+          </Reveal>
+        </div>
+        <div className="mt-10">{photo}</div>
       </div>
-      <div className="mt-10">{photo}</div>
     </section>
   );
 }
 
 function StoryQuote({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="border-l-2 border-soul py-1 pl-5 text-[15.5px] font-medium leading-[2.05] text-carbon">
-      {children}
-    </p>
-  );
+  return <p className="kt-story-quote">{children}</p>;
 }
 
 /**
  * story.portrait (未来枠) の装飾プレースホルダ。V2a 以前 (旧 page.tsx) の見た目を
  * SlotImage の placeholder prop 経由で復元したもの (公開時の非退行、修正1)。
- * 自己完結で aspect-[3/4] / 枠線 / aria-label を持つため、editMode=false のときは
+ * 自己完結で aspect-[3/4] / aria-label を持つため、editMode=false のときは
  * SlotImage が余計なラッパを足さずそのまま描画する。
+ * 枠線・斜めストライプ背景・四隅コーナーマークは呼び出し側の `.kt-portrait-frame` /
+ * `.kt-portrait-corner` (motion: page-story-process) が担うため、本体は背景を持たず
+ * 透過のまま重ねる (ストライプが透けて見える)。
  */
 export function StoryPortraitPlaceholder() {
   return (
     <figure
-      className="relative flex aspect-[3/4] w-full flex-col items-center justify-center border border-hair bg-paper"
+      className="relative flex aspect-[3/4] w-full flex-col items-center justify-center"
       aria-label="代表・隈部信之（近日、実際の写真に差し替え予定）"
     >
-      <span
-        aria-hidden="true"
-        className="absolute left-3 top-2 font-mono text-carbon-soft"
-      >
-        +
-      </span>
-      <span
-        aria-hidden="true"
-        className="absolute bottom-2 right-3 font-mono text-carbon-soft"
-      >
-        +
-      </span>
       <span className="text-4xl font-bold tracking-[0.2em]">信之</span>
       <span className="mt-6 font-mono text-[10px] tracking-[0.24em] text-carbon-soft">
         PORTRAIT — COMING SOON
@@ -172,9 +161,7 @@ export function StoryPageBody({
         </p>
         <StoryQuote>
           「塗装をやってくれる店はあるんです。でも、この積層痕を分かってる人がいない。造形はできても、仕上げは単色止まり。誰も、最後の一歩をやってくれないんですよ」
-          <cite className="mt-2 block font-mono text-[11px] not-italic tracking-[0.14em] text-carbon-soft">
-            — ある試作の相談者の言葉
-          </cite>
+          <cite>— ある試作の相談者の言葉</cite>
         </StoryQuote>
         <p>
           その瞬間、隈部は気づきました。塗装はできても3Dプリントの下地を知らない塗装店。造形はできても仕上げは苦手な出力サービス。その二つの
@@ -306,15 +293,30 @@ export function StoryPageBody({
       </Chapter>
 
       {/* ============ 代表メッセージ ============ */}
-      <section className="bg-primer-deep">
+      <section className="kt-message-sec">
         <div className="mx-auto grid max-w-[1240px] gap-10 px-5 py-16 sm:px-8 sm:py-24 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] md:gap-14">
           <Reveal as="div" className="max-w-sm">
-            <SlotImage
-              slotKey="story.portrait"
-              resolved={slots["story.portrait"]}
-              editMode={editMode}
-              placeholder={<StoryPortraitPlaceholder />}
-            />
+            <div className="kt-portrait-frame">
+              <SlotImage
+                slotKey="story.portrait"
+                resolved={slots["story.portrait"]}
+                editMode={editMode}
+                className="bg-transparent"
+                placeholder={<StoryPortraitPlaceholder />}
+              />
+              <span
+                className="kt-portrait-corner kt-portrait-corner--tl"
+                aria-hidden="true"
+              >
+                +
+              </span>
+              <span
+                className="kt-portrait-corner kt-portrait-corner--br"
+                aria-hidden="true"
+              >
+                +
+              </span>
+            </div>
           </Reveal>
           <div>
             <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
