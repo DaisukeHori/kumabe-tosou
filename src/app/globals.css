@@ -822,6 +822,232 @@ html {
 }
 /* === /motion: hover-suite === */
 /* === motion: scroll-texture === */
+/* =============================================================
+   M3 — スクロール駆動 (G7: rule / title / photo / swatch) + 質感装飾
+   (G10 紙ノイズ / G11 罫線・小口帯・目盛り / G12 ハンバーガー→X)
+   統合計画 §3-3 修正版スコープ: G7-5 (colors 透かし番号) と G7-6 (qty バー) は
+   それぞれ page-colors / page-rest (Wave 3) が単独所有するため本区画から除外。
+   `.kt-sd-swatch` は CSS のみ本区画で定義し、DOM 付与は Wave 3 の page-colors
+   (Drawdown rewrite) が担う — Wave 2 時点では発火対象の DOM が存在しない
+   (統合計画 §6 Wave 2 受入 3 に明記の想定どおり)。
+   旧実装対応: legacy/css/style.css
+     G7  … 1507-1517 (rule) / 1541-1550 (title) / 2487-2500 (photo) / 1530-1539 (swatch)
+     G10 … 1333-1341   G11 … 1207-1222, 1236-1256, 1258-1269
+     G12 … 179-192
+   パラメータ正典: docs/design/motion-gap-report.md §2/§5
+   ============================================================= */
+
+/* ---------- G11-a) 罫線 + レジストレーションマーク (legacy 1236-1256) ----------
+   罫線本体は両端 16px を空けた中央グラデ、両端に 9px の「+」。
+   legacy 同様 flex:1 で残余幅いっぱいに伸ばす (旧 .sec-mark/.page-index の .rule)。 */
+.kt-rule {
+  position: relative;
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(var(--hair), var(--hair)) center / calc(100% - 32px)
+    1px no-repeat;
+}
+.kt-rule::before,
+.kt-rule::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translateY(-50%);
+  background:
+    linear-gradient(var(--hair), var(--hair)) center / 1px 100% no-repeat,
+    linear-gradient(var(--hair), var(--hair)) center / 100% 1px no-repeat;
+}
+.kt-rule::before {
+  left: 0;
+}
+.kt-rule::after {
+  right: 0;
+}
+
+/* ---------- G11-b) ヘッダー 8 色小口帯 — 色見本帳の小口染め (legacy 1207-1222) ----------
+   header は sticky (=positioned) なので ::before の absolute 基準になる。 */
+.kt-header-edge::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--dd-090-b) 0 12.5%,
+    var(--dd-46v-a) 12.5% 25%,
+    var(--dd-4y6-a) 25% 37.5%,
+    var(--dd-3t4-b) 37.5% 50%,
+    var(--dd-202-a) 50% 62.5%,
+    var(--dd-tv2-a) 62.5% 75%,
+    var(--dd-am-a) 75% 87.5%,
+    var(--dd-46g-a) 87.5% 100%
+  );
+  pointer-events: none;
+}
+
+/* ---------- G11-c) フッター目盛りティック — 定規 (legacy 1258-1269) ---------- */
+.kt-footer-ticks {
+  position: relative;
+}
+.kt-footer-ticks::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background:
+    repeating-linear-gradient(90deg, var(--hair) 0 1px, transparent 1px 96px)
+      left top / auto 12px repeat-x,
+    repeating-linear-gradient(90deg, var(--hair-soft) 0 1px, transparent 1px 12px)
+      left top / auto 7px repeat-x;
+  pointer-events: none;
+}
+
+/* ---------- G10) 紙の微細ノイズ (legacy 1333-1341 body::before の移植) ----------
+   body は /admin と共有のため body::before ではなく、(site)/(editor) レイアウトが
+   描画する固定レイヤ (PaperNoise) に載せる。z-index:-1 で body 背景の上・
+   コンテンツの下に入る (legacy と同じ重なり)。 */
+.kt-paper-noise {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23p)' opacity='0.045'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+/* ---------- G12) ハンバーガー → X モーフィング (legacy 179-192) ----------
+   Base UI の Dialog.Trigger は開時に aria-expanded="true" と data-popup-open を
+   トリガー button に付与する。両方をセレクタにして版差に備える。 */
+.kt-nav-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kt-nav-toggle span {
+  display: block;
+  width: 24px;
+  height: 1.5px;
+  background: var(--carbon);
+  transition: transform 0.3s var(--ease);
+}
+[aria-expanded="true"] .kt-nav-toggle span:nth-child(1),
+[data-popup-open] .kt-nav-toggle span:nth-child(1) {
+  transform: translateY(3.75px) rotate(45deg);
+}
+[aria-expanded="true"] .kt-nav-toggle span:nth-child(2),
+[data-popup-open] .kt-nav-toggle span:nth-child(2) {
+  transform: translateY(-3.75px) rotate(-45deg);
+}
+
+/* ---------- G7) スクロール駆動 (legacy 1507-1550 / 2487-2500 / 1530-1539) ----------
+   二重ガード: @supports 非対応 (Firefox 安定版等) はブロック丸ごと無効になり
+   既存 Reveal (IO フェード) がフォールバックとして機能する。
+   reduced-motion は no-preference 側にしか書かないので追加キルスイッチ不要。
+   G7-5 (colors 透かし番号) / G7-6 (qty バー) は page-colors / page-rest が
+   単独所有 (統合計画 §2 衝突裁定 #1/#2) のため、ここには含めない。 */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* G7-1) セクション罫線が画面に入ると左から引かれる (legacy 1507-1517) */
+    .kt-sd-rule {
+      transform-origin: left center;
+      animation: kt-rule-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 62%;
+    }
+
+    /* G7-2) セクションタイトルの微パララックス上昇 (legacy 1541-1550)。
+       同一 h2 に .reveal が付く (legacy html も sec-title reveal 併記で同構造)。
+       アニメーション origin が opacity/transform を常時所有するため実害はないが、
+       二重発火を仕様として明示的に断つため transition を無効化する。
+       (このルールは .reveal より後ろに現れるため同 specificity で勝つ) */
+    .kt-sd-title {
+      transition: none;
+      animation: kt-title-lift linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+
+    /* G7-3) 写真がビュー内で下からせり上がる (legacy 2487-2500)。
+       Reveal は親 figure のフェード、こちらは img の clip なので二重発火なし
+       (legacy も figure.photo.reveal + img アニメの並存)。 */
+    .kt-sd-photo {
+      animation: kt-photo-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+
+    /* G7-4) colors 色板が下から塗られて登場 (legacy 1530-1539)。
+       DOM 付与は Wave 3 page-colors の Drawdown rewrite が担う
+       (統合計画 §2 衝突裁定 #3: フック名 .kt-sd-swatch に統一、CSS 所有 = 本班)。 */
+    .kt-sd-swatch {
+      animation: kt-swatch-paint linear both;
+      animation-timeline: view();
+      animation-range: entry 6% entry 60%;
+    }
+  }
+}
+
+@keyframes kt-rule-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes kt-title-lift {
+  from {
+    opacity: 0.35;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes kt-photo-reveal {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes kt-swatch-paint {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* reduced-motion: G12 はトグルの状態変化のみ即時反映 (a11y 情報は保持) */
+@media (prefers-reduced-motion: reduce) {
+  .kt-nav-toggle span {
+    transition: none;
+  }
+}
+
+/* 印刷: scroll timeline が解決できず from 状態で固まる事故を防ぐ。
+   .kt-color-entry::after (page-colors) / .kt-sd-qty (page-rest) の print ガードは
+   各所有班が自区画で持つ (統合計画 §3-3 修正指示 4)。 */
+@media print {
+  .kt-sd-rule,
+  .kt-sd-title,
+  .kt-sd-photo,
+  .kt-sd-swatch {
+    animation: none;
+  }
+  .kt-paper-noise {
+    display: none;
+  }
+}
 /* === /motion: scroll-texture === */
 /* === motion: page-home === */
 /* === /motion: page-home === */

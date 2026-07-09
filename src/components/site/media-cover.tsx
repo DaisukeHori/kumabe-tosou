@@ -53,7 +53,13 @@ export function MediaCover({
 
   return (
     <div className={cn("kt-photo relative w-full overflow-hidden", aspect)} {...editableAttrs}>
-      <Image src={src} alt={alt} fill sizes={sizes} className="kt-photo-img object-cover" />
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes={sizes}
+        className="kt-photo-img kt-sd-photo object-cover"
+      />
     </div>
   );
 }

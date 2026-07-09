@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { MenuIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +32,7 @@ export const NAV_ITEMS = [
 
 export function SiteHeader() {
   return (
-    <header className="kt-vt-header sticky top-0 z-50 border-b border-hair bg-primer/80 backdrop-blur-md">
+    <header className="kt-vt-header kt-header-edge sticky top-0 z-50 border-b border-hair bg-primer/80 backdrop-blur-md">
       <div className="mx-auto flex h-[72px] max-w-[1240px] items-center justify-between gap-6 px-5 sm:px-8">
         <Link href="/" className="flex items-baseline gap-3 leading-none">
           <span className="text-xl font-bold tracking-[0.16em] text-carbon">
@@ -84,7 +83,10 @@ export function SiteHeader() {
               />
             }
           >
-            <MenuIcon className="size-5" />
+            <span className="kt-nav-toggle" aria-hidden="true">
+              <span />
+              <span />
+            </span>
           </SheetTrigger>
           <SheetContent side="right" className="bg-paper">
             <SheetHeader>

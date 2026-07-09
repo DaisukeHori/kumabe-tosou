@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
+import { PaperNoise } from "@/components/motion/paper-noise";
 
 /**
  * `/edit/**` (編集プレビュー専用ルート) のレイアウト。
@@ -23,6 +24,7 @@ export default function EditorLayout({
 }>) {
   return (
     <>
+      <PaperNoise />
       <SiteHeader />
       <main className="flex-1">{children}</main>
       <SiteFooter />

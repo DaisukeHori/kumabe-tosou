@@ -22,7 +22,7 @@ export function PageHead({
     <div className="mx-auto max-w-[1240px] px-5 pb-6 pt-20 sm:px-8 sm:pt-28">
       <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
         <span>{index}</span>
-        <span className="h-px w-16 bg-hair" aria-hidden="true" />
+        <span className="kt-rule" aria-hidden="true" />
         <span className="hidden sm:inline">{en}</span>
       </p>
       <h1 className="mt-8 text-[clamp(30px,5vw,56px)] font-bold leading-[1.35] tracking-[0.04em]">
@@ -68,7 +68,7 @@ export function SectionMark({ no, label }: { no: string; label: string }) {
       className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft"
     >
       <span>{no}</span>
-      <span className="h-px w-12 bg-hair" aria-hidden="true" />
+      <span className="kt-rule kt-sd-rule" aria-hidden="true" />
       <span>{label}</span>
     </Reveal>
   );
@@ -78,7 +78,7 @@ export function SecTitle({ children }: { children: React.ReactNode }) {
   return (
     <Reveal
       as="h2"
-      className="mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
+      className="kt-sd-title mt-6 text-[clamp(26px,3.6vw,44px)] font-bold leading-snug tracking-[0.04em]"
     >
       {children}
     </Reveal>
