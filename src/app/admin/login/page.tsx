@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { isAllowedLoginNext } from "./next-path";
+
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
@@ -12,5 +14,5 @@ export default async function AdminLoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
-  return <LoginForm next={next && next.startsWith("/admin") ? next : "/admin"} />;
+  return <LoginForm next={next && isAllowedLoginNext(next) ? next : "/admin"} />;
 }

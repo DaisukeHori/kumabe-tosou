@@ -25,9 +25,13 @@ export const zCompanySettings = z
   })
   .strict();
 
+/**
+ * BLOCKER-1 (docs/design/visual-media-editor.md §1): hero 画像は page_media.home.hero に
+ * 一本化する。hero.media_id は 0013 migration で site_settings 行からも除去済みのため、
+ * ここでも削除する (見出し・CTA テキストのみに縮退)。
+ */
 export const zHeroSettings = z
   .object({
-    media_id: zMediaId,
     heading: zShortText(40),
     subheading: z.string().max(80),
     cta_label: zShortText(20),

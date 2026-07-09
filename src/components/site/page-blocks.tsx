@@ -1,9 +1,10 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/site/reveal";
+import { SlotImage } from "@/components/site/slot-image";
+import type { ResolvedSlot } from "@/modules/page-media/contracts";
 
 /* ページ冒頭 (legacy .page-head) */
 export function PageHead({
@@ -99,34 +100,32 @@ export function MapNote({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* 写真 figure (legacy .photo) */
+/* 写真 figure (legacy .photo)。
+   V2a: aspect/sizes/priority は SlotImage が registry (slotKey) から引くため、
+   ここでは持たない (docs/design/visual-media-editor.md §4.2)。 */
 export function PhotoFigure({
   figNo,
-  src,
-  alt,
+  slotKey,
+  resolved,
+  editMode,
   capJa,
   capEn,
   credit,
-  aspect = "aspect-[3/2]",
-  sizes = "(max-width: 640px) 100vw, 600px",
 }: {
   figNo: string;
-  src: string;
-  alt: string;
+  slotKey: string;
+  resolved: ResolvedSlot;
+  editMode: boolean;
   capJa: string;
   capEn: string;
   credit: string;
-  aspect?: string;
-  sizes?: string;
 }) {
   return (
     <Reveal as="figure" className="border border-hair bg-paper p-2">
       <span className="block px-1 py-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
         {figNo}
       </span>
-      <div className={cn("relative w-full overflow-hidden", aspect)}>
-        <Image src={src} alt={alt} fill sizes={sizes} className="object-cover" />
-      </div>
+      <SlotImage slotKey={slotKey} resolved={resolved} editMode={editMode} />
       <figcaption className="flex flex-col gap-1 px-1 py-2 sm:flex-row sm:items-baseline sm:justify-between">
         <span className="text-xs tracking-wider text-carbon-mid">
           {capJa}

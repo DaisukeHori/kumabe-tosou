@@ -214,14 +214,10 @@ function HeroForm({
     <form ref={formRef} action={action} className="max-w-xl">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
       <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <FieldDescription className="mt-4">
+        ヒーロー画像は /admin/visual のビジュアルエディタ (トップページのヒーロー写真) から差し替えてください。ここでは見出し・CTA テキストのみを編集します。
+      </FieldDescription>
       <FieldGroup className="mt-4">
-        <Field>
-          <FieldLabel htmlFor="hero-media-id">ヒーロー画像 media ID</FieldLabel>
-          <Input id="hero-media-id" name="media_id" defaultValue={v?.media_id ?? ""} required placeholder="uuid" />
-          <FieldDescription>
-            /admin/media でメディアの ID をコピーして貼り付けてください。
-          </FieldDescription>
-        </Field>
         <Field>
           <FieldLabel htmlFor="hero-heading">見出し</FieldLabel>
           <Input id="hero-heading" name="heading" defaultValue={v?.heading ?? ""} required maxLength={40} />

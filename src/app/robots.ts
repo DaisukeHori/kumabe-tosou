@@ -8,6 +8,9 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
+      // /admin (CMS) と /edit (ビジュアルエディタの編集プレビュー専用ルート) は
+      // 検索エンジンに出さない (docs/design/visual-media-editor.md §5.3/§10)。
+      disallow: ["/admin", "/edit"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };

@@ -52,6 +52,29 @@ export function Reveal({ as = "div", className, children, ...rest }: RevealProps
     return () => io.disconnect();
   }, []);
 
+  // ビジュアルエディタ (V2b) がホットスポットの座標を再測定するためのフック
+  // (docs/design/visual-media-editor.md §5.2)。reveal のトランジション完了時
+  // (opacity/transform の transitionend) に window へ通知する。
+  // prefers-reduced-motion 等でトランジション自体が発生しない環境の保険として、
+  // 次フレームでも一度通知する (再測定は冪等な処理のため二重発火は許容する)。
+  useEffect(() => {
+    if (!visible) return;
+    const el = ref.current;
+    if (!el) return;
+
+    function notifyRevealDone() {
+      window.dispatchEvent(new CustomEvent("kmb:reveal-done"));
+    }
+
+    el.addEventListener("transitionend", notifyRevealDone);
+    const raf = requestAnimationFrame(notifyRevealDone);
+
+    return () => {
+      el.removeEventListener("transitionend", notifyRevealDone);
+      cancelAnimationFrame(raf);
+    };
+  }, [visible]);
+
   return createElement(
     as,
     {

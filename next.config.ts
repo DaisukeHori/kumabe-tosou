@@ -37,6 +37,24 @@ const nextConfig: NextConfig = {
         ]
       : [],
   },
+  /**
+   * クリックジャッキング対策 (docs/design/visual-media-editor.md §5.3 脅威モデル):
+   * /admin/** と /edit/** に X-Frame-Options: SAMEORIGIN を付与する。
+   * /edit/** は /admin/visual から同一オリジン iframe で読まれる想定のため SAMEORIGIN
+   * (DENY ではない)。公開 (site) ルートには付けない (現状維持)。
+   */
+  async headers() {
+    return [
+      {
+        source: "/admin/:path*",
+        headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }],
+      },
+      {
+        source: "/edit/:path*",
+        headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
