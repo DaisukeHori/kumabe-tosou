@@ -18,19 +18,24 @@
 
 **潰したもの (v1.2 で対応)**: 6 件全部を設計書 v1.2 に反映。
 
-## v1.2 レビュー (2026-07-09) — **最新**
+## v1.2 レビュー (2026-07-09)
 
 指摘 9 件: BLOCKER 2 / MAJOR 4 / MINOR 3。総評: 「v1.2 は方向性はかなり良く、hero 一本化、resolver 1 クエリ化、work_images の atomic RPC 化は概ね妥当です。ただし cookie 発行経路と `security_invoker` view の権限設計に実装不能/矛盾が残っています。BLOCKER 2 のため、現状は実装GOではありません。」
 
-**残 BLOCKER (v1.3 で潰す)**:
-- Server Component で cookies().set() は Next.js 制約で不可 → Server Action/Route Handler へ移す(Issue #2)
-- security_invoker view と base table への direct grant しない設計が権限モデル的に矛盾(Issue #3)
+指摘は GitHub Issue #2〜#10 に個別化した。
 
-**残 MAJOR / MINOR**: Issue #4〜#10 で管理
+**潰したもの (v1.3 で対応、2026-07-09)**: 9 件全部 + 独自発見 2 件(E404 コード衝突 → E109 採番、メディア URL 2 系統分裂 → V0 補修)。主要な設計変更:
+- edit-token cookie 機構を**全廃** → 専用 `/edit/[[...path]]` 動的ルートに分離(#2/#4/#8/#10 を同時解消)
+- page_media.updated_by 列を廃止して anon SELECT を明示許可(#3)
+- 対応の全容は設計書 §11.2 の対応表を参照
+
+## v1.3 レビュー — 依頼中 (2026-07-09)
+
+結果はこのファイルと Issue #1 に追記する。
 
 ## 実装 GO 判定の条件
 
-Codex レビューで **BLOCKER 0** かつ設計書側で MAJOR 4 件も対応済み(MINOR は実装中対応可)であることを確認してから、V1(基盤)実装に着手する。
+Codex レビューで **BLOCKER 0** かつ設計書側で MAJOR も対応済み(MINOR は実装中対応可)であることを確認してから、V0/V1(基盤)実装に着手する。
 
 ## Codex への依頼テンプレ
 

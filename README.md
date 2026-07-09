@@ -4,7 +4,7 @@
 > 1. **[`HANDOFF.md`](./HANDOFF.md)** — 引き継ぎ資料(インフラ・環境変数・ハマりポイント 11 件・進行中タスク)
 > 2. [`docs/design/cms-ai-pipeline.md`](./docs/design/cms-ai-pipeline.md) — 全体設計 v3.4(canonical)
 > 3. [`docs/module-contracts.md`](./docs/module-contracts.md) — モジュール契約 v2.2(canonical)
-> 4. [`docs/design/visual-media-editor.md`](./docs/design/visual-media-editor.md) — 進行中の設計 v1.2(Codex 未 GO)
+> 4. [`docs/design/visual-media-editor.md`](./docs/design/visual-media-editor.md) — 進行中の設計 v1.3(Codex 再々レビュー待ち)
 
 > **進行中の作業と TODO は全て GitHub Issues に整理済み**:
 > - 📌 [全 Open Issue 一覧](https://github.com/DaisukeHori/kumabe-tosou/issues)
@@ -32,7 +32,7 @@
 
 | ファイル | 内容 |
 |---|---|
-| [docs/design/visual-media-editor-review-log.md](./docs/design/visual-media-editor-review-log.md) | Codex レビュー履歴(v1.0→v1.2) |
+| [docs/design/visual-media-editor-review-log.md](./docs/design/visual-media-editor-review-log.md) | Codex レビュー履歴(v1.0→v1.3) |
 | [docs/mock-check.md](./docs/mock-check.md) | Phase 0 手動チェックリスト |
 
 ## 🛠 技術スタック

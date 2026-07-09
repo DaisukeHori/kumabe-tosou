@@ -1,14 +1,14 @@
 # 引き継ぎ資料 — 隈部塗装 CMS
 
 - 作成: 2026-07-09 (堀さんの指示で次の担当へ引き継ぎ)
-- 状態: 本番稼働中。次の大物「ビジュアル画像エディタ」は設計 v1.2 段階で Codex 未 GO(BLOCKER 2 件残)
+- 状態: 本番稼働中。次の大物「ビジュアル画像エディタ」は設計 v1.3(Codex 再々レビュー待ち)
 - 主エディタセッション: Opus 4.8(直接執筆) / 実装エージェント: Sonnet 5(user-level 規約)
 
 ## ⚠️ 最優先で読むもの
 1. **本ファイル**(この HANDOFF.md)全部
 2. `docs/design/cms-ai-pipeline.md`(全体設計 v3.4)
 3. `docs/module-contracts.md`(モジュール契約 v2.2)
-4. `docs/design/visual-media-editor.md`(v1.2、進行中)
+4. `docs/design/visual-media-editor.md`(v1.3、進行中)
 5. **GitHub Issues**(既知課題・未着手・仕様確認事項をラベル付きで整理)
 
 ## 1. いま本番で動いているもの
@@ -71,10 +71,9 @@ Vercel の GitHub 連携は **コードのみ**を扱う。**migration は自動
 0010 distribution_worker_support        … vault_read_secret + refresh lease + index
 0011 pg_cron_jobs                       … publish(毎分) / watchdog(5分毎)
 0012 admin_write_junction_tables        … work_images / seed_manifest への admin 書込許可
-0013 media_reference_summary(view 更新)   … これは 0008 と同名だが別内容(admin セッション対応時に追加)
 ```
 
-**注意**: v1.2 の設計書に載っている `page_media` テーブル用の migration はまだ書いていない。実装 GO が出たら 0014 として作成する。
+**注意**: migration は **0012 が最新**(計 12 本、`ls supabase/migrations/` で確認可能。本文書 v1 の「0013 適用済み」は誤記だった)。設計書 v1.3 の `page_media` 用 migration はまだ書いていない。実装 GO が出たら **0013** として作成する。
 
 ## 4. 直近の設計・実装ステータス
 
@@ -106,16 +105,17 @@ Vercel の GitHub 連携は **コードのみ**を扱う。**migration は自動
 
 **ビジュアル画像エディタ**(要望 = 全公開ページの写真を管理画面の実物ページ縮小 iframe 上でクリック → メニューで差し替え)
 
-- 設計書: `docs/design/visual-media-editor.md` v1.2(commit `ed21e5a`)
+- 設計書: `docs/design/visual-media-editor.md` **v1.3**
 - **Codex 外部レビュー結果**:
-  - v1.0 → 12 件(BLOCKER 3 / MAJOR 8 / MINOR 1)
-  - v1.1 → 6 件(BLOCKER 1 / MAJOR 4 / MINOR 1)
-  - **v1.2 → 9 件残(BLOCKER 2 / MAJOR 4 / MINOR 3)** ← ここが最新、**まだ実装 GO ではない**
-- v1.2 の残 BLOCKER:
-  1. **Server Component で `cookies().set()` は不可**(Next.js 制約)。edit-token は Server Action か Route Handler(`/admin/visual/edit-session`)で発行する契約に修正必要
-  2. **security_invoker view + base table に direct grant しない の矛盾**。呼び出しユーザーが両方の権限を持つ必要があるため、`page_media` は「公開メタデータ」と割り切って anon SELECT を明示 grant すべき
-
-- v1.2 の残 MAJOR/MINOR は Issue に個別化(下記)
+  - v1.0 → 12 件(BLOCKER 3 / MAJOR 8 / MINOR 1)→ v1.1 で全反映
+  - v1.1 → 6 件(BLOCKER 1 / MAJOR 4 / MINOR 1)→ v1.2 で全反映
+  - v1.2 → 9 件(BLOCKER 2 / MAJOR 4 / MINOR 3)→ **v1.3 で全反映**(対応表 = 設計書 §11.2)
+- v1.3 の主要な設計変更:
+  1. **edit-token cookie 機構を全廃** → 編集プレビューは専用 `/edit/[[...path]]` 動的ルート(middleware + requireAdmin の 2 層)。公開ページは純 SSG のまま
+  2. **page_media.updated_by 列を廃止**して anon SELECT を明示許可(security_invoker view の権限矛盾を解消)
+  3. **V0 補修フェーズ新設**: メディア URL 生成の 2 系統分裂(公開=storage_path / admin={id}.webp)を `{id}.webp` に統一 + 修復スクリプト
+  4. KMB-E404 の既存コード衝突を発見 → E109 に採番変更
+- Codex 再々レビューで BLOCKER 0 を確認してから実装 GO の順序(Issue #2-#10 参照)
 
 ### 4.3 未着手(承認済みの方針)
 - 独自ドメイン取得 → Vercel + Resend の SPF/DKIM
@@ -156,7 +156,7 @@ kumabe-tosou/
 ├── docs/
 │   ├── design/
 │   │   ├── cms-ai-pipeline.md          … 全体設計 v3.4(canonical)
-│   │   └── visual-media-editor.md      … 進行中 v1.2
+│   │   └── visual-media-editor.md      … 進行中 v1.3
 │   ├── module-contracts.md             … モジュール契約 v2.2(Zod/facade/依存)
 │   └── mock-check.md                   … Phase 0 手動チェックリスト
 ├── src/
@@ -184,7 +184,7 @@ kumabe-tosou/
 │   └── lib/
 │       ├── env.ts                      … 空文字→undefined 正規化(重要バグ回避)
 │       └── supabase/{server,service,public}.ts
-├── supabase/migrations/                … 0001〜0013 適用済み
+├── supabase/migrations/                … 0001〜0012 適用済み
 ├── scripts/
 │   ├── bootstrap-admin.ts              … 管理者作成(admin セッション対応)
 │   ├── seed-from-legacy.ts             … コンテンツ + 画像投入(冪等)
@@ -207,7 +207,7 @@ kumabe-tosou/
 4. **@supabase/supabase-js は Node 20 で無条件 RealtimeClient 初期化**。native WebSocket が無くて即例外。
    → `ws` パッケージを `realtime.transport` に渡す(scripts/lib/service-client.ts に対応済み)
 5. **Server Component で `cookies().set()` は不可**(Next.js 制約)。書き込みは Server Action / Route Handler。
-   → 設計書 v1.2 で BLOCKER 指摘済
+   → 設計書 v1.3 で /edit ルート化により解消済
 6. **`.env.local` の空文字プレースホルダは zod の optional() を通らない**。
    → `preprocess(emptyToUndefined, z.string().optional())` で対応済(src/lib/env.ts)
 7. **React 19 の form は送信ごとに form.reset() を呼ぶ**。
@@ -217,7 +217,7 @@ kumabe-tosou/
 9. **loading="lazy" の img がキャッシュ済みだと onLoad 発火せずスケルトンが固着**。
    → `useEffect` で `img.complete` を初期化時にチェック(MediaThumbnail で対応済)
 10. **並列 agent を isolation=worktree なしで起動すると cwd 共有事故**が起きる。
-11. **Supabase migration は Vercel と別**。0001〜0013 を DB に手動 apply する運用は継続。
+11. **Supabase migration は Vercel と別**。0001〜0012 を DB に手動 apply する運用は継続。
 
 ## 9. 「もし詰まったら」の連絡先・参考
 
@@ -231,5 +231,5 @@ kumabe-tosou/
 
 - Wave 0 → Wave 2 まで並列実装で 1 日完遂
 - 途中で発見した本番バグをすべて修正済み(楽観ロック誤爆 / 施工事例保存 / メディア UUID 手入力 / admin 背景コントラスト)
-- ビジュアル画像エディタは要望を受けて設計中(v1.2)。Codex レビューで残 BLOCKER 2 件があるため、**v1.3 で潰してから実装 GO** の順序
-- v1.2 → v1.3 の対応候補は Issue #(ビジュアル画像エディタ関連)にまとめた
+- ビジュアル画像エディタは要望を受けて設計中(v1.3)。Codex 再々レビューで BLOCKER 0 を確認してから実装 GO の順序
+- v1.2 → v1.3 の対応内容は設計書 §11.2 と Issue #2-#10 のコメントにまとめた
