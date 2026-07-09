@@ -1591,4 +1591,333 @@ html {
 }
 /* === /motion: page-story-process === */
 /* === motion: page-rest === */
+/* M4: service / about / shop / materials / notes ページ固有。
+   正典: docs/design/motion-gap-report.md §3, §5。行番号は legacy/css/style.css。
+   統合計画 §3-7 の修正指示を反映: qty バー一式は本区画が単独所有 (M3 の
+   .kt-sd-qty は存在しない前提)。全称ブランケット kill は signature 区画が
+   単独所有のため、本区画では自クラスの個別 kill のみを書く。
+   font-family は var(--font-legacy-mono) を使う (--font-mono は @theme inline で
+   Tailwind 用に別マッピング済み — globals.css:11,162)。 */
+
+/* ---------- service: QC チェック ✓ 赤アイコン (legacy css:1911-1927) ---------- */
+.kt-qc-check {
+  flex: none;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--soul);
+  border-radius: 2px;
+  position: relative;
+}
+.kt-qc-check::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--soul);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* ---------- [採用 EXTRA] service: 検品スタンプ演出 ----------
+   Reveal (.reveal.is-visible) が付与された瞬間に QC ✓ を clip-path で 0.4s 描画し、
+   カード出現順に 0.06s ずつ stagger する (検品票へチェックを入れていく手つきの再現)。
+   「描かれていない」初期状態そのものを no-preference の中に置くことで、reduce 環境では
+   常に描画済み (静的全表示) になる二重ガード構造 (§1.5 と同じ考え方、個別 kill 不要)。 */
+@media (prefers-reduced-motion: no-preference) {
+  .kt-qc-check::after {
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path 0.4s var(--ease);
+  }
+  .reveal.is-visible .kt-qc-check::after {
+    clip-path: inset(0 0 0 0);
+  }
+  .reveal.is-visible > :nth-child(1) .kt-qc-check::after {
+    transition-delay: 0s;
+  }
+  .reveal.is-visible > :nth-child(2) .kt-qc-check::after {
+    transition-delay: 0.06s;
+  }
+  .reveal.is-visible > :nth-child(3) .kt-qc-check::after {
+    transition-delay: 0.12s;
+  }
+  .reveal.is-visible > :nth-child(4) .kt-qc-check::after {
+    transition-delay: 0.18s;
+  }
+  .reveal.is-visible > :nth-child(5) .kt-qc-check::after {
+    transition-delay: 0.24s;
+  }
+  .reveal.is-visible > :nth-child(6) .kt-qc-check::after {
+    transition-delay: 0.3s;
+  }
+  .reveal.is-visible > :nth-child(7) .kt-qc-check::after {
+    transition-delay: 0.36s;
+  }
+  .reveal.is-visible > :nth-child(8) .kt-qc-check::after {
+    transition-delay: 0.42s;
+  }
+}
+
+/* ---------- service: 数量バー 斜め縞 + スクロール伸長 (legacy css:1598-1636) ---------- */
+.kt-qty-track {
+  display: block;
+  height: 8px;
+  background: var(--primer-deep);
+  border: 1px solid var(--hair);
+  position: relative;
+  overflow: hidden;
+}
+.kt-qty-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--w, 100%);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--carbon) 0 6px,
+    #2a2e32 6px 12px
+  );
+  transform-origin: left;
+}
+.kt-qty-fill--best {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--soul) 0 6px,
+    #c4132e 6px 12px
+  );
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .kt-qty-fill {
+      animation: kt-qty-grow linear both;
+      animation-timeline: view();
+      animation-range: entry 10% entry 70%;
+    }
+  }
+}
+@keyframes kt-qty-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@media print {
+  /* view() timeline は印刷コンテキストで解決されず from 状態に固まるため個別に殺す (§1.5, §3-7-2) */
+  .kt-qty-fill {
+    animation: none;
+    transform: none;
+  }
+}
+
+/* ---------- about: 地図 grayscale → hover カラー化 (legacy css:666-679)
+   旧は無条件 grayscale だが、タッチでは hover 解除不能のため pointer:fine 限定 (意図的差分) */
+@media (hover: hover) and (pointer: fine) {
+  .kt-map-frame iframe {
+    filter: grayscale(1) contrast(1.04);
+    transition: filter 0.5s var(--ease);
+  }
+  .kt-map-frame:hover iframe {
+    filter: grayscale(0);
+  }
+}
+
+/* ---------- shop: グレードカード写真 grayscale → hover カラー+ズーム (legacy css:2954-2961)
+   filter 0.7s / transform 1s の非対称 duration が正典 (§5「写真 hover」) */
+@media (hover: hover) and (pointer: fine) {
+  .kt-svc-card .kt-svc-photo img {
+    filter: grayscale(0.9) contrast(1.05);
+    transition:
+      filter 0.7s var(--ease),
+      transform 1s var(--ease);
+  }
+  .kt-svc-card:hover .kt-svc-photo img {
+    filter: grayscale(0.1);
+    transform: scale(1.05);
+  }
+}
+
+/* ---------- shop: featured カード 赤 radial-gradient (legacy css:2978-2982) ---------- */
+.kt-svc-featured {
+  background:
+    radial-gradient(80% 60% at 85% 0%, rgba(168, 15, 34, 0.06), transparent 60%),
+    var(--paper);
+}
+
+/* ---------- shop: 製品カード 浮遊 + 斜めストライプ + 光沢 (legacy css:3176-3210, 3456-3476) ---------- */
+.kt-product-card {
+  transition:
+    border-color 0.3s var(--ease),
+    transform 0.3s var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .kt-product-card:hover {
+    border-color: var(--carbon-soft);
+    transform: translateY(-3px);
+  }
+}
+/* 画像未設定時の legacy モックビジュアル (shop.html:236-287 の CSS 再現)。
+   aspect は旧 4/3 でなく registry (card32 = 3/2) に合わせる: 画像設定後に
+   カード高が変わらないための意図的差分 */
+.kt-product-visual {
+  aspect-ratio: 3 / 2;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--hair);
+  background:
+    repeating-linear-gradient(-45deg, var(--primer-deep) 0 2px, transparent 2px 12px),
+    linear-gradient(155deg, #e2e2db, #d0d0c8);
+  display: grid;
+  place-items: center;
+}
+.kt-pv-swatch {
+  width: 62%;
+  aspect-ratio: 16 / 10;
+  background: linear-gradient(150deg, var(--a), var(--b) 78%);
+  border-radius: 2px;
+  box-shadow: 0 12px 30px rgba(23, 25, 27, 0.22);
+  position: relative;
+  overflow: hidden;
+}
+.kt-pv-swatch::after,
+.kt-pv-mini::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    112deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 58%
+  );
+}
+.kt-pv-swatch-row {
+  display: flex;
+  gap: 3px;
+  padding: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 78%;
+}
+.kt-pv-mini {
+  width: 20px;
+  height: 28px;
+  border-radius: 1px;
+  background: linear-gradient(150deg, var(--a), var(--b) 80%);
+  box-shadow: 0 3px 8px rgba(23, 25, 27, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+.kt-pv-note {
+  position: absolute;
+  bottom: 9px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-legacy-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  color: var(--carbon-soft);
+}
+
+/* ---------- shop: ミニスウォッチ hover ポップ + 質感 (legacy css:3423-3438) ---------- */
+.kt-mini-swatch {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.32),
+    0 1px 3px rgba(23, 25, 27, 0.22);
+  transition: transform 0.25s var(--ease);
+}
+.kt-mini-swatch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 44%,
+    rgba(255, 255, 255, 0.38) 52%,
+    transparent 60%
+  );
+}
+@media (hover: hover) and (pointer: fine) {
+  .kt-mini-swatch:hover {
+    transform: translateY(-2px) scale(1.08);
+  }
+}
+
+/* ---------- materials: タイムライン 縦連結線 + 赤縁ノード (legacy css:2021-2034) ---------- */
+.kt-timeline {
+  border-left: 1px solid var(--hair);
+  margin-left: 8px;
+  padding-left: clamp(24px, 3vw, 40px);
+}
+.kt-timeline-item {
+  position: relative;
+  padding-bottom: clamp(28px, 3.4vw, 44px);
+}
+.kt-timeline-item:last-child {
+  padding-bottom: 0;
+}
+.kt-timeline-item::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * clamp(24px, 3vw, 40px) - 5px);
+  top: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--primer);
+  border: 1.5px solid var(--soul);
+}
+
+/* ---------- [採用 EXTRA] notes 詳細: 前後記事ナビの塗り下線 ----------
+   G4 (kt-nav-link) の正典パラメータ (0.35s var(--ease) / hover=左から伸びる・
+   leave=右へ縮む) を流用。色見本帳のページをめくる指の動きの暗示。 */
+.kt-note-nav-link {
+  position: relative;
+}
+.kt-note-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--soul);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.35s var(--ease);
+}
+.kt-note-nav-link:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+@media (hover: hover) and (pointer: fine) {
+  .kt-note-nav-link:hover::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+}
+
+/* ---------- reduced-motion 個別キル ----------
+   全称ブランケット (*, *::before, *::after の 0.01ms) は signature 区画が単独所有
+   (統合計画 §1.5 #8 / §3-7-3)。本区画は自クラスの個別 kill のみを持つ。 */
+@media (prefers-reduced-motion: reduce) {
+  .kt-qty-fill {
+    animation: none;
+    transform: none; /* 幅 var(--w) で静止表示 */
+  }
+  .kt-map-frame iframe,
+  .kt-svc-card .kt-svc-photo img,
+  .kt-product-card,
+  .kt-mini-swatch,
+  .kt-note-nav-link::after {
+    transition: none;
+  }
+}
 /* === /motion: page-rest === */

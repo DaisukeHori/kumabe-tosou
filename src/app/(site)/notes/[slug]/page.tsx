@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { getPublishedReadingPostBySlug, listPublishedReadingSlugs } from "@/app/_lib/public-content";
+import {
+  getPublishedReadingPostBySlug,
+  getPublishedReadingPosts,
+  listPublishedReadingSlugs,
+} from "@/app/_lib/public-content";
+import { buildNoteNav } from "@/app/_lib/note-nav";
 
 import { NoteDetailPageBody } from "./page-body";
 
@@ -38,8 +43,12 @@ export default async function NoteDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = await getPublishedReadingPostBySlug(slug);
+  const [post, posts] = await Promise.all([
+    getPublishedReadingPostBySlug(slug),
+    getPublishedReadingPosts(),
+  ]);
   if (!post) notFound();
+  const nav = buildNoteNav(posts, slug);
 
-  return <NoteDetailPageBody post={post} editMode={false} />;
+  return <NoteDetailPageBody post={post} nav={nav} editMode={false} />;
 }

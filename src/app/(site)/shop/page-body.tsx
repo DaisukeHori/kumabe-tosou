@@ -42,7 +42,7 @@ function MiniSwatch({ id }: { id: keyof typeof DD }) {
   return (
     <span
       title={SWATCH_TITLES[id]}
-      className="inline-block size-6 border border-hair"
+      className="kt-mini-swatch inline-block size-6 border border-hair"
       style={{
         background: `linear-gradient(135deg, ${DD[id].a}, ${DD[id].b})`,
       }}
@@ -55,56 +55,70 @@ function MiniSwatch({ id }: { id: keyof typeof DD }) {
  * CSS スウォッチ装飾を SlotImage の placeholder prop 経由で復元したもの
  * (公開時の非退行、修正1)。COMING SOON / 受注制作バッジは page-body 側で
  * SlotImage の外側 (sibling) に既に描画されているため、ここでは含めない。
+ *
+ * motion (page-rest §4-4): legacy の斜めストライプ+浮遊塗り板+光沢を
+ * kt-product-visual / kt-pv-swatch(-row) / kt-pv-mini / kt-pv-note で復元する。
+ * SlotImage 側の editMode 分岐 (placeholder prop) は既存のまま変更しない —
+ * data-editable-* のクリック対象確保は slot-image.tsx が一元管理するため、
+ * ここでは kt-pv-* の視覚強化のみを行う (SlotImage を壊さない)。
+ * 塗りグラデーションは従来どおり inline style (linear-gradient) を維持し、
+ * tests/slot-image-placeholder.test.ts の非退行 (8 スウォッチ = linear-gradient ×8) を保つ。
  */
 export function ShopProduct1Placeholder() {
   return (
-    <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-4 bg-primer-deep">
-      <div className="flex flex-wrap justify-center gap-2 px-8">
+    <div className="kt-product-visual" aria-hidden="true">
+      <span className="kt-pv-swatch-row">
         {(Object.keys(DD) as (keyof typeof DD)[]).map((id) => (
           <span
             key={id}
-            className="inline-block size-9 border border-hair"
-            style={{
-              background: `linear-gradient(135deg, ${DD[id].a}, ${DD[id].b})`,
-            }}
+            className="kt-pv-mini"
+            style={
+              {
+                background: `linear-gradient(150deg, ${DD[id].a}, ${DD[id].b} 80%)`,
+                "--a": DD[id].a,
+                "--b": DD[id].b,
+              } as React.CSSProperties
+            }
           />
         ))}
-      </div>
-      <span className="font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
-        8-COLOR SET — IMAGE
       </span>
+      <span className="kt-pv-note">8-COLOR SET — IMAGE</span>
     </div>
   );
 }
 
 export function ShopProduct2Placeholder() {
   return (
-    <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-4 bg-primer-deep">
+    <div className="kt-product-visual" aria-hidden="true">
       <span
-        className="inline-block size-24 border border-hair"
-        style={{
-          background: `linear-gradient(135deg, ${DD.tv2.a}, ${DD.tv2.b})`,
-        }}
+        className="kt-pv-swatch"
+        style={
+          {
+            background: `linear-gradient(150deg, ${DD.tv2.a}, ${DD.tv2.b} 78%)`,
+            "--a": DD.tv2.a,
+            "--b": DD.tv2.b,
+          } as React.CSSProperties
+        }
       />
-      <span className="font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
-        SINGLE PANEL — IMAGE
-      </span>
+      <span className="kt-pv-note">SINGLE PANEL — IMAGE</span>
     </div>
   );
 }
 
 export function ShopProduct3Placeholder() {
   return (
-    <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-4 bg-primer-deep">
+    <div className="kt-product-visual" aria-hidden="true">
       <span
-        className="inline-block size-24 border border-hair"
-        style={{
-          background: `linear-gradient(135deg, ${DD["202"].a}, ${DD["202"].b})`,
-        }}
+        className="kt-pv-swatch"
+        style={
+          {
+            background: `linear-gradient(150deg, ${DD["202"].a}, ${DD["202"].b} 78%)`,
+            "--a": DD["202"].a,
+            "--b": DD["202"].b,
+          } as React.CSSProperties
+        }
       />
-      <span className="font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
-        YOUR OBJECT HERE
-      </span>
+      <span className="kt-pv-note">YOUR OBJECT HERE</span>
     </div>
   );
 }
@@ -222,8 +236,8 @@ export function ShopPageBody({
         </SecLead>
         <Reveal as="div" className="mt-10 grid gap-5 lg:grid-cols-3">
           {/* GRADE 01 */}
-          <div className="flex flex-col border border-hair bg-paper">
-            <figure className="relative">
+          <div className="kt-svc-card flex flex-col border border-hair bg-paper">
+            <figure className="kt-svc-photo relative">
               <span className="absolute left-3 top-3 z-10 bg-carbon px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-paper">
                 GRADE 01
               </span>
@@ -290,8 +304,8 @@ export function ShopPageBody({
           </div>
 
           {/* GRADE 02 */}
-          <div className="flex flex-col border border-hair bg-paper">
-            <figure className="relative">
+          <div className="kt-svc-card flex flex-col border border-hair bg-paper">
+            <figure className="kt-svc-photo relative">
               <span className="absolute left-3 top-3 z-10 bg-carbon px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-paper">
                 GRADE 02
               </span>
@@ -354,8 +368,8 @@ export function ShopPageBody({
           </div>
 
           {/* GRADE 03 */}
-          <div className="flex flex-col border-2 border-carbon bg-paper">
-            <figure className="relative">
+          <div className="kt-svc-card kt-svc-featured flex flex-col border-2 border-carbon">
+            <figure className="kt-svc-photo relative">
               <span className="absolute left-3 top-3 z-10 bg-soul px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-paper">
                 GRADE 03 — 最上位
               </span>
@@ -463,7 +477,7 @@ export function ShopPageBody({
         </SecLead>
         <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-3">
           {/* 8色セット */}
-          <article className="flex flex-col border border-hair bg-paper">
+          <article className="kt-product-card flex flex-col border border-hair bg-paper">
             <div className="relative">
               <span className="absolute left-3 top-3 z-10 bg-carbon px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-paper">
                 COMING SOON
@@ -515,7 +529,7 @@ export function ShopPageBody({
           </article>
 
           {/* 単色 */}
-          <article className="flex flex-col border border-hair bg-paper">
+          <article className="kt-product-card flex flex-col border border-hair bg-paper">
             <div className="relative">
               <span className="absolute left-3 top-3 z-10 bg-carbon px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-paper">
                 COMING SOON
@@ -567,7 +581,7 @@ export function ShopPageBody({
           </article>
 
           {/* 受注制作 */}
-          <article className="flex flex-col border border-hair bg-paper">
+          <article className="kt-product-card flex flex-col border border-hair bg-paper">
             <div className="relative">
               <span className="absolute left-3 top-3 z-10 bg-soul px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-paper">
                 受注制作

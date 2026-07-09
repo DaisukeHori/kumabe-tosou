@@ -9,6 +9,7 @@ import {
   fetchPublishedWorkBySlug,
   fetchPublishedWorks,
 } from "@/app/_lib/public-content";
+import { buildNoteNav } from "@/app/_lib/note-nav";
 
 import { AboutPageBody } from "@/app/(site)/about/page-body";
 import { BlogDetailPageBody } from "@/app/(site)/blog/[slug]/page-body";
@@ -75,9 +76,13 @@ export async function renderEditRouteBody(match: EditRouteMatch): Promise<React.
       return <WorkDetailPageBody work={work} editMode={true} />;
     }
     case "notes-detail": {
-      const post = await fetchPublishedPostBySlug("reading", match.slug);
+      const [post, posts] = await Promise.all([
+        fetchPublishedPostBySlug("reading", match.slug),
+        fetchPublishedPosts("reading"),
+      ]);
       if (!post) return null;
-      return <NoteDetailPageBody post={post} editMode={true} />;
+      const nav = buildNoteNav(posts, match.slug);
+      return <NoteDetailPageBody post={post} nav={nav} editMode={true} />;
     }
     case "blog-detail": {
       const post = await fetchPublishedPostBySlug("blog", match.slug);
