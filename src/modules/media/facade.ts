@@ -201,6 +201,8 @@ export const mediaFacade: MediaFacadeExtended = {
 
   async createUploadUrl(input) {
     try {
+      // クライアント側の事前検証 (src/app/admin/media/media-grid.tsx の MAX_UPLOAD_BYTES) と同基準。
+      // 変更する場合は両方を更新すること。
       if (input.sizeBytes > 10 * 1024 * 1024) {
         return { ok: false, code: "KMB-E302", detail: "10MB を超えています" };
       }
