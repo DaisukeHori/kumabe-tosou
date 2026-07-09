@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { computeScale, mapChildRectToParent } from "@/app/admin/visual/coordinate-mapping";
+import {
+  computeScale,
+  mapChildRectToContainer,
+  mapChildRectToParent,
+} from "@/app/admin/visual/coordinate-mapping";
 
 /**
  * canonical: docs/design/visual-media-editor.md §5.2 (ホットスポット座標追従)。
@@ -53,6 +57,62 @@ describe("mapChildRectToParent", () => {
     expect(result.top).toBeCloseTo(120 + 400 * scale);
     expect(result.width).toBeCloseTo(1280 * scale);
     expect(result.height).toBeCloseTo(720 * scale);
+  });
+});
+
+describe("mapChildRectToContainer", () => {
+  // ホットスポット overlay (visual-editor.tsx) は `position: absolute` で containerRef
+  // (position: relative な div) を基準に配置される。iframe はその containerRef の中に
+  // `top: 0; left: 0` で敷き詰められているため、実運用では iframeRect === containerRect
+  // (誤差なし) になる。以下のケースはいずれも
+  // 「mapChildRectToParent (ビューポート座標) をそのまま overlay の top/left に使うと、
+  //   containerRect 自身のビューポート位置の分だけ必ずズレる」ことを検出する。
+
+  it("コンテナがビューポート内でオフセットしている場合、コンテナ相対座標のゼロ点に正しく写像する", () => {
+    const containerRect = { top: 300, left: 100, width: 1280, height: 900 };
+    const iframeRect = { top: 300, left: 100, width: 1280, height: 900 };
+    const innerRect = { top: 80, left: 40, width: 200, height: 150 };
+    const scale = 1;
+
+    const result = mapChildRectToContainer(iframeRect, containerRect, innerRect, scale);
+    expect(result).toEqual({ top: 80, left: 40, width: 200, height: 150 });
+
+    // ビューポート座標 (旧実装のバグ) をそのまま使うと、コンテナのオフセット分だけズレる。
+    const viewportCoords = mapChildRectToParent(iframeRect, innerRect, scale);
+    expect(viewportCoords).not.toEqual(result);
+    expect(viewportCoords.top - result.top).toBe(containerRect.top);
+    expect(viewportCoords.left - result.left).toBe(containerRect.left);
+  });
+
+  it("親ページがスクロールして containerRect.top / iframeRect.top が負になっても、内側要素との相対位置は変わらない", () => {
+    // 親ページを下にスクロールすると、containerRef はビューポート上端より上へ押し出され
+    // getBoundingClientRect().top は負値になる。
+    const containerRect = { top: -400, left: 0, width: 1280, height: 900 };
+    const iframeRect = { top: -400, left: 0, width: 1280, height: 900 };
+    const innerRect = { top: 500, left: 300, width: 100, height: 60 };
+    const scale = 1;
+
+    const result = mapChildRectToContainer(iframeRect, containerRect, innerRect, scale);
+    expect(result).toEqual({ top: 500, left: 300, width: 100, height: 60 });
+
+    // ビューポート座標をそのまま使うと、スクロール量の分だけ全く別の位置 (100) になってしまう。
+    const viewportCoords = mapChildRectToParent(iframeRect, innerRect, scale);
+    expect(viewportCoords.top).not.toBe(result.top);
+    expect(viewportCoords.top).toBe(100);
+  });
+
+  it("コンテナオフセット + scale 0.5 の合成でも、コンテナ相対座標を正しく計算する", () => {
+    const containerRect = { top: 50, left: 20, width: 640, height: 450 };
+    const iframeRect = { top: 50, left: 20, width: 640, height: 450 };
+    const innerRect = { top: 200, left: 100, width: 400, height: 300 };
+    const scale = 0.5;
+
+    const result = mapChildRectToContainer(iframeRect, containerRect, innerRect, scale);
+    expect(result).toEqual({ top: 100, left: 50, width: 200, height: 150 });
+
+    const viewportCoords = mapChildRectToParent(iframeRect, innerRect, scale);
+    expect(viewportCoords.top - result.top).toBe(containerRect.top);
+    expect(viewportCoords.left - result.left).toBe(containerRect.left);
   });
 });
 

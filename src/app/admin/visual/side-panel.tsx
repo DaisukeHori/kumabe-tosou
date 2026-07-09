@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import type { KmbErrorCode } from "@/modules/platform/contracts";
 
 import type { ContentGapItem, SlotPanelItem, WorksNavItem } from "./actions";
 
@@ -31,6 +32,8 @@ type Props = {
   /** 現在 iframe が表示している施工事例詳細の slug (一覧表示中は null)。§5.1a */
   activeWorkSlug: string | null;
   pending: boolean;
+  /** listSidePanel 取得失敗時のエラー (§5.4)。無言で空リスト表示にすると原因が判別できないため表示する。 */
+  error: { code: KmbErrorCode; message: string } | null;
   onSlotClick: (item: SlotPanelItem) => void;
   onGapClick: (item: ContentGapItem) => void;
   onWorkClick: (slug: string) => void;
@@ -51,6 +54,7 @@ export function SidePanel({
   works,
   activeWorkSlug,
   pending,
+  error,
   onSlotClick,
   onGapClick,
   onWorkClick,
@@ -61,6 +65,16 @@ export function SidePanel({
       className="flex h-fit flex-col gap-4 rounded-xl border border-border bg-background p-4"
       aria-busy={pending}
     >
+      {error && (
+        <p
+          role="alert"
+          className="rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-xs text-destructive"
+        >
+          読み込みに失敗しました ({error.code})。KMB-E901 の場合はデータベース移行 (migration 0013)
+          が未適用の可能性があります。
+        </p>
+      )}
+
       {works.length > 0 && (
         <div>
           <div className="flex items-center justify-between gap-2">
@@ -100,7 +114,7 @@ export function SidePanel({
 
       <div>
         <h2 className="text-sm font-semibold">このページの画像スロット</h2>
-        {slots.length === 0 && contentGaps.length === 0 && works.length === 0 && !pending && (
+        {slots.length === 0 && contentGaps.length === 0 && works.length === 0 && !pending && !error && (
           <p className="mt-2 text-xs text-muted-foreground">このページに編集可能な画像はありません。</p>
         )}
         <ul className="mt-2 flex flex-col gap-1.5">

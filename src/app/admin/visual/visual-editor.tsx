@@ -19,7 +19,7 @@ import {
   type SlotPanelItem,
   type WorksNavItem,
 } from "./actions";
-import { computeScale, mapChildRectToParent } from "./coordinate-mapping";
+import { computeScale, mapChildRectToContainer } from "./coordinate-mapping";
 import { HotspotMenu } from "./hotspot-menu";
 import { SidePanel } from "./side-panel";
 import type { Hotspot, MenuState, PageTab } from "./types";
@@ -166,6 +166,10 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
     works: [],
   });
   const [sidePanelPending, startSidePanelTransition] = useTransition();
+  // listSidePanel の取得失敗を可視化するための状態 (§5.4 の「読み込み中」「空」との区別)。
+  // 無言で空リストにすると「画像を選択できない」原因がユーザーから見て判別できないため、
+  // SidePanel 側にエラー行として表示する。
+  const [sidePanelError, setSidePanelError] = useState<{ code: KmbErrorCode; message: string } | null>(null);
 
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [altValue, setAltValue] = useState("");
@@ -181,11 +185,17 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
   // ---- ホットスポット再測定 (座標のみ。ラベル表示以外の外部状態に依存しないため安定した参照) ----
   const measureNow = useCallback(() => {
     const iframe = iframeRef.current;
-    if (!iframe) return;
+    const container = containerRef.current;
+    if (!iframe || !container) return;
     const doc = iframe.contentDocument;
     if (!doc || !doc.documentElement) return;
 
+    // ホットスポット overlay は containerRef (position: relative) 基準の absolute 配置のため、
+    // iframe のビューポート座標をそのまま使わず、containerRect との差分を取ってコンテナ相対座標に
+    // 写像する (mapChildRectToContainer の docstring参照。ビューポート座標のまま使うとタブ・ヘッダー
+    // の高さやページスクロール量の分だけ二重にズレる)。
     const hostRect = iframe.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
     const elements = doc.querySelectorAll<HTMLElement>(
       "[data-editable-slot],[data-editable-content],[data-editable-work-image]",
     );
@@ -194,8 +204,9 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
       const parsed = readHotspot(el);
       if (!parsed) return;
       const innerRect = el.getBoundingClientRect();
-      const rect = mapChildRectToParent(
+      const rect = mapChildRectToContainer(
         { top: hostRect.top, left: hostRect.left, width: hostRect.width, height: hostRect.height },
+        { top: containerRect.top, left: containerRect.left, width: containerRect.width, height: containerRect.height },
         { top: innerRect.top, left: innerRect.left, width: innerRect.width, height: innerRect.height },
         scaleRef.current,
       );
@@ -272,9 +283,11 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
       if (!result.ok) {
         toast.error(errorMessage(result));
         setSidePanel({ slots: [], contentGaps: [], works: [] });
+        setSidePanelError({ code: result.code, message: errorMessage(result) });
         return;
       }
       setSidePanel(result.value);
+      setSidePanelError(null);
     });
   }, [activeRoute, reloadTick]);
 
@@ -552,6 +565,7 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
           works={sidePanel.works}
           activeWorkSlug={activeRoute === "/works" ? worksDetailSlug : null}
           pending={sidePanelPending}
+          error={sidePanelError}
           onSlotClick={handleSidePanelSlotClick}
           onGapClick={handleSidePanelGapClick}
           onWorkClick={handleWorkNavClick}
