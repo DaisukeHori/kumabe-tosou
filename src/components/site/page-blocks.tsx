@@ -55,11 +55,16 @@ export function Section({
   );
 }
 
-/* SEC. XX — LABEL (legacy .sec-mark.reveal) */
+/* SEC. XX — LABEL (legacy .sec-mark.reveal)
+   data-sec-* はセクションインジケータ (motion/section-indicator.tsx) の
+   自動発見フック。旧 main.js:271-275 の span テキスト解析の代替。 */
 export function SectionMark({ no, label }: { no: string; label: string }) {
   return (
     <Reveal
       as="p"
+      data-sec-mark=""
+      data-sec-no={no}
+      data-sec-label={label}
       className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft"
     >
       <span>{no}</span>

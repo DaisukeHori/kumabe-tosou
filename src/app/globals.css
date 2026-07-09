@@ -377,6 +377,216 @@ a:hover .kt-swatch-sheen {
   }
 }
 /* === motion: signature === */
+/* M1 共通署名演出: G1 カーソル / G2 プログレスバー / G3 インジケータ / G4 ナビ。
+   正典: docs/design/motion-gap-report.md §5。easing は --ease を使い回す。 */
+
+/* ---------- G2 塗りプログレスバー (旧 css:1224-1234)
+   統合計画 §3-1-2 [採用 EXTRA]: 刷毛先端モチーフのため scaleX ではなく
+   width:100% 固定 + translateX((ratio-1)*100%) で塗り進める。 ---------- */
+.kt-paint-progress {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 2px;
+  background: var(--soul);
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+.kt-paint-progress::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -7px;
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(135deg, var(--soul), rgba(168, 15, 34, 0));
+  transform: skewX(-14deg);
+  pointer-events: none;
+}
+
+/* ---------- G4 ナビ現在地 + 下線スライド (旧 css:127-157, 1330-1331) ---------- */
+.kt-nav-link {
+  position: relative;
+  color: var(--carbon-mid);
+  transition: color 0.25s var(--ease);
+}
+.kt-nav-link:hover,
+.kt-nav-link:focus-visible {
+  color: var(--carbon);
+}
+.kt-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 4px;
+  height: 1px;
+  background: var(--carbon);
+  transform: scaleX(0);
+  transform-origin: right; /* leave 時: 右へ縮んで消える */
+  transition: transform 0.35s var(--ease);
+}
+.kt-nav-link:hover::after,
+.kt-nav-link:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left; /* hover 時: 左から伸びる */
+}
+.kt-nav-link[data-current="true"] {
+  color: var(--carbon);
+}
+.kt-nav-link[data-current="true"]::after {
+  transform: scaleX(1);
+  background: var(--soul); /* 旧 css:1330-1331 現在地は赤 */
+}
+.kt-nav-link[data-current="true"] .kt-nav-no,
+.kt-nav-link-m[data-current="true"] .kt-nav-no {
+  color: var(--soul); /* 旧 css:157 */
+}
+
+/* ---------- G3 セクションインジケータ (旧 css:1726-1774) ---------- */
+.kt-sec-indicator {
+  position: fixed;
+  right: clamp(12px, 2vw, 26px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s var(--ease);
+}
+.kt-sec-indicator.is-active {
+  opacity: 1;
+}
+.kt-sec-indicator-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.kt-sec-indicator-label {
+  font-family: var(--font-legacy-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--carbon-soft);
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+  white-space: nowrap;
+}
+.kt-sec-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--carbon-soft);
+  border-radius: 50%;
+  flex: none;
+  transition:
+    background 0.3s var(--ease),
+    border-color 0.3s var(--ease),
+    transform 0.3s var(--ease);
+}
+.kt-sec-indicator-item.is-current .kt-sec-indicator-dot {
+  background: var(--soul);
+  border-color: var(--soul);
+  transform: scale(1.25);
+}
+.kt-sec-indicator-item.is-current .kt-sec-indicator-label {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--carbon);
+}
+@media (max-width: 1100px) {
+  .kt-sec-indicator {
+    display: none;
+  }
+}
+
+/* ---------- G1 カスタムカーソル (旧 css:1361-1419) ---------- */
+@media (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  body.kt-has-cursor,
+  body.kt-has-cursor a,
+  body.kt-has-cursor button,
+  body.kt-has-cursor input,
+  body.kt-has-cursor label {
+    cursor: none;
+  }
+  .kt-cursor-dot {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--carbon);
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+  }
+  .kt-cursor-ring {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid rgba(23, 25, 27, 0.55);
+    background: rgba(168, 15, 34, 0);
+    pointer-events: none;
+    z-index: 9998;
+    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
+    transition:
+      width 0.3s var(--ease),
+      height 0.3s var(--ease),
+      border-color 0.3s var(--ease),
+      background-color 0.3s var(--ease);
+  }
+  .kt-cursor-label {
+    font-family: var(--font-legacy-mono);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    color: #fff;
+    opacity: 0;
+    transition: opacity 0.2s var(--ease);
+    user-select: none;
+  }
+  .kt-cursor-ring.is-link {
+    width: 48px;
+    height: 48px;
+    border-color: var(--carbon);
+  }
+  .kt-cursor-ring.is-view {
+    width: 62px;
+    height: 62px;
+    border-color: var(--soul);
+    background: rgba(168, 15, 34, 0.92);
+  }
+  .kt-cursor-ring.is-view .kt-cursor-label {
+    opacity: 1;
+  }
+  body.kt-cursor-hidden .kt-cursor-dot,
+  body.kt-cursor-hidden .kt-cursor-ring {
+    opacity: 0;
+  }
+}
+
+/* ---------- 一括キルスイッチ (旧 css:1130-1136 方式) ----------
+   既存の個別 reduce 対応 (globals.css:358-377) に加える site 全体の保険。
+   M1 が導入点だが全班共通の前提 (他班が重複追記しても冪等)。
+   統合計画 §1.5 #8 により全称ブランケットは signature 区画の 1 箇所のみ所有。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
 /* === /motion: signature === */
 /* === motion: hover-suite === */
 /* === /motion: hover-suite === */

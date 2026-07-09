@@ -1,5 +1,7 @@
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
+import { CustomCursor } from "@/components/motion/custom-cursor";
+import { SectionIndicator } from "@/components/motion/section-indicator";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
@@ -45,6 +47,9 @@ export default function SiteLayout({
       <SiteHeader />
       <main className="flex-1">{children}</main>
       <SiteFooter />
+      {/* 署名演出オーバーレイ (M1)。/edit iframe に載せないため (site) 限定 */}
+      <CustomCursor />
+      <SectionIndicator />
     </>
   );
 }
