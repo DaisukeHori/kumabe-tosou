@@ -429,6 +429,7 @@ export function WorkForm({
         open={coverPickerOpen}
         onOpenChange={setCoverPickerOpen}
         mode="single"
+        title="カバー画像を選ぶ"
         initialItems={mediaCatalog}
         initialNextCursor={catalogNextCursor}
         selectedIds={coverMediaId ? [coverMediaId] : []}
@@ -439,6 +440,7 @@ export function WorkForm({
         open={attachPickerOpen}
         onOpenChange={setAttachPickerOpen}
         mode="multiple"
+        title="添付画像を選ぶ"
         initialItems={mediaCatalog}
         initialNextCursor={catalogNextCursor}
         selectedIds={[]}
