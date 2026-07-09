@@ -83,7 +83,6 @@ export async function updateHeroSettingsAction(
   formData: FormData,
 ): Promise<SettingsFormState> {
   const raw = {
-    media_id: String(formData.get("media_id") ?? ""),
     heading: String(formData.get("heading") ?? ""),
     subheading: String(formData.get("subheading") ?? ""),
     cta_label: String(formData.get("cta_label") ?? ""),

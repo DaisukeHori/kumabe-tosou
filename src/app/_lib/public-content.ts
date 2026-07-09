@@ -18,6 +18,12 @@ import { toPublicMediaRef, type PublicMediaRef } from "./media";
  * 明示的に従い、本ファイルは ContentFacade を介さず直接 Supabase (anon) へクエリする。
  * ContentFacade 実装が揃った時点で、本ファイルの中身を facade 呼び出しへ差し替えるのが
  * 望ましい (repository 直叩きのロジックをここに閉じ込めているのはその置換を容易にするため)。
+ *
+ * V2a (docs/design/visual-media-editor.md §5.3): 「素の fetch 関数 + unstable_cache ラッパ」の
+ * 2 層構造に分離する。`fetch*Raw` が DB に直接問い合わせる素の関数 (throw する)、
+ * `getPublished*` はそれを unstable_cache で包んだ cached 版 ((site) が使う)、
+ * `fetchPublished*` (Raw を safeQuery で包んだもの) は /edit ルートが使う fresh 版
+ * (キャッシュ非経由。DB commit 直後の reload でも必ず最新が見える)。
  */
 
 export type PublicWorkListItem = {
@@ -96,7 +102,7 @@ type WorkListRow = {
   } | null;
 };
 
-async function fetchPublishedWorks(): Promise<PublicWorkListItem[]> {
+async function fetchPublishedWorksRaw(): Promise<PublicWorkListItem[]> {
   const client = createSupabasePublicClient();
   const { data, error } = await client
     .from("works")
@@ -117,7 +123,7 @@ async function fetchPublishedWorks(): Promise<PublicWorkListItem[]> {
   }));
 }
 
-async function fetchPublishedWorkBySlug(slug: string): Promise<PublicWorkDetail | null> {
+async function fetchPublishedWorkBySlugRaw(slug: string): Promise<PublicWorkDetail | null> {
   const client = createSupabasePublicClient();
   const { data, error } = await client
     .from("works")
@@ -155,7 +161,7 @@ async function fetchPublishedWorkBySlug(slug: string): Promise<PublicWorkDetail 
   };
 }
 
-async function fetchPublishedWorkSlugs(): Promise<string[]> {
+async function fetchPublishedWorkSlugsRaw(): Promise<string[]> {
   const client = createSupabasePublicClient();
   const { data, error } = await client.from("works").select("slug").returns<{ slug: string }[]>();
   if (error) throw error;
@@ -163,19 +169,19 @@ async function fetchPublishedWorkSlugs(): Promise<string[]> {
 }
 
 const cachedWorksList = unstable_cache(
-  () => fetchPublishedWorks(),
+  () => fetchPublishedWorksRaw(),
   ["public-content", "works", "list"],
   { tags: ["works"] },
 );
 
 const cachedWorkBySlug = unstable_cache(
-  (slug: string) => fetchPublishedWorkBySlug(slug),
+  (slug: string) => fetchPublishedWorkBySlugRaw(slug),
   ["public-content", "works", "detail"],
   { tags: ["works"] },
 );
 
 const cachedWorkSlugs = unstable_cache(
-  () => fetchPublishedWorkSlugs(),
+  () => fetchPublishedWorkSlugsRaw(),
   ["public-content", "works", "slugs"],
   { tags: ["works"] },
 );
@@ -188,6 +194,14 @@ export const getPublishedWorkBySlug = (slug: string): Promise<PublicWorkDetail |
 
 export const listPublishedWorkSlugs = (): Promise<string[]> =>
   safeQuery("works slug 一覧", cachedWorkSlugs, []);
+
+/** /edit 用の fresh fetch (キャッシュ非経由、docs/design/visual-media-editor.md §5.3) */
+export const fetchPublishedWorks = (): Promise<PublicWorkListItem[]> =>
+  safeQuery("works 一覧 (fresh)", fetchPublishedWorksRaw, []);
+
+/** /edit 用の fresh fetch (キャッシュ非経由) */
+export const fetchPublishedWorkBySlug = (slug: string): Promise<PublicWorkDetail | null> =>
+  safeQuery(`works 詳細 (${slug}) (fresh)`, () => fetchPublishedWorkBySlugRaw(slug), null);
 
 // ---------------------------------------------------------------------------
 // posts (reading / news / blog)
@@ -211,7 +225,7 @@ type PostListRow = {
   } | null;
 };
 
-async function fetchPublishedPosts(kind: PublicPostKind): Promise<PublicPostListItem[]> {
+async function fetchPublishedPostsRaw(kind: PublicPostKind): Promise<PublicPostListItem[]> {
   const client = createSupabasePublicClient();
   const { data, error } = await client
     .from("posts")
@@ -232,7 +246,7 @@ async function fetchPublishedPosts(kind: PublicPostKind): Promise<PublicPostList
   }));
 }
 
-async function fetchPublishedPostBySlug(
+async function fetchPublishedPostBySlugRaw(
   kind: PublicPostKind,
   slug: string,
 ): Promise<PublicPostDetail | null> {
@@ -258,7 +272,7 @@ async function fetchPublishedPostBySlug(
   };
 }
 
-async function fetchPublishedPostSlugs(kind: PublicPostKind): Promise<string[]> {
+async function fetchPublishedPostSlugsRaw(kind: PublicPostKind): Promise<string[]> {
   const client = createSupabasePublicClient();
   const { data, error } = await client
     .from("posts")
@@ -272,21 +286,32 @@ async function fetchPublishedPostSlugs(kind: PublicPostKind): Promise<string[]> 
 /** kind ごとに tag (`posts:${kind}`) を固定した cache インスタンスを作る (§6.1) */
 function definePostQueries(kind: PublicPostKind) {
   const tags = [`posts:${kind}`];
-  const list = unstable_cache(() => fetchPublishedPosts(kind), ["public-content", "posts", kind, "list"], {
+  const list = unstable_cache(() => fetchPublishedPostsRaw(kind), ["public-content", "posts", kind, "list"], {
     tags,
   });
   const detail = unstable_cache(
-    (slug: string) => fetchPublishedPostBySlug(kind, slug),
+    (slug: string) => fetchPublishedPostBySlugRaw(kind, slug),
     ["public-content", "posts", kind, "detail"],
     { tags },
   );
   const slugs = unstable_cache(
-    () => fetchPublishedPostSlugs(kind),
+    () => fetchPublishedPostSlugsRaw(kind),
     ["public-content", "posts", kind, "slugs"],
     { tags },
   );
   return { list, detail, slugs };
 }
+
+/** /edit 用の fresh fetch (キャッシュ非経由)。kind は呼び出し側 (page-map) が指定する */
+export const fetchPublishedPosts = (kind: PublicPostKind): Promise<PublicPostListItem[]> =>
+  safeQuery(`posts:${kind} 一覧 (fresh)`, () => fetchPublishedPostsRaw(kind), []);
+
+/** /edit 用の fresh fetch (キャッシュ非経由) */
+export const fetchPublishedPostBySlug = (
+  kind: PublicPostKind,
+  slug: string,
+): Promise<PublicPostDetail | null> =>
+  safeQuery(`posts:${kind} 詳細 (${slug}) (fresh)`, () => fetchPublishedPostBySlugRaw(kind, slug), null);
 
 const readingQueries = definePostQueries("reading");
 const blogQueries = definePostQueries("blog");
@@ -327,7 +352,7 @@ type VoiceRow = {
   photo_media: { id: string; storage_path: string; alt: string; is_placeholder: boolean } | null;
 };
 
-async function fetchPublishedVoices(): Promise<PublicVoiceListItem[]> {
+async function fetchPublishedVoicesRaw(): Promise<PublicVoiceListItem[]> {
   const client = createSupabasePublicClient();
   const { data, error } = await client
     .from("voices")
@@ -352,10 +377,14 @@ async function fetchPublishedVoices(): Promise<PublicVoiceListItem[]> {
 }
 
 const cachedVoicesList = unstable_cache(
-  () => fetchPublishedVoices(),
+  () => fetchPublishedVoicesRaw(),
   ["public-content", "voices", "list"],
   { tags: ["voices"] },
 );
 
 export const getPublishedVoices = (): Promise<PublicVoiceListItem[]> =>
   safeQuery("お客様の声一覧", cachedVoicesList, []);
+
+/** /edit 用の fresh fetch (キャッシュ非経由) */
+export const fetchPublishedVoices = (): Promise<PublicVoiceListItem[]> =>
+  safeQuery("お客様の声一覧 (fresh)", fetchPublishedVoicesRaw, []);

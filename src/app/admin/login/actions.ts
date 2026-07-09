@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { isAllowedLoginNext } from "./next-path";
+
 // email/attempt は「失敗後にメールアドレス欄を再表示する」ための付随情報 (下記参照)。
 export type LoginState = { error: string | null; email: string; attempt: number };
 
@@ -24,7 +26,7 @@ export async function loginAction(prevState: LoginState, formData: FormData): Pr
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const nextRaw = String(formData.get("next") ?? "/admin");
-  const next = nextRaw.startsWith("/admin") ? nextRaw : "/admin";
+  const next = isAllowedLoginNext(nextRaw) ? nextRaw : "/admin";
   const attempt = prevState.attempt + 1;
 
   if (!email || !password) {
