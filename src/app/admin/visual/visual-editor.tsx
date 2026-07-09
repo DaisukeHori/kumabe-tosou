@@ -17,6 +17,7 @@ import {
   type ContentGapItem,
   type EditableTarget,
   type SlotPanelItem,
+  type WorksNavItem,
 } from "./actions";
 import { computeScale, mapChildRectToParent } from "./coordinate-mapping";
 import { HotspotMenu } from "./hotspot-menu";
@@ -130,8 +131,14 @@ function readHotspot(el: HTMLElement): Omit<Hotspot, "rect"> | null {
  */
 export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMediaNextCursor }: Props) {
   const [activeRoute, setActiveRoute] = useState(initialRoute);
+  // /works タブの2段ナビ (§5.1a): 一覧表示中は null、事例クリックで slug をセットし
+  // iframe を /edit/works/{slug} (詳細ページ) に切り替える。タブ選択状態 (activeRoute) 自体は
+  // "/works" のまま変えない (パンくず的に「一覧に戻る」で戻せる)。
+  const [worksDetailSlug, setWorksDetailSlug] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
-  const iframeKey = `${activeRoute}:${reloadTick}`;
+  const iframeRoute =
+    activeRoute === "/works" && worksDetailSlug ? `/works/${worksDetailSlug}` : activeRoute;
+  const iframeKey = `${iframeRoute}:${reloadTick}`;
   const activeTab = tabs.find((t) => t.route === activeRoute) ?? tabs[0];
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -139,6 +146,9 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
   const docResizeObserverRef = useRef<ResizeObserver | null>(null);
   const scaleRef = useRef(1);
   const gatingRef = useRef({ windowLoadSeen: false, revealDoneSeen: false, timeoutFired: false });
+  // ホットスポット (overlay button) の DOM 参照。hotspot.id → button。
+  // メニューを閉じたとき、開いていたホットスポットへ focus を戻すために使う (修正4)。
+  const hotspotButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const [scale, setScale] = useState(1);
   const [intrinsicHeight, setIntrinsicHeight] = useState(DEFAULT_INTRINSIC_HEIGHT);
@@ -146,9 +156,14 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [flashId, setFlashId] = useState<string | null>(null);
 
-  const [sidePanel, setSidePanel] = useState<{ slots: SlotPanelItem[]; contentGaps: ContentGapItem[] }>({
+  const [sidePanel, setSidePanel] = useState<{
+    slots: SlotPanelItem[];
+    contentGaps: ContentGapItem[];
+    works: WorksNavItem[];
+  }>({
     slots: [],
     contentGaps: [],
+    works: [],
   });
   const [sidePanelPending, startSidePanelTransition] = useTransition();
 
@@ -256,7 +271,7 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
       const result = await listSidePanel(activeRoute);
       if (!result.ok) {
         toast.error(errorMessage(result));
-        setSidePanel({ slots: [], contentGaps: [] });
+        setSidePanel({ slots: [], contentGaps: [], works: [] });
         return;
       }
       setSidePanel(result.value);
@@ -308,8 +323,16 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
     setReloadTick((t) => t + 1);
   }
 
+  /**
+   * メニュー (または alt 編集フォーム) を閉じる。HotspotMenu の docstring どおり、
+   * 閉じたときは開いていたホットスポットへ focus を戻す (Esc / キャンセル操作の受入条件、修正4)。
+   * ボタンは menu の開閉に関わらず overlay として常に DOM に存在するため、
+   * setMenu(null) 前でも hotspotButtonRefs から同期的に focus() できる。
+   */
   function closeMenu() {
+    const hotspotId = menu?.hotspot.id;
     setMenu(null);
+    if (hotspotId) hotspotButtonRefs.current.get(hotspotId)?.focus();
   }
 
   function openMenuFor(hotspot: Hotspot) {
@@ -410,6 +433,16 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
     setPickerOpen(true);
   }
 
+  /** §5.1a: 施工事例クリック → iframe を /edit/works/{slug} (詳細ページ) に切り替える */
+  function handleWorkNavClick(slug: string) {
+    setWorksDetailSlug(slug);
+  }
+
+  /** §5.1a: パンくず的な「一覧に戻る」導線。/edit/works (一覧) に戻す */
+  function handleBackToWorksList() {
+    setWorksDetailSlug(null);
+  }
+
   function handleSidePanelGapClick(item: ContentGapItem) {
     // cover/photo 未設定のコンテンツは公開ページに DOM が出ないため、直接 MediaPicker を開く (§5.4)
     setPickerTarget({
@@ -437,7 +470,14 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
 
   return (
     <div className="flex flex-col gap-4">
-      <Tabs value={activeRoute} onValueChange={(v) => setActiveRoute(v as string)}>
+      <Tabs
+        value={activeRoute}
+        onValueChange={(v) => {
+          setActiveRoute(v as string);
+          // 別タブへ切り替えたら /works の詳細ナビ状態はリセットする (§5.1a)
+          setWorksDetailSlug(null);
+        }}
+      >
         <TabsList variant="line" className="h-auto flex-wrap">
           {tabs.map((tab) => (
             <TabsTrigger key={tab.route} value={tab.route}>
@@ -461,8 +501,8 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
           <iframe
             key={iframeKey}
             ref={iframeRef}
-            src={editUrl(activeRoute)}
-            title={`編集プレビュー: ${activeTab?.label ?? activeRoute}`}
+            src={editUrl(iframeRoute)}
+            title={`編集プレビュー: ${activeTab?.label ?? activeRoute}${worksDetailSlug ? ` / ${worksDetailSlug}` : ""}`}
             onLoad={handleIframeLoad}
             className="absolute left-0 top-0 origin-top-left border-0 bg-white"
             style={{ width: INTRINSIC_WIDTH, height: intrinsicHeight, transform: `scale(${scale})` }}
@@ -470,6 +510,10 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
           {hotspots.map((hotspot) => (
             <button
               key={hotspot.id}
+              ref={(el) => {
+                if (el) hotspotButtonRefs.current.set(hotspot.id, el);
+                else hotspotButtonRefs.current.delete(hotspot.id);
+              }}
               type="button"
               aria-label={`${hotspot.label} を編集`}
               onClick={() => openMenuFor(hotspot)}
@@ -505,9 +549,13 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
         <SidePanel
           slots={sidePanel.slots}
           contentGaps={sidePanel.contentGaps}
+          works={sidePanel.works}
+          activeWorkSlug={activeRoute === "/works" ? worksDetailSlug : null}
           pending={sidePanelPending}
           onSlotClick={handleSidePanelSlotClick}
           onGapClick={handleSidePanelGapClick}
+          onWorkClick={handleWorkNavClick}
+          onBackToWorksList={handleBackToWorksList}
         />
       </div>
 
