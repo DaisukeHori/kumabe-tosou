@@ -201,3 +201,35 @@ export type AdminVoice = {
   created_at: string;
   updated_at: string;
 };
+
+// ---- ビジュアル画像エディタ拡張 (visual-media-editor.md §6 / §6.1) ----
+// setWorkImage (work_images ギャラリー 1 行の置換) / setWorkCover・setVoicePhoto・setPostCover
+// (cover/photo 系の楽観排他付き差し替え) の入力契約。
+
+/**
+ * work_images ギャラリー画像の置換 (§6.1)。sort_order はクライアントから受け取らず、
+ * RPC (replace_work_image) が対象行から読み直して維持する。
+ */
+export const zSetWorkImageReq = z
+  .object({
+    work_id: z.string().uuid(),
+    old_media_id: z.string().uuid(),
+    new_media_id: z.string().uuid().nullable(),
+  })
+  .strict();
+export type SetWorkImageReq = z.infer<typeof zSetWorkImageReq>;
+
+/**
+ * works.cover_media_id / voices.photo_media_id / posts.cover_media_id の楽観排他付き差し替え (§6)。
+ * old_media_id はクライアント提示の楽観排他期待値 (data-editable-media のクリック時点の値) —
+ * 偽装しても CAS が失敗するか自分の変更が上書きされるだけで、権限は RLS が最終防御。
+ */
+export const zSetContentCoverReq = z
+  .object({
+    kind: z.enum(["work", "voice", "post"]),
+    id: z.string().uuid(),
+    old_media_id: z.string().uuid().nullable(),
+    new_media_id: z.string().uuid().nullable(),
+  })
+  .strict();
+export type SetContentCoverReq = z.infer<typeof zSetContentCoverReq>;

@@ -24,6 +24,21 @@ export const KMB_ERRORS = {
     message: "他の人がこの内容を更新しています。最新の内容を確認してください。",
     recovery: "最新版との差分を提示し選択させる",
   },
+  "KMB-E107": {
+    category: "1xx 入力検証",
+    message: "存在しないスロットが指定されました。",
+    recovery: "再読み込み。registry と DB の整合を確認",
+  },
+  "KMB-E108": {
+    category: "1xx 入力検証",
+    message: "この画像はすでにこの施工事例に追加されています。",
+    recovery: "別の画像を選ぶか、既存画像を先に削除",
+  },
+  "KMB-E109": {
+    category: "1xx 入力検証",
+    message: "対象が見つからないか、他の変更と競合しました。",
+    recovery: "画面を再読み込みして最新の状態をご確認ください",
+  },
   "KMB-E201": {
     category: "2xx 認証認可",
     message: "ログインが必要です。",

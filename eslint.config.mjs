@@ -24,6 +24,7 @@ const MODULES = [
   "settings",
   "ai-studio",
   "distribution",
+  "page-media",
 ];
 
 function restrictedModuleImportPatterns(excludeModule) {

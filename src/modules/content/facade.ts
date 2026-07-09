@@ -75,6 +75,34 @@ export interface ContentFacade {
     transition: StatusTransition,
     expectedUpdatedAt: string,
   ): Promise<Result<{ updated_at: string }>>;
+
+  // ---- ビジュアル画像エディタ拡張 (visual-media-editor.md §6 / §6.1。
+  // module-contracts.md 未反映 — オーケストレーターへ報告済み) ----
+  // 保存成功時の revalidate はあえて入れない (V2b の Server Action 側が §5.5b の
+  // 失効セットを一元管理する設計のため。既存メソッドの revalidateTag 慣行とは異なる)。
+  /** works.cover_media_id の楽観排他付き差し替え。CAS 不一致・対象なしは KMB-E109 */
+  setWorkCover(
+    workId: string,
+    oldMediaId: string | null,
+    newMediaId: string | null,
+  ): Promise<Result<void>>;
+  /** voices.photo_media_id の楽観排他付き差し替え。CAS 不一致・対象なしは KMB-E109 */
+  setVoicePhoto(
+    voiceId: string,
+    oldMediaId: string | null,
+    newMediaId: string | null,
+  ): Promise<Result<void>>;
+  /** posts.cover_media_id の楽観排他付き差し替え。CAS 不一致・対象なしは KMB-E109 */
+  setPostCover(
+    postId: string,
+    oldMediaId: string | null,
+    newMediaId: string | null,
+  ): Promise<Result<void>>;
+  /**
+   * work_images ギャラリー 1 行の置換 (RPC replace_work_image を呼ぶ、§6.1)。
+   * 同一 work に new_media_id が既存 → KMB-E108。対象行なし → KMB-E109
+   */
+  setWorkImage(workId: string, oldMediaId: string, newMediaId: string | null): Promise<Result<void>>;
 }
 
 // ---- kind ↔ table / tag 変換 ----
@@ -612,6 +640,44 @@ async function transitionVoice(
   return { ok: true, value: { updated_at: updateResult.value.updated_at } };
 }
 
+// ---- ビジュアル画像エディタ拡張 (visual-media-editor.md §6 / §6.1) ----
+
+async function setWorkCover(
+  workId: string,
+  oldMediaId: string | null,
+  newMediaId: string | null,
+): Promise<Result<void>> {
+  const client = await createSupabaseServerClient();
+  return repo.updateCoverWithCas(client, "works", workId, "cover_media_id", oldMediaId, newMediaId);
+}
+
+async function setVoicePhoto(
+  voiceId: string,
+  oldMediaId: string | null,
+  newMediaId: string | null,
+): Promise<Result<void>> {
+  const client = await createSupabaseServerClient();
+  return repo.updateCoverWithCas(client, "voices", voiceId, "photo_media_id", oldMediaId, newMediaId);
+}
+
+async function setPostCover(
+  postId: string,
+  oldMediaId: string | null,
+  newMediaId: string | null,
+): Promise<Result<void>> {
+  const client = await createSupabaseServerClient();
+  return repo.updateCoverWithCas(client, "posts", postId, "cover_media_id", oldMediaId, newMediaId);
+}
+
+async function setWorkImage(
+  workId: string,
+  oldMediaId: string,
+  newMediaId: string | null,
+): Promise<Result<void>> {
+  const client = await createSupabaseServerClient();
+  return repo.replaceWorkImage(client, workId, oldMediaId, newMediaId);
+}
+
 export const contentFacade: ContentFacade = {
   createBlogPostFromDraft,
   publish,
@@ -632,4 +698,8 @@ export const contentFacade: ContentFacade = {
   createVoice,
   updateVoice,
   transitionVoice,
+  setWorkCover,
+  setVoicePhoto,
+  setPostCover,
+  setWorkImage,
 };
