@@ -27,12 +27,40 @@ export type Rect = {
 
 /**
  * iframe 内の要素の rect (iframe 自身のビューポート座標系、素の px) を、
- * 親ドキュメントの座標系へ写像する。
+ * 親ドキュメント (ビューポート) の座標系へ写像する。
+ *
+ * @deprecated ホットスポット overlay (visual-editor.tsx) は `position: absolute` で
+ * 「最も近い position 指定祖先」である containerRef 基準に配置されるため、本関数が返す
+ * ビューポート座標をそのまま style.top/left に使うと、containerRef 自身のビューポート位置
+ * (タブ・ヘッダーの高さやページスクロール量) の分だけ二重にオフセットしてズレる。
+ * overlay 配置には {@link mapChildRectToContainer} を使うこと。
  */
 export function mapChildRectToParent(iframeRect: Rect, innerRect: Rect, scale: number): Rect {
   return {
     left: iframeRect.left + innerRect.left * scale,
     top: iframeRect.top + innerRect.top * scale,
+    width: innerRect.width * scale,
+    height: innerRect.height * scale,
+  };
+}
+
+/**
+ * iframe 内の要素の rect (iframe 自身のビューポート座標系、素の px) を、
+ * `position: absolute` overlay の配置に使う「コンテナ (position 指定祖先) 相対座標系」へ写像する。
+ *
+ * `iframeRect` / `containerRect` はいずれも `getBoundingClientRect()` のビューポート座標。
+ * 両者の差分を取ることで、コンテナ自身のビューポート位置 (タブ・ヘッダーの高さ、ページスクロール量)
+ * を打ち消してから、内側要素のローカル座標 (innerRect) に scale を掛けて加算する。
+ */
+export function mapChildRectToContainer(
+  iframeRect: Rect,
+  containerRect: Rect,
+  innerRect: Rect,
+  scale: number,
+): Rect {
+  return {
+    left: iframeRect.left - containerRect.left + innerRect.left * scale,
+    top: iframeRect.top - containerRect.top + innerRect.top * scale,
     width: innerRect.width * scale,
     height: innerRect.height * scale,
   };
