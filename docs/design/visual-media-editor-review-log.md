@@ -42,13 +42,15 @@
 
 **重大な副産物**: 本番 HTTP 実測で `storage_path` 直 URL = 400、`{id}.webp` = 200 を確認。**公開サイトの works/voices/posts 画像は現在壊れている実バグ**と判明し、V0 を hotfix + 検証スクリプトに再定義 (設計書 §2.3)。
 
-## v1.4 レビュー — 依頼中 (2026-07-09)
+## v1.4 レビュー (2026-07-09) — **BLOCKER 0 = 実装 GO** 🎉
 
-結果はこのファイルと Issue #1 に追記する。
+**BLOCKER 0 / MAJOR 0 / MINOR 3**。総評: 「v1.4 は v1.3 指摘の設計反映として整っています。残りは CAS の Supabase 実装メモを補う程度です。BLOCKER 0。実装 GO。」
 
-## 実装 GO 判定の条件
+確認済み: §11.3 の対応は全節に反映 / Record + JSON-safe で unstable_cache 問題解消 (Next 15.5.20 実装で裏取り) / cover CAS は RLS/Supabase client で実装可能。
 
-Codex レビューで **BLOCKER 0** かつ設計書側で MAJOR も対応済み(MINOR は実装中対応可)であることを確認してから、V0/V1(基盤)実装に着手する。
+MINOR 3 件 (CAS の .select() チェーンと .is()/.eq() 分岐、§5.5b の content 素 fetch 再掲) は同日 v1.4 に反映済み。
+
+**実装 GO (2026-07-09)**: V0 (hotfix、GO 前に先行着手済み) → V1 → V2a/V2b 並列 → V3 の順で実装フェーズへ。
 
 ## Codex への依頼テンプレ
 

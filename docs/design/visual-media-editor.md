@@ -319,7 +319,7 @@ Server Action の実装契約:
    - posts.cover 保存: 対象 post の kind に応じて `revalidateTag("posts:" + kind)` + 該当 path (`/notes` + `/notes/{slug}` または `/blog` + `/blog/{slug}`)。全 kind を無差別に失効させない (既存 content facade の tagForKind パターン踏襲)
 4. Server Action の Result を返却 → **クライアントは成功 Result を受け取ってから** `iframe.contentWindow.location.reload()` を呼ぶ。
 
-**エディタの即時反映は revalidate に依存しない** (v1.3): iframe が読む `/edit/**` は force-dynamic + `resolveAllFresh()` のため、reload すれば必ず DB 最新。上記の失効は**公開 (site) 側**を最新化するためのもので、多少の伝播遅延を許容する。
+**エディタの即時反映は revalidate に依存しない** (v1.3/v1.4): iframe が読む `/edit/**` は force-dynamic で、page_media は `resolveAllFresh()`、**works/posts/voices の content データも素の fetch 関数** (§5.3 の 2 層化) を使うため、reload すれば必ず DB 最新。上記の失効は**公開 (site) 側**を最新化するためのもので、多少の伝播遅延を許容する。
 
 **revalidateTag 単引数 API の採用判断** (MAJOR-v1.2 の (2) への回答): 本リポジトリは Next 15.5.20 で、既存コードベース全体 (content facade 8 箇所 / admin actions) が `revalidateTag(tag)` / `revalidatePath(path)` の安定 API を使用している。`unstable_expireTag` への移行はリポジトリ横断変更となり本フェーズのスコープ外。エディタの即時性要件は上記のとおり /edit ルートで満たすため、公開側は既存 API の失効セマンティクス (次回アクセス時に再生成) で十分。将来 Next を更新して `updateTag` 系が安定化した際に一括移行する。
 
@@ -357,12 +357,17 @@ export interface PageMediaFacade {
 //
 // 楽観排他 (MAJOR-v1.4 で work_images と対称の CAS に統一):
 //   cover/photo 系は data-editable-content のクリック時点の表示 media_id を old として送り、
-//   update ... set cover_media_id = {new}
-//   where id = {id} and cover_media_id is not distinct from {old}
-//   の CAS 更新にする (is not distinct from で null 同士も一致)。
-//   affected rows = 0 なら KMB-E109 (他所で先に変更された)。UI は「リロードして最新を確認」。
+//   「cover_media_id が old と一致する行だけを new に更新」する CAS にする。
+//   意味論は SQL の is not distinct from (null 同士も一致) と同じ。
+//   一致行なし = KMB-E109 (他所で先に変更された)。UI は「リロードして最新を確認」。
 //   updated_at ベースの排他は使わない (visual editor は「見えている画像」が比較対象として自然で、
 //   works フォーム全体の updated_at 排他と競合しない)。
+//
+// Supabase JS での実装メモ (MINOR-v1.4-final、Codex 確認済み):
+//   - PostgREST は is not distinct from を直接書けないため、
+//     old が null → .is("cover_media_id", null) / 非 null → .eq("cover_media_id", old) で等価にする
+//   - update() は既定で更新行を返さないため、.select("id") をチェーンし
+//     data が空 (0 行) を KMB-E109 に写像する (affected rows の判定はこれで行う)
 ```
 
 Zod 契約 (`page-media/contracts.ts`):
@@ -565,4 +570,4 @@ export const zSetWorkImageReq = z.object({
 | v1.1 | 2026-07-09 | Codex 外部レビュー 12 件反映 (BLOCKER 3 / MAJOR 8 / MINOR 1) |
 | v1.2 | 2026-07-09 | Codex 再レビュー 6 件反映 (BLOCKER 1 / MAJOR 4 / MINOR 1) |
 | v1.3 | 2026-07-09 | Codex 再々レビュー 9 件反映 (BLOCKER 2 / MAJOR 4 / MINOR 3)。edit-token 廃止 → /edit ルート分離、updated_by 廃止、V0 補修新設、E109 採番 |
-| v1.4 | 2026-07-09 | Codex v1.3 レビュー 8 件反映 (BLOCKER 1 / MAJOR 3 / MINOR 4)。Record 契約・/edit fresh fetch・EDITABLE_ROUTES・cover CAS。本番実測で公開画像 400 の実バグ確認 → V0 を hotfix 化。実装 GO 判断待ち |
+| v1.4 | 2026-07-09 | Codex v1.3 レビュー 8 件反映 (BLOCKER 1 / MAJOR 3 / MINOR 4)。Record 契約・/edit fresh fetch・EDITABLE_ROUTES・cover CAS。本番実測で公開画像 400 の実バグ確認 → V0 を hotfix 化。**Codex 最終レビュー: BLOCKER 0 = 実装 GO** (MINOR 3 件 = CAS の Supabase 実装メモも反映済み) |
