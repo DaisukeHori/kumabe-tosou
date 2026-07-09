@@ -185,7 +185,8 @@ async function schedulePosts(entries: ScheduleEntry[]): Promise<Result<{ post_id
       const content = draft.content as XContent;
       tweetCount = content.thread.length;
       urlCount = content.thread.filter((t) => twitterText.extractUrls(t.text).length > 0).length;
-      costCents = estimateXCostCents({ tweetCount, urlCount });
+      const mediaCount = content.thread.filter((t) => t.media_id !== null).length;
+      costCents = estimateXCostCents({ tweetCount, urlCount, mediaCount });
     }
 
     prepared.push({

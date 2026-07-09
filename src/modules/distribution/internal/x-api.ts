@@ -1,14 +1,18 @@
 import { ConfirmedApiError } from "./publish-error-classify";
 
 /**
- * X (Twitter) API v2/v1.1 の薄い fetch ラッパ (設計書 §8.1: SDK 不使用)。
+ * X (Twitter) API v2 の薄い fetch ラッパ (設計書 §8.1: SDK 不使用)。
  * fetch 自身が投げる例外 (AbortError/TypeError) はそのまま再 throw し、
  * classifyPublishFailure が「応答不明」と判定できるようにする。
  * HTTP 応答を受信できた 4xx/5xx は ConfirmedApiError に包んで「確定エラー」として扱う。
+ *
+ * 画像アップロードは v1.1 (`upload.twitter.com/1.1/media/upload.json`、base64 の
+ * `media_data`) が 2025-06-09 に sunset 済みで必ず失敗するため本ファイルから撤去した
+ * (research/ai-studio-v2/sns-image-posting.md §2.1)。v2 media upload (INIT/APPEND/FINALIZE)
+ * は ./x-media.ts の uploadMediaToX() を使う。
  */
 
 const X_API_BASE = "https://api.twitter.com/2";
-const X_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json";
 const X_TOKEN_URL = "https://api.twitter.com/2/oauth2/token";
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -40,33 +44,6 @@ export async function postTweet(input: PostTweetInput): Promise<{ id: string }> 
   const id = json.data?.id;
   if (!id) throw new ConfirmedApiError("X API 応答に tweet id がありません", res.status);
   return { id };
-}
-
-/**
- * v1.1 media/upload (chunked/resumable ではない単発アップロード。画像 <5MB 想定)。
- * media_category="tweet_image" 固定のため mimeType 引数は取らない (JPEG レンディション前提)。
- */
-export async function uploadImageToX(accessToken: string, imageBytes: Buffer): Promise<string> {
-  const form = new URLSearchParams();
-  form.set("media_data", imageBytes.toString("base64"));
-  form.set("media_category", "tweet_image");
-
-  const res = await fetch(X_UPLOAD_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new ConfirmedApiError(`X media upload エラー (status=${res.status}): ${detail}`, res.status);
-  }
-  const json = (await res.json()) as { media_id_string?: string };
-  if (!json.media_id_string) {
-    throw new ConfirmedApiError("X media upload 応答に media_id が含まれていません", res.status);
-  }
-  return json.media_id_string;
 }
 
 export type RefreshXTokenResult = { accessToken: string; refreshToken: string; expiresAt: string };
