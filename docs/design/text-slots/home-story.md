@@ -1,0 +1,157 @@
+# テキスト棚卸し: home-story
+
+
+## Tier A (36)
+
+- `home.hero.cta.shop` [cta/単行/max14] 「SHOPで概算を出す」 — ヒーロー直下の主要CTA。site_settings.hero.cta_label(単一項目)と概念が重複するため設計時に要調整
+- `home.hero.cta.colors` [cta/単行/max14] 「8色の色見本を見る」 — ヒーロー直下の第2CTA。既存hero設定は単一CTAのみのため新規page_textスロット候補
+- `home.hero.cta.service` [cta/単行/max12] 「サービス・料金」 — ヒーロー直下の第3CTA。既存hero設定は単一CTAのみのため新規page_textスロット候補
+- `home.statement.heading` [heading/複数行/max90] 「デザインモデルの品質は、表面処理で決まる。それでも…その空白のために、この工房がある。」 — トップページの核心メッセージ、最終行はtext-soulハイライト装飾付きの5行構成
+- `home.statement.cta` [cta/単行/max18] 「なぜこの工房を始めたのか」 — storyページへ誘導する導線CTA文言
+- `home.craft.heading` [heading/単行/max24] 「3つの技術を、ひとりで持つ。」 — サービス概要セクションの見出し、短く強い『声』
+- `home.craft.card.1.title` [label/単行/max16] 「積層痕を消す研磨」 — 3技術カードの1枚目タイトル、短い訴求フレーズ
+- `home.craft.card.2.title` [label/単行/max16] 「自動車グレードの艶」 — 3技術カードの2枚目タイトル、短い訴求フレーズ
+- `home.craft.card.3.title` [label/単行/max16] 「3コートパールの意匠」 — 3技術カードの3枚目タイトル、短い訴求フレーズ
+- `home.craft.cta.process` [cta/単行/max14] 「全9工程を見る」 — processページへの導線CTA文言
+- `home.craft.cta.about` [cta/単行/max16] 「工房と職人について」 — aboutページへの導線CTA文言
+- `home.colorlineup.heading` [heading/複数行/max30] 「名車の象徴色で組んだ、8枚の技術証明。」 — 実績プレビューセクションの見出し
+- `home.colorlineup.cta` [cta/単行/max16] 「色見本を一枚ずつ見る」 — colorsページへの導線CTA文言
+- `home.twoscenes.heading` [heading/単行/max26] 「一点の勝負にも、千個の生産にも。」 — 2シーン対応セクションの見出し
+- `home.twoscenes.scene.1.title` [label/単行/max28] 「プレミアムデザインモデルの一点仕上げ」 — シーン1のサブ見出し、意味のある訴求フレーズ
+- `home.twoscenes.scene.2.title` [label/単行/max28] 「金型を作らない少量生産の外観仕上げ」 — シーン2のサブ見出し、意味のある訴求フレーズ
+- `home.stats.heading` [heading/複数行/max20] 「工房の能力を、数字で。」 — 数字訴求セクションの見出し
+- `home.materials.heading` [heading/複数行/max40] 「FDMも、光造形も、SLSも。素材ごとに、手を変える。」 — 素材対応導線セクションの見出し
+- `home.materials.cta` [cta/単行/max16] 「素材別の対応を見る」 — materialsページへの導線CTA文言
+- `home.notes.heading` [heading/複数行/max32] 「なぜ綺麗なのかは、写真だけでは伝わらない。」 — 読みもの導線セクションの見出し
+- `home.notes.cta` [cta/単行/max14] 「読みものを開く」 — notesページへの導線CTA文言
+- `home.gallery.heading` [heading/単行/max16] 「工房の、手の記録。」 — ギャラリーセクションの見出し
+- `home.cta.heading` [heading/複数行/max44] 「見積もりは、3つの数字で。サイズ × 個数 × グレード。」 — ページ最下部CTA帯の見出し、強い訴求文
+- `home.cta.button` [cta/単行/max10] 「相談する」 — contactページへの最終CTAボタン文言
+- `story.head.title` [heading/複数行/max28] 「なぜ、積層痕と戦うことにしたのか。」 — storyページのメインタイトル、サイトの声そのもの
+- `story.head.lead` [lead/複数行/max130] 「家電の量産塗装で長年腕を磨いた職人が、どうして3Dプリントの表面処理という…」 — ストーリー全体の導入文、章立ての前振りとして重要
+- `story.chapter1.title` [heading/複数行/max22] 「毎日、同じ色を、同じ艶で。」 — 第一章タイトル、物語の声
+- `story.chapter2.title` [heading/複数行/max24] 「その造形物には、縞があった。」 — 第二章タイトル、物語の声
+- `story.chapter3.title` [heading/複数行/max20] 「樹脂は、鉄板とは違った。」 — 第三章タイトル、物語の声
+- `story.chapter4.title` [heading/複数行/max28] 「答えは、毎日やっていた下地にあった。」 — 第四章タイトル、物語の声
+- `story.chapter4.quote` [body/複数行/max60] 「量産品と、見分けがつかない。金型を使わずに、金型で成形したような顔をつくる。」 — トップページ見出しのモチーフ(見分けがつかない)を反復するブランド核心フレーズ
+- `story.chapter5.title` [heading/複数行/max22] 「大分から、あなたの一個へ。」 — 第五章タイトル、物語の声
+- `story.message.heading` [heading/複数行/max36] 「「見えなくなる仕事」に、誇りを持っています。」 — 代表メッセージの見出し、ブランドの核心フレーズ
+- `story.message.body` [body/複数行/max550] 「私は、塗装職人です。長く家電の量産塗装に携わり、来る日も来る日も…」 — 代表本人の一人称メッセージ全4段落、オーナーが最も書き換えたくなる一等地コンテンツ。長文のためtextarea/リッチテキスト前提
+- `story.cta.heading` [heading/複数行/max26] 「物語の続きは、あなたの造形物で。」 — ページ最下部CTA帯の見出し
+- `story.cta.button` [cta/単行/max10] 「相談する」 — contactページへの最終CTAボタン文言
+
+## Tier B (51)
+
+- `home.hero.photoband.caption` [caption/単行/max40] 「自動車グレードの塗装が、造形物の最終工程になる。」 — ヒーロー写真のキャプション、変更頻度は低い説明文
+- `home.statement.body` [body/複数行/max160] 「塗装はできても積層痕を知らない塗装店。造形はできても、仕上げは単色止まりの出力サービス…」 — 見出しを補足する説明段落、変更頻度は見出しより低い
+- `home.craft.card.1.body` [body/複数行/max110] 「3Dプリント特有の縞を #800 まで面で研ぎ落とし、プラサフで埋め、#1200 で仕上げる…」 — カード説明本文、番手数値を含むが地の文として編集頻度は低め
+- `home.craft.card.2.body` [body/複数行/max110] 「2液ウレタンクリアは、吹きっぱなしで自動車外板と同等の艶が出ます…」 — カード説明本文、変更頻度は低い
+- `home.craft.card.3.body` [body/複数行/max110] 「ベース＋パール＋クリアの3層構造。ホワイトパールやソウルレッドなど…」 — カード説明本文、変更頻度は低い
+- `home.craft.1.caption` [caption/単行/max16] 「研ぎの手」 — home.craft.1画像に紐づくキャプション、既存画像スロット番号に対応
+- `home.craft.2.caption` [caption/単行/max16] 「吹き付けの手」 — home.craft.2画像に紐づくキャプション、既存画像スロット番号に対応
+- `home.craft.3.caption` [caption/単行/max16] 「仕上がりの艶」 — home.craft.3画像に紐づくキャプション、既存画像スロット番号に対応
+- `home.colorlineup.lead` [body/複数行/max100] 「8色中5色が3コート・高難度系。いずれも市販の調色済み補修塗料を正規の用途で使用し…」 — 補足説明文。『参考色』表記など色再現に関する注記ニュアンスがあり変更時は慎重に
+- `home.colorlineup.swatch.note.1` [caption/単行/max16] 「実績納品色」 — 色見本1件目に付くマーケティング一言バッジ
+- `home.colorlineup.swatch.note.2` [caption/単行/max16] 「最高難度の技術証明」 — 色見本2件目に付くマーケティング一言バッジ
+- `home.colorlineup.swatch.note.3` [caption/単行/max16] 「現行クラウンの上品な茶」 — 色見本3件目に付くマーケティング一言バッジ
+- `home.colorlineup.swatch.note.4` [caption/単行/max16] 「全国650台限定の伝説色」 — 色見本4件目に付くマーケティング一言バッジ
+- `home.colorlineup.swatch.note.5` [caption/単行/max16] 「最難関ソリッド黒」 — 色見本5件目に付くマーケティング一言バッジ
+- `home.colorlineup.swatch.note.6` [caption/単行/max16] 「R34 GT-Rの代名詞」 — 色見本6件目に付くマーケティング一言バッジ
+- `home.colorlineup.swatch.note.7` [caption/単行/max16] 「英国の象徴色」 — 色見本7件目に付くマーケティング一言バッジ
+- `home.colorlineup.swatch.note.8` [caption/単行/max16] 「匠塗のもう一枚の看板」 — 色見本8件目に付くマーケティング一言バッジ
+- `home.twoscenes.scene.1.body` [body/複数行/max120] 「企業トップへの最終プレゼン、重要商談、展示会、クラウドファンディングの掲載写真…」 — シーン1の説明本文、変更頻度は低い
+- `home.twoscenes.scene.2.body` [body/複数行/max120] 「クラウドファンディングのリターン品、D2Cの初回ロット、産業機器の筐体…」 — シーン2の説明本文、変更頻度は低い
+- `home.twoscenes.summary` [body/複数行/max120] 「試作を仕上げたその手で、量産も仕上げる。クラウドファンディング達成の瞬間に…」 — セクション末尾のまとめ文
+- `home.stats.item.1.label` [label/単行/max20] 「バンパー同時塗装」 — 統計1件目の見出しラベル、実数(6本)と対応するため単独編集時は整合注意
+- `home.stats.item.1.note` [caption/複数行/max70] 「この同時処理能力があるから、小物なら100個超を一度に…」 — 統計1件目の補足説明文
+- `home.stats.item.2.label` [label/単行/max20] 「段階研磨の番手」 — 統計2件目の見出しラベル、実数(220–2000)と対応するため単独編集時は整合注意
+- `home.stats.item.2.note` [caption/複数行/max70] 「粗い番手から徐々に上げる段階研磨。海外の現場で「射出成形品と見分けが…」 — 統計2件目の補足説明文
+- `home.stats.item.3.label` [label/単行/max20] 「名車の象徴色ラインナップ」 — 統計3件目の見出しラベル、実数(8色)と対応するため単独編集時は整合注意
+- `home.stats.item.3.note` [caption/複数行/max70] 「うち5色が3コート・高難度系。ソウルレッドもベイサイドブルーも…」 — 統計3件目の補足説明文
+- `home.stats.item.4.label` [label/単行/max20] 「対応数量（点）」 — 統計4件目の見出しラベル、実数(1–1,000)と対応するため単独編集時は整合注意
+- `home.stats.item.4.note` [caption/複数行/max70] 「勝負試作の一点から、ブリッジ生産の千個まで。試作と量産を…」 — 統計4件目の補足説明文
+- `home.stats.item.5.label` [label/単行/max20] 「最高級の黒が下地にかける時間」 — 統計5件目の見出しラベル、実数(40時間)と対応するため単独編集時は整合注意
+- `home.stats.item.5.note` [caption/複数行/max70] 「名車センチュリーの黒は、塗装だけで約40時間・水研ぎ3回…」 — 統計5件目の補足説明文
+- `home.stats.item.6.label` [label/単行/max20] 「2液ウレタン完全硬化」 — 統計6件目の見出しラベル、実数(5–7日)と対応するため単独編集時は整合注意
+- `home.stats.item.6.note` [caption/複数行/max70] 「主剤と硬化剤の化学反応で硬く艶やかに。硬化を待ち、検品してから…」 — 統計6件目の補足説明文
+- `home.materials.body` [body/複数行/max160] 「造形方式が違えば、積層痕の出方も塗料の乗り方も変わります。FDMは研磨で埋め…」 — 技術素材説明の本文、変更頻度は低い
+- `home.notes.body` [body/複数行/max130] 「工程と色の裏側を、読みものとして残しています。センチュリーの黒が水研ぎ3回…」 — 読みもの導線の説明文、変更頻度は低い
+- `home.gallery.lead` [body/単行/max40] 「研ぎ、吹き、仕上げる。派手さのない手仕事の断片を。」 — ギャラリーセクションの短いリード文
+- `home.gallery.1.caption` [caption/単行/max16] 「手を動かす」 — home.gallery.1画像に紐づくキャプション、既存画像スロット番号に対応
+- `home.gallery.2.caption` [caption/単行/max16] 「段取り」 — home.gallery.2画像に紐づくキャプション、既存画像スロット番号に対応
+- `home.gallery.3.caption` [caption/単行/max16] 「精度」 — home.gallery.3画像に紐づくキャプション、既存画像スロット番号に対応
+- `home.cta.note` [body/単行/max44] 「造形データや写真があれば、より正確に概算をお出しできます。」 — CTA帯の補足説明文
+- `story.chapter1.body` [body/複数行/max600] 「隈部塗装を始める前、隈部信之の一日は、色に始まり、色に終わっていました…」 — 第一章本文3段落。<strong>強調タグを含むためプレーンテキスト化時は書式喪失に注意
+- `story.chapter1.photo.caption` [caption/単行/max30] 「均一に、正確に。それが量産塗装の日常だった。」 — 第一章の写真キャプション
+- `story.chapter2.body` [body/複数行/max400] 「きっかけは、知人からの一本の相談でした。手のひらにのる、樹脂の造形物…」 — 第二章本文2段落。<strong>強調タグを含む
+- `story.chapter2.quote.text` [body/複数行/max130] 「「塗装をやってくれる店はあるんです。でも、この積層痕を分かってる人がいない…」 — 顧客の声として提示される疑似証言の引用文、表現の信頼性維持に注意
+- `story.chapter2.photo.caption` [caption/単行/max36] 「造形はできる。だが、その先の仕上げに空白があった。」 — 第二章の写真キャプション
+- `story.chapter3.body` [body/複数行/max500] 「思い立ってすぐ、うまくいったわけではありません。自動車の鉄板と…」 — 第三章本文3段落。<strong>強調タグを含む
+- `story.chapter3.photo.caption` [caption/単行/max20] 「研いでは吹き、吹いては削る。」 — 第三章の写真キャプション
+- `story.chapter4.body` [body/複数行/max400] 「転機は、ある一枚のテストピースでした。積層痕を #800 の紙やすりで面ごと…」 — 第四章本文2段落。#800/#1200等のインライン等幅数値表記と<strong>強調を含む
+- `story.chapter4.photo.caption` [caption/単行/max20] 「量産品と、見分けがつかない。」 — 第四章の写真キャプション
+- `story.chapter5.body` [body/複数行/max500] 「こうして、隈部塗装は始まりました。大分県豊後高田市の、小さな工房…」 — 第五章本文3段落。<strong>強調タグ、所在地(大分県豊後高田市)言及を含む
+- `story.chapter5.photo.caption` [caption/単行/max20] 「大分から、あなたの一個へ。」 — 第五章の写真キャプション
+- `story.cta.note` [body/単行/max55] 「「絶対に外せない一個」を、量産品の顔に。まずはお気軽にご相談ください。」 — CTA帯の補足説明文
+
+## Tier C (43)
+
+- `home.hero.index` [label/単行/max24] 「INDEX 00 — HOME」 — SEC.xxと同種のINDEX意匠ラベル、編集対象外の構造文字
+- `home.hero.techsubtitle` [label/単行/max40] 「SURFACE FINISHING FOR 3D PRINTS」 — 英語の装飾サブラベル、意匠のため編集対象外
+- `home.hero.dimlabels` [label/単行/max20] 「200mm CLASS / φ55」 — 設計図グリッドの寸法マーカー装飾、構造上の文字
+- `home.hero.ticker` [label/複数行/max200] 「#800 SANDED / PRIMER-SURFACER / #1200 WET-SANDED 他7項目」 — 英語技術タグの横スクロールマーキー、装飾のため編集対象外(7項目)
+- `home.hero.photoband.figno` [label/単行/max20] 「FIG.00 — FINISH」 — figure番号ラベル、構造上の文字
+- `home.hero.photoband.captionEn` [label/単行/max30] 「AUTOMOTIVE-GRADE FINISH」 — 英語装飾ラベル、意匠のため編集対象外
+- `home.hero.photoband.credit` [caption/単行/max40] 「Photo: cmreflections / Unsplash」 — 写真クレジット表記、帰属情報のため編集対象外
+- `home.statement.secmark` [label/単行/max24] 「SEC. 01 / STATEMENT」 — セクション番号+英語ラベルの意匠、編集対象外
+- `home.craft.secmark` [label/単行/max20] 「SEC. 02 / CRAFT」 — セクション番号+英語ラベルの意匠、編集対象外
+- `home.craft.card.badge` [label/単行/max12] 「CRAFT 01 / CRAFT 02 / CRAFT 03」 — カード内の連番インデックス、構造上の文字(3件)
+- `home.craft.photo.figno` [label/単行/max12] 「FIG.01 / FIG.02 / FIG.03」 — figure番号ラベル、構造上の文字(3件)
+- `home.craft.photo.captionEn` [label/単行/max30] 「SANDING & PREP / SPRAY APPLICATION / THE FINISH」 — 英語装飾キャプション、編集対象外(3件)
+- `home.craft.photo.credit` [caption/単行/max40] 「Photo: mazinomron / Unsplash 他」 — 写真クレジット表記、帰属情報のため編集対象外(3件)
+- `home.colorlineup.secmark` [label/単行/max24] 「SEC. 03 / COLOR LINEUP」 — セクション番号+英語ラベルの意匠、編集対象外
+- `home.colorlineup.swatch.code` [label/単行/max24] 「TOYOTA 090 / 3COAT, MAZDA 46V / 3COAT など8件」 — 実在自動車メーカーの正式カラーコード、技術仕様値のため編集対象外(8件)
+- `home.colorlineup.swatch.name` [label/単行/max20] 「プレシャスホワイトパール, ソウルレッドクリスタル など8件」 — メーカー正式カラー名、実物と齟齬が出るため編集対象外(8件)
+- `home.colorlineup.draghint` [label/単行/max20] 「DRAG / SCROLL →」 — 横スクロール操作の機能的UIヒント、編集対象外
+- `home.twoscenes.secmark` [label/単行/max24] 「SEC. 04 / TWO SCENES」 — セクション番号+英語ラベルの意匠、編集対象外
+- `home.twoscenes.scene.1.range` [label/単行/max12] 「1–9」 — 数量レンジの数値、pricing領分のため編集対象外
+- `home.twoscenes.scene.1.unit` [label/単行/max20] 「PIECES / 勝負試作」 — 英数混在の技術的単位ラベル、編集対象外
+- `home.twoscenes.scene.2.range` [label/単行/max12] 「30–1,000」 — 数量レンジの数値、pricing領分のため編集対象外
+- `home.twoscenes.scene.2.unit` [label/単行/max20] 「PIECES / ブリッジ生産」 — 英数混在の技術的単位ラベル、編集対象外
+- `home.stats.secmark` [label/単行/max26] 「SEC. 05 / BY THE NUMBERS」 — セクション番号+英語ラベルの意匠、編集対象外
+- `home.stats.item.value` [label/単行/max12] 「6 / 220–2000 / 8 / 1–1,000 / 40 / 5–7」 — 統計の数値本体、実測値のためpricing/DB領分・編集対象外(6件)
+- `home.stats.item.unit` [label/単行/max8] 「本 / 色 / 時間 / 日」 — 数値に付随する単位表記、編集対象外(6件)
+- `home.stats.item.en` [label/単行/max30] 「SIMULTANEOUS BUMPERS 他」 — 英語装飾ラベル、編集対象外(6件)
+- `home.materials.secmark` [label/単行/max24] 「SEC. 06 / MATERIALS」 — セクション番号+英語ラベルの意匠、編集対象外
+- `home.notes.secmark` [label/単行/max20] 「SEC. 07 / NOTES」 — セクション番号+英語ラベルの意匠、編集対象外
+- `home.gallery.secmark` [label/単行/max30] 「GALLERY / IN THE WORKSHOP」 — セクション番号+英語ラベルの意匠、編集対象外
+- `home.gallery.photo.figno` [label/単行/max12] 「FIG.04 / FIG.05 / FIG.06」 — figure番号ラベル、構造上の文字(3件)
+- `home.gallery.photo.captionEn` [label/単行/max30] 「HANDS AT WORK / THE TOOLING / THE MACHINERY」 — 英語装飾キャプション、編集対象外(3件)
+- `home.gallery.photo.credit` [caption/単行/max40] 「Photo: claritycoat / Unsplash 他」 — 写真クレジット表記、帰属情報のため編集対象外(3件)
+- `story.head.index` [label/単行/max24] 「INDEX 01 — STORY」 — INDEX番号ラベルは意匠上の構造文字、編集対象外
+- `story.head.en` [label/単行/max30] 「WHY THIS WORKSHOP EXISTS」 — 英語装飾サブラベル、編集対象外
+- `story.chapter.no` [label/単行/max14] 「CHAPTER 01〜05」 — 章番号ラベル、構造上の文字(5件)
+- `story.chapter.en` [label/単行/max24] 「The Ordinary Days / The Call / The Trials / The Revelation /」 — 各章の英語装飾サブタイトル、編集対象外(5件)
+- `story.chapter2.quote.cite` [label/単行/max20] 「— ある試作の相談者の言葉」 — 引用の出典表記、構造上の帰属ラベル
+- `story.chapter.photo.figno` [label/単行/max24] 「FIG.01 / FIG.02 — THE GAP / FIG.03 / FIG.04 / FIG.05」 — figure番号ラベル、構造上の文字(5件、2章のみ追加サフィックスあり)
+- `story.chapter.photo.captionEn` [label/単行/max28] 「THE DISCIPLINE / AWAITING ITS FINISH / TRIAL & ERROR 他」 — 英語装飾キャプション、編集対象外(5件)
+- `story.chapter.photo.credit` [caption/単行/max40] 「Photo: cmreflections / Unsplash 他」 — 写真クレジット表記、帰属情報のため編集対象外(5件)
+- `story.message.badge` [label/単行/max20] 「MESSAGE — 代表挨拶」 — SEC.xxと同種のバッジ意匠、編集対象外
+- `story.message.signature.role` [label/単行/max20] 「隈部塗装 代表 / 塗装職人」 — 社名部分はsite_settings.company.nameと重複する複合表記で、肩書き部分はDB外のため編集対象外
+- `story.portrait.placeholder` [label/複数行/max40] 「信之 / PORTRAIT — COMING SOON」 — story.portrait画像未設定時のみ表示される暫定プレースホルダ、実写真差し替え後は消えるため恒久コンテンツでなく編集対象外
+
+## DB 由来 (スロット化しない)
+- home hero 見出し(h1)「3Dプリントを、量産品と見分けがつかない外観に。」— site_settings.hero.heading (maxLength 40, /admin/settings hero タブで既に編集可能)。ただし (site)/page.tsx は settings.hero を fetch しておらず、現状ページは完全ハードコードでDB値と非接続(実装ドリフト、要オーケストレーター判断)
+- home hero リード文「積層痕を消す研磨から…全国からお受けします。」(90字) — site_settings.hero.subheading (maxLength 80) に相当する内容だが、現行文言が10字超過。DB化する場合は文言短縮かmaxLength拡張が必要
+- story 代表メッセージ署名「隈部 信之」— site_settings.company.representative (maxLength 30, /admin/settings 会社情報タブ「代表者名」) で既に編集可能。story/page-body.tsxはハードコードでDBと非接続
+- story 署名行「隈部塗装 代表 / 塗装職人」内の社名「隈部塗装」— site_settings.company.name (maxLength 50, 会社情報タブ「会社名」) で既に編集可能。site-footer.tsxにも同様のハードコード重複あり
+- story 第五章本文中の所在地言及「大分県豊後高田市」— site_settings.company.address (会社情報タブ「所在地」) と重複する事実情報。物語文の一部でDB直結スロット化は非推奨だが、住所変更時は本文側も手動更新が必要
+
+## レイアウトリスク
+- home.hero.heading: h1はSplitChars(1文字ずつアニメーション)構造で、2行目の一部「見分けがつかない」だけkt-paint-markでハイライト装飾されており、aria-labelに全文複製もある。将来この見出しを編集可能にする際(hero設定UI経由でも)、ハイライト境界とaria-label同期が崩れないよう別途仕様検討が必要
+- home.statement.heading: clamp(21px,3vw,34px)の大きな5行reveal見出しで最終行のみtext-soulハイライト。文字数が伸びるとモバイルで折り返し崩れ・行間バランス悪化のリスクがあるためmax_len厳守を推奨
+- home.craft / home.twoscenes / home.stats のカードグリッド(3列/2列/最大3列)はCSS Gridで同一行内のカード高さが揃うため、1枚だけ極端に長いbody文言を入れるとカード間の余白バランスが崩れる(致命的破損ではないが視覚的不均衡)
+- story chapter本文(第1〜5章)は<strong>によるインライン強調と、第4章は<span class=font-mono>#800</span>等の等幅技術数値表記を文中に埋め込んでいる。プレーンテキストのtextareaスロットにすると強調位置と技術値の書式が失われるため、page_text化する場合はリッチテキスト/マークダウン対応が必須
+- home.colorlineup.swatch.note (8件) を将来編集可能にする場合、code/nameは技術仕様値としてtier C固定のまま。noteだけ自由編集にすると実物の色見本と一致しないキャッチコピーになるリスクがあるため、code/nameとセットで見せるUIを推奨
+- story.message.body はオーナー本人の一人称メッセージで約370字・4段落と長文。他のtier A見出し類(20〜40字)と異なり、UI設計では単一行inputでなく複数行textarea+リッチテキストを前提にすること
+- home hero(見出し・リード・CTA)は既にsite_settings.heroという別のDB編集経路が存在するが現在未接続。page_text設計時にhero領域を二重管理(page_text × site_settings)にしないよう、設計フェーズで統合方針を先に決めるべき

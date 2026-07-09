@@ -1,0 +1,216 @@
+# テキスト棚卸し: about-service
+
+
+## Tier A (32)
+
+- `about.hero.heading` [heading/複数行/max32] 「下地の仕事は、見えなくなるからこそ。」 — ページ最上部のヒーロー見出し。オーナーが最も変えたくなる『声』
+- `about.hero.lead` [lead/複数行/max160] 「仕上がった塗面に、研ぎの跡は残りません。それでも、艶の深さも、色の正確さも、すべては見え…」 — ヒーロー直下のリード文。ページの価値提案を語る声
+- `about.why.heading` [heading/複数行/max40] 「「表面処理だけ頼みたい」に、応える工房が少なかった。」 — SEC.01の見出し。市場ポジショニングを語る訴求コピー
+- `about.facility.heading` [heading/単行/max24] 「バンパー6本を、同時に塗れる。」 — 設備の同時処理能力を訴求する見出しコピー
+- `about.facility.lead` [lead/複数行/max100] 「同時処理能力は、そのまま数量対応力と価格に反映されます。面を埋めるほど1個あたりの手間は下…」 — 価格競争力を語るリード文、訴求性が高い
+- `about.location.lead` [lead/複数行/max90] 「郵送受託が基本のため、地方立地のハンデはありません。送料が軽微な小〜中型品なら、全国どこか…」 — 地方立地の不利を打ち消す訴求文、商売の言葉
+- `about.gallery.heading` [heading/単行/max18] 「現場の、手ざわり。」 — ギャラリー導入のキャッチコピー
+- `about.gallery.lead` [lead/単行/max50] 「大分・豊後高田の工房で、造形物と一個ずつ向き合っています。」 — ギャラリーのリード文
+- `about.cta.heading` [heading/複数行/max30] 「工程と料金の詳細は、サービスページに。」 — ページ末尾CTA帯の見出し文言
+- `about.cta.note` [lead/単行/max50] 「下地は全グレード共通。差分はトップコートの層数だけです。」 — CTA帯の補足コピー
+- `about.cta.button` [cta/単行/max16] 「サービス・料金を見る」 — CTAボタン文言そのもの
+- `service.hero.heading` [heading/複数行/max32] 「下地は全グレード共通。だから品質が揺れない。」 — ヒーロー見出し、サービスページの核となる訴求コピー
+- `service.hero.lead` [lead/複数行/max160] 「自動車板金塗装のプロ標準工程を、そのまま3Dプリントに適用します。グレードの違いはトップコ…」 — ヒーロー直下のリード文
+- `service.process.aside.heading` [heading/単行/max20] 「なぜ鏡面磨きをしないのか」 — 問いかけ調のミニ見出し。マーケティング的な声
+- `service.process.link_button` [cta/単行/max20] 「全9工程を、層構造から見る」 — 内部リンクボタン文言(/processへ)
+- `service.grade.basic.name` [heading/単行/max12] 「下地仕上げ」 — グレード(商品プラン)名。オーナーが命名を調整したくなる商売の言葉
+- `service.grade.basic.target` [caption/単行/max50] 「最終色をご自身で吹く造形作家・ガレージキット層・試作会社の方へ。」 — ターゲット訴求コピー。グレードの立ち位置を語る商売の言葉
+- `service.grade.standard.name` [heading/単行/max12] 「スタンダード」 — グレード名
+- `service.grade.standard.target` [caption/単行/max40] 「単色の製品試作・小ロット生産品の外観仕上げに。」 — ターゲット訴求コピー
+- `service.grade.premium.name` [heading/単行/max10] 「プレミアム」 — グレード名
+- `service.grade.premium.target` [caption/単行/max50] 「商談・展示会・クラウドファンディング掲載写真のための最上位仕上げ。」 — ターゲット訴求コピー
+- `service.grade.shop_button` [cta/単行/max20] 「SHOPのシミュレータで概算を出す」 — 内部リンクボタン文言(/shop#simへ)
+- `service.flow.heading` [heading/単行/max14] 「依頼の流れ」 — セクション見出し
+- `service.flow.lead` [lead/複数行/max90] 「主戦場は手のひら〜200×200mm級の小〜中型品。送料が軽微なサイズ帯なら、地方立地のハンデ…」 — リード文
+- `service.terms.heading` [heading/単行/max20] 「正直に、先にお伝えします。」 — セクション見出し、誠実さを訴求する声
+- `service.qc.heading` [heading/単行/max20] 「発送前に、8つの目で見る。」 — セクション見出し、品質管理を訴求するコピー
+- `service.qc.lead` [lead/複数行/max90] 「自動車補修の現場で使われる検品項目を、そのまま持ち込んでいます。仕上がりは主観ではなく、チ…」 — リード文
+- `service.gallery.heading` [heading/単行/max16] 「工程の、その手。」 — ギャラリー導入のキャッチコピー
+- `service.gallery.lead` [lead/単行/max40] 「工程の一つひとつに、自動車補修で培った手が入ります。」 — リード文
+- `service.cta.heading` [heading/複数行/max32] 「見積もりは、3つの数字で。サイズ × 個数 × グレード。」 — ページ末尾CTA見出し
+- `service.cta.note` [lead/単行/max40] 「造形データや写真があれば、より正確に概算をお出しできます。」 — CTA帯の補足コピー
+- `service.cta.button` [cta/単行/max12] 「相談する」 — CTAボタン文言そのもの
+
+## Tier B (74)
+
+- `about.why.compare.big3.th` [label/単行/max16] 「大手3Dプリント業者」 — 比較表の分類ラベル。変更頻度は低いが説明文の一部として編集余地あり
+- `about.why.compare.big3.td` [body/複数行/max120] 「塗装は後加工オプション扱いで、多くは黒塗装・単色止まり。カスタム塗装は手動見積もりで、3コ…」 — 比較表の説明文段落。変更可だが頻度は低い
+- `about.why.compare.paintshop.th` [label/単行/max16] 「一般の塗装店」 — 比較表の分類ラベル
+- `about.why.compare.paintshop.td` [body/複数行/max100] 「塗装はできても、3Dプリント特有の積層痕処理を知らない。素材との相性や下地の作り方に、専用…」 — 比較表の説明文段落
+- `about.why.compare.proto.th` [label/単行/max14] 「試作会社」 — 比較表の分類ラベル
+- `about.why.compare.proto.td` [body/複数行/max120] 「デザインモデルの品質は表面処理で決まるにもかかわらず、表面処理を高水準で内製できる会社は…」 — 比較表の説明文段落
+- `about.why.compare.kumabe.td` [body/複数行/max180] 「積層痕を消す研磨・自動車グレードの艶・3コートパールの意匠。3つ全部をひとりで持ち、その空…」 — 比較表最終行の説明文。<strong>強調と平文が1つのJSXノードに混在しており分割が必要(layout_risks参照)
+- `about.craftsman.bio1` [body/複数行/max130] 「家電の量産塗装の現場で、均一な膜厚管理・治具化・段取りを積み重ねてきた自動車塗装職人。「量…」 — 代表者の経歴・人物紹介の本文段落
+- `about.craftsman.bio2` [body/複数行/max140] 「一点ものを美しく塗ることと、同じ品質で数を仕上げることは、別の技術です。量産塗装の現場は、…」 — 代表者紹介の本文段落2
+- `about.facility.1.cap_ja` [caption/単行/max14] 「吹き付けの設備」 — 写真キャプション(和文)。tier B例に明記された種別
+- `about.facility.2.cap_ja` [caption/単行/max14] 「整然と並ぶ工具」 — 写真キャプション(和文)
+- `about.facility.3.cap_ja` [caption/単行/max12] 「工房の機械」 — 写真キャプション(和文)
+- `about.profile.heading` [heading/単行/max12] 「会社概要」 — 定型見出し。キャッチコピー性が薄く変更頻度が低い業務ラベル
+- `about.profile.business.td` [body/単行/max60] 「3Dプリント造形物の表面処理（研磨・塗装）／家電の量産塗装」 — site_settings.companyスキーマに事業内容フィールドは無く未DB化。将来スロット化候補
+- `about.profile.area.td` [body/複数行/max70] 「全国（郵送受託）。主戦場は手のひら〜200×200mm級の小〜中型品。」 — 対応エリアの説明。未DB化のためスロット化候補
+- `about.profile.contact.td` [body/単行/max40] 「準備中（先行のご相談は紹介経由で承っています）」 — 受付窓口の現況注記。運用フェーズにより頻繁に更新される可能性があり編集価値あり
+- `about.location.note` [caption/単行/max50] 「※ 工房の詳細な住所は、ご依頼確定時に発送先としてご案内します。」 — 運用注記。特商法等の法定表示ではないためC ではなくB、住所非開示ポリシーの正確性に注意
+- `about.gallery.1.cap_ja` [caption/単行/max10] 「手の仕事」 — 写真キャプション
+- `about.gallery.2.cap_ja` [caption/単行/max10] 「面の質感」 — 写真キャプション
+- `service.process.row1.title` [heading/単行/max10] 「素地研磨」 — 工程名。技術的正確性が要求されるため自由編集リスクを考慮しB
+- `service.process.row1.body` [body/複数行/max100] 「積層痕を面で捉えて研ぎ落とします。FDMも光造形も、ここで平滑の土台を作ります。塗装の出来の…」 — 工程説明の本文段落
+- `service.process.row2.title` [heading/単行/max12] 「プラサフ吹付」 — 工程名
+- `service.process.row2.body` [body/複数行/max110] 「プライマーサフェーサーを厚めに吹き、研磨で残った微細な段差を膜で埋めます。海外の3Dプリント…」 — 工程説明の本文段落
+- `service.process.row3.title` [heading/単行/max12] 「水研ぎ仕上げ」 — 工程名
+- `service.process.row3.body` [body/複数行/max100] 「プロの板金塗装は #600〜800 で平滑化し、#1000〜1200 で仕上げます。一般的な…」 — 工程説明の本文段落
+- `service.process.row4.title` [heading/単行/max8] 「上塗り」 — 工程名
+- `service.process.row4.body` [body/複数行/max90] 「ソリッド＋クリア、または3コートパール。市販の調色済み自動車補修塗料と2液ウレタンで、硬く…」 — 工程説明の本文段落
+- `service.process.row5.title` [heading/単行/max12] 「硬化・検品」 — 工程名
+- `service.process.row5.body` [body/複数行/max90] 「主剤と硬化剤の化学反応で常温硬化（表面乾燥1〜3時間、完全硬化5〜7日）。硬化を確認し、検品…」 — 工程説明の本文段落
+- `service.process.aside.body` [body/複数行/max140] 「#2000〜コンパウンドの鏡面磨き工程は、あえて行いません。2液ウレタンは吹きっぱなしで自動…」 — 補足説明の本文段落
+- `service.process.1.cap_ja` [caption/単行/max14] 「吹き付けの工程」 — 写真キャプション
+- `service.process.2.cap_ja` [caption/単行/max16] 「調色済みの補修塗料」 — 写真キャプション
+- `service.grade.basic.desc` [body/単行/max50] 「#800 研磨＋プラサフ＋#1200 仕上げで納品。塗装はしません。」 — 技術仕様を含む商品説明。数値精度が重要なためB
+- `service.grade.standard.desc` [body/単行/max30] 「下地＋ソリッドカラー＋2液ウレタンクリア。」 — 技術仕様を含む商品説明
+- `service.grade.premium.desc` [body/単行/max35] 「下地＋3コートパール（ベース＋パール＋クリア）。」 — 技術仕様を含む商品説明
+- `service.grade.quantity.note` [body/複数行/max110] 「同一品のバッチ仕上げ・カラーバリエーション展開に対応。初回のみ治具・段取り費をいただき、リ…」 — 料金ポリシーの説明文段落
+- `service.grade.options.note` [body/複数行/max120] 「価格は「サイズ帯別の基本料金＋グレード加算」で算出します。立ち上げ期につき実績価格でご提供…」 — 価格算出ポリシーの説明文段落
+- `service.flow.step1.title` [heading/単行/max16] 「ご相談・お見積もり」 — 業務フローのステップ名
+- `service.flow.step1.body` [caption/単行/max40] 「サイズ × 個数 × グレードの3点で概算をお出しします。」 — ステップ説明の短文キャプション
+- `service.flow.step2.title` [heading/単行/max16] 「造形物を工房へ発送」 — 業務フローのステップ名
+- `service.flow.step2.body` [caption/単行/max40] 「データ入稿 → 提携出力 → 工房直送の流れにも対応します。」 — ステップ説明の短文キャプション
+- `service.flow.step3.title` [heading/単行/max18] 「受入検品・ビフォー撮影」 — 業務フローのステップ名
+- `service.flow.step3.body` [caption/単行/max30] 「状態を記録してから工程に入ります。」 — ステップ説明の短文キャプション
+- `service.flow.step4.title` [heading/単行/max12] 「下地工程」 — 業務フローのステップ名
+- `service.flow.step4.body` [caption/単行/max30] 「#800 研磨 → プラサフ → #1200 水研ぎ。」 — ステップ説明の短文キャプション
+- `service.flow.step5.title` [heading/単行/max10] 「上塗り」 — 業務フローのステップ名
+- `service.flow.step5.body` [caption/単行/max40] 「グレード別に施工。火気厳禁・換気管理のもとで行います。」 — ステップ説明の短文キャプション
+- `service.flow.step6.title` [heading/単行/max16] 「硬化・アフター撮影」 — 業務フローのステップ名
+- `service.flow.step6.body` [caption/単行/max40] 「常温または赤外線ヒーターで硬化。仕上がりを記録します。」 — ステップ説明の短文キャプション
+- `service.flow.step7.title` [heading/単行/max12] 「梱包・発送」 — 業務フローのステップ名
+- `service.flow.step7.body` [caption/単行/max40] 「完全硬化前後の取り扱い注意点を添えてお届けします。」 — ステップ説明の短文キャプション
+- `service.flow.note` [caption/複数行/max80] 「※ 進行中の写真は守秘義務の範囲で管理し、実績としての掲載は案件ごとに許諾をいただきます。N…」 — 運用注記。法定表示ではないためB、NDA対応可否等の記述精度に留意
+- `service.terms.can.heading` [heading/単行/max10] 「できること」 — 定型リスト見出し
+- `service.terms.can.item1` [body/単行/max40] 「色番号指定（日塗工番号・自動車カラーコード）」 — 対応可能項目の箇条書き
+- `service.terms.can.item2` [body/単行/max40] 「同一品のバッチ仕上げ・カラーバリエーション展開」 — 対応可能項目の箇条書き
+- `service.terms.can.item3` [body/単行/max30] 「NDA対応・掲載許諾の案件ごと管理」 — 対応可能項目の箇条書き
+- `service.terms.can.item4` [body/単行/max26] 「大型・特殊案件の個別見積もり」 — 対応可能項目の箇条書き
+- `service.terms.can.item5` [body/単行/max26] 「未経験素材のテストピース確認」 — 対応可能項目の箇条書き
+- `service.terms.caution.heading` [heading/単行/max16] 「ご了承いただきたいこと」 — 定型リスト見出し
+- `service.terms.caution.item1` [body/複数行/max70] 「純正色のピタリ合わせ（調色）は対象外です。市販の調色済み補修塗料による「参考色」仕上げです。」 — 免責事項的な説明文。事実正確性への配慮が必要
+- `service.terms.caution.item2` [body/複数行/max50] 「2液ウレタンの完全硬化は5〜7日。発送は硬化を確認してからになります。」 — 免責事項的な説明文。事実正確性への配慮が必要
+- `service.terms.caution.item3` [body/単行/max40] 「経験のない樹脂素材は、テストピースでの相性確認を挟みます。」 — 免責事項的な説明文
+- `service.terms.caution.item4` [body/複数行/max50] 「繁忙期は「納期◯週間待ち」を表示して受注を絞ります。品質を落とさないためです。」 — 免責事項的な説明文
+- `service.terms.caution.item5` [body/単行/max40] 「輸送中の破損に備え、梱包基準と保証条件を事前に明示します。」 — 免責事項的な説明文
+- `service.qc.item1.body` [body/単行/max50] 「塗料が流れて溜まった跡がないか。厚塗りを避け、薄く重ねることで防ぎます。」 — QC項目の説明文
+- `service.qc.item2.body` [body/単行/max50] 「表面がミカンの皮のように凸凹していないか。吹き付けの距離と量で管理します。」 — QC項目の説明文
+- `service.qc.item3.body` [body/単行/max55] 「光の当たり方を変えても、色が均一に見えるか。特にメタリック・パールで重要です。」 — QC項目の説明文
+- `service.qc.item4.body` [body/単行/max55] 「エッジや奥まった箇所に、薄い部分・塗り残しがないか。角と縁を重点的に確認します。」 — QC項目の説明文
+- `service.qc.item5.body` [body/単行/max50] 「塗膜にホコリ・毛・ゴミが噛み込んでいないか。塗装環境の清浄度で防ぎます。」 — QC項目の説明文
+- `service.qc.item6.body` [body/単行/max50] 「塗膜が素地にしっかり食いついているか。洗浄・脱脂・下地の徹底で担保します。」 — QC項目の説明文
+- `service.qc.item7.body` [body/単行/max55] 「角・縁まで塗膜が回り込み、めくれや欠けがないか。輸送に耐える塗り際に整えます。」 — QC項目の説明文
+- `service.qc.item8.body` [body/単行/max50] 「2液ウレタンが完全硬化しているか。硬化を確認してから梱包・発送します。」 — QC項目の説明文
+- `service.gallery.1.cap_ja` [caption/単行/max8] 「研ぐ」 — 写真キャプション
+- `service.gallery.2.cap_ja` [caption/単行/max10] 「仕上げる」 — 写真キャプション
+
+## Tier C (86)
+
+- `about.pagehead.index` [label/単行/max24] 「INDEX 02 — ABOUT」 — SEC番号/INDEX意匠ラベル。装飾的な英語+番号表記で編集対象外
+- `about.pagehead.en` [label/単行/max30] 「WORKSHOP & CRAFTSMAN」 — 英語装飾ラベル(意匠)。SEC.xxと同種の固定意匠要素
+- `about.why.sec_no` [label/単行/max12] 「SEC. 01」 — セクション番号。section-indicator ナビにも data-sec-no として供給される構造要素
+- `about.why.sec_label` [label/単行/max30] 「WHY THIS WORKSHOP」 — 英語装飾ラベル。data-sec-label としてフローティングナビ表示にも使われる
+- `about.why.compare.kumabe.th` [label/単行/max12] 「隈部塗装」 — 自社名。site_settings.company.name (DB) と重複するため個別スロット化しない(db_backed_texts参照)
+- `about.craftsman.sec_no` [label/単行/max12] 「SEC. 02」 — セクション番号、構造要素
+- `about.craftsman.sec_label` [label/単行/max20] 「CRAFTSMAN」 — 英語装飾ラベル、ナビ供給元
+- `about.craftsman.name` [label/単行/max10] 「隈部 信之」 — 代表者名の大見出し表示(clamp 48-96px)。site_settings.company.representative(DB)と重複(db_backed_texts参照)
+- `about.craftsman.romaji` [label/単行/max50] 「KUMABE NOBUYUKI — REPRESENTATIVE / PAINTER」 — ローマ字氏名+肩書の装飾サブタイトル。英語装飾ラベルに準ずる
+- `about.facility.sec_no` [label/単行/max12] 「SEC. 03」 — セクション番号
+- `about.facility.sec_label` [label/単行/max16] 「FACILITY」 — 英語装飾ラベル
+- `about.facility.spec.booth.th` [label/単行/max12] 「塗装ブース」 — 設備仕様表の項目名。数値(6本)と一体の技術仕様、DB/pricing領分
+- `about.facility.spec.booth.td` [body/単行/max50] 「乗用車のバンパー6本を同時に塗装できる常設ブース。」 — 技術仕様値(本数)、DB/pricing領分
+- `about.facility.spec.batch.th` [label/単行/max14] 「バッチ処理能力」 — 技術仕様の項目名
+- `about.facility.spec.batch.td` [body/単行/max70] 「200×200mm級 — 約30個 / 30×200mm級 — 100個超 を同時処理。」 — 数値主体の技術仕様値
+- `about.facility.spec.paint_system.th` [label/単行/max14] 「塗料システム」 — 技術仕様の項目名
+- `about.facility.spec.paint_system.td` [body/複数行/max80] 「自動車補修用2液ウレタン（主剤＋硬化剤の化学反応で常温硬化）。市販の調色済み補修塗料を正規…」 — 塗料の技術仕様説明
+- `about.facility.spec.cure.th` [label/単行/max8] 「硬化」 — 技術仕様の項目名
+- `about.facility.spec.cure.td` [body/複数行/max80] 「常温硬化（表面乾燥1〜3時間 / 完全硬化5〜7日）。赤外線ヒーターは納期短縮・回転率向上の道…」 — 硬化時間の数値仕様
+- `about.facility.spec.safety.th` [label/単行/max12] 「安全管理」 — 技術仕様の項目名
+- `about.facility.spec.safety.td` [body/複数行/max80] 「塗装作業中（溶剤蒸気がある間）の火気は厳禁。石油燃焼機器の使用は、塗装後に換気を経てからの雰…」 — 安全規定の技術文言。誤編集で事故リスクの誤解を招くため編集対象外
+- `about.facility.1.cap_en` [label/単行/max24] 「SPRAY EQUIPMENT」 — 英語装飾キャプション
+- `about.facility.1.credit` [caption/単行/max40] 「Photo: kagan_4854 / Unsplash」 — 写真クレジット表記。著作権表示に相当し自由編集不可
+- `about.facility.2.cap_en` [label/単行/max20] 「THE TOOLING」 — 英語装飾キャプション
+- `about.facility.2.credit` [caption/単行/max40] 「Photo: volft / Unsplash」 — 写真クレジット表記
+- `about.facility.3.cap_en` [label/単行/max22] 「THE MACHINERY」 — 英語装飾キャプション
+- `about.facility.3.credit` [caption/単行/max40] 「Photo: kadircelep / Unsplash」 — 写真クレジット表記
+- `about.profile.sec_no` [label/単行/max12] 「SEC. 04」 — セクション番号
+- `about.profile.sec_label` [label/単行/max14] 「PROFILE」 — 英語装飾ラベル
+- `about.profile.name.th` [label/単行/max8] 「屋号」 — 会社概要表のフィールド名。DBスキーマのキー名相当で固定
+- `about.profile.name.td` [label/単行/max20] 「隈部塗装（くまべとそう）」 — site_settings.company.name(DB, /admin/settingsで編集可)と重複(db_backed_texts参照)
+- `about.profile.rep.th` [label/単行/max8] 「代表」 — 会社概要表のフィールド名
+- `about.profile.rep.td` [label/単行/max10] 「隈部 信之」 — site_settings.company.representative(DB)と重複(db_backed_texts参照)
+- `about.profile.address.th` [label/単行/max8] 「所在地」 — 会社概要表のフィールド名
+- `about.profile.address.td` [label/単行/max16] 「大分県豊後高田市」 — site_settings.company.address(DB)と重複(db_backed_texts参照)
+- `about.profile.business.th` [label/単行/max10] 「事業内容」 — 会社概要表のフィールド名
+- `about.profile.area.th` [label/単行/max12] 「対応エリア」 — 会社概要表のフィールド名
+- `about.profile.contact.th` [label/単行/max10] 「受付窓口」 — 会社概要表のフィールド名
+- `about.location.sec_no` [label/単行/max12] 「SEC. 05」 — セクション番号
+- `about.location.sec_label` [label/単行/max14] 「LOCATION」 — 英語装飾ラベル
+- `about.location.heading` [heading/単行/max16] 「大分県豊後高田市」 — site_settings.company.address(DB)と重複する見出し表示(db_backed_texts参照)
+- `about.location.map_title` [label/単行/max30] 「隈部塗装の所在地（大分県豊後高田市）」 — iframe title属性(非表示のアクセシビリティテキスト)。altと同様に対象外、かつ会社住所と重複
+- `about.gallery.sec_no` [label/単行/max14] 「GALLERY」 — セクション番号相当の固定ラベル
+- `about.gallery.sec_label` [label/単行/max16] 「THE PLACE」 — 英語装飾ラベル
+- `about.gallery.1.cap_en` [label/単行/max22] 「CRAFTSMANSHIP」 — 英語装飾キャプション
+- `about.gallery.1.credit` [caption/単行/max40] 「Photo: riiyad / Unsplash」 — 写真クレジット表記
+- `about.gallery.2.cap_en` [label/単行/max20] 「THE SURFACE」 — 英語装飾キャプション
+- `about.gallery.2.credit` [caption/単行/max40] 「Photo: apryan_cahyo / Unsplash」 — 写真クレジット表記
+- `service.pagehead.index` [label/単行/max26] 「INDEX 03 — SERVICE」 — SEC番号/INDEX意匠ラベル
+- `service.pagehead.en` [label/単行/max40] 「PROCESS / GRADE / PRICE / FLOW」 — 英語装飾ラベル
+- `service.process.sec_no` [label/単行/max12] 「SEC. 01」 — セクション番号
+- `service.process.sec_label` [label/単行/max30] 「PROCESS — 全メニュー共通の下地」 — 英語+和文混在の装飾ラベル。data-sec-labelとしてナビにも供給される
+- `service.process.rows.codes` [label/単行/max20] 「#800 / PS / #1200 / 2K / CURE, STEP 01〜05(5行分)」 — 研磨番手・工程略号の技術仕様値。5行すべて同種のため代表1件に集約
+- `service.process.1.cap_en` [label/単行/max26] 「SPRAY APPLICATION」 — 英語装飾キャプション
+- `service.process.1.credit` [caption/単行/max40] 「Photo: createasea / Unsplash」 — 写真クレジット表記
+- `service.process.2.cap_en` [label/単行/max24] 「AUTOMOTIVE PAINT」 — 英語装飾キャプション
+- `service.process.2.credit` [caption/単行/max40] 「Photo: jacobsoup / Unsplash」 — 写真クレジット表記
+- `service.grade.sec_no` [label/単行/max12] 「SEC. 02」 — セクション番号
+- `service.grade.sec_label` [label/単行/max30] 「GRADE — 差分はトップコートだけ」 — 英語+和文混在の装飾ラベル、ナビ供給元
+- `service.grade.badge_codes` [label/単行/max14] 「GRADE 01 / GRADE 02 / GRADE 03」 — カードの番号バッジ。3枚とも同種のため代表1件に集約
+- `service.grade.premium.price` [label/単行/max24] 「¥15,000–35,000 / 1点」 — 価格表示、DB/pricing領分。編集対象外
+- `service.grade.premium.price_note` [label/単行/max20] 「目安。サイズにより変動します」 — 価格の注記、pricing領分
+- `service.grade.quantity.heading` [label/単行/max26] 「QUANTITY — 数量スライド（目安）」 — 英語装飾見出し。数量割引の見出しでpricing領分に近接
+- `service.grade.quantity.rows` [label/単行/max20] 「〜9個/定価, 10〜29個/−15%, 30個〜/−25%」 — 数量スライド割引率の価格データ。DB/pricing領分
+- `service.grade.options.heading` [label/単行/max22] 「OPTIONS — 加算・個別対応」 — 英語装飾見出し
+- `service.grade.options.rows` [label/単行/max30] 「特急仕上げ/+50%, 大型・特殊案件/個別見積もり, 色番号指定/対応」 — オプション料金・対応可否のペア。DB/pricing領分
+- `service.flow.sec_no` [label/単行/max12] 「SEC. 03」 — セクション番号
+- `service.flow.sec_label` [label/単行/max26] 「FLOW — 郵送で、全国から」 — 英語+和文混在の装飾ラベル
+- `service.terms.sec_no` [label/単行/max12] 「SEC. 04」 — セクション番号
+- `service.terms.sec_label` [label/単行/max20] 「HONEST TERMS」 — 英語装飾ラベル
+- `service.qc.sec_no` [label/単行/max12] 「SEC. 05」 — セクション番号
+- `service.qc.sec_label` [label/単行/max22] 「QUALITY CONTROL」 — 英語装飾ラベル
+- `service.qc.item1.label` [label/単行/max30] 「タレ・ダレ / RUNS-SAGS」 — 業界用語の欠陥種別名。技術正確性が必須のため編集対象外
+- `service.qc.item2.label` [label/単行/max26] 「ゆず肌 / ORANGE PEEL」 — 業界用語の欠陥種別名
+- `service.qc.item3.label` [label/単行/max30] 「色ムラ / COLOR CONSISTENCY」 — 業界用語の欠陥種別名
+- `service.qc.item4.label` [label/単行/max24] 「塗り残し / COVERAGE」 — 業界用語の欠陥種別名
+- `service.qc.item5.label` [label/単行/max28] 「異物混入 / CONTAMINATION」 — 業界用語の欠陥種別名
+- `service.qc.item6.label` [label/単行/max20] 「密着 / ADHESION」 — 業界用語の欠陥種別名
+- `service.qc.item7.label` [label/単行/max28] 「エッジの被り / EDGE QUALITY」 — 業界用語の欠陥種別名
+- `service.qc.item8.label` [label/単行/max20] 「硬化状態 / CURE」 — 業界用語の欠陥種別名
+- `service.gallery.sec_no` [label/単行/max14] 「GALLERY」 — セクション番号相当
+- `service.gallery.sec_label` [label/単行/max16] 「THE HANDS」 — 英語装飾ラベル
+- `service.gallery.1.cap_en` [label/単行/max16] 「SANDING」 — 英語装飾キャプション
+- `service.gallery.1.credit` [caption/単行/max40] 「Photo: mazinomron / Unsplash」 — 写真クレジット表記
+- `service.gallery.2.cap_en` [label/単行/max18] 「THE FINISH」 — 英語装飾キャプション
+- `service.gallery.2.credit` [caption/単行/max40] 「Photo: avenir_visuals / Unsplash」 — 写真クレジット表記
+
+## DB 由来 (スロット化しない)
+- site_settings.company.name (DB, /admin/settings で編集可) — about ページ『会社概要』表の『屋号』td (現在値: 隈部塗装（くまべとそう）) と重複するハードコード文字列
+- site_settings.company.representative (DB) — about ページ代表者名の大見出し (clamp 48-96px 表示, 現在値: 隈部 信之) および『会社概要』表『代表』td と重複
+- site_settings.company.address (DB) — about ページ『会社概要』表『所在地』td および LOCATION セクション見出し (現在値: 大分県豊後高田市) と重複
+
+## レイアウトリスク
+- about.why.compare.kumabe.td: <strong>による太字強調と平文が1つの td (JSXフラグメント) に混在。単純な文字列スロットに変換する場合は強調文/補足文の2フィールドへ分割しないと装飾が失われるか構造が壊れる
+- PageHead/CtaBand の見出し (about.hero.heading, service.hero.heading, about.cta.heading, service.cta.heading) は手動 <br/> による2行組版が前提。clamp(30px,5vw,56px) 相当のフォントで、モバイル最小30px時に長文を入れると3行以上になり組版バランスが崩れる。max_len 超過時は改行位置の再指定手段が必要
+- SectionMark の label は Reveal の data-sec-label 属性として section-indicator (motion/section-indicator.tsx) のフローティングナビにも供給される。tier C 判定の主因だが、将来編集可能にする場合は本文表示とナビ表示の両方を同時に確認する必要がある
+- about.craftsman.name (代表名, clamp(48px,7.6vw,96px)) は現状4文字『隈部 信之』という短い日本語名を前提にした巨大表示。DB側 site_settings.company.representative は zod で最大30文字まで許容しており、その上限をそのままこの表示に流用すると96px時に重大な折り返し/オーバーフローを起こす
+- QC_ITEMS/FLOW_CELLS の等幅グリッドカード (sm:grid-cols-2 lg:grid-cols-4, p-5) は line-clamp が無く、行内で文字数が不揃いだとカード高さがガタつく (機能破綻は無いが見た目のガタつきリスク)
+- service.grade の3カード (md:grid-cols-3) のうちプレミアムカードの価格文字列 (¥15,000–35,000 / 1点) は tracking-wider 指定の太字表示で pricing 領分として tier C 固定。グレード名・説明文だけを編集可能にし、価格ブロックは別枠として明確に除外する設計が必要
