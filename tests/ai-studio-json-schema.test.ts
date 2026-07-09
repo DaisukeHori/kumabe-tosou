@@ -12,20 +12,21 @@ import type { Channel } from "@/modules/platform/contracts";
 /**
  * Claude structured outputs 用 JSON Schema 生成の単体テスト。
  *
- * 実装メモ (§7.2 との乖離。オーケストレーターへ報告済み): 設計書は
- * 「zod-to-json-schema で契約から生成」と指定するが、当該パッケージ (v3.25.2) は
- * zod v4 (本プロジェクト pinned ^4.4.3) の内部表現を解釈できず、実際に検証したところ
- * 空スキーマ ({}) しか返さないことを確認した (パッケージ自身の README も zod v4 は
- * 非サポートと明記)。そのため zod v4 ネイティブの `z.toJSONSchema()` +
- * `@anthropic-ai/sdk/helpers/json-schema` の `jsonSchemaOutputFormat()` を使う
- * (internal/json-schema.ts 参照)。本テストは「生成された JSON Schema が空でなく、
- * 契約の必須フィールドを正しく反映していること」を検証する。
+ * 実装メモ (契約書 §3 との整合): zod v4 ネイティブの `z.toJSONSchema()` で契約から
+ * JSON Schema を生成する (zod-to-json-schema は zod v4 非対応で空スキーマしか返さないことを
+ * 実証済みのため不採用)。
+ *
+ * P1 移行 (ai-studio-v2.md §1 受入条件) での変更点: 生成した JSON Schema を Anthropic 専用の
+ * `output_config.format` (jsonSchemaOutputFormat の戻り値、type='json_schema' + parse()) に
+ * 変換する処理は ai-providers/internal/anthropic.ts に移した (`@anthropic-ai/sdk` の直 import は
+ * ai-providers/internal のみ許可)。本ファイル (ai-studio 側) はプレーンな
+ * `{ name, schema }` (ai-providers の GenerateTextReq.responseSchema 契約) を返すに留まるため、
+ * 本テストはその形での検証に更新した (旧: format.type/format.parse を検証 → 新: format.name/format.schema)。
  */
 describe("ai-studio internal/json-schema (structured outputs 用 JSON Schema 生成)", () => {
-  it("cleanedTranscriptOutputFormat: type='json_schema' で必須フィールドを含む", () => {
+  it("cleanedTranscriptOutputFormat: name + 必須フィールドを含む schema を返す", () => {
     const format = cleanedTranscriptOutputFormat();
-    expect(format.type).toBe("json_schema");
-    expect(typeof format.parse).toBe("function");
+    expect(format.name).toBe("cleaned_transcript");
     const schema = format.schema as { type: string; properties: Record<string, unknown>; required: string[] };
     expect(schema.type).toBe("object");
     expect(Object.keys(schema.properties).sort()).toEqual(
@@ -50,6 +51,7 @@ describe("ai-studio internal/json-schema (structured outputs 用 JSON Schema 生
     const channels: Channel[] = ["site_blog", "note", "x", "instagram"];
     for (const channel of channels) {
       const format = channelDraftOutputFormat(channel);
+      expect(format.name).toBe(`channel_draft_${channel}`);
       const schema = format.schema as { type: string; properties: Record<string, unknown> };
       expect(schema.type).toBe("object");
       expect(Object.keys(schema.properties).sort()).toEqual(
@@ -59,18 +61,5 @@ describe("ai-studio internal/json-schema (structured outputs 用 JSON Schema 生
       // 発生した既知の不具合の再発防止)。
       expect(Object.keys(schema.properties).length).toBeGreaterThan(0);
     }
-  });
-
-  it("parse() で結果 JSON を実際にパースできる (AutoParseableOutputFormat)", () => {
-    const format = briefOutputFormat();
-    const sample = {
-      theme: "テスト",
-      topics: ["a"],
-      audience: "テスト読者",
-      keywords: [],
-      claims: [],
-    };
-    const parsed = format.parse(JSON.stringify(sample));
-    expect(parsed).toEqual(sample);
   });
 });

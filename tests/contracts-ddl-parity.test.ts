@@ -12,6 +12,7 @@ import {
   zChannelAuthStatus,
   zChannelPostStatus,
 } from "@/modules/distribution/contracts";
+import { zAiKeyStatus, zProvider, zUsageKind, zUsageStatus } from "@/modules/ai-providers/contracts";
 
 /**
  * DB 接続不要の静的検証 (設計書 §11.1 1a: contracts-ddl-parity.test.ts)。
@@ -136,6 +137,36 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
     const expected = [...zChannelAuthStatus.options].sort();
     const actual = findCheck(checks, "channel_accounts", "auth_status").sort();
     expect(actual).toEqual(expected);
+  });
+
+  // ---- ai-providers (P1: migration 20260710000015) ----
+  it("ai_provider_keys.provider ↔ ai-providers の zProvider", () => {
+    const expected = [...zProvider.options].sort();
+    const actual = findCheck(checks, "ai_provider_keys", "provider").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("ai_provider_keys.status ↔ ai-providers の zAiKeyStatus (MAJOR-1: 'limited' 追加込み)", () => {
+    const expected = [...zAiKeyStatus.options].sort();
+    const actual = findCheck(checks, "ai_provider_keys", "status").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("ai_usage_log.kind ↔ ai-providers の zUsageKind", () => {
+    const expected = [...zUsageKind.options].sort();
+    const actual = findCheck(checks, "ai_usage_log", "kind").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("ai_usage_log.status ↔ ai-providers の zUsageStatus", () => {
+    const expected = [...zUsageStatus.options].sort();
+    const actual = findCheck(checks, "ai_usage_log", "status").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("ai_image_generations.status ↔ 固定 3 値 ('pending','succeeded','failed')", () => {
+    const actual = findCheck(checks, "ai_image_generations", "status").sort();
+    expect(actual).toEqual(["failed", "pending", "succeeded"]);
   });
 
   /**

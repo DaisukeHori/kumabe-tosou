@@ -108,12 +108,36 @@ export async function updateSeoDefaultsAction(
   );
 }
 
+/**
+ * ops_limits は単一の site_settings 行 (JSONB) に x_monthly_post_limit (既存) と
+ * AI 予算関連 3 フィールド (ai-studio-v2.md §1/§2、settings/contracts.ts zOpsLimits) が同居する。
+ * 「運用上限」タブ (X 投稿上限のみ編集) と「AI」タブ (予算のみ編集) の 2 フォームに分かれるため、
+ * 各フォームは自分が編集しない分のフィールドを hidden input で現在値のまま持ち回して
+ * 他タブの値を上書きしないようにする (両フォームとも本関数の raw 組み立て方は同型)。
+ */
 export async function updateOpsLimitsAction(
   _prevState: SettingsFormState,
   formData: FormData,
 ): Promise<SettingsFormState> {
   const raw = {
     x_monthly_post_limit: Number(formData.get("x_monthly_post_limit") ?? 0),
+    ai_monthly_budget_micro_usd: Number(formData.get("ai_monthly_budget_micro_usd") ?? 0),
+    ai_monthly_image_limit: Number(formData.get("ai_monthly_image_limit") ?? 0),
+    ai_default_image_model: emptyToNull(formData.get("ai_default_image_model")),
+  };
+  return submitSettingsForm("ops_limits", zOpsLimits, raw, String(formData.get("expected_updated_at") ?? ""));
+}
+
+/** AI タブの予算サブフォーム (/admin/settings §6-3)。x_monthly_post_limit は hidden で現在値を保持する。 */
+export async function updateAiBudgetAction(
+  _prevState: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const raw = {
+    x_monthly_post_limit: Number(formData.get("x_monthly_post_limit") ?? 0),
+    ai_monthly_budget_micro_usd: Number(formData.get("ai_monthly_budget_micro_usd") ?? 0),
+    ai_monthly_image_limit: Number(formData.get("ai_monthly_image_limit") ?? 0),
+    ai_default_image_model: emptyToNull(formData.get("ai_default_image_model")),
   };
   return submitSettingsForm("ops_limits", zOpsLimits, raw, String(formData.get("expected_updated_at") ?? ""));
 }

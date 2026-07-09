@@ -94,6 +94,21 @@ export const KMB_ERRORS = {
     message: "整文処理が意味の変化を検出しました。原文のまま確認してください。",
     recovery: "raw_text のまま人間修正へフォールバック",
   },
+  "KMB-E407": {
+    category: "4xx AI",
+    message: "AI の月次予算上限 (または画像枚数上限) に達しています。",
+    recovery: "設定画面で予算/上限を見直すか、翌月まで待機",
+  },
+  "KMB-E408": {
+    category: "4xx AI",
+    message: "AI プロバイダの呼び出しに失敗しました (登録済みキーをすべて試行しましたが失敗しました)。",
+    recovery: "detail (最後のエラー分類) を確認。キーの状態を設定画面で確認",
+  },
+  "KMB-E409": {
+    category: "4xx AI",
+    message: "note セッションが無効または失効しています。",
+    recovery: "設定画面から note セッション Cookie を再登録",
+  },
   "KMB-E501": {
     category: "5xx 配信",
     message: "X への投稿でエラーが発生しました。",

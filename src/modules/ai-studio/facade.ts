@@ -16,10 +16,10 @@ import {
   type RunStatus,
   type TokenUsage,
 } from "./contracts";
-import { cleanTranscript, draftChannel, extractBrief, isClaudeConfigured, researchBrief } from "./internal/claude";
+import { cleanTranscript, draftChannel, extractBrief, researchBrief } from "./internal/claude";
 import { HEARTBEAT_INTERVAL_MS, interpretAcquireLeaseResult } from "./internal/lease";
 import { MAX_STAGE_ATTEMPTS, nextStatusAfterStage } from "./internal/stage-machine";
-import { isOpenAiConfigured, transcribeAudio } from "./internal/transcribe";
+import { transcribeAudio } from "./internal/transcribe";
 import {
   acquireLease,
   commitStage,
@@ -306,9 +306,10 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
   },
 
   async advanceRunDetailed(runId) {
-    if (!isClaudeConfigured()) {
-      return { kind: "error", code: "KMB-E901", detail: "ANTHROPIC_API_KEY が未設定です" };
-    }
+    // P1 移行 (ai-studio-v2.md §1): 「未設定」の事前ガードは廃止した。キー未登録・env 未設定は
+    // ai-providers/internal/router.ts が候補ゼロとして検出し KMB-E408 を返すため
+    // (登録済みキーがあれば env 未設定でも動作するようになった非退行の裏側)、
+    // 呼び出し前の env チェックは不要かつ「登録キーがあるのに動かない」誤検知の原因になる。
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
     try {
       const supabase = await createSupabaseServerClient();
@@ -433,9 +434,6 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
   },
 
   async transcribeSource(sourceId) {
-    if (!isOpenAiConfigured()) {
-      return { ok: false, code: "KMB-E901", detail: "OPENAI_API_KEY が未設定です" };
-    }
     try {
       const supabase = await createSupabaseServerClient();
       const source = await getSource(supabase, sourceId);
@@ -470,9 +468,6 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
   },
 
   async cleanSource(sourceId) {
-    if (!isClaudeConfigured()) {
-      return { ok: false, code: "KMB-E901", detail: "ANTHROPIC_API_KEY が未設定です" };
-    }
     try {
       const supabase = await createSupabaseServerClient();
       const source = await getSource(supabase, sourceId);
@@ -542,9 +537,6 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
   },
 
   async regenerateDraft(draftId, instruction) {
-    if (!isClaudeConfigured()) {
-      return { ok: false, code: "KMB-E901", detail: "ANTHROPIC_API_KEY が未設定です" };
-    }
     try {
       const supabase = await createSupabaseServerClient();
       const draft = await getDraft(supabase, draftId);

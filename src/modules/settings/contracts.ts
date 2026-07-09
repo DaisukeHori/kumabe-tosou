@@ -53,6 +53,17 @@ export const zSeoDefaults = z
 export const zOpsLimits = z
   .object({
     x_monthly_post_limit: z.number().int().min(0).max(1000), // 課金ガード (設計書 §8.2)。初期値 100
+    // ai-studio-v2.md §1/§2 (module-contracts.md v2.5 §4.2)。µUSD 整数で統一 (USD 小数は使わない)。
+    ai_monthly_budget_micro_usd: z.number().int().min(0), // AI 従量課金の月次上限。既定 50_000_000 = $50
+    ai_monthly_image_limit: z.number().int().min(0).max(10_000), // 画像生成の月次枚数上限。既定 200
+    /**
+     * 判断点 (オーケストレーターへ報告): ai-studio-v2.md §2 の ai_provider_keys.default_model
+     * コメント「画像の既定は ops 設定」を実装したもの。契約書 v2.5 §4.2 の抜粋には明記されて
+     * いないが、設計書の同コメントから導かれる必然のフィールドとして追加した。
+     * 画像生成モデルは複数プロバイダを横断しうるため per-key ではなく ops 設定 (グローバル 1 つ)
+     * に置く。null = 未設定 (設定画面で選択されるまで)。
+     */
+    ai_default_image_model: z.string().max(200).nullable(),
   })
   .strict();
 

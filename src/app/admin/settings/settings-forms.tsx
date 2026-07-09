@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import type { AiKeyMeta } from "@/modules/ai-providers/contracts";
 import type { SettingsKey, SettingsValue } from "@/modules/settings/contracts";
 
 import {
@@ -25,6 +26,7 @@ import {
   updateOpsLimitsAction,
   updateSeoDefaultsAction,
 } from "./actions";
+import { AiSettingsTab } from "./ai-tab";
 import { SETTINGS_FORM_INITIAL_STATE, type SettingsFormState } from "./form-state";
 
 export type SettingsMetaFor<K extends SettingsKey> = {
@@ -41,12 +43,16 @@ export type SettingsTabsData = {
   notifications: SettingsMetaFor<"notifications">;
 };
 
-const TAB_LABELS: Record<SettingsKey, string> = {
+/** "ai" は site_settings の SettingsKey ではなく ai-providers 由来のタブのため、別ユニオンで扱う */
+type TabKey = SettingsKey | "ai";
+
+const TAB_LABELS: Record<TabKey, string> = {
   company: "会社情報",
   hero: "ヒーロー",
   seo_defaults: "SEO既定値",
   ops_limits: "運用上限",
   notifications: "通知",
+  ai: "AI",
 };
 
 /** フォーム共通のフィードバック処理 (成功トースト/エラー表示) */
@@ -67,14 +73,17 @@ function UpdatedAtHint({ updatedAt, isUnset }: { updatedAt: string | null; isUns
   );
 }
 
-export function SettingsTabs({ data }: { data: SettingsTabsData }) {
-  const [active, setActive] = useState<SettingsKey>("company");
+export function SettingsTabs({ data, aiKeys }: { data: SettingsTabsData; aiKeys: AiKeyMeta[] }) {
+  const [active, setActive] = useState<TabKey>("company");
+  // "ai" タブは複数の独立したフォーム (キー追加/予算) を持つため単一の Cmd+S 対象を持たない
+  // (キーを設定しない = そのタブでは Cmd+S が何もしない、という割り切り)。
   const formRefs = useRef<Partial<Record<SettingsKey, HTMLFormElement | null>>>({});
 
   useEffect(() => {
     function handleKeydown(e: KeyboardEvent) {
       const isSave = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s";
       if (!isSave) return;
+      if (active === "ai") return;
       e.preventDefault();
       formRefs.current[active]?.requestSubmit();
     }
@@ -83,9 +92,9 @@ export function SettingsTabs({ data }: { data: SettingsTabsData }) {
   }, [active]);
 
   return (
-    <Tabs value={active} onValueChange={(v) => setActive(v as SettingsKey)}>
+    <Tabs value={active} onValueChange={(v) => setActive(v as TabKey)}>
       <TabsList variant="line">
-        {(Object.keys(TAB_LABELS) as SettingsKey[]).map((key) => (
+        {(Object.keys(TAB_LABELS) as TabKey[]).map((key) => (
           <TabsTrigger key={key} value={key}>
             {TAB_LABELS[key]}
           </TabsTrigger>
@@ -131,6 +140,9 @@ export function SettingsTabs({ data }: { data: SettingsTabsData }) {
             formRefs.current.notifications = el;
           }}
         />
+      </TabsContent>
+      <TabsContent value="ai" className="mt-6">
+        <AiSettingsTab keys={aiKeys} opsLimits={data.ops_limits} />
       </TabsContent>
     </Tabs>
   );
@@ -311,6 +323,14 @@ function OpsLimitsForm({
   return (
     <form ref={formRef} action={action} className="max-w-xl">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
+      {/* AI タブが編集する分は現在値のまま hidden で持ち回す (本フォームは x_monthly_post_limit のみ編集) */}
+      <input
+        type="hidden"
+        name="ai_monthly_budget_micro_usd"
+        value={v?.ai_monthly_budget_micro_usd ?? 50_000_000}
+      />
+      <input type="hidden" name="ai_monthly_image_limit" value={v?.ai_monthly_image_limit ?? 200} />
+      <input type="hidden" name="ai_default_image_model" value={v?.ai_default_image_model ?? ""} />
       <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
       <FieldGroup className="mt-4">
         <Field>
