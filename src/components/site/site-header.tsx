@@ -16,6 +16,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { MotionNavLink } from "@/components/motion/nav-link";
+import { PaintProgress } from "@/components/motion/paint-progress";
 
 export const NAV_ITEMS = [
   { no: "01", label: "ストーリー", href: "/story" },
@@ -49,10 +51,10 @@ export function SiteHeader() {
               {NAV_ITEMS.map((item) => (
                 <NavigationMenuItem key={item.href}>
                   <NavigationMenuLink
-                    render={<Link href={item.href} />}
-                    className="gap-1.5 px-2.5 text-[13px] tracking-wider text-carbon hover:bg-carbon/5 focus:bg-carbon/5"
+                    render={<MotionNavLink href={item.href} />}
+                    className="kt-nav-link gap-1.5 rounded-none px-2.5 text-[13px] tracking-wider hover:bg-transparent focus:bg-transparent"
                   >
-                    <span className="font-mono text-[10px] text-carbon-soft">
+                    <span className="kt-nav-no font-mono text-[10px] text-carbon-soft">
                       {item.no}
                     </span>
                     {item.label}
@@ -94,10 +96,10 @@ export function SiteHeader() {
               {NAV_ITEMS.map((item) => (
                 <SheetClose
                   key={item.href}
-                  render={<Link href={item.href} />}
-                  className="flex items-baseline gap-3 border-b border-hair-soft py-3 text-sm tracking-wider text-carbon"
+                  render={<MotionNavLink href={item.href} />}
+                  className="kt-nav-link-m flex items-baseline gap-3 border-b border-hair-soft py-3 text-sm tracking-wider text-carbon"
                 >
-                  <span className="font-mono text-[10px] text-carbon-soft">
+                  <span className="kt-nav-no font-mono text-[10px] text-carbon-soft">
                     {item.no}
                   </span>
                   {item.label}
@@ -113,6 +115,7 @@ export function SiteHeader() {
           </SheetContent>
         </Sheet>
       </div>
+      <PaintProgress />
     </header>
   );
 }
