@@ -1,10 +1,23 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Noto_Sans_JP, Shippori_Antique_B1 } from "next/font/google";
+import { Archivo, IBM_Plex_Mono, Noto_Sans_JP, Shippori_Antique_B1 } from "next/font/google";
 import "./globals.css";
 
 const notoSansJP = Noto_Sans_JP({
   variable: "--font-sans",
   subsets: ["latin"],
+});
+
+/*
+  legacy/css/style.css の --font-wide (font-stretch: 125% で使用) の移植。
+  可変フォントの wdth 軸を axes で読み込み、--font-wide (globals.css) から参照される。
+*/
+const archivo = Archivo({
+  variable: "--font-archivo",
+  subsets: ["latin"],
+  axes: ["wdth"],
+  // --font-wide は装飾テキスト (透かし番号/章番号) 専用で LCP に関与しないため
+  // 全ページ ~208KB の先行プリロードを止める (実測でプラン見積り +25-30KB を大幅超過)
+  preload: false,
 });
 
 /*
@@ -74,7 +87,7 @@ export default function RootLayout({
   return (
     <html
       lang="ja"
-      className={`${notoSansJP.variable} ${shipporiAntiqueB1.variable} ${ibmPlexMono.variable} h-full antialiased`}
+      className={`${notoSansJP.variable} ${shipporiAntiqueB1.variable} ${ibmPlexMono.variable} ${archivo.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-primer text-carbon">
         {children}
