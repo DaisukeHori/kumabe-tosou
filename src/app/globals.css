@@ -1050,6 +1050,226 @@ html {
 }
 /* === /motion: scroll-texture === */
 /* === motion: page-home === */
+/* -------------------------------------------------------------
+   M4-home: ヒーロー1文字リビール / 設計図グリッド / カラーストリップ
+   正典: legacy/js/main.js:197-265,
+         legacy/css/style.css:514-536, 1429-1501, 1554-1587
+   ------------------------------------------------------------- */
+
+/* ---------- 1) ヒーロー1文字分割リビール (旧 css:1429-1441) ----------
+   旧 .hero-title[data-split].is-split .char 相当。ビルド時分割のため
+   発火クラスは無く、first paint から CSS のみで発火する。
+   既存 .kt-hero-line の行ライズ (1s) と併走する複合アニメ (旧実装と同じ)。 */
+@keyframes kt-char-rise {
+  from {
+    transform: translateY(115%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.kt-hero-char {
+  display: inline-block;
+  will-change: transform;
+  transform: translateY(115%);
+  animation: kt-char-rise 0.72s var(--ease) both;
+  animation-delay: calc(var(--ci, 0) * 0.032s);
+}
+/* 分割時は塗りマーカーの発火を後ろへ (旧 css:1443-1445: 0.75s → 1.05s) */
+.kt-hero-title--split .kt-paint-mark::before {
+  animation-delay: 1.05s;
+}
+
+/* ---------- 2) 設計図グリッド+寸法マーカー (旧 css:1451-1501) ----------
+   inset の換算根拠: 旧は全幅 .hero 基準 top 96px (= INDEX 行の 76px 上)。
+   現構造は max-w セクション内のため top 32px (= pt-28 の INDEX 行の 80px 上)、
+   左右は section の padding (px-5 / sm:px-8) に一致させる。 */
+.kt-hero-grid {
+  position: absolute;
+  inset: 32px 20px 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--hair-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hair-soft) 1px, transparent 1px);
+  background-size:
+    100% 25%,
+    20% 100%;
+  -webkit-mask-image: radial-gradient(
+    120% 90% at 78% 30%,
+    #000 0%,
+    rgba(0, 0, 0, 0.35) 45%,
+    transparent 72%
+  );
+  mask-image: radial-gradient(
+    120% 90% at 78% 30%,
+    #000 0%,
+    rgba(0, 0, 0, 0.35) 45%,
+    transparent 72%
+  );
+  opacity: 0.9;
+}
+@media (min-width: 640px) {
+  .kt-hero-grid {
+    inset: 32px 32px 0; /* sm:px-8 に追従 */
+  }
+}
+/* --font-mono は @theme inline のため runtime CSS 変数として参照不可。
+   :root に実在する --font-legacy-mono を使う。 */
+.kt-hero-dim {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-legacy-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--carbon-soft);
+  white-space: nowrap;
+}
+.kt-hero-dim .kt-hero-tick {
+  display: inline-block;
+  width: 1px;
+  height: 8px;
+  background: var(--carbon-soft);
+}
+.kt-hero-dim--x {
+  top: 24%;
+  right: 4%;
+}
+.kt-hero-dim--y {
+  top: 46%;
+  right: 20%;
+  writing-mode: vertical-rl;
+}
+.kt-hero-dim--y .kt-hero-tick {
+  width: 8px;
+  height: 1px;
+}
+.kt-hero-cross {
+  position: absolute;
+  font-family: var(--font-legacy-mono);
+  font-size: 12px;
+  color: var(--carbon-soft);
+  transform: translate(-50%, -50%);
+}
+.kt-hero-cross--tl {
+  top: 0;
+  left: 0;
+}
+.kt-hero-cross--tr {
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+}
+.kt-hero-cross--bl {
+  bottom: 8%;
+  left: 0;
+}
+@media (max-width: 900px) {
+  .kt-hero-grid {
+    display: none; /* 旧 css:1499-1501 */
+  }
+}
+
+/* ---------- 3) カラーストリップ (旧 css:514-536, 1554-1587) ---------- */
+.kt-color-strip-wrap {
+  position: relative;
+  /* 進捗バー (兄弟枝の .kt-strip-progress-bar) から名前付き scroll timeline を
+     参照するための scope 宣言。旧 CSS には無いが、現仕様ではサブツリー外参照に
+     必須 (無いと Chrome で進捗バーが scaleX(0) のまま不可視になる)。 */
+  timeline-scope: --kt-strip;
+}
+.kt-color-strip {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding: 4px 4px 26px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--carbon-soft) transparent;
+}
+.kt-color-strip::-webkit-scrollbar {
+  height: 4px;
+}
+.kt-color-strip::-webkit-scrollbar-thumb {
+  background: var(--carbon-soft);
+}
+.kt-color-strip > * {
+  flex: 0 0 clamp(200px, 22vw, 250px);
+  scroll-snap-align: start;
+}
+.kt-strip-foot {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.kt-strip-hint {
+  margin: 0;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  color: var(--carbon-soft);
+}
+.kt-strip-progress {
+  flex: 1;
+  display: block;
+  height: 2px;
+  background: var(--hair);
+  position: relative;
+  overflow: hidden;
+}
+.kt-strip-progress-bar {
+  position: absolute;
+  inset: 0;
+  background: var(--soul);
+  transform-origin: left;
+  transform: scaleX(0.15); /* scroll-timeline 非対応環境の静的表示 (旧 css:1574) */
+}
+@supports (animation-timeline: scroll()) {
+  .kt-color-strip {
+    scroll-timeline: --kt-strip x;
+  }
+  .kt-strip-progress-bar {
+    transform: scaleX(0);
+    animation: kt-strip-fill linear both;
+    animation-timeline: --kt-strip;
+  }
+  @keyframes kt-strip-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+}
+
+/* ---------- print ガード (motion-implementation-plan.md §1.5 是正・§3-4) ----------
+   scroll-timeline は印刷コンテキストで解決されず from 状態 (scaleX(0)) に
+   固まるおそれがあるため、印刷時は静的 15% 表示に固定する。 */
+@media print {
+  .kt-strip-progress-bar {
+    animation: none;
+    transform: scaleX(0.15);
+  }
+}
+
+/* ---------- reduced-motion キルスイッチ (旧 css:1130-1136 / 1446-1448 方式) ----------
+   既存ブロック (kt-hero-line / kt-paint-mark / reveal / marquee) は上方で定義済み。
+   ここでは本バンドが追加した機構だけを止める。wheel 変換は 1:1 の直接操作
+   (アニメではない) のため対象外。 */
+@media (prefers-reduced-motion: reduce) {
+  .kt-hero-char {
+    animation: none;
+    transform: none;
+    will-change: auto;
+  }
+  .kt-strip-progress-bar {
+    animation: none;
+    transform: scaleX(0.15);
+  }
+}
 /* === /motion: page-home === */
 /* === motion: page-colors === */
 /* === /motion: page-colors === */

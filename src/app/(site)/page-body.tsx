@@ -8,6 +8,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ColorStrip } from "@/components/motion/color-strip";
+import { SplitChars } from "@/components/motion/split-chars";
 import { ArrowButton, SectionMark } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
 import { SlotImage } from "@/components/site/slot-image";
@@ -244,50 +246,73 @@ export function HomePageBody({
   return (
     <>
       {/* ============ HERO ============ */}
-      <section className="mx-auto max-w-[1240px] px-5 pb-16 pt-20 sm:px-8 sm:pt-28">
-        <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-          <span>INDEX 00 — HOME</span>
-          <span className="h-px w-16 bg-hair" aria-hidden="true" />
-          <span className="hidden sm:inline">
-            SURFACE FINISHING FOR 3D PRINTS
+      <section className="relative mx-auto max-w-[1240px] px-5 pb-16 pt-20 sm:px-8 sm:pt-28">
+        {/* 設計図グリッド+寸法マーカー (legacy/index.html:45-51, css:1451-1501) */}
+        <div className="kt-hero-grid" aria-hidden="true">
+          <span className="kt-hero-dim kt-hero-dim--x">
+            <i className="kt-hero-tick" />
+            200mm CLASS
+            <i className="kt-hero-tick" />
           </span>
-        </p>
-        <h1 className="mt-8 text-[clamp(34px,6.2vw,72px)] font-bold leading-[1.3] tracking-[0.04em]">
-          <span className="kt-hero-line">
-            <span>3Dプリントを、</span>
+          <span className="kt-hero-dim kt-hero-dim--y">
+            <i className="kt-hero-tick" />
+            φ55
+            <i className="kt-hero-tick" />
           </span>
-          <span className="kt-hero-line">
-            <span>
-              量産品と
-              <span className="kt-paint-mark">見分けがつかない</span>
-            </span>
-          </span>
-          <span className="kt-hero-line">
-            <span>外観に。</span>
-          </span>
-        </h1>
-        <p className="mt-10 max-w-2xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid">
-          積層痕を消す研磨から、自動車グレードの塗装仕上げまで。家電の量産塗装で「量産の精度」を磨いた自動車塗装職人が、勝負試作の一点からブリッジ生産の千個まで、郵送で全国からお受けします。
-        </p>
-        <div className="mt-10 flex flex-wrap gap-3">
-          <ArrowButton href="/shop">SHOPで概算を出す</ArrowButton>
-          <ArrowButton href="/colors">8色の色見本を見る</ArrowButton>
-          <ArrowButton href="/service">サービス・料金</ArrowButton>
+          <span className="kt-hero-cross kt-hero-cross--tl">+</span>
+          <span className="kt-hero-cross kt-hero-cross--tr">+</span>
+          <span className="kt-hero-cross kt-hero-cross--bl">+</span>
         </div>
-        <div
-          className="kt-marquee mt-14 overflow-hidden border-y border-hair py-2"
-          aria-hidden="true"
-        >
-          <div className="kt-marquee-track font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
-            {[0, 1].map((rep) => (
-              <span key={rep} className="flex">
-                {TICKER_ITEMS.map((item, i) => (
-                  <span key={`${rep}-${i}`} className="inline-block pr-[4.5em]">
-                    {item}
-                  </span>
-                ))}
+        <div className="relative z-[1]">
+          <p className="flex items-center gap-4 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
+            <span>INDEX 00 — HOME</span>
+            <span className="h-px w-16 bg-hair" aria-hidden="true" />
+            <span className="hidden sm:inline">
+              SURFACE FINISHING FOR 3D PRINTS
+            </span>
+          </p>
+          <h1
+            className="kt-hero-title--split mt-8 text-[clamp(34px,6.2vw,72px)] font-bold leading-[1.3] tracking-[0.04em]"
+            aria-label="3Dプリントを、量産品と見分けがつかない外観に。"
+          >
+            <SplitChars>
+              <span className="kt-hero-line">
+                <span>3Dプリントを、</span>
               </span>
-            ))}
+              <span className="kt-hero-line">
+                <span>
+                  量産品と
+                  <span className="kt-paint-mark">見分けがつかない</span>
+                </span>
+              </span>
+              <span className="kt-hero-line">
+                <span>外観に。</span>
+              </span>
+            </SplitChars>
+          </h1>
+          <p className="mt-10 max-w-2xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid">
+            積層痕を消す研磨から、自動車グレードの塗装仕上げまで。家電の量産塗装で「量産の精度」を磨いた自動車塗装職人が、勝負試作の一点からブリッジ生産の千個まで、郵送で全国からお受けします。
+          </p>
+          <div className="mt-10 flex flex-wrap gap-3">
+            <ArrowButton href="/shop">SHOPで概算を出す</ArrowButton>
+            <ArrowButton href="/colors">8色の色見本を見る</ArrowButton>
+            <ArrowButton href="/service">サービス・料金</ArrowButton>
+          </div>
+          <div
+            className="kt-marquee mt-14 overflow-hidden border-y border-hair py-2"
+            aria-hidden="true"
+          >
+            <div className="kt-marquee-track font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
+              {[0, 1].map((rep) => (
+                <span key={rep} className="flex">
+                  {TICKER_ITEMS.map((item, i) => (
+                    <span key={`${rep}-${i}`} className="inline-block pr-[4.5em]">
+                      {item}
+                    </span>
+                  ))}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -416,45 +441,50 @@ export function HomePageBody({
         <p className="mt-6 max-w-2xl text-[15px] leading-[2.05] text-carbon-mid">
           8色中5色が3コート・高難度系。いずれも市販の調色済み補修塗料を正規の用途で使用し、「参考色」として仕上げます。
         </p>
-        <Reveal
-          as="div"
-          className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-4"
-        >
-          {DRAWDOWNS.map((dd) => (
-            <Link
-              key={dd.id}
-              href={`/colors#${dd.id}`}
-              className="group border border-hair bg-paper p-2 transition-transform duration-[450ms] ease-out hover:-translate-y-1.5 hover:border-carbon/40 hover:shadow-[0_18px_40px_-22px_rgba(23,25,27,0.35)]"
-            >
-              <div
-                className="relative aspect-[4/3] w-full overflow-hidden"
-                style={{
-                  background: `linear-gradient(168deg, ${dd.a}, ${dd.b})`,
-                }}
-                aria-hidden="true"
+        <Reveal as="div" className="kt-color-strip-wrap mt-12">
+          <ColorStrip>
+            {DRAWDOWNS.map((dd) => (
+              <Link
+                key={dd.id}
+                href={`/colors#${dd.id}`}
+                className="group border border-hair bg-paper p-2 transition-transform duration-[450ms] ease-out hover:-translate-y-1.5 hover:border-carbon/40 hover:shadow-[0_18px_40px_-22px_rgba(23,25,27,0.35)]"
               >
-                <span className="kt-swatch-noise pointer-events-none" />
-                <span className="kt-swatch-sheen pointer-events-none" />
-                {dd.pearl ? (
-                  <span className="kt-pearl-iris pointer-events-none" />
-                ) : null}
-              </div>
-              <div className="px-1 pb-1 pt-3">
-                <p className="font-mono text-[9px] tracking-[0.14em] text-carbon-soft">
-                  {dd.code}
-                </p>
-                <p className="mt-1 text-sm font-medium tracking-wider">
-                  {dd.name}
-                </p>
-                <Badge
-                  variant="outline"
-                  className="mt-2 rounded-none border-hair font-mono text-[9px] tracking-[0.1em] text-carbon-mid"
+                <div
+                  className="relative aspect-[4/3] w-full overflow-hidden"
+                  style={{
+                    background: `linear-gradient(168deg, ${dd.a}, ${dd.b})`,
+                  }}
+                  aria-hidden="true"
                 >
-                  {dd.note}
-                </Badge>
-              </div>
-            </Link>
-          ))}
+                  <span className="kt-swatch-noise pointer-events-none" />
+                  <span className="kt-swatch-sheen pointer-events-none" />
+                  {dd.pearl ? (
+                    <span className="kt-pearl-iris pointer-events-none" />
+                  ) : null}
+                </div>
+                <div className="px-1 pb-1 pt-3">
+                  <p className="font-mono text-[9px] tracking-[0.14em] text-carbon-soft">
+                    {dd.code}
+                  </p>
+                  <p className="mt-1 text-sm font-medium tracking-wider">
+                    {dd.name}
+                  </p>
+                  <Badge
+                    variant="outline"
+                    className="mt-2 rounded-none border-hair font-mono text-[9px] tracking-[0.1em] text-carbon-mid"
+                  >
+                    {dd.note}
+                  </Badge>
+                </div>
+              </Link>
+            ))}
+          </ColorStrip>
+          <div className="kt-strip-foot">
+            <p className="kt-strip-hint font-mono">DRAG / SCROLL →</p>
+            <span className="kt-strip-progress" aria-hidden="true">
+              <span className="kt-strip-progress-bar" />
+            </span>
+          </div>
         </Reveal>
         <Reveal as="div" className="mt-10">
           <ArrowButton href="/colors">色見本を一枚ずつ見る</ArrowButton>
