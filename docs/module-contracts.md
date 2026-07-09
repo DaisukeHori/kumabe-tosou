@@ -1,6 +1,7 @@
 # モジュール契約書 (canonical)
 
-- 版: v2.3 (2026-07-09: page-media モジュール新設を §1/§5 に反映 / ContentFacade にビジュアルエディタ用 CAS メソッド 4 件を追加 / KMB-E107〜E109 の所有を明記)
+- 版: v2.4 (2026-07-10: page_text テーブルを page-media 所有に追加、PageMediaFacade にテキストスロット 4 メソッド追加 — visual-text-editor.md v1.0)
+- 旧版: v2.3 (2026-07-09: page-media モジュール新設を §1/§5 に反映 / ContentFacade にビジュアルエディタ用 CAS メソッド 4 件を追加 / KMB-E107〜E109 の所有を明記)
 - 旧版: v2.1 (価格契約を行列モデル v2 に改訂 — Wave 0 実装で legacy 実構造との乖離が判明したため。zEstimateInput は size_key 必須・数量値引き自動適用・レンジ結果に変更)
 - 旧版: v2.0 (Codex 外部レビュー反映: worker 実行面を Next.js に統一 / lease 型 stage 実行 / draft 単位予約 / at-least-once 配信モデル / IG 接続シーケンス / ai-studio facade 増補)
 - 作成日: 2026-07-07
@@ -19,7 +20,7 @@
 | `pricing` | 価格グレード/オプション・見積り計算 | price_grades, price_options | (E101/E103 を共用) | PricingFacade |
 | `inquiry` | お問い合わせ受付・管理・レート制限 | contact_inquiries, rate_limits | E105 (+E101 を共用) | InquiryFacade |
 | `settings` | サイト設定 (会社情報/ヒーロー/SEO/運用上限) | site_settings | (E101/E103 を共用) | SettingsFacade |
-| `page-media` | 公開ページの装飾/ヒーロー画像スロット (visual-media-editor.md が親設計) | page_media (+view page_media_resolved) | KMB-E107 (E108/E109 は content 所有) | PageMediaFacade |
+| `page-media` | 公開ページの装飾/ヒーロー画像・テキストスロット (visual-media-editor.md / visual-text-editor.md が親設計) | page_media, page_text (+view page_media_resolved) | KMB-E107 (E108/E109 は content 所有) | PageMediaFacade |
 | `ai-studio` | 音声入力・文字起こし・整文・要旨抽出・リサーチ・チャネル別生成・レビュー | ai_sources, ai_runs, channel_drafts, draft_revisions (+Storage bucket: audio) | KMB-E303, E4xx | AiStudioFacade |
 | `distribution` | 配信予約・SNS API 実行・チャネル接続・文体プロファイル | channel_posts, channel_accounts, style_profiles | KMB-E5xx | DistributionFacade |
 | `site-public` | 公開サイトの表示 (App Router ページ群) | **所有テーブルなし** (read 専用) | なし | なし (他 facade の消費者) |
@@ -567,6 +568,12 @@ export interface PageMediaFacade {
   listForAdmin(route?: string): Promise<Result<PageSlotState[]>>;
   setSlot(slotKey: string, mediaId: string | null): Promise<Result<void>>;   // registry 外 slot_key は KMB-E107
   setSlotAlt(slotKey: string, alt: string | null): Promise<Result<void>>;
+
+  // テキストスロット (visual-text-editor.md §3。2026-07-10 追加。page_text 所有)
+  resolveAllTexts(): Promise<Result<ResolvedTexts>>;      // Record (JSON-safe)。tag "page_text"
+  resolveAllTextsFresh(): Promise<Result<ResolvedTexts>>;
+  listTextsForAdmin(route?: string): Promise<Result<PageTextState[]>>;
+  setText(slotKey: string, text: string | null): Promise<Result<void>>; // null = 既定に戻す (行削除)。maxLen/kind 違反は E101
 }
 
 // media/facade.ts
