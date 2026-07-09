@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  estimateMediaUploadCostCents,
   estimateXCostCents,
   exceedsMonthlyBillingGuard,
+  X_MEDIA_UPLOAD_COST_CENTS,
   X_POST_COST_CENTS,
   X_POST_WITH_URL_COST_CENTS,
 } from "@/modules/distribution/internal/billing";
@@ -36,6 +38,38 @@ describe("estimateXCostCents", () => {
 
   it("負数入力は 0 として扱われる", () => {
     expect(estimateXCostCents({ tweetCount: -3, urlCount: -1 })).toBe(0);
+  });
+
+  it("mediaCount 省略時は画像コストが加算されない (従来どおりの計算結果)", () => {
+    expect(estimateXCostCents({ tweetCount: 1, urlCount: 0 })).toBe(
+      estimateXCostCents({ tweetCount: 1, urlCount: 0, mediaCount: 0 }),
+    );
+  });
+
+  it("mediaCount を渡しても現行単価 (X_MEDIA_UPLOAD_COST_CENTS=0) では合計コストは変わらない " +
+    "(research: media upload 自体の別建て課金は docs 記載なし、確度ある事実のみ反映)", () => {
+    expect(X_MEDIA_UPLOAD_COST_CENTS).toBe(0);
+    expect(estimateXCostCents({ tweetCount: 1, urlCount: 0, mediaCount: 4 })).toBe(
+      estimateXCostCents({ tweetCount: 1, urlCount: 0 }),
+    );
+  });
+});
+
+describe("estimateMediaUploadCostCents (画像アップロード分の課金加算フック)", () => {
+  it("costCentsPerMedia 省略時は canonical 定数 X_MEDIA_UPLOAD_COST_CENTS を使う (現行 0)", () => {
+    expect(estimateMediaUploadCostCents(4)).toBe(0);
+  });
+
+  it("costCentsPerMedia を明示指定すると mediaCount との積になる (将来の単価改定時の計算検証)", () => {
+    expect(estimateMediaUploadCostCents(3, 5)).toBe(15);
+  });
+
+  it("負数の mediaCount は 0 として扱われる", () => {
+    expect(estimateMediaUploadCostCents(-2, 5)).toBe(0);
+  });
+
+  it("小数の costCentsPerMedia は整数丸めされる", () => {
+    expect(estimateMediaUploadCostCents(3, 1.4)).toBe(Math.round(3 * 1.4));
   });
 });
 

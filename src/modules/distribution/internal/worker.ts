@@ -26,7 +26,8 @@ import { classifyPublishFailure, ConfirmedApiError } from "./publish-error-class
 import { appendCompletedTweet, nextThreadIndex, previousTweetId } from "./thread";
 import type { InstagramVaultSecret, XVaultSecret } from "./vault-names";
 import { VAULT_SECRET_NAMES } from "./vault-names";
-import { postTweet, refreshXToken, uploadImageToX } from "./x-api";
+import { postTweet, refreshXToken } from "./x-api";
+import { uploadMediaToX } from "./x-media";
 import { zInstagramAccountMeta, zXAccountMeta } from "../contracts";
 import * as repo from "../repository";
 import type { ChannelAccountRow, ChannelPostRow } from "../repository";
@@ -123,6 +124,24 @@ function buildTweetUrl(username: string | undefined, tweetId: string | undefined
   return `https://x.com/${username}/status/${tweetId}`;
 }
 
+/**
+ * ツイート添付画像の取得 (JPEG レンディション URL) → ダウンロード → X media upload v2 実行。
+ * 失敗時はそのまま例外を再送出する (呼び出し元で 401 は channel expired 経路へ、それ以外
+ * (403=media.write 未認可 等) はテキスト投稿ごと manual_required に倒すため。
+ * §7 P0: 画像なしで勝手に投稿しない — 旧実装はここを catch で握りつぶし「画像なしで投稿される」
+ * 形で症状が顕在化していた。research/ai-studio-v2/sns-image-posting.md §2.1 の指摘どおり)。
+ */
+async function uploadTweetImage(accessToken: string, mediaId: string): Promise<string> {
+  const urlResult = await mediaFacade.getJpegRenditionUrl(mediaId);
+  if (!urlResult.ok) {
+    throw new Error(
+      `画像 (media_id=${mediaId}) の JPEG レンディション取得に失敗しました: ${urlResult.detail ?? urlResult.code}`,
+    );
+  }
+  const bytes = await downloadBytes(urlResult.value);
+  return uploadMediaToX({ accessToken, bytes, mediaType: "image/jpeg", mediaCategory: "tweet_image" });
+}
+
 async function publishXPost(
   serviceClient: SupabaseClient,
   post: ChannelPostRow,
@@ -161,13 +180,34 @@ async function publishXPost(
     const mediaIds: string[] = [];
     if (tweet.media_id) {
       try {
-        const urlResult = await mediaFacade.getJpegRenditionUrl(tweet.media_id);
-        if (urlResult.ok) {
-          const bytes = await downloadBytes(urlResult.value);
-          mediaIds.push(await uploadImageToX(accessToken, bytes));
+        mediaIds.push(await uploadTweetImage(accessToken, tweet.media_id));
+      } catch (err) {
+        // 401 (invalid_token = トークン失効) は postTweet の 401 分岐と同一の扱いに統一する
+        // (チャネル自体が失効しているため、テキスト投稿時の失敗と区別する理由がない)。
+        if (err instanceof ConfirmedApiError && err.status === 401) {
+          await repo.markChannelAccountExpired(serviceClient, "x");
+          await repo.flagScheduledPostsForExpiredChannel(serviceClient, "x");
+          await repo.markFailed(serviceClient, post.id, {
+            code: "KMB-E503",
+            detail: "X トークンが失効しました (401、画像アップロード時に検出)",
+            externalId: JSON.stringify(ref),
+          });
+          return;
         }
-      } catch {
-        // 画像アップロードの失敗はテキスト投稿を止めない (画像添付は §8.1 R1 のとおり未確定要件のためベストエフォート)
+
+        // それ以外 (403 = media.write 未認可、その他の失敗) は投稿を止めて manual_required に
+        // 落とす (画像なしで勝手に投稿しない)。403 は再認可が必要な可能性があるためヒントを付与する。
+        const detail = err instanceof Error ? err.message : String(err);
+        const scopeHint =
+          err instanceof ConfirmedApiError && err.status === 403
+            ? " (media.write スコープが未認可の可能性があります。X の再接続 (media.write 再認可) をご確認ください)"
+            : "";
+        await repo.markManualRequired(serviceClient, post.id, {
+          code: "KMB-E501",
+          detail: `${detail}${scopeHint}`,
+          externalId: JSON.stringify(ref),
+        });
+        return;
       }
     }
 
