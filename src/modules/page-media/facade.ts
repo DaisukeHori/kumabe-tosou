@@ -7,7 +7,14 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mediaFacade } from "@/modules/media/facade";
 import type { Result } from "@/modules/platform/contracts";
 
-import type { PageSlotState, ResolvedSlot, ResolvedSlots, SlotState } from "./contracts";
+import type {
+  PageSlotState,
+  PageTextState,
+  ResolvedSlot,
+  ResolvedSlots,
+  ResolvedTexts,
+  SlotState,
+} from "./contracts";
 import { EDITABLE_ROUTES, REGISTRY_HASH, SLOT_REGISTRY, isValidSlotKey, slotsForRoute } from "./registry";
 import type { PageSlot } from "./registry";
 import {
@@ -16,7 +23,20 @@ import {
   updateSlotAlt,
   upsertSlot,
   type PageMediaResolvedRow,
+  deleteText,
+  fetchTextRows,
+  upsertText,
+  type PageTextRow,
 } from "./repository";
+import {
+  TEXT_REGISTRY,
+  TEXT_REGISTRY_HASH,
+  isValidTextSlotKey,
+  normalizeLineEndings,
+  textSlotByKey,
+  textSlotsForRoute,
+} from "./text-registry";
+import type { PageTextSlot } from "./text-registry";
 
 /**
  * page-media モジュールの公開 facade (canonical: docs/design/visual-media-editor.md §6)。
@@ -33,12 +53,21 @@ export interface PageMediaFacade {
   listForAdmin(route?: string): Promise<Result<PageSlotState[]>>;
   setSlot(slotKey: string, mediaId: string | null): Promise<Result<void>>;
   setSlotAlt(slotKey: string, alt: string | null): Promise<Result<void>>;
+
+  // テキストスロット (visual-text-editor.md §3。2026-07-10 追加。page_text 所有)
+  /** 公開 SSR 用。unstable_cache tag "page_text"。ResolvedTexts は Record (JSON-safe、Map 禁止) */
+  resolveAllTexts(): Promise<Result<ResolvedTexts>>;
+  /** /edit 用 (キャッシュ非経由) */
+  resolveAllTextsFresh(): Promise<Result<ResolvedTexts>>;
+  listTextsForAdmin(route?: string): Promise<Result<PageTextState[]>>;
+  /** null = 既定に戻す (行削除)。defaultText と同一文字列の保存も同様に削除へ正規化する (v1.1) */
+  setText(slotKey: string, text: string | null): Promise<Result<void>>;
 }
 
 // re-export (admin UI / edit ルートが registry を直接読みたいケース用の利便 export。
 // facade を経由しない registry の値自体は「静的メタの単一ソース」であり秘匿情報ではない)
-export { EDITABLE_ROUTES, REGISTRY_HASH, SLOT_REGISTRY };
-export type { PageSlot };
+export { EDITABLE_ROUTES, REGISTRY_HASH, SLOT_REGISTRY, TEXT_REGISTRY, TEXT_REGISTRY_HASH };
+export type { PageSlot, PageTextSlot };
 
 function rowsBySlotKey(rows: PageMediaResolvedRow[]): Map<string, PageMediaResolvedRow> {
   return new Map(rows.map((r) => [r.slot_key, r]));
@@ -210,10 +239,130 @@ async function setSlotAlt(slotKey: string, alt: string | null): Promise<Result<v
   }
 }
 
+// ---------------------------------------------------------------------------
+// page-text (ビジュアルテキストエディタ、visual-text-editor.md §3)
+// ---------------------------------------------------------------------------
+
+function rowsBySlotKeyText(rows: PageTextRow[]): Map<string, PageTextRow> {
+  return new Map(rows.map((r) => [r.slot_key, r]));
+}
+
+/** 行なし = registry の defaultText (§1: 「既定に戻す」= 行削除) */
+function buildResolvedTexts(rows: PageTextRow[]): ResolvedTexts {
+  const bySlotKey = rowsBySlotKeyText(rows);
+  const result: ResolvedTexts = {};
+  for (const slot of TEXT_REGISTRY) {
+    const row = bySlotKey.get(slot.key);
+    result[slot.key] = row
+      ? { text: row.text_override, isDefault: false }
+      : { text: slot.defaultText, isDefault: true };
+  }
+  return result;
+}
+
+/** エラー時のフォールバック: 全 slot を defaultText で返し、公開ページを落とさない (§3) */
+function allDefaultTextFallback(): ResolvedTexts {
+  const result: ResolvedTexts = {};
+  for (const slot of TEXT_REGISTRY) {
+    result[slot.key] = { text: slot.defaultText, isDefault: true };
+  }
+  return result;
+}
+
+/** キャッシュ非経由の生フェッチ (resolveAllTextsFresh と unstable_cache 内部実装で共用) */
+async function fetchResolvedTextsRaw(): Promise<ResolvedTexts> {
+  const client = createSupabasePublicClient();
+  const rowsResult = await fetchTextRows(client);
+  if (!rowsResult.ok) {
+    throw new Error(`page_text の取得に失敗しました: ${rowsResult.code} ${rowsResult.detail ?? ""}`);
+  }
+  return buildResolvedTexts(rowsResult.value);
+}
+
+/**
+ * 公開 (site) ページ用のキャッシュ (§3)。keyParts に TEXT_REGISTRY_HASH を含めることで、
+ * registry のコード変更がキャッシュに残らない (画像側 BLOCKER-v1.4 と同一不変条件)。
+ */
+const getCachedResolvedTexts = unstable_cache(
+  fetchResolvedTextsRaw,
+  ["page_text", TEXT_REGISTRY_HASH],
+  { tags: ["page_text"] },
+);
+
+async function resolveAllTexts(): Promise<Result<ResolvedTexts>> {
+  try {
+    const value = await getCachedResolvedTexts();
+    return { ok: true, value };
+  } catch (err) {
+    console.error("[page-media] resolveAllTexts に失敗しました (既定表示にフォールバックします):", err);
+    return { ok: true, value: allDefaultTextFallback() };
+  }
+}
+
+async function resolveAllTextsFresh(): Promise<Result<ResolvedTexts>> {
+  try {
+    const value = await fetchResolvedTextsRaw();
+    return { ok: true, value };
+  } catch (err) {
+    console.error("[page-media] resolveAllTextsFresh に失敗しました (既定表示にフォールバックします):", err);
+    return { ok: true, value: allDefaultTextFallback() };
+  }
+}
+
+async function listTextsForAdmin(route?: string): Promise<Result<PageTextState[]>> {
+  try {
+    const client = await createSupabaseServerClient();
+    const rowsResult = await fetchTextRows(client);
+    if (!rowsResult.ok) return rowsResult;
+    const bySlotKey = rowsBySlotKeyText(rowsResult.value);
+    const slots: PageTextSlot[] = route ? textSlotsForRoute(route) : [...TEXT_REGISTRY];
+    const items: PageTextState[] = slots.map((slot) => {
+      const row = bySlotKey.get(slot.key);
+      return row
+        ? { slot, text: row.text_override, isDefault: false }
+        : { slot, text: slot.defaultText, isDefault: true };
+    });
+    return { ok: true, value: items };
+  } catch (err) {
+    return { ok: false, code: "KMB-E901", detail: errDetail(err) };
+  }
+}
+
+/**
+ * requireAdmin 相当・maxLen/kind (+ v1.3: 下限/空文字列) の Zod 検証は呼び出し側 Server
+ * Action の責務 (T2b、setSlot と同じ役割分担)。ここでは registry 存在確認のみ行い、
+ * admin セッションの server client で書き込む (RLS が最終防御)。
+ * v1.1: text が対象スロットの defaultText と文字列として同一の場合も「既定に戻す」として
+ * 削除に正規化する (差分のみ保持という page_text の一貫性を保つ)。
+ * v1.3: zSetTextReq (Server Action 層) を経由しない呼び出しに備え、保存前に必ず
+ * normalizeLineEndings で \r\n / 単独 \r を \n に正規化する (defense-in-depth。
+ * zSetTextReq の transform と同一関数を使い、検証対象と保存対象を一致させる)。
+ */
+async function setText(slotKey: string, text: string | null): Promise<Result<void>> {
+  if (!isValidTextSlotKey(slotKey)) {
+    return { ok: false, code: "KMB-E107", detail: `未知の slot_key です: ${slotKey}` };
+  }
+  const normalizedText = text === null ? null : normalizeLineEndings(text);
+  try {
+    const client = await createSupabaseServerClient();
+    const slot = textSlotByKey(slotKey);
+    if (normalizedText === null || (slot && normalizedText === slot.defaultText)) {
+      return await deleteText(client, slotKey);
+    }
+    return await upsertText(client, slotKey, normalizedText);
+  } catch (err) {
+    return { ok: false, code: "KMB-E901", detail: errDetail(err) };
+  }
+}
+
 export const pageMediaFacade: PageMediaFacade = {
   resolveAll,
   resolveAllFresh,
   listForAdmin,
   setSlot,
   setSlotAlt,
+  resolveAllTexts,
+  resolveAllTextsFresh,
+  listTextsForAdmin,
+  setText,
 };

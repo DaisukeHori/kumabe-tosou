@@ -61,3 +61,15 @@ export function workImageEditableAttrs(
     "data-editable-work-image": `${workId}:${mediaId}`,
   };
 }
+
+/**
+ * ビジュアルテキストエディタの data-editable-text 属性 (canonical:
+ * docs/design/visual-text-editor.md §4.1)。SlotText からのみ使う。
+ * editMode===true のときだけ data-editable-text=slotKey を出力する (画像側と同型の
+ * 構造的保証: editMode=false なら空オブジェクトで、公開 (site) ページに
+ * data 属性のコードパス自体が存在しない)。
+ */
+export function textEditableAttrs(slotKey: string, editMode: boolean): EditableAttrs {
+  if (!editMode) return {};
+  return { "data-editable-text": slotKey };
+}

@@ -79,3 +79,42 @@ export async function deleteSlot(client: SupabaseClient, slotKey: string): Promi
   if (error) return pgErrorToResult(error);
   return { ok: true, value: undefined };
 }
+
+/**
+ * page-text (ビジュアルテキストエディタ) の repository (canonical:
+ * docs/design/visual-text-editor.md §1)。page_media と同じ規律 (facade.ts のみが
+ * ここを import する) に従う。page_text は media との join が無いため view を経由せず
+ * base table を直接 SELECT する (§1: 「view は作らない」)。
+ */
+
+export type PageTextRow = {
+  slot_key: string;
+  text_override: string;
+};
+
+/** page_text を 1 SELECT で全行取得する */
+export async function fetchTextRows(client: SupabaseClient): Promise<Result<PageTextRow[]>> {
+  const { data, error } = await client.from("page_text").select("slot_key, text_override");
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as PageTextRow[] };
+}
+
+/** slot のテキストを upsert する (差分のみ保持) */
+export async function upsertText(
+  client: SupabaseClient,
+  slotKey: string,
+  text: string,
+): Promise<Result<void>> {
+  const { error } = await client
+    .from("page_text")
+    .upsert({ slot_key: slotKey, text_override: text }, { onConflict: "slot_key" });
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+/** slot を既定へ戻す (page_text 行を削除) */
+export async function deleteText(client: SupabaseClient, slotKey: string): Promise<Result<void>> {
+  const { error } = await client.from("page_text").delete().eq("slot_key", slotKey);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
