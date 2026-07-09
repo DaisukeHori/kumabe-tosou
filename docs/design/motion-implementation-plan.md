@@ -1,5 +1,6 @@
 # モーション実装統合計画 (canonical)
 
+- v1.1 (2026-07-09): 堀さん指示「旧サイトに無い発明でも良いものは大歓迎」を受け、却下 16 件を再裁定。5 件を Wave 5 (発明枠) として復活 (§5.1)。11 件は実害根拠で却下維持
 - 生成: 2026-07-09 motion-spec-design Workflow (7 班仕様 → アートディレクション統合批評)
 - 班別仕様の全文: docs/design/motion-specs/*.md
 - ギャップ調査: docs/design/motion-gap-report.md
@@ -295,6 +296,20 @@ Wave 3 (並列 4 worktree — 相互ファイル交差ゼロ)  マージ順: 任
   └─ page-rest      … service/about/shop/materials/notes page-body + _lib/note-nav + (editor)/edit/page-map.tsx + 自区画 CSS
 Wave 4 (直列・実装なし・fix のみ)
   └─ 統合検証 (§7) + 堀さん視覚承認 4 項目
+Wave 5 (発明枠 — v1.1 で新設。パリティ検収完了後に着手)
+  ├─ W5-A インク引き継ぎ (signature+hover-suite の同根 2 案を統合 1 設計。
+  │       sessionStorage に直近閲覧色を保持 → プログレスバー/インジケータドットに反映。
+  │       WCAG コントラスト 3:1 未満の淡色 (DD-090 等) は --soul 赤へフォールバック)
+  ├─ W5-B 塗料が満ちる工程番号 (process .kt-ps-no の hover fill を下から満ちる
+  │       linear-gradient 遷移 0.6s に。正典 0.3s 即時塗りからのオプトイン逸脱)
+  ├─ W5-C インジケータのクリックナビ化 (ドット 7px 見た目のまま ::before で 24px
+  │       ヒット領域。tabindex なし = マウス/タッチ専用、scrollIntoView smooth)
+  ├─ W5-D 粘性イージング統一 (--ease-viscous を 1 定義で新設。適用はカーソルリング拡大 /
+  │       検品スタンプ / hover 戻りの 3 箇所限定。カーブ 2 案を実機で堀さんが選定)
+  └─ W5-E 文字が塗られて現れるヒーロー (正典「立ち上がり」と A/B 実機比較 →
+          堀さんが選択。Safari の background-clip:text 実機 QA 必須)
+※ 膜厚ゲージは「事実データ (工程別膜厚 μm) の入手」が前提条件。隈部さんから実測値が
+  もらえたら W5-F として昇格 (データ発明は不可)。
 ```
 
 各 wave の worktree は直前 wave マージ後の main から切る。globals.css は全班とも自区画内のみ編集のためどの順でマージしても衝突しない。
