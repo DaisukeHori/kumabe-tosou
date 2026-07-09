@@ -408,6 +408,75 @@ async function updateWithOptimisticLock<Row extends { updated_at: string }>(
   };
 }
 
+// ---- ビジュアル画像エディタ拡張 (visual-media-editor.md §6 / §6.1) ----
+
+const KMB_ERROR_CODE_RE = /KMB-E\d+/;
+
+/**
+ * RPC (replace_work_image) が投げる例外メッセージ先頭の `KMB-E1xx` を parse して
+ * Result の code に写像する。parse 不能な例外は KMB-E901 (§6.1 の実装メモ通り)。
+ */
+function mapRpcExceptionToResult(error: PgError): { ok: false; code: KmbErrorCode; detail: string } {
+  const match = KMB_ERROR_CODE_RE.exec(error.message);
+  const code = match?.[0] as KmbErrorCode | undefined;
+  if (code) return { ok: false, code, detail: error.message };
+  return { ok: false, code: "KMB-E901", detail: error.message };
+}
+
+/**
+ * migration 20260709000013 の replace_work_image RPC を呼ぶ (§6.1)。sort_order は
+ * クライアントから受け取らず RPC 側が対象行から読み直して維持する。
+ */
+export async function replaceWorkImage(
+  client: SupabaseClient,
+  workId: string,
+  oldMediaId: string,
+  newMediaId: string | null,
+): Promise<Result<void>> {
+  const { error } = await client.rpc("replace_work_image", {
+    p_work_id: workId,
+    p_old_media_id: oldMediaId,
+    p_new_media_id: newMediaId,
+  });
+  if (error) return mapRpcExceptionToResult(error);
+  return { ok: true, value: undefined };
+}
+
+export type CoverColumn = "cover_media_id" | "photo_media_id";
+export type CoverTable = "works" | "voices" | "posts";
+
+/**
+ * works.cover_media_id / voices.photo_media_id / posts.cover_media_id の楽観排他付き差し替え
+ * (§6)。PostgREST は `is not distinct from` を直接書けないため、old が null なら
+ * `.is(column, null)` / 非 null なら `.eq(column, old)` で等価にする (Supabase JS 実装メモ)。
+ * `.select("id")` をチェーンして 0 行 (data が空) を KMB-E109 に写像する。
+ */
+export async function updateCoverWithCas(
+  client: SupabaseClient,
+  table: CoverTable,
+  id: string,
+  column: CoverColumn,
+  oldMediaId: string | null,
+  newMediaId: string | null,
+): Promise<Result<void>> {
+  let query = client
+    .from(table)
+    .update({ [column]: newMediaId })
+    .eq("id", id);
+  query = oldMediaId === null ? query.is(column, null) : query.eq(column, oldMediaId);
+
+  const { data, error } = await query.select("id");
+  if (error) return pgErrorToResult(error);
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      code: "KMB-E109",
+      detail: "対象が見つからないか、他の変更と競合しました。",
+    };
+  }
+  return { ok: true, value: undefined };
+}
+
 // ---- 状態遷移 ----
 
 export async function updateStatusFields(
