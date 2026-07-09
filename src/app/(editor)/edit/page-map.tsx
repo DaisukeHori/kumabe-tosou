@@ -64,7 +64,9 @@ export async function renderEditRouteBody(match: EditRouteMatch): Promise<React.
     }
     case "notes-list": {
       const posts = await fetchPublishedPosts("reading");
-      return <NotesPageBody posts={posts} editMode={true} />;
+      const textsResult = await pageMediaFacade.resolveAllTextsFresh();
+      const texts = textsResult.ok ? textsResult.value : {};
+      return <NotesPageBody posts={posts} texts={texts} editMode={true} />;
     }
     case "blog-list": {
       const posts = await fetchPublishedPosts("blog");
@@ -82,7 +84,9 @@ export async function renderEditRouteBody(match: EditRouteMatch): Promise<React.
       ]);
       if (!post) return null;
       const nav = buildNoteNav(posts, match.slug);
-      return <NoteDetailPageBody post={post} nav={nav} editMode={true} />;
+      const textsResult = await pageMediaFacade.resolveAllTextsFresh();
+      const texts = textsResult.ok ? textsResult.value : {};
+      return <NoteDetailPageBody post={post} nav={nav} texts={texts} editMode={true} />;
     }
     case "blog-detail": {
       const post = await fetchPublishedPostBySlug("blog", match.slug);
@@ -99,29 +103,31 @@ export async function renderEditRouteBody(match: EditRouteMatch): Promise<React.
 async function renderSlotPage(page: SlotPageKey): Promise<React.ReactNode> {
   const slotsResult = await pageMediaFacade.resolveAllFresh();
   const slots = slotsResult.ok ? slotsResult.value : {};
+  const textsResult = await pageMediaFacade.resolveAllTextsFresh();
+  const texts = textsResult.ok ? textsResult.value : {};
 
   switch (page) {
     case "":
-      return <HomePageBody slots={slots} editMode={true} />;
+      return <HomePageBody slots={slots} texts={texts} editMode={true} />;
     case "about":
-      return <AboutPageBody slots={slots} editMode={true} />;
+      return <AboutPageBody slots={slots} texts={texts} editMode={true} />;
     case "colors":
-      return <ColorsPageBody slots={slots} editMode={true} />;
+      return <ColorsPageBody slots={slots} texts={texts} editMode={true} />;
     case "contact":
-      return <ContactPageBody slots={slots} editMode={true} />;
+      return <ContactPageBody slots={slots} texts={texts} editMode={true} />;
     case "materials":
-      return <MaterialsPageBody slots={slots} editMode={true} />;
+      return <MaterialsPageBody slots={slots} texts={texts} editMode={true} />;
     case "process":
-      return <ProcessPageBody slots={slots} editMode={true} />;
+      return <ProcessPageBody slots={slots} texts={texts} editMode={true} />;
     case "service":
-      return <ServicePageBody slots={slots} editMode={true} />;
+      return <ServicePageBody slots={slots} texts={texts} editMode={true} />;
     case "story":
-      return <StoryPageBody slots={slots} editMode={true} />;
+      return <StoryPageBody slots={slots} texts={texts} editMode={true} />;
     case "shop": {
       const facade = createPricingFacade();
       const priceTableResult = await facade.getActivePriceTable();
       const priceTable: PriceTable | null = priceTableResult.ok ? priceTableResult.value : null;
-      return <ShopPageBody slots={slots} editMode={true} priceTable={priceTable} />;
+      return <ShopPageBody slots={slots} texts={texts} editMode={true} priceTable={priceTable} />;
     }
     default: {
       const _exhaustive: never = page;

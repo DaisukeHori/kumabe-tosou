@@ -10,7 +10,8 @@ import {
   SectionMark,
 } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
-import type { ResolvedSlots } from "@/modules/page-media/contracts";
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
 const STEPS = [
   {
@@ -345,9 +346,11 @@ const COAT_LEGEND = [
 
 export function ProcessPageBody({
   slots,
+  texts,
   editMode,
 }: {
   slots: ResolvedSlots;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -356,22 +359,31 @@ export function ProcessPageBody({
         index="PROCESS — 塗りが仕上がるまで"
         en="9 STEPS"
         title={
-          <>
-            一個が仕上がるまでの、
-            <br />
-            9つの手。
-          </>
+          <SlotText
+            slotKey="process.hero.heading"
+            resolved={texts["process.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="3Dプリントの造形物が、量産品と見分けがつかない外観になるまでには、決まった順序があります。派手なのは色を吹く瞬間だけ。その前後にある地味な工程こそが、仕上がりを決めます。自動車補修の手順を、一手ずつ開きます。"
+        lead={
+          <SlotText
+            slotKey="process.hero.lead"
+            resolved={texts["process.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       {/* ============ 塗膜の層構造 ============ */}
       <Section>
         <SectionMark no="SEC. 01" label="COATING STRUCTURE" />
         <SecTitle>
-          塗装は、
-          <br />
-          層でできている。
+          <SlotText
+            slotKey="process.coating.heading"
+            resolved={texts["process.coating.heading"]}
+            editMode={editMode}
+          />
         </SecTitle>
         <SecLead>
           仕上がった塗面は一枚に見えますが、実際は役割の違う層の積み重ねです。下から順に、造形物・プラサフ・ベースコート・クリア。積層痕は、下の層で吸収して消します。
@@ -401,9 +413,11 @@ export function ProcessPageBody({
       <Section>
         <SectionMark no="SEC. 02" label="THE 9 STEPS" />
         <SecTitle>
-          受け取ってから、
-          <br />
-          送り出すまで。
+          <SlotText
+            slotKey="process.steps.heading"
+            resolved={texts["process.steps.heading"]}
+            editMode={editMode}
+          />
         </SecTitle>
         <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-3">
           <PhotoFigure
@@ -469,9 +483,11 @@ export function ProcessPageBody({
       <Section>
         <SectionMark no="SEC. 03" label="THE BOOTH" />
         <SecTitle>
-          きれいな空気でしか、
-          <br />
-          きれいには塗れない。
+          <SlotText
+            slotKey="process.booth.heading"
+            resolved={texts["process.booth.heading"]}
+            editMode={editMode}
+          />
         </SecTitle>
         <SecLead>
           塗装の大敵は、宙を舞うホコリです。だから塗装は、専用のブースの中で行います。フィルターを通した清浄な空気を上から下へ流し、オーバーミストとともに床下へ排気する——異物混入をふせぐ、目に見えない設備です。
@@ -522,7 +538,13 @@ export function ProcessPageBody({
       {/* ============ 関連導線 ============ */}
       <Section>
         <SectionMark no="SEC. 04" label="RELATED" />
-        <SecTitle>工程の、その先へ。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="process.related.heading"
+            resolved={texts["process.related.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
           グレード別の料金や数量スライドはサービスページに、素材ごとの下地の作り分けは素材対応ページにまとめています。工程の思想を、色の実例で見たいときは色見本へ。
         </SecLead>
@@ -536,7 +558,13 @@ export function ProcessPageBody({
       {/* ============ GALLERY ============ */}
       <Section>
         <SectionMark no="GALLERY" label="BEHIND THE STEPS" />
-        <SecTitle>工程を、支えるもの。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="process.gallery.heading"
+            resolved={texts["process.gallery.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
           地味な工程の積み重ねが、量産品と見分けがつかない顔をつくります。
         </SecLead>
@@ -574,13 +602,19 @@ export function ProcessPageBody({
       {/* ============ CTA ============ */}
       <CtaBand
         title={
-          <>
-            この9工程を、
-            <br />
-            あなたの一個に。
-          </>
+          <SlotText
+            slotKey="process.cta.heading"
+            resolved={texts["process.cta.heading"]}
+            editMode={editMode}
+          />
         }
-        note="サイズ・個数・グレードが分かれば、概算をお出しできます。まずはご相談ください。"
+        note={
+          <SlotText
+            slotKey="process.cta.note"
+            resolved={texts["process.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
         label="相談する"
       />

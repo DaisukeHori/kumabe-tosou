@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedText } from "@/modules/page-media/contracts";
+
 const MARQUEE_ITEMS = [
   "研磨 · 塗装 · 3Dプリント表面処理",
   "NATIONWIDE MAIL-IN",
@@ -22,16 +25,30 @@ const FOOTER_NAV = [
   { no: "11", label: "相談する", href: "/contact" },
 ] as const;
 
-export function SiteFooter() {
+/**
+ * chrome.footer.tagline (route 横断の共有スロット) の配線 (canonical:
+ * docs/design/visual-text-editor.md §4.1 MAJOR-1)。kind=multiline のため SlotText の
+ * root は常に div (v1.1 仕様) — 元は <p> だった要素を SlotText に丸ごと差し替える。
+ */
+export function SiteFooter({
+  footerTagline,
+  editMode,
+}: {
+  footerTagline: ResolvedText;
+  editMode: boolean;
+}) {
   return (
     <footer className="kt-footer-ticks border-t border-hair bg-primer-deep text-carbon">
       <div className="mx-auto max-w-[1240px] px-5 py-16 sm:px-8">
         <div className="grid gap-10 md:grid-cols-3">
           <div>
             <p className="text-lg font-bold tracking-[0.16em]">隈部塗装</p>
-            <p className="mt-4 max-w-sm text-sm leading-7 text-carbon-mid">
-              3Dプリント造形物の表面処理(研磨・塗装)専門工房。積層痕除去から自動車グレードの仕上げまで、郵送で全国からお受けします。
-            </p>
+            <SlotText
+              slotKey="chrome.footer.tagline"
+              resolved={footerTagline}
+              editMode={editMode}
+              className="mt-4 max-w-sm text-sm leading-7 text-carbon-mid"
+            />
           </div>
           <nav aria-label="フッターナビゲーション">
             <p className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">

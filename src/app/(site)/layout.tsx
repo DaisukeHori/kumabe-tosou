@@ -4,6 +4,8 @@ import { SiteHeader } from "@/components/site/site-header";
 import { CustomCursor } from "@/components/motion/custom-cursor";
 import { SectionIndicator } from "@/components/motion/section-indicator";
 import { PaperNoise } from "@/components/motion/paper-noise";
+import { pageMediaFacade } from "@/modules/page-media/facade";
+import type { ResolvedText } from "@/modules/page-media/contracts";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
@@ -33,11 +35,22 @@ const LOCAL_BUSINESS_JSON_LD = {
   LocalBusiness JSON-LD はこの route group レイアウトに閉じ込める。
   (site) は URL には出現しないため、配下ページの公開 URL は一切変わらない。
 */
-export default function SiteLayout({
+/**
+ * shared.cta.consult / chrome.footer.tagline の配線 (canonical:
+ * docs/design/visual-text-editor.md §4.1 MAJOR-1)。公開 (site) は resolveAllTexts()
+ * (unstable_cache 経由・request-time API ではないため SSG を壊さない) を editMode=false で
+ * SiteHeader/SiteFooter に渡す。
+ */
+export default async function SiteLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
+  const ctaText: ResolvedText = texts["shared.cta.consult"];
+  const footerTagline: ResolvedText = texts["chrome.footer.tagline"];
+
   return (
     <>
       <script
@@ -47,11 +60,11 @@ export default function SiteLayout({
         }}
       />
       <PaperNoise />
-      <SiteHeader />
+      <SiteHeader ctaText={ctaText} editMode={false} />
       <main className="flex-1">
         <PageTransition>{children}</PageTransition>
       </main>
-      <SiteFooter />
+      <SiteFooter footerTagline={footerTagline} editMode={false} />
       {/* 署名演出オーバーレイ (M1)。/edit iframe に載せないため (site) 限定 */}
       <CustomCursor />
       <SectionIndicator />

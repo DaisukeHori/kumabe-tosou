@@ -10,7 +10,8 @@ import {
   SectionMark,
 } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
-import type { ResolvedSlots } from "@/modules/page-media/contracts";
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
 const METHODS = [
   {
@@ -153,9 +154,11 @@ const CAUSES = [
 
 export function MaterialsPageBody({
   slots,
+  texts,
   editMode,
 }: {
   slots: ResolvedSlots;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -164,22 +167,31 @@ export function MaterialsPageBody({
         index="INDEX 06 — MATERIALS"
         en="FDM / SLA / SLS"
         title={
-          <>
-            素材を選ばない。
-            <br />
-            ただし、素材ごとに手を変える。
-          </>
+          <SlotText
+            slotKey="materials.hero.heading"
+            resolved={texts["materials.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="3Dプリントは、造形方式によって積層痕の出方も、塗料の乗り方も、まったく違います。FDMは研磨で埋め、光造形は洗浄と二次硬化を前提にし、SLSは多孔質を作り込む——同じ「下地」でも、素材ごとに手を変えます。ここでは対応方式と、素材別の考え方をまとめます。"
+        lead={
+          <SlotText
+            slotKey="materials.hero.lead"
+            resolved={texts["materials.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       {/* ============ 3方式 ============ */}
       <Section>
         <SectionMark no="SEC. 01" label="PRINTING METHODS" />
         <SecTitle>
-          3つの造形方式、
-          <br />
-          それぞれの下地。
+          <SlotText
+            slotKey="materials.methods.heading"
+            resolved={texts["materials.methods.heading"]}
+            editMode={editMode}
+          />
         </SecTitle>
         <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-3">
           {METHODS.map((method) => (
@@ -227,7 +239,13 @@ export function MaterialsPageBody({
       {/* ============ 素材別対応表 ============ */}
       <Section>
         <SectionMark no="SEC. 02" label="MATERIAL MATRIX" />
-        <SecTitle>素材別の、対応と勘所。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="materials.matrix.heading"
+            resolved={texts["materials.matrix.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
           代表的な樹脂ごとの下地処理・注意点・耐候性の目安です。ここに無い素材も、テストピースで相性を確認してからお受けできます。
         </SecLead>
@@ -294,9 +312,11 @@ export function MaterialsPageBody({
       <Section>
         <SectionMark no="SEC. 03" label="WHY IT MATTERS" />
         <SecTitle>
-          失敗の多くは、
-          <br />
-          塗る前に決まっている。
+          <SlotText
+            slotKey="materials.why.heading"
+            resolved={texts["materials.why.heading"]}
+            editMode={editMode}
+          />
         </SecTitle>
         <SecLead>
           塗料の食いつき不良やムラは、塗装技術以前の「素地の準備」で起きることがほとんどです。だから、この工房は塗る前の工程に最も神経を使います。
@@ -321,7 +341,13 @@ export function MaterialsPageBody({
       {/* ============ 入稿 ============ */}
       <Section>
         <SectionMark no="SEC. 04" label="DATA INTAKE" />
-        <SecTitle>造形から、任せてもいい。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="materials.intake.heading"
+            resolved={texts["materials.intake.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
           完成した造形物を送っていただくのはもちろん、データ入稿 → 提携出力 →
           工房直送の流れにも対応します。出力先と塗装先を別々に手配する手間を省けます。
@@ -360,7 +386,13 @@ export function MaterialsPageBody({
       {/* ============ GALLERY ============ */}
       <Section>
         <SectionMark no="GALLERY" label="BEYOND MATERIAL" />
-        <SecTitle>素材の、その先。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="materials.gallery.heading"
+            resolved={texts["materials.gallery.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>素材ごとに手を変える。それが下地づくりの本質です。</SecLead>
         <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <PhotoFigure
@@ -387,13 +419,19 @@ export function MaterialsPageBody({
       {/* ============ CTA ============ */}
       <CtaBand
         title={
-          <>
-            素材が決まっていなくても、
-            <br />
-            用途から相談できます。
-          </>
+          <SlotText
+            slotKey="materials.cta.heading"
+            resolved={texts["materials.cta.heading"]}
+            editMode={editMode}
+          />
         }
-        note="「屋外で使う」「撮影用」「触れる展示物」——用途に合う素材と仕上げをご提案します。"
+        note={
+          <SlotText
+            slotKey="materials.cta.note"
+            resolved={texts["materials.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
         label="相談する"
       />

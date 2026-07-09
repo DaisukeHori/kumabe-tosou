@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { textEditableAttrs } from "@/components/site/editable-attrs";
+import type { ResolvedText } from "@/modules/page-media/contracts";
 import type { PriceOption, PriceTable } from "@/modules/pricing/contracts";
 import { computeEstimate } from "@/modules/pricing/estimate";
 
@@ -13,6 +15,14 @@ import { computeEstimate } from "@/modules/pricing/estimate";
   PriceTable を props として受け取る (クライアント側での再フェッチはしない、設計書 §6.2)。
   計算そのものは @/modules/pricing/estimate の computeEstimate() (副作用なしの純関数) に委譲し、
   UI/UX・操作感は旧実装 (ハードコード PRICE_TABLE 版) と同一に保つ。
+
+  注文ボタンの文言 (shop.simulator.cta) は visual-text-editor 対象スロットだが、この
+  コンポーネントは "use client" であり、facade.ts ("server-only") を import する
+  <SlotText> を直接使うとクライアントバンドルがビルド時に壊れる (docs/design/
+  visual-text-editor.md §4.1 の SlotText は page-media/facade 経由で TEXT_REGISTRY を
+  読む)。そのため、resolved テキストと editMode を props で受け取り、"server-only" を
+  持たない純関数 textEditableAttrs (editable-attrs.ts) だけを使って data-editable-text を
+  手動で付与する (SlotText と同じ見た目・同じ data 属性契約を、import せずに再現する)。
 */
 
 export type Grade = string;
@@ -90,7 +100,15 @@ function OptGroup<T extends string>({
   );
 }
 
-export function ShopSimulator({ priceTable }: { priceTable: PriceTable | null }) {
+export function ShopSimulator({
+  priceTable,
+  ctaText,
+  editMode,
+}: {
+  priceTable: PriceTable | null;
+  ctaText: ResolvedText;
+  editMode: boolean;
+}) {
   const router = useRouter();
 
   const grades = useMemo(
@@ -343,8 +361,9 @@ export function ShopSimulator({ priceTable }: { priceTable: PriceTable | null })
           type="button"
           onClick={handleOrder}
           className="mt-6 flex items-center justify-center gap-1 bg-paper py-3.5 text-sm font-medium tracking-[0.12em] text-carbon transition-colors hover:bg-paper/85"
+          {...textEditableAttrs("shop.simulator.cta", editMode)}
         >
-          この内容で注文・相談する
+          {ctaText.text}
           <span aria-hidden="true">→</span>
         </button>
         {copied ? (

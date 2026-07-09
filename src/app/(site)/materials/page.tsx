@@ -21,6 +21,8 @@ export const metadata: Metadata = {
 export default async function MaterialsPage() {
   const slotsResult = await pageMediaFacade.resolveAll();
   const slots = slotsResult.ok ? slotsResult.value : {};
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
 
-  return <MaterialsPageBody slots={slots} editMode={false} />;
+  return <MaterialsPageBody slots={slots} texts={texts} editMode={false} />;
 }

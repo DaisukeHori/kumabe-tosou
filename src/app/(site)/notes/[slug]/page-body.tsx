@@ -2,18 +2,22 @@ import Link from "next/link";
 
 import { MediaCover } from "@/components/site/media-cover";
 import { ArrowButton, CtaBand, PageHead, Section } from "@/components/site/page-blocks";
+import { SlotText } from "@/components/site/slot-text";
 
 import type { PublicPostDetail } from "@/app/_lib/public-content";
 import { formatNoteNo, type NoteNav } from "@/app/_lib/note-nav";
 import { SimpleMarkdown } from "@/app/_lib/simple-markdown";
+import type { ResolvedTexts } from "@/modules/page-media/contracts";
 
 export function NoteDetailPageBody({
   post,
   nav,
+  texts,
   editMode,
 }: {
   post: PublicPostDetail;
   nav: NoteNav;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -98,13 +102,19 @@ export function NoteDetailPageBody({
 
       <CtaBand
         title={
-          <>
-            読んで気になったことは、
-            <br />
-            そのまま聞いてください。
-          </>
+          <SlotText
+            slotKey="notes.cta.heading"
+            resolved={texts["notes.cta.heading"]}
+            editMode={editMode}
+          />
         }
-        note="工程・色・素材の相性、どんな質問でも。"
+        note={
+          <SlotText
+            slotKey="notes.cta.note"
+            resolved={texts["notes.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
         label="相談する"
       />

@@ -21,6 +21,8 @@ export const metadata: Metadata = {
 export default async function ProcessPage() {
   const slotsResult = await pageMediaFacade.resolveAll();
   const slots = slotsResult.ok ? slotsResult.value : {};
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
 
-  return <ProcessPageBody slots={slots} editMode={false} />;
+  return <ProcessPageBody slots={slots} texts={texts} editMode={false} />;
 }

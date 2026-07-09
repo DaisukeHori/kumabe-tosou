@@ -10,13 +10,16 @@ import {
   SpecTable,
 } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
-import type { ResolvedSlots } from "@/modules/page-media/contracts";
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
 export function AboutPageBody({
   slots,
+  texts,
   editMode,
 }: {
   slots: ResolvedSlots;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -25,22 +28,31 @@ export function AboutPageBody({
         index="INDEX 02 — ABOUT"
         en="WORKSHOP & CRAFTSMAN"
         title={
-          <>
-            下地の仕事は、
-            <br />
-            見えなくなるからこそ。
-          </>
+          <SlotText
+            slotKey="about.hero.heading"
+            resolved={texts["about.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="仕上がった塗面に、研ぎの跡は残りません。それでも、艶の深さも、色の正確さも、すべては見えなくなった下地が決めています。隈部塗装は、その見えない工程に最も時間を割く工房です。"
+        lead={
+          <SlotText
+            slotKey="about.hero.lead"
+            resolved={texts["about.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       {/* ============ 市場の空白 ============ */}
       <Section>
         <SectionMark no="SEC. 01" label="WHY THIS WORKSHOP" />
         <SecTitle>
-          「表面処理だけ頼みたい」に、
-          <br />
-          応える工房が少なかった。
+          <SlotText
+            slotKey="about.why.heading"
+            resolved={texts["about.why.heading"]}
+            editMode={editMode}
+          />
         </SecTitle>
         <Reveal as="div" className="mt-10">
           <SpecTable
@@ -106,7 +118,13 @@ export function AboutPageBody({
       {/* ============ 設備 ============ */}
       <Section>
         <SectionMark no="SEC. 03" label="FACILITY" />
-        <SecTitle>バンパー6本を、同時に塗れる。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="about.facility.heading"
+            resolved={texts["about.facility.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
           同時処理能力は、そのまま数量対応力と価格に反映されます。面を埋めるほど1個あたりの手間は下がる——バッチ処理は、この工房の価格競争力の源泉です。
         </SecLead>
@@ -235,7 +253,13 @@ export function AboutPageBody({
       {/* ============ GALLERY ============ */}
       <Section>
         <SectionMark no="GALLERY" label="THE PLACE" />
-        <SecTitle>現場の、手ざわり。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="about.gallery.heading"
+            resolved={texts["about.gallery.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
           大分・豊後高田の工房で、造形物と一個ずつ向き合っています。
         </SecLead>
@@ -264,13 +288,19 @@ export function AboutPageBody({
       {/* ============ CTA ============ */}
       <CtaBand
         title={
-          <>
-            工程と料金の詳細は、
-            <br />
-            サービスページに。
-          </>
+          <SlotText
+            slotKey="about.cta.heading"
+            resolved={texts["about.cta.heading"]}
+            editMode={editMode}
+          />
         }
-        note="下地は全グレード共通。差分はトップコートの層数だけです。"
+        note={
+          <SlotText
+            slotKey="about.cta.note"
+            resolved={texts["about.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/service"
         label="サービス・料金を見る"
       />

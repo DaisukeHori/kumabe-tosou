@@ -10,7 +10,8 @@ import {
   SectionMark,
 } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
-import type { ResolvedSlots } from "@/modules/page-media/contracts";
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
 const QUOTE_VARS = [
   {
@@ -55,9 +56,11 @@ const FAQ_ITEMS = [
 
 export function ContactPageBody({
   slots,
+  texts,
   editMode,
 }: {
   slots: ResolvedSlots;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -66,13 +69,20 @@ export function ContactPageBody({
         index="INDEX 10 — CONTACT"
         en="SIZE × QTY × GRADE"
         title={
-          <>
-            見積もりは、
-            <br />
-            3つの数字で。
-          </>
+          <SlotText
+            slotKey="contact.hero.heading"
+            resolved={texts["contact.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="「サイズ × 個数 × グレード」がわかれば、概算をお出しできます。下地が全グレード共通だから、見積もりの構造もこれだけシンプルです。造形データや写真、素材の種類がわかると、より正確になります。"
+        lead={
+          <SlotText
+            slotKey="contact.hero.lead"
+            resolved={texts["contact.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       <Section className="pb-0 pt-6 sm:pb-0 sm:pt-8">

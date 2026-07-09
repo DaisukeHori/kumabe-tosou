@@ -10,7 +10,8 @@ import {
   SectionMark,
 } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
-import type { ResolvedSlots } from "@/modules/page-media/contracts";
+import { SlotText } from "@/components/site/slot-text";
+import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
 const PROCESS_ROWS = [
   {
@@ -118,9 +119,11 @@ const QC_ITEMS = [
 
 export function ServicePageBody({
   slots,
+  texts,
   editMode,
 }: {
   slots: ResolvedSlots;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -129,13 +132,20 @@ export function ServicePageBody({
         index="INDEX 03 — SERVICE"
         en="PROCESS / GRADE / PRICE / FLOW"
         title={
-          <>
-            下地は全グレード共通。
-            <br />
-            だから品質が揺れない。
-          </>
+          <SlotText
+            slotKey="service.hero.heading"
+            resolved={texts["service.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="自動車板金塗装のプロ標準工程を、そのまま3Dプリントに適用します。グレードの違いはトップコートの層数だけ。見積もりも「サイズ × 個数 × グレード」の3つで決まる、シンプルな構造です。"
+        lead={
+          <SlotText
+            slotKey="service.hero.lead"
+            resolved={texts["service.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       {/* ============ 工程 ============ */}
@@ -159,9 +169,13 @@ export function ServicePageBody({
           ))}
         </Reveal>
         <aside className="mt-10 border-l-2 border-soul bg-paper p-6">
-          <span className="font-mono text-[11px] tracking-[0.2em] text-soul">
-            なぜ鏡面磨きをしないのか
-          </span>
+          <SlotText
+            as="span"
+            className="font-mono text-[11px] tracking-[0.2em] text-soul"
+            slotKey="service.process.aside.heading"
+            resolved={texts["service.process.aside.heading"]}
+            editMode={editMode}
+          />
           <p className="mt-3 text-sm leading-7 text-carbon-mid">
             #2000〜コンパウンドの鏡面磨き工程は、あえて行いません。2液ウレタンは吹きっぱなしで自動車外板と同等の艶が出るためです。磨きに時間を使わないぶん、同じ品質で数量に応え、価格に還元します。
           </p>
@@ -331,7 +345,13 @@ export function ServicePageBody({
       {/* ============ 正直な条件 ============ */}
       <Section>
         <SectionMark no="SEC. 04" label="HONEST TERMS" />
-        <SecTitle>正直に、先にお伝えします。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="service.terms.heading"
+            resolved={texts["service.terms.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-2">
           <div className="border border-hair bg-paper p-6">
             <h3 className="text-lg font-bold tracking-wider">できること</h3>
@@ -385,7 +405,13 @@ export function ServicePageBody({
       {/* ============ 品質管理 ============ */}
       <Section>
         <SectionMark no="SEC. 05" label="QUALITY CONTROL" />
-        <SecTitle>発送前に、8つの目で見る。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="service.qc.heading"
+            resolved={texts["service.qc.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
           自動車補修の現場で使われる検品項目を、そのまま持ち込んでいます。仕上がりは主観ではなく、チェックリストで確認してから梱包します。
         </SecLead>
@@ -410,7 +436,13 @@ export function ServicePageBody({
       {/* ============ GALLERY ============ */}
       <Section>
         <SectionMark no="GALLERY" label="THE HANDS" />
-        <SecTitle>工程の、その手。</SecTitle>
+        <SecTitle>
+          <SlotText
+            slotKey="service.gallery.heading"
+            resolved={texts["service.gallery.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
           工程の一つひとつに、自動車補修で培った手が入ります。
         </SecLead>
@@ -439,13 +471,19 @@ export function ServicePageBody({
       {/* ============ CTA ============ */}
       <CtaBand
         title={
-          <>
-            見積もりは、3つの数字で。
-            <br />
-            サイズ × 個数 × グレード。
-          </>
+          <SlotText
+            slotKey="service.cta.heading"
+            resolved={texts["service.cta.heading"]}
+            editMode={editMode}
+          />
         }
-        note="造形データや写真があれば、より正確に概算をお出しできます。"
+        note={
+          <SlotText
+            slotKey="service.cta.note"
+            resolved={texts["service.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
         label="相談する"
       />
