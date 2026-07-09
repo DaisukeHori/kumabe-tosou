@@ -1,14 +1,20 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { mediaFacade } from "@/modules/media/facade";
 
 /**
  * 公開ページ (works/notes/blog/voices) が使う media 解決ヘルパー。
  *
- * media.storage_path は media-originals バケット内パス (原本) を指すが、
- * scripts/seed-from-legacy.ts の実装コメント通り、公開レンディション (WebP/JPEG) 生成は
- * Wave 1 の media モジュールでまだ実装されていないため、当面は同一 storage_path を
- * 公開 `media` バケットへコピーする代用実装になっている (seed-from-legacy.ts 参照)。
- * 本ヘルパーもこの規約 (同一パスを media バケットから配信) にあわせて公開 URL を組み立てる。
- * media モジュールが正式なレンディション命名規則を持つに至った場合はここを追随させる。
+ * media バケットの公開レンディションは常に `{media_id}.webp` (決定論 URL)。
+ * これは `src/modules/media/facade.ts` の getPublicUrl() と同一規約であり、
+ * 本ヘルパーも同じ規約で URL を組み立てる (mediaFacade 経由、_lib → facade の import は
+ * モジュール境界上 OK)。
+ *
+ * (V0 hotfix — 2026-07-09 本番実測に基づく訂正)
+ * 旧実装は `media.storage_path` を使って Supabase Storage クライアントの
+ * `getPublicUrl(storage_path)` で URL を組み立てていたが、"media" バケットには
+ * storage_path 名のオブジェクトは存在せず (`{id}.webp` / `{id}.jpg` のみ存在)、
+ * 本番 HTTP 実測でも storage_path 直の URL は 400 だった (実バグ)。
+ * `{id}.webp` は全 media 行に存在するため、決定論 URL への統一で解消する
+ * (docs/design/visual-media-editor.md §2.3)。
  */
 export type PublicMediaRef = {
   id: string;
@@ -19,20 +25,21 @@ export type PublicMediaRef = {
 
 type MediaRow = {
   id: string;
-  storage_path: string;
   alt: string;
   is_placeholder: boolean;
 };
 
-export function toPublicMediaRef(
-  client: SupabaseClient,
-  row: MediaRow | null | undefined,
-): PublicMediaRef | null {
+export function toPublicMediaRef(row: MediaRow | null | undefined): PublicMediaRef | null {
   if (!row) return null;
-  const { data } = client.storage.from("media").getPublicUrl(row.storage_path);
+  const result = mediaFacade.getPublicUrl(row.id);
+  if (!result.ok) {
+    throw new Error(
+      `[toPublicMediaRef] media (${row.id}) の公開 URL 生成に失敗しました: ${result.detail ?? result.code}`,
+    );
+  }
   return {
     id: row.id,
-    url: data.publicUrl,
+    url: result.value,
     alt: row.alt,
     isPlaceholder: row.is_placeholder,
   };
