@@ -109,7 +109,8 @@ export const zCompanySettings = z.object({
 }).strict();
 
 export const zHeroSettings = z.object({
-  media_id: zMediaId,
+  // media_id は 2026-07-09 に削除 (visual-media-editor.md §1 BLOCKER-1: hero 画像は
+  // page_media スロット 'home.hero' に一本化。migration 0013 が既存行から除去)
   heading: zShortText(40),
   subheading: z.string().max(80),
   cta_label: zShortText(20),
