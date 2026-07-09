@@ -50,6 +50,38 @@ function StoryQuote({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * story.portrait (未来枠) の装飾プレースホルダ。V2a 以前 (旧 page.tsx) の見た目を
+ * SlotImage の placeholder prop 経由で復元したもの (公開時の非退行、修正1)。
+ * 自己完結で aspect-[3/4] / 枠線 / aria-label を持つため、editMode=false のときは
+ * SlotImage が余計なラッパを足さずそのまま描画する。
+ */
+export function StoryPortraitPlaceholder() {
+  return (
+    <figure
+      className="relative flex aspect-[3/4] w-full flex-col items-center justify-center border border-hair bg-paper"
+      aria-label="代表・隈部信之（近日、実際の写真に差し替え予定）"
+    >
+      <span
+        aria-hidden="true"
+        className="absolute left-3 top-2 font-mono text-carbon-soft"
+      >
+        +
+      </span>
+      <span
+        aria-hidden="true"
+        className="absolute bottom-2 right-3 font-mono text-carbon-soft"
+      >
+        +
+      </span>
+      <span className="text-4xl font-bold tracking-[0.2em]">信之</span>
+      <span className="mt-6 font-mono text-[10px] tracking-[0.24em] text-carbon-soft">
+        PORTRAIT — COMING SOON
+      </span>
+    </figure>
+  );
+}
+
 export function StoryPageBody({
   slots,
   editMode,
@@ -281,6 +313,7 @@ export function StoryPageBody({
               slotKey="story.portrait"
               resolved={slots["story.portrait"]}
               editMode={editMode}
+              placeholder={<StoryPortraitPlaceholder />}
             />
           </Reveal>
           <div>

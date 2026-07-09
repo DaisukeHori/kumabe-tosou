@@ -55,6 +55,7 @@ const getPostAdmin = vi.fn();
 const listWorksAdmin = vi.fn();
 const listVoicesAdmin = vi.fn();
 const listPostsAdmin = vi.fn();
+const listPublished = vi.fn();
 
 vi.mock("@/modules/content/facade", () => ({
   contentFacade: {
@@ -67,6 +68,7 @@ vi.mock("@/modules/content/facade", () => ({
     listWorksAdmin: (...args: unknown[]) => listWorksAdmin(...args),
     listVoicesAdmin: (...args: unknown[]) => listVoicesAdmin(...args),
     listPostsAdmin: (...args: unknown[]) => listPostsAdmin(...args),
+    listPublished: (...args: unknown[]) => listPublished(...args),
   },
 }));
 
@@ -88,6 +90,13 @@ describe("setImage: slot", () => {
     const result = await setImage({ type: "slot", slotKey: "home.nonexistent" }, MEDIA_A);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("KMB-E107");
+    expect(setSlot).not.toHaveBeenCalled();
+  });
+
+  it("slot_key は有効だが media_id が不正な uuid のときは KMB-E101 を返す (修正3: E107 は slot_key 不正のみ)", async () => {
+    const result = await setImage({ type: "slot", slotKey: "home.hero" }, "not-a-uuid");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E101");
     expect(setSlot).not.toHaveBeenCalled();
   });
 
@@ -281,6 +290,13 @@ describe("setSlotAlt", () => {
     expect(setSlotAltFn).not.toHaveBeenCalled();
   });
 
+  it("slot_key は有効だが alt が上限 (200字) 超過のときは KMB-E101 を返す (修正3: E107 は slot_key 不正のみ)", async () => {
+    const result = await setSlotAlt("home.hero", "あ".repeat(201));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E101");
+    expect(setSlotAltFn).not.toHaveBeenCalled();
+  });
+
   it("requireAdmin 失敗時は facade を呼ばない", async () => {
     requireAdmin.mockResolvedValue({ ok: false, code: "KMB-E201" });
     const result = await setSlotAlt("home.hero", "新しい alt");
@@ -354,6 +370,7 @@ describe("listSidePanel (§5.4 サイドパネル)", () => {
         next_cursor: null,
       },
     });
+    listPublished.mockResolvedValue({ ok: true, value: { items: [], next_cursor: null } });
 
     const result = await listSidePanel("/works");
     expect(result.ok).toBe(true);
@@ -361,6 +378,36 @@ describe("listSidePanel (§5.4 サイドパネル)", () => {
     expect(result.value.contentGaps).toEqual([
       { kind: "work", id: "w1", title: "施工例1", status: "draft" },
     ]);
+  });
+
+  it("/works ルートは公開済み施工事例一覧 (§5.1a 2段ナビ) を works に含める", async () => {
+    listForAdmin.mockResolvedValue({ ok: true, value: [] });
+    listWorksAdmin.mockResolvedValue({ ok: true, value: { items: [], next_cursor: null } });
+    listPublished.mockResolvedValue({
+      ok: true,
+      value: {
+        items: [
+          { id: "w1", slug: "car-detail-01", title: "施工例1", category: "外装", body: "", process_note: null, cover_media_id: null, image_ids: [], published_at: "2026-01-01T00:00:00Z" },
+        ],
+        next_cursor: null,
+      },
+    });
+
+    const result = await listSidePanel("/works");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(listPublished).toHaveBeenCalledWith("work", expect.objectContaining({ cursor: null }));
+    expect(result.value.works).toEqual([{ slug: "car-detail-01", title: "施工例1" }]);
+  });
+
+  it("/works 以外のルートでは listPublished を呼ばず works は常に空配列", async () => {
+    listForAdmin.mockResolvedValue({ ok: true, value: [] });
+
+    const result = await listSidePanel("/");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(listPublished).not.toHaveBeenCalled();
+    expect(result.value.works).toEqual([]);
   });
 
   it("/notes ルートは posts.kind='reading' を listPostsAdmin に渡す", async () => {

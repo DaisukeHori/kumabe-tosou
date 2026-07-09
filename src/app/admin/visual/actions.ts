@@ -13,7 +13,7 @@ import {
 import { pageMediaFacade, SLOT_REGISTRY } from "@/modules/page-media/facade";
 import { zSetSlotAltReq, zSetSlotReq } from "@/modules/page-media/contracts";
 import type { PageSlotState } from "@/modules/page-media/contracts";
-import type { Result } from "@/modules/platform/contracts";
+import type { KmbErrorCode, Result } from "@/modules/platform/contracts";
 import { platformFacade } from "@/modules/platform/facade";
 
 /**
@@ -50,6 +50,18 @@ function zodDetail(error: z.ZodError): string {
   return error.issues.map((issue) => issue.message).join(" / ");
 }
 
+/**
+ * zSetSlotReq / zSetSlotAltReq (slot_key を含む Zod スキーマ) の検証失敗を
+ * KMB エラーコードへ写像する (修正3: docs/design/visual-media-editor.md §7)。
+ * **slot_key フィールドの不正のみ KMB-E107**(存在しない slot_key)。
+ * media_id / alt 等の他フィールドの不正は汎用の入力検証エラー KMB-E101 に写像する
+ * (KMB-E107 を「registry 外の slot_key」以外の意味で使わない)。
+ */
+function mapSlotZodError(error: z.ZodError): KmbErrorCode {
+  const hasSlotKeyIssue = error.issues.some((issue) => issue.path[0] === "slot_key");
+  return hasSlotKeyIssue ? "KMB-E107" : "KMB-E101";
+}
+
 function revalidateSlotRoute(slotKey: string): void {
   const slot = SLOT_REGISTRY.find((s) => s.key === slotKey);
   if (slot) revalidatePath(slot.route);
@@ -83,7 +95,7 @@ async function revalidatePost(postId: string): Promise<void> {
 async function setSlotImage(slotKey: string, mediaId: string | null): Promise<Result<void>> {
   const parsed = zSetSlotReq.safeParse({ slot_key: slotKey, media_id: mediaId });
   if (!parsed.success) {
-    return { ok: false, code: "KMB-E107", detail: zodDetail(parsed.error) };
+    return { ok: false, code: mapSlotZodError(parsed.error), detail: zodDetail(parsed.error) };
   }
 
   const admin = await platformFacade.requireAdmin();
@@ -179,7 +191,7 @@ export async function setImage(target: EditableTarget, mediaId: string | null): 
 export async function setSlotAlt(slotKey: string, alt: string | null): Promise<Result<void>> {
   const parsed = zSetSlotAltReq.safeParse({ slot_key: slotKey, alt });
   if (!parsed.success) {
-    return { ok: false, code: "KMB-E107", detail: zodDetail(parsed.error) };
+    return { ok: false, code: mapSlotZodError(parsed.error), detail: zodDetail(parsed.error) };
   }
 
   const admin = await platformFacade.requireAdmin();
@@ -212,9 +224,15 @@ export type ContentGapItem = {
   status: string;
 };
 
+/** /works タブの2段ナビ (§5.1a): 公開済み施工事例の slug + タイトル。
+ *  クリックで iframe を /edit/works/{slug} (詳細ページ) に切り替える導線に使う。 */
+export type WorksNavItem = { slug: string; title: string };
+
 export type SidePanelData = {
   slots: SlotPanelItem[];
   contentGaps: ContentGapItem[];
+  /** route === "/works" のときのみ非空 (§5.1a)。それ以外の route では常に空配列。 */
+  works: WorksNavItem[];
 };
 
 const GAP_SCAN_PARAMS: AdminListParams = { cursor: null, limit: 100 };
@@ -257,6 +275,20 @@ async function listContentGapsForRoute(route: string): Promise<ContentGapItem[]>
   return [];
 }
 
+/**
+ * /works タブ選択時のみ呼ぶ、公開済み施工事例の一覧 (§5.1a 2段ナビ)。
+ * work_images (ギャラリー) は施工事例詳細ページにしか出ないため、一覧ページ (page_media
+ * スロットを持たない) からは到達できない — サイドパネルにこの一覧を出し、クリックで
+ * iframe を /edit/works/{slug} に切り替えることで詳細ページのホットスポット編集に導く。
+ * contentFacade.listPublished は canonical API (module-contracts.md §5) のためこのまま使う
+ * (facade 拡張不要)。
+ */
+async function listPublishedWorksNav(): Promise<WorksNavItem[]> {
+  const result = await contentFacade.listPublished("work", { cursor: null, limit: 100 });
+  if (!result.ok) return [];
+  return result.value.items.map((w) => ({ slug: w.slug, title: w.title }));
+}
+
 /** ページ選択タブ切り替えごとに呼ぶ、サイドパネル用の読み取り専用 Action */
 export async function listSidePanel(route: string): Promise<Result<SidePanelData>> {
   const admin = await platformFacade.requireAdmin();
@@ -274,5 +306,6 @@ export async function listSidePanel(route: string): Promise<Result<SidePanelData
   }));
 
   const contentGaps = await listContentGapsForRoute(route);
-  return { ok: true, value: { slots, contentGaps } };
+  const works = route === "/works" ? await listPublishedWorksNav() : [];
+  return { ok: true, value: { slots, contentGaps, works } };
 }

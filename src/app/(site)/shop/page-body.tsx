@@ -50,6 +50,65 @@ function MiniSwatch({ id }: { id: keyof typeof DD }) {
   );
 }
 
+/**
+ * SEC.03「塗装済み製品」3枠 (未来枠) の装飾プレースホルダ。V2a 以前 (旧 page.tsx) の
+ * CSS スウォッチ装飾を SlotImage の placeholder prop 経由で復元したもの
+ * (公開時の非退行、修正1)。COMING SOON / 受注制作バッジは page-body 側で
+ * SlotImage の外側 (sibling) に既に描画されているため、ここでは含めない。
+ */
+export function ShopProduct1Placeholder() {
+  return (
+    <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-4 bg-primer-deep">
+      <div className="flex flex-wrap justify-center gap-2 px-8">
+        {(Object.keys(DD) as (keyof typeof DD)[]).map((id) => (
+          <span
+            key={id}
+            className="inline-block size-9 border border-hair"
+            style={{
+              background: `linear-gradient(135deg, ${DD[id].a}, ${DD[id].b})`,
+            }}
+          />
+        ))}
+      </div>
+      <span className="font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
+        8-COLOR SET — IMAGE
+      </span>
+    </div>
+  );
+}
+
+export function ShopProduct2Placeholder() {
+  return (
+    <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-4 bg-primer-deep">
+      <span
+        className="inline-block size-24 border border-hair"
+        style={{
+          background: `linear-gradient(135deg, ${DD.tv2.a}, ${DD.tv2.b})`,
+        }}
+      />
+      <span className="font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
+        SINGLE PANEL — IMAGE
+      </span>
+    </div>
+  );
+}
+
+export function ShopProduct3Placeholder() {
+  return (
+    <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-4 bg-primer-deep">
+      <span
+        className="inline-block size-24 border border-hair"
+        style={{
+          background: `linear-gradient(135deg, ${DD["202"].a}, ${DD["202"].b})`,
+        }}
+      />
+      <span className="font-mono text-[9px] tracking-[0.18em] text-carbon-soft">
+        YOUR OBJECT HERE
+      </span>
+    </div>
+  );
+}
+
 function SvcBadge({ children }: { children: React.ReactNode }) {
   return (
     <span className="border border-hair bg-primer px-2.5 py-1 text-[11px] tracking-wider text-carbon-mid [&_strong]:font-bold [&_strong]:text-carbon">
@@ -413,6 +472,7 @@ export function ShopPageBody({
                 slotKey="shop.product.1"
                 resolved={slots["shop.product.1"]}
                 editMode={editMode}
+                placeholder={<ShopProduct1Placeholder />}
               />
             </div>
             <div className="flex flex-1 flex-col p-6">
@@ -464,6 +524,7 @@ export function ShopPageBody({
                 slotKey="shop.product.2"
                 resolved={slots["shop.product.2"]}
                 editMode={editMode}
+                placeholder={<ShopProduct2Placeholder />}
               />
             </div>
             <div className="flex flex-1 flex-col p-6">
@@ -515,6 +576,7 @@ export function ShopPageBody({
                 slotKey="shop.product.3"
                 resolved={slots["shop.product.3"]}
                 editMode={editMode}
+                placeholder={<ShopProduct3Placeholder />}
               />
             </div>
             <div className="flex flex-1 flex-col p-6">
