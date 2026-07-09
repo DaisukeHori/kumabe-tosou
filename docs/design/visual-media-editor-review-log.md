@@ -29,7 +29,20 @@
 - page_media.updated_by 列を廃止して anon SELECT を明示許可(#3)
 - 対応の全容は設計書 §11.2 の対応表を参照
 
-## v1.3 レビュー — 依頼中 (2026-07-09)
+## v1.3 レビュー (2026-07-09)
+
+指摘 8 件: BLOCKER 1 / MAJOR 3 / MINOR 4。総評: 「/edit 分離と公開 SSG 維持の方向は正しい。ただし unstable_cache × Map は設計書のままだと壊れる。BLOCKER 1 のため、現 v1.3 はまだ実装 GO ではない。」
+
+確認済み事項 (Codex 承認): /edit + force-dynamic + requireAdmin は Next 15.5 で実装可能 / 公開 SSG 維持は成立 (JSON-safe 条件付き) / RLS・view 設計の矛盾は解消。
+
+**潰したもの (v1.4 で対応、2026-07-09)**: 8 件全部。
+- BLOCKER: unstable_cache は JSON round-trip するため Map 契約が壊れる → Record 化 + JSON-safe 不変条件
+- MAJOR: /edit の content freshness (public-content の fetch/cache 2 層化) / EDITABLE_ROUTES 全量テスト / cover の CAS 楽観排他 (old_media_id + is not distinct from)
+- MINOR: DDL grant 明記 / seed 記述の事実訂正 / login next ホワイトリスト / preventDefault 受入条件拡張
+
+**重大な副産物**: 本番 HTTP 実測で `storage_path` 直 URL = 400、`{id}.webp` = 200 を確認。**公開サイトの works/voices/posts 画像は現在壊れている実バグ**と判明し、V0 を hotfix + 検証スクリプトに再定義 (設計書 §2.3)。
+
+## v1.4 レビュー — 依頼中 (2026-07-09)
 
 結果はこのファイルと Issue #1 に追記する。
 
