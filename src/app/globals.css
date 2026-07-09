@@ -380,16 +380,41 @@ a:hover .kt-swatch-sheen {
 /* M1 共通署名演出: G1 カーソル / G2 プログレスバー / G3 インジケータ / G4 ナビ。
    正典: docs/design/motion-gap-report.md §5。easing は --ease を使い回す。 */
 
+/* ---------- [Wave5 W5-D] 粘性イージング --ease-viscous (実装計画 §5 W5-D) ----------
+   統合計画 §1.3 で「予約名として凍結・未実装」だったトークンを、堀さん指示
+   (2026-07-09「旧サイトに無い発明でも良いものは大歓迎」) を受けて Wave 5 で解禁する。
+   カーブ 2 案を常設し、堀さんが実機比較で選定できるようにする。適用は 3 箇所限定
+   (下記いずれも kt-* prefix の各区画側で var(--ease-viscous) を参照する):
+     1) 本区画: カーソルリング拡大 (.kt-cursor-ring.is-link / .is-view 突入時のみ。
+        縮小/leave は下の基本 transition のまま --ease — 「戻り」は粘らない)
+     2) page-rest 区画: 検品スタンプ (.kt-qc-check::after の clip-path 描画)
+     3) hover-suite 区画: kt-btn-brush の hover 戻り (::before の帯が base 状態
+        [= 非 hover] に戻る遷移だけ粘性化。hover 突入時は :hover/:focus-visible の
+        transition-timing-function 明示上書きで --ease のまま)
+   ---- 切替手順 (堀さんが実機で選ぶ) ----
+   下の `--ease-viscous: var(--ease-viscous-a);` の右辺を `var(--ease-viscous-b);` に
+   書き換えるだけで 3 箇所全部に反映される (他コードの変更は不要)。
+   -a = 軽いオーバーシュート (塗料の弾み) / -b = 重い立ち上がり (高粘度)。 */
+:root {
+  --ease-viscous-a: cubic-bezier(0.34, 1.3, 0.5, 1);
+  --ease-viscous-b: cubic-bezier(0.6, 0.05, 0.28, 1);
+  --ease-viscous: var(--ease-viscous-a); /* ← ここを var(--ease-viscous-b) に書き換えて切替 */
+}
+
 /* ---------- G2 塗りプログレスバー (旧 css:1224-1234)
    統合計画 §3-1-2 [採用 EXTRA]: 刷毛先端モチーフのため scaleX ではなく
    width:100% 固定 + translateX((ratio-1)*100%) で塗り進める。 ---------- */
+/* [Wave5 W5-A] --kt-ink: colors ページで直近閲覧した色見本の色 (ink-recorder.tsx が
+   sessionStorage 経由で document.documentElement に設定)。未設定時は従来の --soul。
+   淡色 (DD-090 等) は ink-carry.ts の WCAG コントラスト判定で --soul にフォールバック
+   済みの値が渡ってくるため、ここでは var() の既定値フォールバックのみで足りる。 */
 .kt-paint-progress {
   position: absolute;
   left: 0;
   bottom: -1px;
   width: 100%;
   height: 2px;
-  background: var(--soul);
+  background: var(--kt-ink, var(--soul));
   transform: translateX(-100%);
   pointer-events: none;
 }
@@ -400,7 +425,7 @@ a:hover .kt-swatch-sheen {
   right: -7px;
   width: 8px;
   height: 8px;
-  background: linear-gradient(135deg, var(--soul), rgba(168, 15, 34, 0));
+  background: linear-gradient(135deg, var(--kt-ink, var(--soul)), transparent);
   transform: skewX(-14deg);
   pointer-events: none;
 }
@@ -478,19 +503,33 @@ a:hover .kt-swatch-sheen {
   white-space: nowrap;
 }
 .kt-sec-indicator-dot {
+  position: relative;
   width: 7px;
   height: 7px;
   border: 1px solid var(--carbon-soft);
   border-radius: 50%;
   flex: none;
+  /* [Wave5 W5-C] 親 nav (.kt-sec-indicator) は pointer-events:none の純装飾だが、
+     ドットだけ明示的に auto に戻してクリックナビを受け付ける (見た目 7px は不変)。 */
+  pointer-events: auto;
+  cursor: pointer;
   transition:
     background 0.3s var(--ease),
     border-color 0.3s var(--ease),
     transform 0.3s var(--ease);
 }
+/* [Wave5 W5-C] タップ/クリックの当たり判定を 24px に拡張する透明領域。
+   見た目 (7px) には影響しない。tabindex は付与しない設計判断のため
+   :focus-visible の見た目は不要 (マウス/タッチ専用、キーボードは既存ページ内
+   リンクで足りる — 実装計画 §5 W5-C)。 */
+.kt-sec-indicator-dot::before {
+  content: "";
+  position: absolute;
+  inset: -8.5px;
+}
 .kt-sec-indicator-item.is-current .kt-sec-indicator-dot {
-  background: var(--soul);
-  border-color: var(--soul);
+  background: var(--kt-ink, var(--soul));
+  border-color: var(--kt-ink, var(--soul));
   transform: scale(1.25);
 }
 .kt-sec-indicator-item.is-current .kt-sec-indicator-label {
@@ -566,6 +605,16 @@ a:hover .kt-swatch-sheen {
     border-color: var(--soul);
     background: rgba(168, 15, 34, 0.92);
   }
+  /* [Wave5 W5-D] 拡大 (is-link/is-view 突入) だけ粘性イージング。縮小 (leave して
+     基本 .kt-cursor-ring に戻る遷移) は上の --ease のまま — 「戻り」は粘らせない。 */
+  .kt-cursor-ring.is-link,
+  .kt-cursor-ring.is-view {
+    transition:
+      width 0.3s var(--ease-viscous),
+      height 0.3s var(--ease-viscous),
+      border-color 0.3s var(--ease),
+      background-color 0.3s var(--ease);
+  }
   .kt-cursor-ring.is-view .kt-cursor-label {
     opacity: 1;
   }
@@ -617,7 +666,10 @@ html {
   background: var(--carbon);
   transform: translateX(-104%) skewX(-14deg);
   transform-origin: left center;
-  transition: transform 0.42s var(--ease);
+  /* [Wave5 W5-D] 基底 (= 非 hover) 状態の transition。刷毛帯が引っ込む「戻り」の
+     遷移がこれになる (hover/focus-visible 突入時は下で --ease に明示上書き)。
+     --ease-viscous の定義・切替手順は signature 区画冒頭を参照。 */
+  transition: transform 0.42s var(--ease-viscous);
   z-index: -1;
   pointer-events: none;
   /* [採用 EXTRA] 刷毛の掠れエッジ: dd-edge (legacy css:337-341) の不規則な
@@ -656,11 +708,15 @@ html {
   transition: transform 0.3s var(--ease);
 }
 @media (hover: hover) and (pointer: fine) {
+  /* [Wave5 W5-D] hover 突入 (帯が伸びる方) は正典どおり --ease のまま。
+     粘性は「戻り」(上の基底 ::before ルール) 側だけに絞る。 */
   .kt-btn-brush:hover::before {
     transform: translateX(-16px) skewX(-14deg);
+    transition-timing-function: var(--ease);
   }
   .kt-btn-brush--cta:hover::before {
     transform: translateX(-13px) skewX(-14deg);
+    transition-timing-function: var(--ease);
   }
   .kt-btn-brush:hover .kt-btn-arrow {
     transform: translateX(5px);
@@ -669,9 +725,11 @@ html {
 /* キーボード操作でも同じ演出 (旧サイトに無い a11y 追補。パラメータは正典と同一) */
 .kt-btn-brush:focus-visible::before {
   transform: translateX(-16px) skewX(-14deg);
+  transition-timing-function: var(--ease);
 }
 .kt-btn-brush--cta:focus-visible::before {
   transform: translateX(-13px) skewX(-14deg);
+  transition-timing-function: var(--ease);
 }
 .kt-btn-brush:focus-visible .kt-btn-arrow {
   transform: translateX(5px);
@@ -1080,6 +1138,45 @@ html {
   animation-delay: 1.05s;
 }
 
+/* ---------- [Wave5 W5-E] ヒーロー文字リビール Variant B「塗られて現れる」 ----------
+   正典 (Variant A = 直上の .kt-hero-title--split「立ち上がり」) との実機 A/B 比較用に
+   用意する代替実装 (実装計画 §5 W5-E)。translateY は使わず、background-clip:text +
+   background-size (縦%) の遷移で下から塗られていくように見せる。
+   ---- 切替手順 (堀さんが実機で選ぶ) ----
+   src/app/(site)/page-body.tsx の h1 className から "kt-hero-title--split" を外し
+   "kt-hero-title--paint" に差し替えるだけ (SplitChars の出力構造・.kt-hero-char の
+   DOM は共通のため他の変更は不要)。既定は Variant A のまま — B はここにコードとして
+   存在するが、上記の className 差し替えを行うまで未適用。
+   Safari など background-clip:text 非対応環境は @supports not で即時表示にフォールバック
+   (アウトラインではなく通常の文字色表示になるだけで、可読性は失われない)。 */
+@keyframes kt-char-paint {
+  from {
+    background-size: 100% 0%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
+}
+.kt-hero-title--paint .kt-hero-char {
+  transform: translateY(0);
+  color: transparent;
+  background-image: linear-gradient(var(--carbon), var(--carbon));
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 100% 0%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: kt-char-paint 0.6s var(--ease) both;
+  animation-delay: calc(var(--ci, 0) * 0.032s);
+}
+@supports not ((background-clip: text) or (-webkit-background-clip: text)) {
+  .kt-hero-title--paint .kt-hero-char {
+    color: var(--carbon);
+    background-image: none;
+    animation: none;
+  }
+}
+
 /* ---------- 2) 設計図グリッド+寸法マーカー (旧 css:1451-1501) ----------
    inset の換算根拠: 旧は全幅 .hero 基準 top 96px (= INDEX 行の 76px 上)。
    現構造は max-w セクション内のため top 32px (= pt-28 の INDEX 行の 80px 上)、
@@ -1264,6 +1361,13 @@ html {
     animation: none;
     transform: none;
     will-change: auto;
+  }
+  /* [Wave5 W5-E] Variant B 用の個別 kill。specificity (2 class) が直上の
+     .kt-hero-char (1 class) と同点タイ以上になるよう明示的に再宣言する
+     (プロパティ単位のカスケードは「ルール継承」しないため animation も再指定)。 */
+  .kt-hero-title--paint .kt-hero-char {
+    animation: none;
+    background-size: 100% 100%;
   }
   .kt-strip-progress-bar {
     animation: none;
@@ -1569,6 +1673,34 @@ html {
     color: rgba(168, 15, 34, 0.06);
   }
 }
+
+/* ---------- [Wave5 W5-B] 塗料が満ちる工程番号 (実装計画 §5 W5-B) ----------
+   正典 (0.3s 即時塗り、直上ブロック) からのオプトイン逸脱。hover 時に文字が
+   下から塗料で「満ちていく」ように見せる: background-clip:text +
+   background-size (縦%) を 0.6s で遷移させる。-webkit-text-stroke による輪郭は
+   直上ブロックのまま維持する。background-clip:text 非対応環境は @supports not で
+   直上ブロックの即時塗り (色変化のみ) にフォールバックする — 内容性のある数字の
+   フォールバック規約 (§1.5) 準拠。reduce では transition:none (下の一括 kill) に
+   より背景サイズの変化そのものは瞬時発生 = 即時表示になる。 */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .kt-ps-no {
+    background-image: linear-gradient(var(--soul), var(--soul));
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    background-size: 100% 0%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    transition:
+      -webkit-text-stroke-color 0.3s var(--ease),
+      background-size 0.6s var(--ease);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .kt-process-step:hover .kt-ps-no {
+      color: transparent;
+      background-size: 100% 100%;
+    }
+  }
+}
 /* モバイル縮小 (legacy css:2360-2363) */
 @media (max-width: 640px) {
   .kt-ps-no {
@@ -1625,11 +1757,13 @@ html {
    Reveal (.reveal.is-visible) が付与された瞬間に QC ✓ を clip-path で 0.4s 描画し、
    カード出現順に 0.06s ずつ stagger する (検品票へチェックを入れていく手つきの再現)。
    「描かれていない」初期状態そのものを no-preference の中に置くことで、reduce 環境では
-   常に描画済み (静的全表示) になる二重ガード構造 (§1.5 と同じ考え方、個別 kill 不要)。 */
+   常に描画済み (静的全表示) になる二重ガード構造 (§1.5 と同じ考え方、個別 kill 不要)。
+   [Wave5 W5-D] clip-path の描画イージングを --ease-viscous に変更 (定義・切替手順は
+   signature 区画冒頭を参照)。スタンプがインクを吸って濃くなっていく質感を狙う。 */
 @media (prefers-reduced-motion: no-preference) {
   .kt-qc-check::after {
     clip-path: inset(0 100% 0 0);
-    transition: clip-path 0.4s var(--ease);
+    transition: clip-path 0.4s var(--ease-viscous);
   }
   .reveal.is-visible .kt-qc-check::after {
     clip-path: inset(0 0 0 0);
@@ -1901,6 +2035,28 @@ html {
   .kt-note-nav-link:hover::after {
     transform: scaleX(1);
     transform-origin: left;
+  }
+}
+
+/* ---------- [Wave5 補完] contact: FAQ 回答リビール (legacy css:1688-1693) ----------
+   Wave 4 統合検証で発見されたスコープ漏れの補完 (実装計画 §5 作業0)。<details> の
+   open/closed は UA スタイルシートで display 切替されるため transition は発火せず、
+   legacy と同じく animation (both) で「開いた瞬間に 1 回再生」させる。no-preference
+   限定で宣言すること自体が reduce 時の自然なフォールバック (即時全表示) になるため、
+   個別 kill は不要 (§1.5 の二重ガード構造と同じ考え方)。 */
+@media (prefers-reduced-motion: no-preference) {
+  details[open] > .kt-faq-answer {
+    animation: kt-faq-answer-in 0.5s var(--ease) both;
+  }
+  @keyframes kt-faq-answer-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
 

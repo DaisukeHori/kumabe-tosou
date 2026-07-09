@@ -1,7 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { applyStoredInkVar } from "./ink-carry";
 
 interface IndicatorItem {
   no: string;
@@ -15,17 +17,28 @@ interface IndicatorItem {
  * - 表示切替: home はヒーロー (main 内最初の section) 退場後に表示、
  *   他ページは常時表示 (旧 :323-335 — .hero は旧 index.html のみ存在した)
  * - SPA 遷移に追従するため pathname を依存に再スキャン
+ * - [Wave5 W5-C] ドットのクリックで対象セクションへ scrollIntoView smooth。
+ *   tabindex は付与しない (マウス/タッチ専用。キーボードは既存ページ内リンクで
+ *   足りる設計判断 — 実装計画 §5 W5-C)。aria-hidden は維持。
  */
 export function SectionIndicator() {
   const pathname = usePathname();
   const [items, setItems] = useState<IndicatorItem[]>([]);
   const [current, setCurrent] = useState(-1);
   const [active, setActive] = useState(false);
+  const marksRef = useRef<HTMLElement[]>([]);
+
+  useEffect(() => {
+    // [Wave5 W5-A] フルロード直後は document.documentElement の --kt-ink が
+    // 消えているため、sessionStorage の記録から復元する (現在地ドット色に反映)。
+    applyStoredInkVar();
+  }, [pathname]);
 
   useEffect(() => {
     setItems([]);
     setCurrent(-1);
     setActive(false);
+    marksRef.current = [];
 
     if (!("IntersectionObserver" in window)) return;
 
@@ -33,6 +46,7 @@ export function SectionIndicator() {
       document.querySelectorAll<HTMLElement>("main [data-sec-mark]"),
     );
     if (marks.length < 2) return;
+    marksRef.current = marks;
 
     setItems(
       marks.map((mark, idx) => ({
@@ -78,6 +92,12 @@ export function SectionIndicator() {
 
   if (items.length < 2) return null;
 
+  // [Wave5 W5-C] ドットクリックで対象セクションへスムーススクロール。
+  // marksRef は上の effect で収集済みの [data-sec-mark] 要素配列 (idx 対応)。
+  const handleDotClick = (idx: number) => {
+    marksRef.current[idx]?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <nav
       className={`kt-sec-indicator${active ? " is-active" : ""}`}
@@ -91,7 +111,10 @@ export function SectionIndicator() {
           <span className="kt-sec-indicator-label">
             {item.label || `SEC ${item.no}`}
           </span>
-          <span className="kt-sec-indicator-dot" />
+          <span
+            className="kt-sec-indicator-dot"
+            onClick={() => handleDotClick(idx)}
+          />
         </div>
       ))}
     </nav>

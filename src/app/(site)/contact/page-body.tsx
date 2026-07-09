@@ -151,7 +151,7 @@ export function ContactPageBody({
                   ＋
                 </span>
               </summary>
-              <p className="pb-6 pl-[3.4em] pr-4 text-sm leading-7 text-carbon-mid">
+              <p className="kt-faq-answer pb-6 pl-[3.4em] pr-4 text-sm leading-7 text-carbon-mid">
                 {item.a}
               </p>
             </details>

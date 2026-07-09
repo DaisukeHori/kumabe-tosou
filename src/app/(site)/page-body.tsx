@@ -271,6 +271,10 @@ export function HomePageBody({
               SURFACE FINISHING FOR 3D PRINTS
             </span>
           </p>
+          {/* [Wave5 W5-E] 文字リビール A/B 切替 (実装計画 §5): 既定は Variant A
+              「立ち上がり」(kt-hero-title--split)。Variant B「塗られて現れる」を
+              試すには、下の className を "kt-hero-title--paint" に差し替えるだけ
+              (globals.css の page-home 区画 .kt-hero-title--paint を参照)。 */}
           <h1
             className="kt-hero-title--split mt-8 text-[clamp(34px,6.2vw,72px)] font-bold leading-[1.3] tracking-[0.04em]"
             aria-label="3Dプリントを、量産品と見分けがつかない外観に。"
