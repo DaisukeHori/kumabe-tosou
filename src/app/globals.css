@@ -1054,6 +1054,164 @@ html {
 /* === motion: page-colors === */
 /* === /motion: page-colors === */
 /* === motion: page-story-process === */
+/* M4 — story / process ページ固有の意匠 (legacy 正典移植)
+   正典: docs/design/motion-gap-report.md §3 + legacy/css/style.css (行番号は各節に記載)
+   すべて宣言的 CSS。JS なし・SSG 影響なし。
+   kt-* 規則は非レイヤー CSS のため Tailwind ユーティリティ (@layer) に常に勝つ。
+   同一要素の transition/filter/transform を Tailwind 側で変えても効かない。 */
+
+/* ---------- story: 章区切り罫線 (legacy css:2055-2059) ---------- */
+.kt-story-chapter {
+  padding: clamp(56px, 8vw, 104px) 0;
+  border-bottom: 1px solid var(--hair);
+}
+.kt-story-chapter:first-of-type {
+  border-top: 1px solid var(--hair);
+}
+
+/* ---------- story: 章見出し sticky (legacy css:2069 / 900px 未満で解除 css:2133-2136) ---------- */
+@media (min-width: 900px) {
+  .kt-story-head {
+    position: sticky;
+    top: 100px; /* sticky ヘッダー h-72px + 28px クリアランス (legacy と同値) */
+  }
+}
+
+/* ---------- story: ドロップキャップ (legacy css:2103-2111) ---------- */
+/* [採用 EXTRA・実装計画 §3-6-2] 乾着 (かんちゃく): reveal 完了前は primer (未乾燥) 色、
+   .reveal.is-visible 到達後に carbon (乾燥後の炭色) へ 0.6s で沈着する。
+   ::first-letter の transition は Safari で無視される場合があるが、その場合は
+   is-visible 到達時点で即 carbon 表示される静的フォールバックとなり無害。 */
+.kt-story-body > p:first-child::first-letter {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 3.6em;
+  line-height: 0.82;
+  float: left;
+  margin: 6px 12px 0 0;
+  color: var(--primer);
+  transition: color 0.6s var(--ease);
+}
+.reveal.is-visible .kt-story-body > p:first-child::first-letter {
+  color: var(--carbon);
+}
+
+/* ---------- story: 引用意匠 (legacy css:2113-2131) ---------- */
+.kt-story-quote {
+  margin: 34px 0;
+  padding: 4px 0 4px 26px;
+  border-left: 3px solid var(--soul);
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: clamp(18px, 2.4vw, 26px);
+  line-height: 1.8;
+  letter-spacing: 0.04em;
+  color: var(--carbon);
+}
+.kt-story-quote cite {
+  display: block;
+  margin-top: 14px;
+  font-family: var(--font-legacy-mono);
+  font-size: 11px;
+  font-style: normal;
+  letter-spacing: 0.12em;
+  color: var(--carbon-soft);
+}
+
+/* ---------- story: 代表メッセージ 赤光暈 (legacy css:2139-2145) ---------- */
+.kt-message-sec {
+  background:
+    radial-gradient(
+      70% 90% at 82% 15%,
+      rgba(168, 15, 34, 0.05),
+      transparent 62%
+    ),
+    var(--paper);
+  border-top: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+}
+
+/* ---------- story: portrait 斜めストライプ + コーナーマーク (legacy css:2155-2190) ---------- */
+/* 画像未設定 (story.portrait は defaultSrc:null の未来枠) のあいだ、
+   legacy の「PORTRAIT — COMING SOON」プレースホルダ意匠として見える。
+   画像が設定されたら写真がストライプを覆う (legacy と同じ意図)。
+   V3 で復元された StoryPortraitPlaceholder (信之/キャプション) は自身の背景・罫線・
+   コーナーマークを持たず、この .kt-portrait-frame / .kt-portrait-corner を親要素として
+   共有することでストライプが透けて見える (実装計画の worktree 追加指示に基づく統合)。 */
+.kt-portrait-frame {
+  position: relative;
+  border: 1px solid var(--hair);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      var(--primer-deep) 0 2px,
+      transparent 2px 11px
+    ),
+    linear-gradient(160deg, #dfdfd8, #cfcfc8);
+}
+.kt-portrait-corner {
+  position: absolute;
+  font-family: var(--font-legacy-mono);
+  font-size: 11px;
+  color: var(--carbon-soft);
+  pointer-events: none; /* /edit の data-editable ホットスポットのクリックを妨げない */
+  z-index: 1;
+}
+.kt-portrait-corner--tl {
+  top: 10px;
+  left: 12px;
+}
+.kt-portrait-corner--br {
+  bottom: 10px;
+  right: 12px;
+}
+
+/* ---------- process: 工程番号 巨大アウトライン数字 (legacy css:2314-2327) ---------- */
+.kt-ps-no {
+  font-family: var(--font-wide);
+  font-weight: 700;
+  font-stretch: 125%; /* Archivo は W1-C で導入済み (root layout) のため発効する */
+  font-size: clamp(40px, 5vw, 62px);
+  line-height: 0.9;
+  color: transparent;
+  -webkit-text-stroke: 1.4px var(--carbon-soft);
+  transition:
+    -webkit-text-stroke-color 0.3s var(--ease),
+    color 0.3s var(--ease);
+}
+/* text-stroke 非対応環境で数字が透明のまま消えないための保険 */
+@supports not (-webkit-text-stroke: 1px #000) {
+  .kt-ps-no {
+    color: var(--carbon-soft);
+  }
+}
+/* hover はポインタ精度ガード付き (タッチデバイスでは発火しない) */
+@media (hover: hover) and (pointer: fine) {
+  .kt-process-step:hover .kt-ps-no {
+    -webkit-text-stroke-color: var(--soul);
+    color: rgba(168, 15, 34, 0.06);
+  }
+}
+/* モバイル縮小 (legacy css:2360-2363) */
+@media (max-width: 640px) {
+  .kt-ps-no {
+    font-size: 44px;
+  }
+}
+
+/* ---------- reduced-motion: 本班分のキルスイッチ (旧 css:1130-1136 方式・班内保険) ----------
+   一括の全称キルスイッチ (*, *::before, *::after) は signature 班 (M1) の区画が単独所有する
+   (実装計画 §1.5 / §2-8)。本班で transition を持つのは kt-ps-no とドロップキャップの乾着のみで、
+   ここで個別に殺しておく。 */
+@media (prefers-reduced-motion: reduce) {
+  .kt-ps-no {
+    transition: none;
+  }
+  .kt-story-body > p:first-child::first-letter {
+    transition: none;
+    color: var(--carbon);
+  }
+}
 /* === /motion: page-story-process === */
 /* === motion: page-rest === */
 /* === /motion: page-rest === */
