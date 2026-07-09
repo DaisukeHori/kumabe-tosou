@@ -112,7 +112,7 @@ async function fetchPublishedWorks(): Promise<PublicWorkListItem[]> {
     title: row.title,
     category: row.category,
     processNote: row.process_note,
-    cover: toPublicMediaRef(client, row.cover_media),
+    cover: toPublicMediaRef(row.cover_media),
     publishedAt: row.published_at,
   }));
 }
@@ -139,7 +139,7 @@ async function fetchPublishedWorkBySlug(slug: string): Promise<PublicWorkDetail 
 
   const images = [...data.work_images]
     .sort((a, b) => a.sort_order - b.sort_order)
-    .map((wi) => toPublicMediaRef(client, wi.media))
+    .map((wi) => toPublicMediaRef(wi.media))
     .filter((m): m is PublicMediaRef => m !== null);
 
   return {
@@ -148,7 +148,7 @@ async function fetchPublishedWorkBySlug(slug: string): Promise<PublicWorkDetail 
     title: data.title,
     category: data.category,
     processNote: data.process_note,
-    cover: toPublicMediaRef(client, data.cover_media),
+    cover: toPublicMediaRef(data.cover_media),
     publishedAt: data.published_at,
     body: data.body,
     images,
@@ -227,7 +227,7 @@ async function fetchPublishedPosts(kind: PublicPostKind): Promise<PublicPostList
     kind: row.kind,
     title: row.title,
     excerpt: row.excerpt,
-    cover: toPublicMediaRef(client, row.cover_media),
+    cover: toPublicMediaRef(row.cover_media),
     publishedAt: row.published_at,
   }));
 }
@@ -252,7 +252,7 @@ async function fetchPublishedPostBySlug(
     kind: data.kind,
     title: data.title,
     excerpt: data.excerpt,
-    cover: toPublicMediaRef(client, data.cover_media),
+    cover: toPublicMediaRef(data.cover_media),
     publishedAt: data.published_at,
     body: data.body,
   };
@@ -346,7 +346,7 @@ async function fetchPublishedVoices(): Promise<PublicVoiceListItem[]> {
     rating: row.rating,
     body: row.body,
     item: row.item,
-    photo: toPublicMediaRef(client, row.photo_media),
+    photo: toPublicMediaRef(row.photo_media),
     publishedAt: row.published_at,
   }));
 }

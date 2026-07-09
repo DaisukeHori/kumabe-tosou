@@ -85,11 +85,10 @@ export interface MediaFacadeExtended extends MediaFacade {
  * 無しで URL を構築できるようにするための決め (契約書 §5 の getPublicUrl が
  * 同期シグネチャのため)。
  *
- * (既知の乖離— オーケストレーターへ報告済み)
- * Wave 0 の scripts/seed-from-legacy.ts は暫定措置として元ファイル名をそのまま
- * "media" バケットにコピーしており、この規約に従っていない。そのため
- * legacy seed 由来の media 行に対して getPublicUrl() を呼ぶと 404 になる。
- * 本規約に合わせるには seed スクリプトの再実行 (レンディション再生成) が必要。
+ * scripts/seed-from-legacy.ts もこの規約に従い `{id}.webp` / `{id}.jpg` を生成する
+ * (seed-from-legacy.ts の seedMedia() 参照)。公開サイト側 (src/app/_lib/media.ts) の
+ * toPublicMediaRef() もこの getPublicUrl() 経由の決定論 URL に統一済み
+ * (docs/design/visual-media-editor.md §2.3、V0 hotfix)。
  */
 function renditionPathFor(mediaId: string, ext: "webp" | "jpg"): string {
   return `${mediaId}.${ext}`;
