@@ -2,6 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  CircleCheckIcon,
+  ImageUpIcon,
+  Loader2Icon,
+  OctagonXIcon,
+  TriangleAlertIcon,
+  XIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +32,7 @@ import type { MediaListItem } from "@/modules/media/facade";
 import { completeUploadAction, deleteMediaAction, patchMediaAction, requestUploadUrlAction } from "./actions";
 
 const GRID_COLUMNS = 4; // ↑↓ キー操作の行推定用 (lg 表示を基準とした概算)
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 function parseTags(input: string): string[] {
   return input
@@ -31,6 +40,19 @@ function parseTags(input: string): string[] {
     .map((t) => t.trim())
     .filter((t) => t.length > 0)
     .slice(0, 10);
+}
+
+/** ファイル名から拡張子を除いた部分を alt の初期値として使う。 */
+function stripExtension(filename: string): string {
+  const idx = filename.lastIndexOf(".");
+  return idx > 0 ? filename.slice(0, idx) : filename;
+}
+
+/** 画像形式・10MB 上限のクライアント側事前検証 (サーバ側 createUploadUrl の検証と同基準)。 */
+function validateFile(file: File): string | null {
+  if (!file.type.startsWith("image/")) return "画像ファイルではありません";
+  if (file.size > MAX_UPLOAD_BYTES) return "10MBを超えています";
+  return null;
 }
 
 /**
@@ -294,113 +316,383 @@ function EditMediaDialog({
   );
 }
 
+type UploadRowStatus = "pending" | "uploading" | "done" | "error";
+
+type UploadRow = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  alt: string;
+  status: UploadRowStatus;
+  error: string | null;
+  /** null 以外なら画像形式外/10MB超。アップロード対象から除外する。 */
+  invalidReason: string | null;
+};
+
+function createUploadRow(file: File): UploadRow {
+  return {
+    id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
+    file,
+    previewUrl: URL.createObjectURL(file),
+    alt: stripExtension(file.name),
+    status: "pending",
+    error: null,
+    invalidReason: validateFile(file),
+  };
+}
+
+/** 行のプレビュー URL (createObjectURL) を revoke する。行を state から取り除く直前に必ず呼ぶこと。 */
+function revokeRowPreview(row: UploadRow): void {
+  URL.revokeObjectURL(row.previewUrl);
+}
+
+function UploadRowStatusIndicator({ status }: { status: UploadRowStatus }) {
+  if (status === "uploading") {
+    return (
+      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+        <Loader2Icon className="size-3 animate-spin" />
+        アップロード中
+      </span>
+    );
+  }
+  if (status === "done") {
+    return (
+      <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+        <CircleCheckIcon className="size-3" />
+        完了
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className="flex items-center gap-1 text-[11px] text-destructive">
+        <OctagonXIcon className="size-3" />
+        失敗
+      </span>
+    );
+  }
+  return <span className="text-[11px] text-muted-foreground">待機</span>;
+}
+
 function UploadMediaDialog({ onClose, onUploaded }: { onClose: () => void; onUploaded: () => void }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [alt, setAlt] = useState("");
+  const [rows, setRows] = useState<UploadRow[]>([]);
   const [tags, setTags] = useState("");
   const [credit, setCredit] = useState("");
   const [isPlaceholder, setIsPlaceholder] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const rowsRef = useRef<UploadRow[]>(rows);
 
-  async function handleUpload() {
-    if (!file) {
-      toast.error("ファイルを選択してください。");
-      return;
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
+  // アンマウント時に残っている全プレビュー URL を revoke する (行削除時は removeRow 側で個別に revoke 済み)。
+  useEffect(() => {
+    return () => {
+      rowsRef.current.forEach(revokeRowPreview);
+    };
+  }, []);
+
+  // アップロード中にタブを閉じる/リロードすると進行中の通信が失われるため警告する。
+  useEffect(() => {
+    if (!isUploading) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
     }
-    if (!alt.trim()) {
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isUploading]);
+
+  function addFiles(files: File[]) {
+    if (files.length === 0) return;
+    setRows((prev) => [...prev, ...files.map((file) => createUploadRow(file))]);
+  }
+
+  function removeRow(id: string) {
+    setRows((prev) => {
+      const target = prev.find((r) => r.id === id);
+      if (target) revokeRowPreview(target);
+      return prev.filter((r) => r.id !== id);
+    });
+  }
+
+  function updateAlt(id: string, alt: string) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, alt } : r)));
+  }
+
+  async function uploadOneRow(row: UploadRow): Promise<{ ok: true } | { ok: false; error: string }> {
+    const urlResult = await requestUploadUrlAction({
+      filename: row.file.name,
+      contentType: row.file.type,
+      sizeBytes: row.file.size,
+    });
+    if (urlResult.error || !urlResult.storagePath || !urlResult.token) {
+      return { ok: false, error: urlResult.error ?? "アップロード URL の発行に失敗しました。" };
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: uploadError } = await supabase.storage
+      .from("media-originals")
+      .uploadToSignedUrl(urlResult.storagePath, urlResult.token, row.file);
+    if (uploadError) {
+      return { ok: false, error: `アップロードに失敗しました: ${uploadError.message}` };
+    }
+
+    const completeResult = await completeUploadAction({
+      storagePath: urlResult.storagePath,
+      alt: row.alt,
+      credit: credit.trim() || null,
+      tags: parseTags(tags),
+      isPlaceholder,
+    });
+    if (completeResult.error) {
+      return { ok: false, error: completeResult.error };
+    }
+    return { ok: true };
+  }
+
+  const uploadTargets = rows.filter((r) => !r.invalidReason && (r.status === "pending" || r.status === "error"));
+
+  async function handleUploadAll() {
+    if (uploadTargets.length === 0) return;
+    const missingAlt = uploadTargets.find((r) => !r.alt.trim());
+    if (missingAlt) {
       toast.error("alt テキストを入力してください。");
       return;
     }
+
     setIsUploading(true);
-    try {
-      const urlResult = await requestUploadUrlAction({
-        filename: file.name,
-        contentType: file.type,
-        sizeBytes: file.size,
-      });
-      if (urlResult.error || !urlResult.storagePath || !urlResult.token) {
-        toast.error(urlResult.error ?? "アップロード URL の発行に失敗しました。");
-        return;
+    let successCount = 0;
+    let failCount = 0;
+    for (const target of uploadTargets) {
+      // ループ実行中にユーザーが行を削除している可能性があるため、処理直前に現存確認する
+      // (存在しなければ削除済みファイルなのでアップロードせずスキップする)。
+      const latest = rowsRef.current.find((r) => r.id === target.id);
+      if (!latest) continue;
+      setRows((prev) => prev.map((r) => (r.id === target.id ? { ...r, status: "uploading", error: null } : r)));
+      const result = await uploadOneRow(latest);
+      if (result.ok) {
+        successCount += 1;
+        setRows((prev) => prev.map((r) => (r.id === target.id ? { ...r, status: "done", error: null } : r)));
+      } else {
+        failCount += 1;
+        setRows((prev) => prev.map((r) => (r.id === target.id ? { ...r, status: "error", error: result.error } : r)));
       }
+    }
+    setIsUploading(false);
 
-      const supabase = createSupabaseBrowserClient();
-      const { error: uploadError } = await supabase.storage
-        .from("media-originals")
-        .uploadToSignedUrl(urlResult.storagePath, urlResult.token, file);
-      if (uploadError) {
-        toast.error(`アップロードに失敗しました: ${uploadError.message}`);
-        return;
-      }
-
-      const completeResult = await completeUploadAction({
-        storagePath: urlResult.storagePath,
-        alt,
-        credit: credit.trim() || null,
-        tags: parseTags(tags),
-        isPlaceholder,
-      });
-      if (completeResult.error) {
-        toast.error(completeResult.error);
-        return;
-      }
-      toast.success("アップロードしました。");
+    if (failCount === 0) {
+      toast.success(`${successCount}枚をアップロードしました。`);
       onUploaded();
-    } finally {
-      setIsUploading(false);
+    } else {
+      toast.error(`${successCount}枚成功、${failCount}枚失敗しました。失敗した項目を確認してください。`);
+      // 成功済みの行は反映済みなので一覧から外し、失敗・未処理の行だけ残してモーダルは維持する。
+      // (revoke してから除去することでプレビュー URL のリークを防ぐ)
+      setRows((prev) => {
+        prev.filter((r) => r.status === "done").forEach(revokeRowPreview);
+        return prev.filter((r) => r.status !== "done");
+      });
+    }
+  }
+
+  async function retryRow(id: string) {
+    if (isUploading) return; // 一括アップロード中の多重実行を防止
+    const target = rowsRef.current.find((r) => r.id === id);
+    if (!target) return;
+    if (!target.alt.trim()) {
+      toast.error("alt テキストを入力してください。");
+      return;
+    }
+
+    setIsUploading(true);
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: "uploading", error: null } : r)));
+    const result = await uploadOneRow(target);
+    setIsUploading(false);
+
+    if (result.ok) {
+      toast.success("アップロードしました。");
+      const uploaded = rowsRef.current.find((r) => r.id === id);
+      if (uploaded) revokeRowPreview(uploaded);
+      const remaining = rowsRef.current.filter((r) => r.id !== id);
+      setRows(remaining);
+      if (remaining.length === 0) {
+        onUploaded();
+      }
+    } else {
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: "error", error: result.error } : r)));
+      toast.error(result.error);
     }
   }
 
   return (
     <Dialog
       open
+      disablePointerDismissal={isUploading}
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (open) return;
+        if (isUploading) return; // アップロード中は閉じない (Esc / 外側クリック含む)
+        onClose();
       }}
     >
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg" showCloseButton={!isUploading}>
         <DialogHeader>
           <DialogTitle>画像をアップロード</DialogTitle>
           <DialogDescription>
-            長辺2560px上限に自動リサイズ・WebP + Instagram用JPEGレンディションを生成します (10MBまで)。
+            長辺2560px上限に自動リサイズ・WebP + Instagram用JPEGレンディションを生成します (10MBまで・複数枚可)。
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          <Field>
-            <FieldLabel htmlFor="upload-file">画像ファイル</FieldLabel>
-            <Input
-              id="upload-file"
+          <label
+            htmlFor="upload-dropzone-input"
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!isUploading) setIsDragOver(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              // 子要素の境界を跨ぐたびに発火するため、ドロップゾーンの外へ本当に出た時だけ解除する
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              setIsDragOver(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+              if (isUploading) return;
+              addFiles(Array.from(e.dataTransfer.files ?? []));
+            }}
+            className={cn(
+              "flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors",
+              isUploading ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+              isDragOver ? "border-primary bg-primary/5" : "border-input hover:bg-muted/40",
+            )}
+          >
+            <ImageUpIcon className="size-7 text-muted-foreground" />
+            <p className="text-sm font-medium">クリックして選択、またはドラッグ&ドロップ</p>
+            <p className="text-xs text-muted-foreground">PNG/JPEG/WebP、10MBまで・複数選択可</p>
+            <input
+              id="upload-dropzone-input"
               type="file"
               accept="image/*"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              multiple
+              disabled={isUploading}
+              className="sr-only"
+              onChange={(e) => {
+                addFiles(Array.from(e.target.files ?? []));
+                e.target.value = "";
+              }}
+            />
+          </label>
+
+          {rows.length > 0 && (
+            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto" aria-live="polite">
+              {rows.map((row) => (
+                <div
+                  key={row.id}
+                  className="flex items-start gap-2 rounded-lg border border-admin-card-border bg-card p-2"
+                >
+                  <div className="relative size-12 shrink-0 overflow-hidden rounded-md bg-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={row.previewUrl} alt="" className="h-full w-full object-cover" />
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-xs font-medium" title={row.file.name}>
+                        {row.file.name}
+                      </p>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        {(row.file.size / (1024 * 1024)).toFixed(2)} MB
+                      </span>
+                    </div>
+                    <Input
+                      value={row.alt}
+                      onChange={(e) => updateAlt(row.id, e.target.value)}
+                      placeholder="alt テキスト (必須)"
+                      maxLength={200}
+                      required
+                      aria-invalid={!row.alt.trim()}
+                      disabled={row.status === "uploading" || row.status === "done" || Boolean(row.invalidReason)}
+                      className="h-7 text-xs"
+                    />
+                    {row.invalidReason && (
+                      <p className="flex items-center gap-1 text-[11px] text-destructive">
+                        <TriangleAlertIcon className="size-3 shrink-0" />
+                        {row.invalidReason} (アップロード対象から除外されます)
+                      </p>
+                    )}
+                    {row.status === "error" && row.error && (
+                      <p className="flex items-center gap-1 text-[11px] text-destructive">
+                        <OctagonXIcon className="size-3 shrink-0" />
+                        {row.error}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <UploadRowStatusIndicator status={row.status} />
+                    {row.status === "error" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => void retryRow(row.id)}
+                        disabled={isUploading}
+                      >
+                        リトライ
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => removeRow(row.id)}
+                      disabled={row.status === "uploading"}
+                      aria-label="この画像を削除"
+                    >
+                      <XIcon />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Field>
+            <FieldLabel htmlFor="upload-tags">タグ (カンマ区切り、任意・全ファイル共通)</FieldLabel>
+            <Input id="upload-tags" value={tags} onChange={(e) => setTags(e.target.value)} disabled={isUploading} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="upload-credit">出典 (任意・全ファイル共通)</FieldLabel>
+            <Input
+              id="upload-credit"
+              value={credit}
+              onChange={(e) => setCredit(e.target.value)}
+              disabled={isUploading}
             />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="upload-alt">alt テキスト</FieldLabel>
-            <Input id="upload-alt" value={alt} onChange={(e) => setAlt(e.target.value)} maxLength={200} required />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="upload-tags">タグ (カンマ区切り、任意)</FieldLabel>
-            <Input id="upload-tags" value={tags} onChange={(e) => setTags(e.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="upload-credit">出典 (任意)</FieldLabel>
-            <Input id="upload-credit" value={credit} onChange={(e) => setCredit(e.target.value)} />
-          </Field>
           <Field orientation="horizontal">
-            <Checkbox checked={isPlaceholder} onCheckedChange={(c) => setIsPlaceholder(Boolean(c))} />
+            <Checkbox
+              checked={isPlaceholder}
+              onCheckedChange={(c) => setIsPlaceholder(Boolean(c))}
+              disabled={isUploading}
+            />
             <FieldContent>
-              <FieldLabel>仮素材として扱う (is_placeholder)</FieldLabel>
+              <FieldLabel>仮素材として扱う (is_placeholder・全ファイル共通)</FieldLabel>
             </FieldContent>
           </Field>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={isUploading}>
             キャンセル (Esc)
           </Button>
-          <Button onClick={handleUpload} disabled={isUploading}>
-            {isUploading ? "アップロード中..." : "アップロード"}
+          <Button onClick={() => void handleUploadAll()} disabled={isUploading || uploadTargets.length === 0}>
+            {isUploading
+              ? "アップロード中..."
+              : uploadTargets.length > 0
+                ? `${uploadTargets.length}枚をアップロード`
+                : "アップロード"}
           </Button>
         </DialogFooter>
       </DialogContent>
