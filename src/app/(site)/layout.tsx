@@ -1,3 +1,4 @@
+import { PageTransition } from "@/components/motion/page-transition";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { CustomCursor } from "@/components/motion/custom-cursor";
@@ -45,7 +46,9 @@ export default function SiteLayout({
         }}
       />
       <SiteHeader />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1">
+        <PageTransition>{children}</PageTransition>
+      </main>
       <SiteFooter />
       {/* 署名演出オーバーレイ (M1)。/edit iframe に載せないため (site) 限定 */}
       <CustomCursor />

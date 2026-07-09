@@ -10,6 +10,7 @@ import {
   Section,
   SectionMark,
 } from "@/components/site/page-blocks";
+import { Reveal } from "@/components/site/reveal";
 import { VoiceBody } from "@/components/site/voice-body";
 import { cn } from "@/lib/utils";
 
@@ -65,41 +66,40 @@ export function VoicesPageBody({
           <>
             <div className="mt-10 grid gap-6 md:grid-cols-3">
               {voices.map((voice) => (
-                <Card
-                  key={voice.id}
-                  className="justify-between overflow-hidden rounded-none border-hair bg-paper py-0 shadow-none"
-                >
-                  {voice.photo ? (
-                    <MediaCover
-                      src={voice.photo.url}
-                      alt={voice.photo.alt}
-                      aspect="aspect-[16/10]"
-                      editMode={editMode}
-                      kind="voice"
-                      id={voice.id}
-                      mediaId={voice.photo.id}
-                    />
-                  ) : null}
-                  <CardHeader className="gap-3 pt-5">
-                    <StarRating count={voice.rating} />
-                  </CardHeader>
-                  <CardContent className="flex flex-1 flex-col justify-between gap-6">
-                    <VoiceBody body={voice.body} />
-                    <div className="border-t border-hair pt-4">
-                      <p className="text-sm font-medium tracking-wider">
-                        {voice.customerInitial} 様
-                        <span className="ml-2 text-xs font-normal text-carbon-soft">
-                          {voice.region}
-                        </span>
-                      </p>
-                      {voice.item ? (
-                        <p className="mt-1 font-mono text-[10px] tracking-[0.14em] text-carbon-soft">
-                          施工品目 — {voice.item}
+                <Reveal key={voice.id} as="div">
+                  <Card className="kt-card-lift kt-photo h-full justify-between overflow-hidden rounded-none border-hair bg-paper py-0 shadow-none">
+                    {voice.photo ? (
+                      <MediaCover
+                        src={voice.photo.url}
+                        alt={voice.photo.alt}
+                        aspect="aspect-[16/10]"
+                        editMode={editMode}
+                        kind="voice"
+                        id={voice.id}
+                        mediaId={voice.photo.id}
+                      />
+                    ) : null}
+                    <CardHeader className="gap-3 pt-5">
+                      <StarRating count={voice.rating} />
+                    </CardHeader>
+                    <CardContent className="flex flex-1 flex-col justify-between gap-6">
+                      <VoiceBody body={voice.body} />
+                      <div className="border-t border-hair pt-4">
+                        <p className="text-sm font-medium tracking-wider">
+                          {voice.customerInitial} 様
+                          <span className="ml-2 text-xs font-normal text-carbon-soft">
+                            {voice.region}
+                          </span>
                         </p>
-                      ) : null}
-                    </div>
-                  </CardContent>
-                </Card>
+                        {voice.item ? (
+                          <p className="mt-1 font-mono text-[10px] tracking-[0.14em] text-carbon-soft">
+                            施工品目 — {voice.item}
+                          </p>
+                        ) : null}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Reveal>
               ))}
             </div>
             <MapNote>

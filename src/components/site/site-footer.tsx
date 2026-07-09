@@ -102,7 +102,7 @@ export function SiteFooter() {
 
         <p
           aria-hidden="true"
-          className="mt-8 select-none overflow-hidden whitespace-nowrap font-mono text-[clamp(40px,9vw,110px)] font-semibold leading-none tracking-[0.08em] text-carbon/10"
+          className="kt-footer-giant mt-8 select-none overflow-hidden whitespace-nowrap font-mono text-[clamp(40px,9vw,110px)] font-semibold leading-none tracking-[0.08em]"
         >
           KUMABE TOSO
         </p>

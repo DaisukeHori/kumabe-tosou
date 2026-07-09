@@ -126,7 +126,7 @@ export function PhotoFigure({
   credit: string;
 }) {
   return (
-    <Reveal as="figure" className="border border-hair bg-paper p-2">
+    <Reveal as="figure" className="kt-photo border border-hair bg-paper p-2">
       <span className="block px-1 py-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
         {figNo}
       </span>
@@ -158,10 +158,10 @@ export function ArrowButton({
     <Button
       variant="outline"
       render={<Link href={href} />}
-      className="h-10 rounded-none border-carbon/40 bg-transparent px-5 tracking-[0.08em] text-carbon hover:bg-carbon hover:text-paper"
+      className="kt-btn-brush h-10 rounded-none border-carbon/40 bg-transparent px-5 tracking-[0.08em] text-carbon hover:bg-transparent hover:text-paper focus-visible:text-paper"
     >
       {children}
-      <span aria-hidden="true" className="ml-1">
+      <span aria-hidden="true" className="kt-btn-arrow ml-1">
         →
       </span>
     </Button>
@@ -190,11 +190,12 @@ export function CtaBand({
           <p className="mt-4 text-sm leading-7 text-paper/70">{note}</p>
         </div>
         <Button
+          variant="outline"
           render={<Link href={href} />}
-          className="h-12 shrink-0 rounded-none bg-paper px-8 tracking-[0.12em] text-carbon hover:bg-paper/85"
+          className="kt-btn-brush kt-btn-brush--soul h-12 shrink-0 rounded-none border-primer bg-transparent px-8 tracking-[0.12em] text-primer hover:border-soul hover:bg-transparent hover:text-white focus-visible:text-white"
         >
           {label}
-          <span aria-hidden="true" className="ml-1">
+          <span aria-hidden="true" className="kt-btn-arrow ml-1">
             →
           </span>
         </Button>
