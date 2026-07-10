@@ -29,6 +29,27 @@
 --   4) ai_run_commit_image_stage RPC 新設。image_generation ステージ専用の CAS commit
 --      (既存 ai_run_commit_stage は channel_drafts 書き込みロジックを抱えた drafting 専用の
 --      形をしているため、シグネチャを汚さず新規関数として追加する)。
+--   5) **Codex BLOCKER 修正 (stage_attempts が stage 遷移でリセットされない)**:
+--      ai_run_acquire_lease は acquire のたびに stage_attempts+1 し、stage_attempts>=3 で
+--      failed (KMB-E402) にするが、旧実装はどの commit RPC も成功遷移時に stage_attempts を
+--      0 へ戻していなかった。そのため正常フロー extracting(1)→researching(2)→drafting(3)→
+--      image_generation (acquire 時点で既に 3) で、画像ステージを持つ run (X/Instagram) が
+--      必ず exhausted (failed) になる本番バグだった。本 migration で ai_run_commit_stage
+--      (既存 migration 0009 の定義をここで create or replace) と ai_run_commit_image_stage
+--      の両方に「実際に status が前進した場合のみ stage_attempts=0 にリセットする」処理を
+--      追加する (CAS が不一致で no-op する冪等経路ではリセットしない — 同じ UPDATE 文の
+--      SET 句に含めることで自然に担保される。where status = p_expected_status が偽なら
+--      その UPDATE 自体が 0 行影響でリセットも起きない)。
+--   6) **CRITICAL (ローカル Postgres 実測で発見): ai_run_acquire_lease の変数/列名衝突バグ**。
+--      RETURNS TABLE (id, status, lease_expires_at, stage_attempts, research_enabled,
+--      target_channels, source_id, brief, research_notes, result_kind) の OUT 列は
+--      PL/pgSQL 内で暗黙のローカル変数として宣言されるが、その名前が ai_runs の実列名と
+--      完全一致している。デフォルトの plpgsql.variable_conflict = error の下では、関数本体の
+--      無修飾識別子 (`where id = p_run_id` 等) が OUT 変数と列のどちらを指すか一意に定まらず、
+--      毎回 "column reference ... is ambiguous" で失敗する (=関数が一度も正常実行できない
+--      本番障害)。RETURNS TABLE の列名 (TS 呼び出し元が .id/.status 等で参照) は変更せず、
+--      関数本体冒頭に `#variable_conflict use_column` を追加して「無修飾識別子は常に列を指す」
+--      に固定することで解消する (本文の意図は一貫して列参照であり、挙動は変えない)。
 -- =========================================================
 
 -- ---------------------------------------------------------
@@ -75,6 +96,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+#variable_conflict use_column
 declare
   v_row ai_runs%rowtype;
 begin
@@ -162,12 +184,16 @@ begin
     raise exception 'permission denied: ai_run_commit_image_stage requires admin';
   end if;
 
+  -- stage_attempts はステージ単位のリトライ回数であり、実際に status が前進した
+  -- (= このUPDATEが行に影響した) 場合のみ 0 にリセットする。CAS 不一致による
+  -- no-op 経路 (下の v_updated_status is null 分岐) では触れない (冪等性を壊さない)。
   update ai_runs
   set
     status = p_next_status,
     image_candidates = coalesce(p_image_candidates, image_candidates),
     error_code = coalesce(p_error_code, error_code),
-    lease_expires_at = null
+    lease_expires_at = null,
+    stage_attempts = 0
   where id = p_run_id
     and status = p_expected_status
   returning status into v_updated_status;
@@ -183,3 +209,113 @@ $$;
 
 revoke execute on function public.ai_run_commit_image_stage(uuid, text, text, jsonb, text) from public, anon;
 grant execute on function public.ai_run_commit_image_stage(uuid, text, text, jsonb, text) to authenticated;
+
+-- ---------------------------------------------------------
+-- 5) ai_run_commit_stage (migration 0009 定義の create or replace)。
+--    Codex BLOCKER 修正: stage_attempts はステージ単位のリトライ回数であり、
+--    このステージの成果物 commit によって実際に status が前進した場合のみ
+--    0 にリセットする (channel_drafts / draft_revisions への書き込みロジックは
+--    0009 のものを完全に保持。変更点は主 UPDATE の SET 句への
+--    `stage_attempts = 0` の追加のみ)。CAS 不一致 (p_expected_status が現在値と
+--    不一致) による no-op 経路ではこの UPDATE 自体が 0 行影響のため、
+--    stage_attempts はリセットされない (冪等性を壊さない)。
+-- ---------------------------------------------------------
+create or replace function public.ai_run_commit_stage(
+  p_run_id uuid,
+  p_expected_status text,
+  p_next_status text,
+  p_brief jsonb default null,
+  p_research_notes jsonb default null,
+  p_token_usage_delta jsonb default null,
+  p_channel_drafts jsonb default null, -- [{channel, content, claims}]
+  p_error_code text default null
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_updated_status text;
+  v_draft_id uuid;
+  v_item jsonb;
+begin
+  if not public.is_admin() then
+    raise exception 'permission denied: ai_run_commit_stage requires admin';
+  end if;
+
+  update ai_runs
+  set
+    status = p_next_status,
+    brief = coalesce(p_brief, brief),
+    research_notes = coalesce(p_research_notes, research_notes),
+    token_usage = case
+      when p_token_usage_delta is null then token_usage
+      else jsonb_build_object(
+        'input_tokens',
+          coalesce((token_usage->>'input_tokens')::bigint, 0)
+            + coalesce((p_token_usage_delta->>'input_tokens')::bigint, 0),
+        'output_tokens',
+          coalesce((token_usage->>'output_tokens')::bigint, 0)
+            + coalesce((p_token_usage_delta->>'output_tokens')::bigint, 0),
+        'cache_read_input_tokens',
+          coalesce((token_usage->>'cache_read_input_tokens')::bigint, 0)
+            + coalesce((p_token_usage_delta->>'cache_read_input_tokens')::bigint, 0),
+        'cache_creation_input_tokens',
+          coalesce((token_usage->>'cache_creation_input_tokens')::bigint, 0)
+            + coalesce((p_token_usage_delta->>'cache_creation_input_tokens')::bigint, 0),
+        'web_search_requests',
+          coalesce((token_usage->>'web_search_requests')::bigint, 0)
+            + coalesce((p_token_usage_delta->>'web_search_requests')::bigint, 0)
+      )
+    end,
+    error_code = coalesce(p_error_code, error_code),
+    lease_expires_at = null,
+    stage_attempts = 0
+  where id = p_run_id
+    and status = p_expected_status
+  returning status into v_updated_status;
+
+  if v_updated_status is null then
+    -- 既に他の試行 (前回のクラッシュ後の別プロセス等) が commit 済み。
+    -- 冪等に現在値を返すのみで、成果物の再書き込みはしない (二重 revision 防止)。
+    -- stage_attempts もこの経路では触れない (上の UPDATE が 0 行影響で終わっているため)。
+    select status into v_updated_status from ai_runs where id = p_run_id;
+    return v_updated_status;
+  end if;
+
+  if p_channel_drafts is not null then
+    for v_item in select * from jsonb_array_elements(p_channel_drafts)
+    loop
+      insert into channel_drafts (run_id, channel, status, content, claims, current_revision)
+      values (
+        p_run_id,
+        v_item->>'channel',
+        'needs_review',
+        v_item->'content',
+        coalesce(v_item->'claims', '[]'::jsonb),
+        1
+      )
+      on conflict (run_id, channel) do update
+        set content = excluded.content,
+            claims = excluded.claims,
+            status = 'needs_review'
+      returning id into v_draft_id;
+
+      insert into draft_revisions (draft_id, revision, content, edited_by)
+      values (v_draft_id, 1, v_item->'content', 'ai')
+      on conflict (draft_id, revision) do update
+        set content = excluded.content;
+    end loop;
+  end if;
+
+  return v_updated_status;
+end;
+$$;
+
+revoke execute on function public.ai_run_commit_stage(
+  uuid, text, text, jsonb, jsonb, jsonb, jsonb, text
+) from public, anon;
+grant execute on function public.ai_run_commit_stage(
+  uuid, text, text, jsonb, jsonb, jsonb, jsonb, text
+) to authenticated;
