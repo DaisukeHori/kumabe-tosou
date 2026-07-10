@@ -11,8 +11,10 @@ import {
   SectionMark,
 } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
+import { SlotText } from "@/components/site/slot-text";
 import { VoiceBody } from "@/components/site/voice-body";
 import { cn } from "@/lib/utils";
+import type { ResolvedTexts } from "@/modules/page-media/contracts";
 
 import type { PublicVoiceListItem } from "@/app/_lib/public-content";
 
@@ -34,32 +36,62 @@ function StarRating({ count }: { count: number }) {
 
 export function VoicesPageBody({
   voices,
+  texts,
   editMode,
 }: {
   voices: PublicVoiceListItem[];
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
     <>
       <PageHead
-        index="INDEX 05 — VOICES"
-        en="CUSTOMER VOICES"
-        title={
-          <>
-            仕上がりを見た方の、
-            <br />
-            率直な声。
-          </>
+        index={
+          <SlotText
+            slotKey="voices.hero.index"
+            resolved={texts["voices.hero.index"]}
+            editMode={editMode}
+          />
         }
-        lead="ご依頼いただいた方からいただいたご感想を掲載しています。小ロット・個人利用のご依頼が多いため、掲載にあたってはお名前をイニシャルとし、ご了承いただいた範囲でご紹介しています。"
+        en={
+          <SlotText
+            slotKey="voices.hero.en"
+            resolved={texts["voices.hero.en"]}
+            editMode={editMode}
+          />
+        }
+        title={
+          <SlotText
+            slotKey="voices.hero.heading"
+            resolved={texts["voices.hero.heading"]}
+            editMode={editMode}
+          />
+        }
+        lead={
+          <SlotText
+            slotKey="voices.hero.lead"
+            resolved={texts["voices.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       <Section className="pt-6 sm:pt-8">
-        <SectionMark no="SEC. 01" label="VOICES" />
+        <SectionMark
+          no="SEC. 01"
+          label={texts["voices.sec.label"].text}
+          labelSlotKey="voices.sec.label"
+          editMode={editMode}
+        />
         {voices.length === 0 ? (
           <div className="mt-10">
             <EmptyState>
-              お客様の声は現在準備中です。ご了承をいただいたご感想を、順次掲載していきます。
+              <SlotText
+                slotKey="voices.empty.message"
+                resolved={texts["voices.empty.message"]}
+                editMode={editMode}
+              />
             </EmptyState>
           </div>
         ) : (
@@ -83,17 +115,32 @@ export function VoicesPageBody({
                       <StarRating count={voice.rating} />
                     </CardHeader>
                     <CardContent className="flex flex-1 flex-col justify-between gap-6">
-                      <VoiceBody body={voice.body} />
+                      <VoiceBody
+                        body={voice.body}
+                        readMoreText={texts["voices.body.readmore"]}
+                        collapseText={texts["voices.body.collapse"]}
+                        editMode={editMode}
+                      />
                       <div className="border-t border-hair pt-4">
                         <p className="text-sm font-medium tracking-wider">
-                          {voice.customerInitial} 様
+                          {voice.customerInitial}
+                          <SlotText
+                            slotKey="voices.card.customer.suffix"
+                            resolved={texts["voices.card.customer.suffix"]}
+                            editMode={editMode}
+                          />
                           <span className="ml-2 text-xs font-normal text-carbon-soft">
                             {voice.region}
                           </span>
                         </p>
                         {voice.item ? (
                           <p className="mt-1 font-mono text-[10px] tracking-[0.14em] text-carbon-soft">
-                            施工品目 — {voice.item}
+                            <SlotText
+                              slotKey="voices.card.item.prefix"
+                              resolved={texts["voices.card.item.prefix"]}
+                              editMode={editMode}
+                            />
+                            {voice.item}
                           </p>
                         ) : null}
                       </div>
@@ -103,14 +150,29 @@ export function VoicesPageBody({
               ))}
             </div>
             <MapNote>
-              ※
-              掲載しているお客様の声は、ご了承をいただいたうえで公開しています。
+              <SlotText
+                slotKey="voices.mapnote"
+                resolved={texts["voices.mapnote"]}
+                editMode={editMode}
+              />
             </MapNote>
           </>
         )}
         <div className="mt-8 flex flex-wrap gap-3">
-          <ArrowButton href="/works">施工事例を見る</ArrowButton>
-          <ArrowButton href="/contact">相談する</ArrowButton>
+          <ArrowButton href="/works">
+            <SlotText
+              slotKey="voices.cta.works"
+              resolved={texts["voices.cta.works"]}
+              editMode={editMode}
+            />
+          </ArrowButton>
+          <ArrowButton href="/contact">
+            <SlotText
+              slotKey="shared.cta.consult"
+              resolved={texts["shared.cta.consult"]}
+              editMode={editMode}
+            />
+          </ArrowButton>
         </div>
       </Section>
     </>

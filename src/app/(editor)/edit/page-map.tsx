@@ -60,7 +60,9 @@ export async function renderEditRouteBody(match: EditRouteMatch): Promise<React.
     }
     case "voices-list": {
       const voices = await fetchPublishedVoices();
-      return <VoicesPageBody voices={voices} editMode={true} />;
+      const textsResult = await pageMediaFacade.resolveAllTextsFresh();
+      const texts = textsResult.ok ? textsResult.value : {};
+      return <VoicesPageBody voices={voices} texts={texts} editMode={true} />;
     }
     case "notes-list": {
       const posts = await fetchPublishedPosts("reading");
