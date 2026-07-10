@@ -1,40 +1,115 @@
 import Link from "next/link";
 
 import { SlotText } from "@/components/site/slot-text";
-import type { ResolvedText } from "@/modules/page-media/contracts";
+import type { ResolvedTexts } from "@/modules/page-media/contracts";
 
 const MARQUEE_ITEMS = [
-  "研磨 · 塗装 · 3Dプリント表面処理",
-  "NATIONWIDE MAIL-IN",
-  "OITA BUNGOTAKADA",
-  "試作1点 — ブリッジ生産1,000個",
+  { text: "研磨 · 塗装 · 3Dプリント表面処理", slotKey: "common.footer.marquee.1" },
+  { text: "NATIONWIDE MAIL-IN", slotKey: "common.footer.marquee.2" },
+  { text: "OITA BUNGOTAKADA", slotKey: "common.footer.marquee.3" },
+  { text: "試作1点 — ブリッジ生産1,000個", slotKey: "common.footer.marquee.4" },
 ] as const;
 
 const FOOTER_NAV = [
-  { no: "00", label: "ホーム", href: "/" },
-  { no: "01", label: "ストーリー", href: "/story" },
-  { no: "02", label: "会社案内", href: "/about" },
-  { no: "03", label: "サービス・料金", href: "/service" },
-  { no: "04", label: "施工事例", href: "/works" },
-  { no: "05", label: "お客様の声", href: "/voices" },
-  { no: "06", label: "工程", href: "/process" },
-  { no: "07", label: "素材対応", href: "/materials" },
-  { no: "08", label: "色見本", href: "/colors" },
-  { no: "09", label: "読みもの", href: "/notes" },
-  { no: "10", label: "SHOP", href: "/shop" },
-  { no: "11", label: "相談する", href: "/contact" },
+  {
+    no: "00",
+    label: "ホーム",
+    href: "/",
+    noSlotKey: "common.footer.nav.1.no",
+    labelSlotKey: "common.footer.nav.1.label",
+  },
+  {
+    no: "01",
+    label: "ストーリー",
+    href: "/story",
+    noSlotKey: "common.footer.nav.2.no",
+    labelSlotKey: "common.footer.nav.2.label",
+  },
+  {
+    no: "02",
+    label: "会社案内",
+    href: "/about",
+    noSlotKey: "common.footer.nav.3.no",
+    labelSlotKey: "common.footer.nav.3.label",
+  },
+  {
+    no: "03",
+    label: "サービス・料金",
+    href: "/service",
+    noSlotKey: "common.footer.nav.4.no",
+    labelSlotKey: "common.footer.nav.4.label",
+  },
+  {
+    no: "04",
+    label: "施工事例",
+    href: "/works",
+    noSlotKey: "common.footer.nav.5.no",
+    labelSlotKey: "common.footer.nav.5.label",
+  },
+  {
+    no: "05",
+    label: "お客様の声",
+    href: "/voices",
+    noSlotKey: "common.footer.nav.6.no",
+    labelSlotKey: "common.footer.nav.6.label",
+  },
+  {
+    no: "06",
+    label: "工程",
+    href: "/process",
+    noSlotKey: "common.footer.nav.7.no",
+    labelSlotKey: "common.footer.nav.7.label",
+  },
+  {
+    no: "07",
+    label: "素材対応",
+    href: "/materials",
+    noSlotKey: "common.footer.nav.8.no",
+    labelSlotKey: "common.footer.nav.8.label",
+  },
+  {
+    no: "08",
+    label: "色見本",
+    href: "/colors",
+    noSlotKey: "common.footer.nav.9.no",
+    labelSlotKey: "common.footer.nav.9.label",
+  },
+  {
+    no: "09",
+    label: "読みもの",
+    href: "/notes",
+    noSlotKey: "common.footer.nav.10.no",
+    labelSlotKey: "common.footer.nav.10.label",
+  },
+  {
+    no: "10",
+    label: "SHOP",
+    href: "/shop",
+    noSlotKey: "common.footer.nav.11.no",
+    labelSlotKey: "common.footer.nav.11.label",
+  },
+  {
+    no: "11",
+    label: "相談する",
+    href: "/contact",
+    noSlotKey: "common.footer.nav.12.no",
+    labelSlotKey: "common.footer.nav.12.label",
+  },
 ] as const;
 
 /**
  * chrome.footer.tagline (route 横断の共有スロット) の配線 (canonical:
  * docs/design/visual-text-editor.md §4.1 MAJOR-1)。kind=multiline のため SlotText の
  * root は常に div (v1.1 仕様) — 元は <p> だった要素を SlotText に丸ごと差し替える。
+ * v2 Wave 1 (W1-1): マーキー/フッターナビ/住所/LEGAL/コピーライト/写真クレジット注記も
+ * common.footer.* スロットとして配線する (`texts` = resolveAllTexts() の全件を丸ごと
+ * 受け取り、内部で slotKey ごとに引く)。
  */
 export function SiteFooter({
-  footerTagline,
+  texts,
   editMode,
 }: {
-  footerTagline: ResolvedText;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   return (
@@ -42,18 +117,28 @@ export function SiteFooter({
       <div className="mx-auto max-w-[1240px] px-5 py-16 sm:px-8">
         <div className="grid gap-10 md:grid-cols-3">
           <div>
-            <p className="text-lg font-bold tracking-[0.16em]">隈部塗装</p>
+            <SlotText
+              slotKey="common.footer.brand"
+              resolved={texts["common.footer.brand"]}
+              editMode={editMode}
+              as="p"
+              className="text-lg font-bold tracking-[0.16em]"
+            />
             <SlotText
               slotKey="chrome.footer.tagline"
-              resolved={footerTagline}
+              resolved={texts["chrome.footer.tagline"]}
               editMode={editMode}
               className="mt-4 max-w-sm text-sm leading-7 text-carbon-mid"
             />
           </div>
           <nav aria-label="フッターナビゲーション">
-            <p className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-              SITEMAP
-            </p>
+            <SlotText
+              slotKey="common.footer.sitemap.label"
+              resolved={texts["common.footer.sitemap.label"]}
+              editMode={editMode}
+              as="p"
+              className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft"
+            />
             <ul className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2">
               {FOOTER_NAV.map((item) => (
                 <li key={item.href}>
@@ -61,40 +146,63 @@ export function SiteFooter({
                     href={item.href}
                     className="flex items-baseline gap-2 text-sm text-carbon-mid transition-colors hover:text-carbon"
                   >
-                    <span className="font-mono text-[10px] text-carbon-soft">
-                      {item.no}
-                    </span>
-                    {item.label}
+                    <SlotText
+                      slotKey={item.noSlotKey}
+                      resolved={texts[item.noSlotKey]}
+                      editMode={editMode}
+                      className="font-mono text-[10px] text-carbon-soft"
+                    />
+                    <SlotText
+                      slotKey={item.labelSlotKey}
+                      resolved={texts[item.labelSlotKey]}
+                      editMode={editMode}
+                    />
                   </Link>
                 </li>
               ))}
             </ul>
           </nav>
           <div>
-            <p className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-              WORKSHOP
-            </p>
-            <address className="mt-4 text-sm not-italic leading-7 text-carbon-mid">
-              隈部塗装(代表: 隈部 信之)
-              <br />
-              大分県豊後高田市
-              <br />
-              郵送受託・全国対応
-            </address>
-            <p className="mt-5 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-              LEGAL
-            </p>
+            <SlotText
+              slotKey="common.footer.workshop.label"
+              resolved={texts["common.footer.workshop.label"]}
+              editMode={editMode}
+              as="p"
+              className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft"
+            />
+            <SlotText
+              slotKey="common.footer.address"
+              resolved={texts["common.footer.address"]}
+              editMode={editMode}
+              as="address"
+              className="mt-4 text-sm not-italic leading-7 text-carbon-mid"
+            />
+            <SlotText
+              slotKey="common.footer.legal.label"
+              resolved={texts["common.footer.legal.label"]}
+              editMode={editMode}
+              as="p"
+              className="mt-5 font-mono text-[11px] tracking-[0.2em] text-carbon-soft"
+            />
             <Link
               href="/tokushoho"
               className="mt-2 block text-sm text-carbon-mid transition-colors hover:text-carbon"
             >
-              特定商取引法に基づく表記
+              <SlotText
+                slotKey="common.footer.legal.tokushoho"
+                resolved={texts["common.footer.legal.tokushoho"]}
+                editMode={editMode}
+              />
             </Link>
             <Link
               href="/privacy"
               className="mt-2 block text-sm text-carbon-mid transition-colors hover:text-carbon"
             >
-              プライバシーポリシー
+              <SlotText
+                slotKey="common.footer.legal.privacy"
+                resolved={texts["common.footer.legal.privacy"]}
+                editMode={editMode}
+              />
             </Link>
           </div>
         </div>
@@ -108,7 +216,13 @@ export function SiteFooter({
               <span key={rep} className="flex items-center">
                 {MARQUEE_ITEMS.map((item, i) => (
                   <span key={`${rep}-${i}`} className="flex items-center">
-                    <span className="px-[1.4em]">{item}</span>
+                    <span className="px-[1.4em]">
+                      <SlotText
+                        slotKey={item.slotKey}
+                        resolved={texts[item.slotKey]}
+                        editMode={editMode}
+                      />
+                    </span>
                     <span className="px-[1.4em] text-soul">✳</span>
                   </span>
                 ))}
@@ -121,17 +235,31 @@ export function SiteFooter({
           aria-hidden="true"
           className="kt-footer-giant mt-8 select-none overflow-hidden whitespace-nowrap font-mono text-[clamp(40px,9vw,110px)] font-semibold leading-none tracking-[0.08em]"
         >
-          KUMABE TOSO
+          <SlotText
+            slotKey="common.footer.giant"
+            resolved={texts["common.footer.giant"]}
+            editMode={editMode}
+          />
         </p>
 
         <div className="mt-8 flex flex-col gap-2 border-t border-hair-soft pt-6 font-mono text-[11px] tracking-[0.14em] text-carbon-soft sm:flex-row sm:justify-between">
-          <span>© 2026 KUMABE TOSO. ALL RIGHTS RESERVED.</span>
-          <span>3D PRINT SURFACE FINISHING — OITA, JAPAN</span>
+          <SlotText
+            slotKey="common.footer.copyright"
+            resolved={texts["common.footer.copyright"]}
+            editMode={editMode}
+          />
+          <SlotText
+            slotKey="common.footer.copyright.sub"
+            resolved={texts["common.footer.copyright.sub"]}
+            editMode={editMode}
+          />
         </div>
-        <p className="mt-6 font-mono text-[10px] leading-5 text-carbon-soft">
-          掲載写真は Unsplash
-          の商用利用可能なイメージ素材で、各写真のクレジットはキャプションに記載しています。これらは隈部塗装の工房・制作事例の写真ではなく、あくまでイメージです(実際の写真は準備中)。
-        </p>
+        <SlotText
+          slotKey="common.footer.creditNote"
+          resolved={texts["common.footer.creditNote"]}
+          editMode={editMode}
+          className="mt-6 font-mono text-[10px] leading-5 text-carbon-soft"
+        />
       </div>
     </footer>
   );

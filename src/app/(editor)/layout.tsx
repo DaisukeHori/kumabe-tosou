@@ -4,7 +4,6 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { PaperNoise } from "@/components/motion/paper-noise";
 import { pageMediaFacade } from "@/modules/page-media/facade";
-import type { ResolvedText } from "@/modules/page-media/contracts";
 
 /**
  * `/edit/**` (編集プレビュー専用ルート) のレイアウト。
@@ -20,9 +19,11 @@ export const metadata: Metadata = {
 };
 
 /**
- * shared.cta.consult / chrome.footer.tagline の配線 (canonical:
- * docs/design/visual-text-editor.md §4.1 MAJOR-1)。/edit は resolveAllTextsFresh()
- * (キャッシュ非経由) を editMode=true で SiteHeader/SiteFooter に渡す。
+ * SiteHeader/SiteFooter の全表示テキスト (shared.cta.consult / chrome.footer.tagline /
+ * common.header.* / common.footer.*) の配線 (canonical: docs/design/visual-text-editor.md
+ * §4.1 MAJOR-1、v2 Wave 1 W1-1)。/edit は resolveAllTextsFresh() (キャッシュ非経由) を
+ * editMode=true で、解決済み全件 (`texts`) をそのまま SiteHeader/SiteFooter に渡す
+ * (両コンポーネントが内部で slotKey ごとに引く)。
  */
 export default async function EditorLayout({
   children,
@@ -31,15 +32,13 @@ export default async function EditorLayout({
 }>) {
   const textsResult = await pageMediaFacade.resolveAllTextsFresh();
   const texts = textsResult.ok ? textsResult.value : {};
-  const ctaText: ResolvedText = texts["shared.cta.consult"];
-  const footerTagline: ResolvedText = texts["chrome.footer.tagline"];
 
   return (
     <>
       <PaperNoise />
-      <SiteHeader ctaText={ctaText} editMode={true} />
+      <SiteHeader texts={texts} editMode={true} />
       <main className="flex-1">{children}</main>
-      <SiteFooter footerTagline={footerTagline} editMode={true} />
+      <SiteFooter texts={texts} editMode={true} />
     </>
   );
 }

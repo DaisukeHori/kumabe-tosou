@@ -133,17 +133,21 @@ describe("page-body: editMode=false は data-editable-text を出力しない (�
     expect(html).toContain("読んで気になったことは、");
   });
 
-  it("SiteHeader / SiteFooter (shared.cta.consult / chrome.footer.tagline)", () => {
+  it("SiteHeader / SiteFooter (shared.cta.consult / chrome.footer.tagline / common.header.* / common.footer.*)", () => {
     const headerHtml = renderToStaticMarkup(
-      createElement(SiteHeader, { ctaText: texts["shared.cta.consult"], editMode: false }),
+      createElement(SiteHeader, { texts, editMode: false }),
     );
     const footerHtml = renderToStaticMarkup(
-      createElement(SiteFooter, { footerTagline: texts["chrome.footer.tagline"], editMode: false }),
+      createElement(SiteFooter, { texts, editMode: false }),
     );
     expect(headerHtml).not.toContain("data-editable-text");
     expect(footerHtml).not.toContain("data-editable-text");
     expect(headerHtml).toContain("相談する");
+    expect(headerHtml).toContain("隈部塗装");
+    expect(headerHtml).toContain("ストーリー");
     expect(footerHtml).toContain("3Dプリント造形物の表面処理");
+    expect(footerHtml).toContain("隈部塗装(代表: 隈部 信之)");
+    expect(footerHtml).toContain("© 2026 KUMABE TOSO. ALL RIGHTS RESERVED.");
   });
 });
 
@@ -158,12 +162,14 @@ describe("page-body: editMode=true は data-editable-text を出力する (posit
 
   it("SiteHeader / SiteFooter", () => {
     const headerHtml = renderToStaticMarkup(
-      createElement(SiteHeader, { ctaText: texts["shared.cta.consult"], editMode: true }),
+      createElement(SiteHeader, { texts, editMode: true }),
     );
     const footerHtml = renderToStaticMarkup(
-      createElement(SiteFooter, { footerTagline: texts["chrome.footer.tagline"], editMode: true }),
+      createElement(SiteFooter, { texts, editMode: true }),
     );
     expect(headerHtml).toContain('data-editable-text="shared.cta.consult"');
+    expect(headerHtml).toContain('data-editable-text="common.header.brand"');
     expect(footerHtml).toContain('data-editable-text="chrome.footer.tagline"');
+    expect(footerHtml).toContain('data-editable-text="common.footer.address"');
   });
 });
