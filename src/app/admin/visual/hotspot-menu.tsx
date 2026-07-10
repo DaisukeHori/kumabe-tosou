@@ -3,12 +3,41 @@
 import { useEffect, useRef, type CSSProperties, type KeyboardEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import type { DetectedModel } from "@/modules/ai-providers/contracts";
 
 import type { TextPanelItem } from "./actions";
 import type { MenuState } from "./types";
+
+/** モデル未選択 (既定モデルを使う) を表す Select の sentinel 値。空文字列は Select に渡せないため。 */
+const AI_MODEL_DEFAULT_VALUE = "__default__";
+
+/** 「AI 候補」パネルの状態 (ai-studio-v2.md §3)。visual-editor.tsx が保持し本コンポーネントへ渡す。 */
+export type AiSuggestPanelState = {
+  open: boolean;
+  models: DetectedModel[];
+  modelsLoading: boolean;
+  /** "" = 既定モデル (設定画面のデフォルト) */
+  selectedModel: string;
+  instruction: string;
+  useScreenshot: boolean;
+  pending: boolean;
+  candidates: string[] | null;
+  /** useScreenshot=true のときのみ意味を持つ。null = 未生成/スクショ未使用 */
+  screenshotUsed: boolean | null;
+  error: string | null;
+};
 
 type Props = {
   menu: MenuState;
@@ -29,6 +58,14 @@ type Props = {
   onSaveAlt: () => void;
   onSaveText: () => void;
   onResetTextToDefault: () => void;
+  /** AI 文言候補パネル (ai-studio-v2.md §3、P2 追加。menu.mode==="text-edit" のときのみ表示) */
+  aiSuggest: AiSuggestPanelState;
+  onToggleAiSuggest: () => void;
+  onAiModelChange: (modelId: string) => void;
+  onAiInstructionChange: (value: string) => void;
+  onAiUseScreenshotChange: (value: boolean) => void;
+  onAiGenerate: () => void;
+  onAiApplyCandidate: (candidate: string) => void;
 };
 
 /**
@@ -60,6 +97,13 @@ export function HotspotMenu({
   onSaveAlt,
   onSaveText,
   onResetTextToDefault,
+  aiSuggest,
+  onToggleAiSuggest,
+  onAiModelChange,
+  onAiInstructionChange,
+  onAiUseScreenshotChange,
+  onAiGenerate,
+  onAiApplyCandidate,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { hotspot } = menu;
@@ -92,13 +136,20 @@ export function HotspotMenu({
   const textIsEmpty = textValue.trim().length === 0;
   const textSaveDisabled = savePending || !textMeta || textOverMaxLen || textOverMaxLines || textIsEmpty;
 
+  // text-edit モードで AI 候補パネルを開いているときは、モデルセレクタ・候補リストの表示のため
+  // 幅を広げる (§3、通常時の w-56 では窮屈なため)。
+  const isAiPanelExpanded = menu.mode === "text-edit" && aiSuggest.open;
+
   return (
     <div
       ref={containerRef}
       role="menu"
       aria-label={`${hotspot.label} の編集メニュー`}
       onKeyDown={handleKeyDown}
-      className="absolute z-20 w-56 rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-md"
+      className={cn(
+        "absolute z-20 rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-md",
+        isAiPanelExpanded ? "w-80" : "w-56",
+      )}
       style={style}
     >
       {menu.mode === "menu" ? (
@@ -262,6 +313,107 @@ export function HotspotMenu({
                 <Button type="button" size="sm" onClick={onSaveText} disabled={textSaveDisabled}>
                   保存{textMeta.kind === "text" ? " (Enter)" : ""}
                 </Button>
+              </div>
+
+              {/* AI 候補 (ai-studio-v2.md §3、P2 追加) */}
+              <div className="flex flex-col gap-2 border-t border-border pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onToggleAiSuggest}
+                  disabled={savePending}
+                >
+                  {aiSuggest.open ? "AI 候補を閉じる" : "AI 候補"}
+                </Button>
+
+                {aiSuggest.open && (
+                  <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] text-muted-foreground" htmlFor="ai-suggest-model">
+                        モデル
+                      </label>
+                      <Select
+                        items={[
+                          { value: AI_MODEL_DEFAULT_VALUE, label: "既定のモデル" },
+                          ...aiSuggest.models.map((m) => ({ value: m.id, label: m.display })),
+                        ]}
+                        value={aiSuggest.selectedModel || AI_MODEL_DEFAULT_VALUE}
+                        onValueChange={(v) =>
+                          onAiModelChange(v === AI_MODEL_DEFAULT_VALUE ? "" : (v as string))
+                        }
+                      >
+                        <SelectTrigger id="ai-suggest-model" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value={AI_MODEL_DEFAULT_VALUE}>既定のモデル</SelectItem>
+                            {aiSuggest.models.map((m) => (
+                              <SelectItem key={m.id} value={m.id}>
+                                {m.display}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      {aiSuggest.modelsLoading && (
+                        <p className="text-[11px] text-muted-foreground">モデル一覧を取得中…</p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] text-muted-foreground" htmlFor="ai-suggest-instruction">
+                        指示 (任意)
+                      </label>
+                      <Input
+                        id="ai-suggest-instruction"
+                        value={aiSuggest.instruction}
+                        onChange={(e) => onAiInstructionChange(e.target.value)}
+                        placeholder="例: もっと信頼感を強調して"
+                        disabled={aiSuggest.pending}
+                      />
+                    </div>
+
+                    <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <Checkbox
+                        checked={aiSuggest.useScreenshot}
+                        onCheckedChange={(checked) => onAiUseScreenshotChange(checked === true)}
+                        disabled={aiSuggest.pending}
+                      />
+                      ページのスクリーンショットも使う (取得に時間がかかります)
+                    </label>
+
+                    <Button type="button" size="sm" onClick={onAiGenerate} disabled={aiSuggest.pending}>
+                      {aiSuggest.pending ? "生成中…" : "候補を出す"}
+                    </Button>
+
+                    {aiSuggest.error && <p className="text-[11px] text-destructive">{aiSuggest.error}</p>}
+
+                    {aiSuggest.useScreenshot && aiSuggest.screenshotUsed === false && (
+                      <p className="text-[11px] text-muted-foreground">
+                        スクリーンショットの取得に失敗したため、テキスト情報のみで生成しました。
+                      </p>
+                    )}
+
+                    {aiSuggest.candidates && aiSuggest.candidates.length > 0 && (
+                      <ul className="flex flex-col gap-1">
+                        {aiSuggest.candidates.map((candidate, i) => (
+                          <li key={i}>
+                            <button
+                              type="button"
+                              onClick={() => onAiApplyCandidate(candidate)}
+                              disabled={savePending}
+                              className="w-full rounded-md border border-border px-2 py-1.5 text-left text-xs whitespace-pre-line hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                            >
+                              {candidate}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           ) : (
