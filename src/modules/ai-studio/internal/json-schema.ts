@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-import { zBrief, zChannelDraftOutput, zCleanedTranscript, zResearchNotes } from "../contracts";
+import {
+  zBrief,
+  zChannelDraftOutput,
+  zCleanedTranscript,
+  zResearchNotes,
+  zSnsImagePromptOutput,
+} from "../contracts";
 import type { Channel } from "@/modules/platform/contracts";
 
 /**
@@ -48,4 +54,9 @@ export function researchNotesOutputFormat() {
 /** stage 4 チャネル別ドラフト出力 (zChannelDraftOutput(channel)) の responseSchema */
 export function channelDraftOutputFormat(channel: Channel) {
   return toResponseSchema(`channel_draft_${channel}`, zChannelDraftOutput(channel));
+}
+
+/** P4: image_generation ステージの画像プロンプト起案出力 (zSnsImagePromptOutput) の responseSchema */
+export function snsImagePromptOutputFormat() {
+  return toResponseSchema("sns_image_prompt", zSnsImagePromptOutput);
 }

@@ -185,8 +185,12 @@ export const zChannelDraftOutput = (channel: Channel) =>
  * canonical: docs/module-contracts.md §4.6 (SSE イベント)
  */
 
-/** run の stage。整文 (cleaning) は run 開始前の /api/ai/clean で完結するため含まない */
-export const zRunStage = z.enum(["extracting", "researching", "drafting"]);
+/**
+ * run の stage。整文 (cleaning) は run 開始前の /api/ai/clean で完結するため含まない。
+ * image_generation は SNS 画像生成 (ai-studio-v2.md §7、P4) で drafting 完了後に走る
+ * 任意ステージ (X/IG を含まない run では skip して ready_for_review へ直行)。
+ */
+export const zRunStage = z.enum(["extracting", "researching", "drafting", "image_generation"]);
 export type RunStage = z.infer<typeof zRunStage>;
 
 export const zRunStatus = z.enum([
@@ -194,12 +198,43 @@ export const zRunStatus = z.enum([
   "extracting",
   "researching",
   "drafting",
+  "image_generation",
   "ready_for_review",
   "completed",
   "failed",
   "cancelled",
-]); // ai_runs.status の check 制約と 1:1
+]); // ai_runs.status の check 制約と 1:1 (image_generation は migration 20260710000019 で追加)
 export type RunStatus = z.infer<typeof zRunStatus>;
+
+/**
+ * P4: image_generation ステージが生成した候補画像 (ai_runs.image_candidates jsonb、最大4件)。
+ * 「候補として run に紐付ける」ための最小の保持構造 (判断点。実装報告参照 — ai-providers 所有の
+ * ai_image_generations は画像カスケード専用の系譜/7日 cron 掃除タグ前提のため転用せず、
+ * ai-studio 所有の ai_runs に専用列として追加した)。
+ */
+export const zImageCandidate = z
+  .object({
+    media_id: zMediaId,
+    selected: z.boolean(),
+  })
+  .strict();
+export type ImageCandidate = z.infer<typeof zImageCandidate>;
+
+/** image_generation ステージの LLM 起案出力 (本文に合う画像プロンプト 1 件)。structured output。 */
+export const zSnsImagePromptOutput = z
+  .object({
+    image_prompt: z.string().min(1).max(2000),
+  })
+  .strict();
+export type SnsImagePromptOutput = z.infer<typeof zSnsImagePromptOutput>;
+
+/** POST /api/ai/runs/{id}/select-image の入力契約。media_id=null は skip。 */
+export const zSelectImageReq = z
+  .object({
+    media_id: zMediaId.nullable(),
+  })
+  .strict();
+export type SelectImageInput = z.infer<typeof zSelectImageReq>;
 
 export const zRunProgressEvent = z.discriminatedUnion("type", [
   z.object({

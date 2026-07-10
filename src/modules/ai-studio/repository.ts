@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Channel } from "@/modules/platform/contracts";
 
 import type { AcquireLeaseRawResult } from "./internal/lease";
-import type { Claim, ChannelContent, RunStatus } from "./contracts";
+import type { Claim, ChannelContent, ImageCandidate, RunStatus } from "./contracts";
 
 type Supa = SupabaseClient;
 
@@ -138,13 +138,15 @@ export type RunRow = {
   token_usage: unknown;
   lease_expires_at: string | null;
   stage_attempts: number;
+  /** P4: image_generation ステージが生成した候補画像 (migration 20260710000019)。 */
+  image_candidates: ImageCandidate[];
   created_by: string | null;
   created_at: string;
   updated_at: string;
 };
 
 const RUN_SELECT =
-  "id, source_id, status, target_channels, research_enabled, brief, research_notes, error_code, token_usage, lease_expires_at, stage_attempts, created_by, created_at, updated_at";
+  "id, source_id, status, target_channels, research_enabled, brief, research_notes, error_code, token_usage, lease_expires_at, stage_attempts, image_candidates, created_by, created_at, updated_at";
 
 export async function insertRun(
   supabase: Supa,
@@ -245,6 +247,46 @@ export async function commitStage(
   });
   if (error) throw new Error(`stage commit RPC に失敗しました (${params.runId}): ${error.message}`);
   return data as string;
+}
+
+/**
+ * P4: image_generation ステージ専用の commit (migration 20260710000019 の
+ * ai_run_commit_image_stage RPC)。既存 ai_run_commit_stage は channel_drafts 書き込み
+ * ロジックを抱えた drafting 専用の形をしているため、シグネチャを汚さず新規関数として分離した
+ * (判断点。実装報告参照)。CAS 意味論・冪等性は commitStage と同型。
+ */
+export async function commitImageStage(
+  supabase: Supa,
+  params: {
+    runId: string;
+    expectedStatus: string;
+    nextStatus: string;
+    imageCandidates?: ImageCandidate[];
+    errorCode?: string;
+  },
+): Promise<string> {
+  const { data, error } = await supabase.rpc("ai_run_commit_image_stage", {
+    p_run_id: params.runId,
+    p_expected_status: params.expectedStatus,
+    p_next_status: params.nextStatus,
+    p_image_candidates: params.imageCandidates ?? null,
+    p_error_code: params.errorCode ?? null,
+  });
+  if (error) throw new Error(`image stage commit RPC に失敗しました (${params.runId}): ${error.message}`);
+  return data as string;
+}
+
+/**
+ * P4: 人間が候補画像 1 枚を選択したときに ai_runs.image_candidates[].selected を更新する。
+ * 単一 admin 操作前提の read-modify-write (insertHumanRevision 等の既存パターンと同型。
+ * 厳密な原子性は不要 — 同時に複数 admin が同一 run を選択操作する運用は想定しない)。
+ */
+export async function updateRunImageSelection(supabase: Supa, runId: string, mediaId: string): Promise<void> {
+  const run = await getRun(supabase, runId);
+  if (!run) throw new Error(`ai_runs が見つかりません (${runId})`);
+  const updated = run.image_candidates.map((c) => ({ ...c, selected: c.media_id === mediaId }));
+  const { error } = await supabase.from("ai_runs").update({ image_candidates: updated }).eq("id", runId);
+  if (error) throw new Error(`ai_runs.image_candidates 更新に失敗しました (${runId}): ${error.message}`);
 }
 
 // ---------------------------------------------------------

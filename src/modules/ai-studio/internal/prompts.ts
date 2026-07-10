@@ -133,3 +133,17 @@ ${researchBlock}${instructionBlock}
 content と claims (この生成で新たに使った事実主張。source は speech/research/inference から選ぶ)
 を同時に出力してください。`;
 }
+
+/**
+ * P4 (ai-studio-v2.md §7): image_generation ステージ用。生成済みの SNS 向け本文から
+ * 「本文に合う画像の生成プロンプト」を 1 件だけ起案させる。sourceText は X スレッド全文 or
+ * Instagram キャプション (facade.ts buildImagePromptSourceText 参照)。
+ */
+export function buildSnsImagePromptUserPrompt(sourceText: string): string {
+  return `以下はSNS投稿用に生成された文章です。この内容に合う、投稿に添える写真的な画像を
+生成するための画像生成プロンプトを1つ提案してください (英語表記。写実的な写真の描写に留め、
+文字・ロゴ・透かしを含めないでください)。
+
+# 投稿文章
+${sourceText}`;
+}
