@@ -83,11 +83,16 @@ describe("matchEditRoute: 個別パターン", () => {
     expect(matchEditRoute(["nonexistent"])).toBeNull();
   });
 
-  it("privacy / tokushoho は EDITABLE_ROUTES に含まれず、page-map でも null", () => {
-    expect(EDITABLE_ROUTES).not.toContain("/privacy");
+  it("tokushoho は EDITABLE_ROUTES に含まれず、page-map でも null (未対応ページ)", () => {
     expect(EDITABLE_ROUTES).not.toContain("/tokushoho");
-    expect(matchEditRoute(["privacy"])).toBeNull();
     expect(matchEditRoute(["tokushoho"])).toBeNull();
+  });
+
+  // v2 Wave 1: privacy はテキストスロット (画像スロットは無し) を持つため EDITABLE_ROUTES に
+  // 含まれ、slot-page (画像スロット0件) として matchEditRoute で解決できる。
+  it("['privacy'] は slot-page / page='privacy'", () => {
+    expect(EDITABLE_ROUTES).toContain("/privacy");
+    expect(matchEditRoute(["privacy"])).toEqual({ kind: "slot-page", page: "privacy" });
   });
 
   it("3 セグメント以上のパスは null", () => {

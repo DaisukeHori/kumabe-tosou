@@ -538,6 +538,9 @@ export const EDITABLE_ROUTES: readonly string[] = [
   "/voices",
   "/notes",
   "/blog",
+  // v2 Wave 1: 法定ページ (tokushoho/privacy) はページスロット (画像) を持たないため
+  // SLOT_ROUTES に含まれないが、テキストスロット (text-registry/slots/{tokushoho,privacy}.ts)
+  // の route として必要 (tests/page-media-text-registry.test.ts の EDITABLE_ROUTES 部分集合検証)。
   "/tokushoho",
   "/privacy",
   "works/[slug]",

@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
-import Link from "next/link";
+import { useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,51 +27,43 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 import { submitContactFormAction } from "@/components/contact/actions";
+import { textEditableAttrs } from "@/components/site/editable-attrs";
+import { renderRichInline } from "@/components/site/rich-text";
+import type { ResolvedTexts } from "@/modules/page-media/contracts";
 
 /*
   Phase 1c: contact_inquiries への実保存 + 通知メール (Resend) に接続済み
   (cms-ai-pipeline.md §6.2 / §6.3)。honeypot 隠しフィールド + 送信最小時間 + IP rate limit で
   スパムを抑止する (§3.3)。
+
+  v2 Wave 1 (docs/design/visual-text-editor-v2.md §5): このコンポーネントは "use client" で
+  あり、facade.ts ("server-only") を import する <SlotText>/<SlotRichText> を直接使うと
+  クライアントバンドルがビルド時に壊れる。そのため ContactPageBody から
+  resolveAllTexts() 済みの `texts: ResolvedTexts` (全スロット分) と editMode を props で
+  受け取り、"server-only" を持たない純関数 textEditableAttrs (editable-attrs.ts) だけを
+  使って data-editable-text を手動で付与する (shop-simulator.tsx と同じパターン)。
+  同意チェックボックスの文言 (contact.form.consent.text) のみ kind="rich" (リンクトークン)
+  のため、client-safe な renderRichInline (rich-text.tsx) で描画する。
+  お名前・メールアドレス・お問い合わせ種別・内容の必須マーク (`<span className=
+  "text-destructive">*</span>`) は presentational な構造として残し、ラベル文字だけを
+  スロット化する (視覚テキストエディタ v2 §4.2 の分割方針)。
 */
 
-const INQUIRY_TYPES = [
-  { value: "construction", label: "施工依頼" },
-  { value: "estimate", label: "見積もり相談" },
-  { value: "material", label: "材料に関する質問" },
-  { value: "other", label: "その他" },
-] as const;
-
-const INQUIRY_TYPE_VALUES = INQUIRY_TYPES.map((t) => t.value);
-const INQUIRY_TYPE_ITEMS = INQUIRY_TYPES.map((t) => ({ label: t.label, value: t.value }));
+const INQUIRY_TYPE_VALUES = ["construction", "estimate", "material", "other"] as const;
 
 const PHONE_REGEX = /^0\d{1,4}-?\d{1,4}-?\d{3,4}$/;
 
-const contactFormSchema = z.object({
-  name: z.string().trim().min(1, "お名前を入力してください"),
-  email: z.email("正しいメールアドレスを入力してください"),
-  phone: z
-    .string()
-    .trim()
-    .refine((v) => v === "" || PHONE_REGEX.test(v), "正しい電話番号の形式で入力してください"),
-  inquiryType: z
-    .string()
-    .refine((value) => (INQUIRY_TYPE_VALUES as readonly string[]).includes(value), {
-      message: "お問い合わせ種別を選択してください",
-    }),
-  targetItem: z.string().trim().max(100, "100文字以内でご記入ください"),
-  message: z
-    .string()
-    .trim()
-    .min(10, "内容は10文字以上でご記入ください")
-    .max(5000, "内容は5000文字以内でご記入ください"),
-  agree: z.boolean().refine((value) => value === true, {
-    message: "プライバシーポリシーへの同意が必要です",
-  }),
+type ContactFormValues = {
+  name: string;
+  email: string;
+  phone: string;
+  inquiryType: string;
+  targetItem: string;
+  message: string;
+  agree: boolean;
   // honeypot: 人間には見えない隠しフィールド。bot がここに値を入れると spam 扱いにする。
-  website: z.string().trim(),
-});
-
-type ContactFormValues = z.infer<typeof contactFormSchema>;
+  website: string;
+};
 
 const DEFAULT_VALUES: ContactFormValues = {
   name: "",
@@ -85,11 +76,59 @@ const DEFAULT_VALUES: ContactFormValues = {
   website: "",
 };
 
-export function ContactForm() {
+export function ContactForm({
+  texts,
+  editMode,
+}: {
+  texts: ResolvedTexts;
+  editMode: boolean;
+}) {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // フォームが描画された時刻。送信最小時間 (3秒) の判定に使う (spam-guard.ts)。
   const formRenderedAtRef = useRef<number>(Date.now());
+
+  const inquiryTypeItems = useMemo(
+    () =>
+      INQUIRY_TYPE_VALUES.map((value) => ({
+        value,
+        label: texts[`contact.form.option.${value}`].text,
+      })),
+    [texts],
+  );
+
+  const contactFormSchema = useMemo(
+    () =>
+      z.object({
+        name: z.string().trim().min(1, texts["contact.form.error.name"].text),
+        email: z.email(texts["contact.form.error.email"].text),
+        phone: z
+          .string()
+          .trim()
+          .refine(
+            (v) => v === "" || PHONE_REGEX.test(v),
+            texts["contact.form.error.phone"].text,
+          ),
+        inquiryType: z
+          .string()
+          .refine((value) => (INQUIRY_TYPE_VALUES as readonly string[]).includes(value), {
+            message: texts["contact.form.error.inquiryType"].text,
+          }),
+        targetItem: z.string().trim().max(100, texts["contact.form.error.targetItem"].text),
+        message: z
+          .string()
+          .trim()
+          .min(10, texts["contact.form.error.message.min"].text)
+          .max(5000, texts["contact.form.error.message.max"].text),
+        agree: z.boolean().refine((value) => value === true, {
+          message: texts["contact.form.error.agree"].text,
+        }),
+        // honeypot: 人間には見えない隠しフィールド。bot がここに値を入れると spam 扱いにする。
+        website: z.string().trim(),
+      }),
+    [texts],
+  );
+
   const {
     register,
     handleSubmit,
@@ -123,29 +162,36 @@ export function ContactForm() {
     }
 
     if (result.status === "rate_limited") {
-      setSubmitError(
-        "送信回数の上限に達しました。しばらく時間をおいてから再度お試しください。",
-      );
+      setSubmitError(texts["contact.form.error.rateLimited"].text);
       return;
     }
 
     if (result.status === "invalid") {
+      // 表示文言はサーバの生文字列ではなく registry (contact.form.error.invalid) から
+      // 取得する (site-public は inquiryFacade 以外の他モジュール facade を import できない
+      // 制約があるため、actions.ts 側は元の文字列のまま維持し、表示側だけ registry を参照する)。
       setError("root", { message: result.message });
-      setSubmitError(result.message);
+      setSubmitError(texts["contact.form.error.invalid"].text);
       return;
     }
 
-    setSubmitError("送信に失敗しました。しばらくしてから再度お試しください。");
+    setSubmitError(texts["contact.form.error.generic"].text);
   }
 
   if (submitted) {
     return (
       <div className="border border-hair bg-paper p-8 sm:p-10">
-        <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
-          STATUS — RECEIVED
+        <span
+          className="font-mono text-[11px] tracking-[0.22em] text-soul"
+          {...textEditableAttrs("contact.form.badge.received", editMode)}
+        >
+          {texts["contact.form.badge.received"].text}
         </span>
-        <p className="mt-5 text-[15px] leading-[2.1] text-carbon-mid">
-          お問い合わせを受け付けました。内容を確認のうえ、ご連絡いたします。
+        <p
+          className="mt-5 text-[15px] leading-[2.1] text-carbon-mid"
+          {...textEditableAttrs("contact.form.success.message", editMode)}
+        >
+          {texts["contact.form.success.message"].text}
         </p>
         <Button
           type="button"
@@ -153,7 +199,9 @@ export function ContactForm() {
           className="mt-6 h-10 rounded-none border-carbon/40 bg-transparent px-5 tracking-[0.08em] text-carbon hover:bg-carbon hover:text-paper"
           onClick={() => setSubmitted(false)}
         >
-          もう一度入力する
+          <span {...textEditableAttrs("contact.form.button.reset", editMode)}>
+            {texts["contact.form.button.reset"].text}
+          </span>
         </Button>
       </div>
     );
@@ -165,11 +213,17 @@ export function ContactForm() {
       noValidate
       className="border border-hair bg-paper p-8 sm:p-10"
     >
-      <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
-        STATUS — CONTACT FORM
+      <span
+        className="font-mono text-[11px] tracking-[0.22em] text-soul"
+        {...textEditableAttrs("contact.form.badge.form", editMode)}
+      >
+        {texts["contact.form.badge.form"].text}
       </span>
-      <p className="mt-5 text-[13px] leading-7 text-carbon-soft">
-        必要事項をご入力のうえ送信してください。内容を確認し、担当より折り返しご連絡いたします。
+      <p
+        className="mt-5 text-[13px] leading-7 text-carbon-soft"
+        {...textEditableAttrs("contact.form.intro", editMode)}
+      >
+        {texts["contact.form.intro"].text}
       </p>
 
       <FieldGroup className="mt-8">
@@ -190,11 +244,14 @@ export function ContactForm() {
 
         <Field data-invalid={!!errors.name}>
           <FieldLabel htmlFor="contact-name">
-            お名前 <span className="text-destructive">*</span>
+            <span {...textEditableAttrs("contact.form.label.name", editMode)}>
+              {texts["contact.form.label.name"].text}
+            </span>{" "}
+            <span className="text-destructive">*</span>
           </FieldLabel>
           <Input
             id="contact-name"
-            placeholder="山田 太郎"
+            placeholder={texts["contact.form.placeholder.name"].text}
             autoComplete="name"
             aria-invalid={!!errors.name}
             {...register("name")}
@@ -205,12 +262,15 @@ export function ContactForm() {
         <div className="grid gap-5 sm:grid-cols-2">
           <Field data-invalid={!!errors.email}>
             <FieldLabel htmlFor="contact-email">
-              メールアドレス <span className="text-destructive">*</span>
+              <span {...textEditableAttrs("contact.form.label.email", editMode)}>
+                {texts["contact.form.label.email"].text}
+              </span>{" "}
+              <span className="text-destructive">*</span>
             </FieldLabel>
             <Input
               id="contact-email"
               type="email"
-              placeholder="you@example.com"
+              placeholder={texts["contact.form.placeholder.email"].text}
               autoComplete="email"
               aria-invalid={!!errors.email}
               {...register("email")}
@@ -219,11 +279,15 @@ export function ContactForm() {
           </Field>
 
           <Field data-invalid={!!errors.phone}>
-            <FieldLabel htmlFor="contact-phone">電話番号(任意)</FieldLabel>
+            <FieldLabel htmlFor="contact-phone">
+              <span {...textEditableAttrs("contact.form.label.phone", editMode)}>
+                {texts["contact.form.label.phone"].text}
+              </span>
+            </FieldLabel>
             <Input
               id="contact-phone"
               type="tel"
-              placeholder="090-1234-5678"
+              placeholder={texts["contact.form.placeholder.phone"].text}
               autoComplete="tel"
               aria-invalid={!!errors.phone}
               {...register("phone")}
@@ -238,10 +302,13 @@ export function ContactForm() {
           render={({ field, fieldState }) => (
             <Field data-invalid={fieldState.invalid}>
               <FieldLabel htmlFor="contact-inquiry-type">
-                お問い合わせ種別 <span className="text-destructive">*</span>
+                <span {...textEditableAttrs("contact.form.label.inquiryType", editMode)}>
+                  {texts["contact.form.label.inquiryType"].text}
+                </span>{" "}
+                <span className="text-destructive">*</span>
               </FieldLabel>
               <Select
-                items={INQUIRY_TYPE_ITEMS}
+                items={inquiryTypeItems}
                 value={field.value || null}
                 onValueChange={(value) => field.onChange(value ?? "")}
               >
@@ -251,11 +318,11 @@ export function ContactForm() {
                   onBlur={field.onBlur}
                   className="w-full sm:w-64"
                 >
-                  <SelectValue placeholder="選択してください" />
+                  <SelectValue placeholder={texts["contact.form.placeholder.inquiryType"].text} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {INQUIRY_TYPES.map((type) => (
+                    {inquiryTypeItems.map((type) => (
                       <SelectItem key={type.value} value={type.value}>
                         {type.label}
                       </SelectItem>
@@ -272,11 +339,13 @@ export function ContactForm() {
 
         <Field data-invalid={!!errors.targetItem}>
           <FieldLabel htmlFor="contact-target-item">
-            対象品目(任意)
+            <span {...textEditableAttrs("contact.form.label.targetItem", editMode)}>
+              {texts["contact.form.label.targetItem"].text}
+            </span>
           </FieldLabel>
           <Input
             id="contact-target-item"
-            placeholder="例: スマホケース、車両パーツ など"
+            placeholder={texts["contact.form.placeholder.targetItem"].text}
             aria-invalid={!!errors.targetItem}
             {...register("targetItem")}
           />
@@ -287,17 +356,22 @@ export function ContactForm() {
 
         <Field data-invalid={!!errors.message}>
           <FieldLabel htmlFor="contact-message">
-            内容 <span className="text-destructive">*</span>
+            <span {...textEditableAttrs("contact.form.label.message", editMode)}>
+              {texts["contact.form.label.message"].text}
+            </span>{" "}
+            <span className="text-destructive">*</span>
           </FieldLabel>
           <Textarea
             id="contact-message"
-            placeholder="ご相談内容、サイズ・個数・希望グレード、造形データの有無などをご記入ください。"
+            placeholder={texts["contact.form.placeholder.message"].text}
             className="min-h-40"
             aria-invalid={!!errors.message}
             {...register("message")}
           />
           <FieldDescription>
-            10文字以上5000文字以内でご記入ください。
+            <span {...textEditableAttrs("contact.form.description.message", editMode)}>
+              {texts["contact.form.description.message"].text}
+            </span>
           </FieldDescription>
           <FieldError errors={errors.message ? [errors.message] : undefined} />
         </Field>
@@ -315,13 +389,10 @@ export function ContactForm() {
               />
               <FieldContent>
                 <FieldLabel htmlFor="contact-agree">
-                  <Link
-                    href="/privacy"
-                    className="underline underline-offset-4 hover:text-carbon"
-                  >
-                    プライバシーポリシー
-                  </Link>
-                  に同意する <span className="text-destructive">*</span>
+                  <span {...textEditableAttrs("contact.form.consent.text", editMode)}>
+                    {renderRichInline(texts["contact.form.consent.text"].text)}
+                  </span>{" "}
+                  <span className="text-destructive">*</span>
                 </FieldLabel>
                 <FieldError
                   errors={fieldState.error ? [fieldState.error] : undefined}
@@ -341,7 +412,9 @@ export function ContactForm() {
         disabled={isSubmitting}
         className="mt-8 h-11 rounded-none bg-carbon px-8 tracking-[0.12em] text-paper hover:bg-carbon/85"
       >
-        送信する
+        <span {...textEditableAttrs("contact.form.button.submit", editMode)}>
+          {texts["contact.form.button.submit"].text}
+        </span>
       </Button>
     </form>
   );
