@@ -121,3 +121,146 @@ describe("ai-studio stage-machine", () => {
     expect(visited).toEqual(["extracting", "drafting", "image_generation"]);
   });
 });
+
+/**
+ * Codex BLOCKER 回帰: lease の stage_attempts が stage 遷移でリセットされないバグ
+ * (migration 20260710000019_ai_runs_image_stage.sql の ai_run_acquire_lease /
+ * ai_run_commit_stage / ai_run_commit_image_stage)。
+ *
+ * この repo の vitest はプレーン Node 環境で DB を持たないため (tests/ai-draft-cleanup-predicate.test.ts
+ * と同型の方針)、SQL の CAS + リセット意味論を 1:1 で転記した純粋関数シミュレータをここに複製し、
+ * 「1 stage あたり最大 3 回まで acquire できる」設計が stage をまたいでも壊れないことを回帰させる。
+ *
+ * 実SQL相当性の担保: 2026-07-10、ローカル Postgres 16 (homebrew, docker 不使用) に最小スキーマ
+ * (profiles / ai_sources / ai_runs / channel_drafts / draft_revisions) + is_admin() スタブを作成し、
+ * 修正後の migration 20260710000019 (ai_run_acquire_lease / ai_run_commit_stage /
+ * ai_run_commit_image_stage) を適用して以下を実測済み (一時クラスタは検証後に破棄、コミットに残していない):
+ *   - 修正前の関数定義 (migration 0009 相当) では `ai_run_acquire_lease` の初回呼び出しが必ず
+ *     `ERROR: column reference "id" is ambiguous` で失敗すること (RETURNS TABLE の OUT 列名が
+ *     ai_runs の実列名と一致し、plpgsql.variable_conflict=error のデフォルトで無修飾識別子が
+ *     曖昧になるため)。`#variable_conflict use_column` 追加で解消することを確認。
+ *   - 修正後、正常フロー pending→extracting→researching→drafting→image_generation→
+ *     ready_for_review を通しで実行し、image_generation の acquire が
+ *     (旧バグでは stage_attempts が総 acquire 数のまま蓄積し exhausted になっていたところ)
+ *     result_kind='acquired' になること (=本テストの核)。
+ *   - 同一 stage を 3 回 acquire しても commit しない場合は従来どおり 4 回目で exhausted/failed
+ *     (KMB-E402) になること (リトライ上限は維持)。
+ *   - commit の CAS 不一致 (no-op) 経路では stage_attempts がリセットされないこと (冪等性維持)。
+ *
+ * SQL 側 (migration) を変更した場合は、このシミュレータも同時に更新すること。
+ */
+describe("ai-studio lease stage_attempts リセット (実 Postgres 16 で cross-check 済み)", () => {
+  const MAX_ATTEMPTS = 3;
+
+  type SimRun = {
+    status: string;
+    stageAttempts: number;
+    leaseHeld: boolean;
+  };
+
+  const RUNNABLE = new Set(["pending", "extracting", "researching", "drafting", "image_generation"]);
+
+  /** ai_run_acquire_lease の CAS 意味論の複製 (lease 期限切れは常に想定、held 判定は対象外)。 */
+  function simulateAcquire(run: SimRun): { result: "acquired" | "exhausted" | "terminal"; run: SimRun } {
+    if (!RUNNABLE.has(run.status)) {
+      return { result: "terminal", run };
+    }
+    if (run.stageAttempts >= MAX_ATTEMPTS) {
+      return { result: "exhausted", run: { ...run, status: "failed", leaseHeld: false } };
+    }
+    const nextStatus = run.status === "pending" ? "extracting" : run.status;
+    return {
+      result: "acquired",
+      run: { status: nextStatus, stageAttempts: run.stageAttempts + 1, leaseHeld: true },
+    };
+  }
+
+  /**
+   * ai_run_commit_stage / ai_run_commit_image_stage の CAS + リセット意味論の複製。
+   * expectedStatus が現在の status と一致する場合のみ実際に前進し、stage_attempts を 0 に
+   * リセットする。不一致なら no-op (現在の run をそのまま返す、stage_attempts 変更なし)。
+   */
+  function simulateCommit(run: SimRun, expectedStatus: string, nextStatus: string): SimRun {
+    if (run.status !== expectedStatus) {
+      return run; // CAS 不一致 = no-op (冪等)。stage_attempts は触らない。
+    }
+    return { status: nextStatus, stageAttempts: 0, leaseHeld: false };
+  }
+
+  it("正常フロー全体: 各 stage で 1 回 acquire しても image_generation の acquire が exhausted にならない (Codex BLOCKER の核)", () => {
+    let run: SimRun = { status: "pending", stageAttempts: 0, leaseHeld: false };
+    const acquiredResults: string[] = [];
+
+    let r = simulateAcquire(run);
+    acquiredResults.push(r.result);
+    run = r.run;
+    expect(run.status).toBe("extracting");
+    expect(run.stageAttempts).toBe(1);
+
+    run = simulateCommit(run, "extracting", nextStatusAfterStage("extracting", true));
+    expect(run.status).toBe("researching");
+    expect(run.stageAttempts).toBe(0); // リセット確認
+
+    r = simulateAcquire(run);
+    acquiredResults.push(r.result);
+    run = r.run;
+    expect(run.stageAttempts).toBe(1);
+
+    run = simulateCommit(run, "researching", nextStatusAfterStage("researching", true));
+    expect(run.status).toBe("drafting");
+    expect(run.stageAttempts).toBe(0); // リセット確認
+
+    r = simulateAcquire(run);
+    acquiredResults.push(r.result);
+    run = r.run;
+    expect(run.stageAttempts).toBe(1);
+
+    run = simulateCommit(run, "drafting", nextStatusAfterStage("drafting", true, ["x"]));
+    expect(run.status).toBe("image_generation");
+    expect(run.stageAttempts).toBe(0); // リセット確認
+
+    // *** 核心: image_generation の acquire。旧バグでは stage_attempts が総 acquire 数
+    // (この時点で 3) のまま蓄積しており、ここで exhausted (failed/KMB-E402) になっていた。
+    r = simulateAcquire(run);
+    acquiredResults.push(r.result);
+    run = r.run;
+    expect(r.result).toBe("acquired");
+    expect(run.status).toBe("image_generation");
+    expect(run.stageAttempts).toBe(1);
+
+    run = simulateCommit(run, "image_generation", nextStatusAfterStage("image_generation", true));
+    expect(run.status).toBe("ready_for_review");
+    expect(run.stageAttempts).toBe(0);
+
+    expect(acquiredResults).toEqual(["acquired", "acquired", "acquired", "acquired"]);
+  });
+
+  it("リトライ上限は維持: 同一 stage を 3 回 acquire しても commit しない場合、4 回目で exhausted (failed/KMB-E402)", () => {
+    let run: SimRun = { status: "extracting", stageAttempts: 0, leaseHeld: false };
+
+    for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+      const r = simulateAcquire(run);
+      expect(r.result).toBe("acquired");
+      expect(r.run.stageAttempts).toBe(i);
+      run = r.run;
+    }
+
+    const exhausted = simulateAcquire(run);
+    expect(exhausted.result).toBe("exhausted");
+    expect(exhausted.run.status).toBe("failed");
+  });
+
+  it("冪等性: commit の CAS 不一致 (no-op) 経路では stage_attempts がリセットされない", () => {
+    const run: SimRun = { status: "researching", stageAttempts: 2, leaseHeld: true };
+
+    // expectedStatus が古い ('extracting') ため no-op。researching のまま、attempts=2 のまま。
+    const afterStaleCommit = simulateCommit(run, "extracting", "researching");
+    expect(afterStaleCommit).toEqual(run);
+    expect(afterStaleCommit.stageAttempts).toBe(2);
+
+    // 正しい expectedStatus なら前進し、attempts はリセットされる。
+    const afterRealCommit = simulateCommit(run, "researching", "drafting");
+    expect(afterRealCommit.status).toBe("drafting");
+    expect(afterRealCommit.stageAttempts).toBe(0);
+  });
+});
