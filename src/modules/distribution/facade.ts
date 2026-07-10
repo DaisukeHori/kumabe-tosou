@@ -24,6 +24,11 @@ import {
   resolveInstagramBusinessAccount,
 } from "./internal/instagram-api";
 import { currentJstMonthRangeUtc } from "./internal/month-window";
+import {
+  createNoteDraft as callNoteCreateDraftApi,
+  reconcileDraftByTitle as reconcileNoteDraftByTitle,
+} from "./internal/note-draft-client";
+import { notifyNoteSessionExpired } from "./internal/note-notify";
 import { ConfirmedApiError } from "./internal/publish-error-classify";
 import { resolveInitialSchedule } from "./internal/schedule-policy";
 import type { InstagramVaultSecret, XVaultSecret } from "./internal/vault-names";
@@ -33,6 +38,7 @@ import { exchangeXAuthorizationCode, getXUserInfo } from "./internal/x-api";
 import {
   zInstagramAccountMeta,
   zNoteAccountMeta,
+  zNoteSessionCookieInput,
   zXAccountMeta,
   type AccountChannel,
   type ChannelAccountView,
@@ -41,6 +47,7 @@ import {
   type ChannelPostView,
   type ManualReconcileAction,
   type NoteAccountInput,
+  type NoteDraftStatus,
   type ScheduleEntry,
   type StyleProfileInput,
   type StyleProfileView,
@@ -72,6 +79,8 @@ export interface DistributionFacadeExtended extends DistributionFacade {
 
   listChannelAccounts(): Promise<Result<ChannelAccountView[]>>;
   updateNoteAccount(input: NoteAccountInput): Promise<Result<void>>;
+  /** note セッション Cookie の登録 (Vault 保存。§8。module-contracts.md 未更新分 — オーケストレーターへ報告済み) */
+  saveNoteSessionCookie(input: { cookie: string }): Promise<Result<void>>;
   markChannelExpired(channel: AccountChannel): Promise<Result<void>>;
 
   getStyleProfile(channel: Channel): Promise<Result<StyleProfileView | null>>;
@@ -101,6 +110,9 @@ export interface DistributionFacadeExtended extends DistributionFacade {
   getNoteDraftForCopy(
     draftId: string,
   ): Promise<Result<{ title: string; body_md: string; hashtags: string[] }>>;
+
+  /** note 下書き自動作成 (設計書 §8 MAJOR-3 の状態遷移込み。module-contracts.md 未更新分) */
+  createNoteDraft(postId: string): Promise<Result<{ status: NoteDraftStatus; url: string | null }>>;
 }
 
 // ---- 行 → ビュー型 mapping ----
@@ -121,6 +133,8 @@ function toChannelPostView(row: ChannelPostRow): ChannelPostView {
     attempt_count: row.attempt_count,
     last_error_code: row.last_error_code,
     last_error_detail: row.last_error_detail,
+    note_draft_status: row.note_draft_status as NoteDraftStatus,
+    note_draft_url: row.note_draft_url,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -318,12 +332,53 @@ async function listChannelAccounts(): Promise<Result<ChannelAccountView[]>> {
 
 async function updateNoteAccount(input: NoteAccountInput): Promise<Result<void>> {
   const client = await createSupabaseServerClient();
+  // 既存の cookie_saved_at / vault_secret_name (§8 の Cookie 登録) を保持したまま
+  // account_label / profile_url だけを更新する (saveNoteSessionCookie と独立に呼ばれうるため)。
+  const existingResult = await repo.getChannelAccount(client, "note");
+  const existing = existingResult.ok ? existingResult.value : null;
+  const existingMetaParsed = existing ? zNoteAccountMeta.safeParse(existing.meta) : null;
+  const cookieSavedAt = existingMetaParsed?.success ? existingMetaParsed.data.cookie_saved_at : null;
+  const hasCookie = Boolean(existing?.vault_secret_name);
+
   return repo.upsertChannelAccount(client, {
     channel: "note",
     account_label: input.account_label,
-    auth_status: input.account_label.length > 0 ? "connected" : "disconnected",
-    vault_secret_name: null,
-    meta: zNoteAccountMeta.parse({ profile_url: input.profile_url }),
+    auth_status: input.account_label.length > 0 || hasCookie ? "connected" : "disconnected",
+    vault_secret_name: existing?.vault_secret_name ?? null,
+    meta: zNoteAccountMeta.parse({ profile_url: input.profile_url, cookie_saved_at: cookieSavedAt }),
+  });
+}
+
+/**
+ * note セッション Cookie の登録 (§8)。Vault 保存 (service client 専用) + channel_accounts.meta に
+ * cookie_saved_at を記録する (UI の「あと約 N 日」表示用。有効期限は note 側の実測値 ~30 日の目安であり
+ * 保証ではない — research/ai-studio-v2/note-posting.md 参照)。
+ */
+async function saveNoteSessionCookie(input: { cookie: string }): Promise<Result<void>> {
+  const parsed = zNoteSessionCookieInput.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "KMB-E101",
+      detail: parsed.error.issues[0]?.message ?? "入力内容を確認してください。",
+    };
+  }
+
+  const serviceClient = createSupabaseServiceClient();
+  const vaultResult = await repo.vaultUpsertSecret(serviceClient, VAULT_SECRET_NAMES.note, parsed.data.cookie);
+  if (!vaultResult.ok) return vaultResult;
+
+  const existingResult = await repo.getChannelAccount(serviceClient, "note");
+  const existing = existingResult.ok ? existingResult.value : null;
+  const existingMetaParsed = existing ? zNoteAccountMeta.safeParse(existing.meta) : null;
+  const profileUrl = existingMetaParsed?.success ? existingMetaParsed.data.profile_url : null;
+
+  return repo.upsertChannelAccount(serviceClient, {
+    channel: "note",
+    account_label: existing && existing.account_label.length > 0 ? existing.account_label : "note",
+    auth_status: "connected",
+    vault_secret_name: VAULT_SECRET_NAMES.note,
+    meta: zNoteAccountMeta.parse({ profile_url: profileUrl, cookie_saved_at: new Date().toISOString() }),
   });
 }
 
@@ -497,6 +552,109 @@ async function getNoteDraftForCopy(
   return { ok: true, value: { title: content.title, body_md: content.body_md, hashtags: content.hashtags } };
 }
 
+/**
+ * note 下書き自動作成 (§8 MAJOR-3 の状態遷移込み)。channel_posts.status (manual_required) は
+ * 変更しない — 失敗時は呼び出し元 UI (channel-posts-queue.tsx) が既存の半自動 (コピー+新規タブ)
+ * にフォールバックする前提。
+ */
+async function createNoteDraft(
+  postId: string,
+): Promise<Result<{ status: NoteDraftStatus; url: string | null }>> {
+  const serviceClient = createSupabaseServiceClient();
+
+  const postResult = await repo.getChannelPostById(serviceClient, postId);
+  if (!postResult.ok) return postResult;
+  const post = postResult.value;
+  if (!post) return { ok: false, code: "KMB-E901", detail: "対象の投稿が見つかりません" };
+  if (post.channel !== "note") {
+    return { ok: false, code: "KMB-E101", detail: "note チャネル以外では下書き作成できません" };
+  }
+  if (post.note_draft_status === "created") {
+    // 二重作成防止 (既に作成済みならそのまま返す)
+    return { ok: true, value: { status: "created", url: post.note_draft_url } };
+  }
+
+  const cookieResult = await repo.vaultReadSecret(serviceClient, VAULT_SECRET_NAMES.note);
+  if (!cookieResult.ok) return cookieResult;
+  if (!cookieResult.value) {
+    return {
+      ok: false,
+      code: "KMB-E409",
+      detail: "note セッション Cookie が未登録です。設定画面 (/admin/channels) から登録してください。",
+    };
+  }
+  const cookie = cookieResult.value;
+
+  let aiStudio;
+  try {
+    aiStudio = await resolveAiStudioFacade();
+  } catch (err) {
+    return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+  }
+  const draftResult = await aiStudio.getApprovedDraft(post.draft_id);
+  if (!draftResult.ok) return draftResult;
+  if (draftResult.value.channel !== "note") {
+    return { ok: false, code: "KMB-E101", detail: "note チャネルの draft ではありません" };
+  }
+  const content = draftResult.value.content as NoteContent;
+
+  // 前回 unknown (タイムアウト/応答不明) だった場合、新規作成の前にまず下書き一覧と照合する
+  // (§8 MAJOR-3: 重複下書きの防止)。照合自体が失敗してもベストエフォートで通常フローへ進む。
+  //
+  // 'creating' も同様に扱う: この状態は note API 呼び出しの「直前」(下の updateNoteDraftStatus
+  // 呼び出し) で書き込まれるため、サーバーレス関数のタイムアウト/クラッシュが
+  // 「note.com 側で作成は成功したが、その後の状態更新 (created へのマーキング) が完了する前に
+  // プロセスが死んだ」場合にも 'creating' のまま永続化されうる。'unknown' と同じく
+  // 「作成されたかどうか実際には分からない」状態のため、reconcile を経ずに新規作成へ進むと
+  // 実際に note 側へ二重下書きを作成してしまう (実装レビューで発見・修正)。
+  if (post.note_draft_status === "unknown" || post.note_draft_status === "creating") {
+    try {
+      const found = await reconcileNoteDraftByTitle(cookie, content.title);
+      if (found) {
+        await repo.updateNoteDraftStatus(serviceClient, postId, "created", found.url);
+        return { ok: true, value: { status: "created", url: found.url } };
+      }
+    } catch {
+      // 照合失敗は無視し、以降の新規作成試行を続ける
+    }
+  }
+
+  await repo.updateNoteDraftStatus(serviceClient, postId, "creating", null);
+
+  const outcome = await callNoteCreateDraftApi(cookie, {
+    title: content.title,
+    bodyMd: content.body_md,
+    hashtags: content.hashtags,
+    // NoteContent (module-contracts.md §4.4) に画像フィールドが無いため現状常に null
+    // (判断点: §7 の SNS 画像生成拡張で note にも見出し画像を持たせる場合はここに配線する。
+    // オーケストレーターへ報告済み)。
+    headerImageUrl: null,
+  });
+
+  if (outcome.kind === "created") {
+    await repo.updateNoteDraftStatus(serviceClient, postId, "created", outcome.url);
+    return { ok: true, value: { status: "created", url: outcome.url } };
+  }
+
+  if (outcome.kind === "failed") {
+    await repo.updateNoteDraftStatus(serviceClient, postId, "failed", null);
+    if (outcome.reason === "session_invalid") {
+      await repo.markChannelAccountExpired(serviceClient, "note");
+      await notifyNoteSessionExpired(outcome.detail);
+      return { ok: false, code: "KMB-E409", detail: outcome.detail };
+    }
+    return { ok: false, code: "KMB-E901", detail: outcome.detail };
+  }
+
+  // unknown: タイムアウト/応答不明。次回実行時に上の reconcile 分岐で照合される
+  await repo.updateNoteDraftStatus(serviceClient, postId, "unknown", null);
+  return {
+    ok: false,
+    code: "KMB-E901",
+    detail: `note の応答が確認できませんでした (${outcome.detail})。しばらくしてから再度お試しください (下書き一覧と自動照合します)。`,
+  };
+}
+
 export const distributionFacade: DistributionFacadeExtended = {
   schedulePosts,
   cancel,
@@ -507,6 +665,7 @@ export const distributionFacade: DistributionFacadeExtended = {
   resolveManualRequired,
   listChannelAccounts,
   updateNoteAccount,
+  saveNoteSessionCookie,
   markChannelExpired,
   getStyleProfile,
   updateStyleProfile,
@@ -514,6 +673,7 @@ export const distributionFacade: DistributionFacadeExtended = {
   exchangeMetaCodeAndListPages,
   finalizeMetaConnection,
   getNoteDraftForCopy,
+  createNoteDraft,
 };
 
 // 型のみ再エクスポート (admin UI / Route Handler から Pagination 付きで扱うため)

@@ -39,9 +39,30 @@ export type InstagramAccountMeta = z.infer<typeof zInstagramAccountMeta>;
 export const zNoteAccountMeta = z
   .object({
     profile_url: z.string().url().nullable(),
+    // §8: note セッション Cookie を Vault に保存した日時 (非秘匿。UI の「あと約 N 日」表示用)。
+    // 既存行の非破壊的スキーマ拡張 — migration 20260710000016 の実装報告参照。
+    cookie_saved_at: zIsoDatetime.nullable(),
   })
   .strict();
 export type NoteAccountMeta = z.infer<typeof zNoteAccountMeta>;
+
+/** channel_posts.note_draft_status (DDL check 制約と 1:1。§8 MAJOR-3 の状態意味論) */
+export const zNoteDraftStatus = z.enum(["none", "creating", "created", "unknown", "failed"]);
+export type NoteDraftStatus = z.infer<typeof zNoteDraftStatus>;
+
+/** /admin/channels の note セッション Cookie 登録フォーム入力 (§8)。DevTools でコピーした
+ * 生の Cookie ヘッダ文字列をそのまま Vault に保存する (module-contracts.md 未更新分 —
+ * オーケストレーターへ報告済み) */
+export const zNoteSessionCookieInput = z
+  .object({
+    cookie: z
+      .string()
+      .trim()
+      .min(20, "Cookie の値が短すぎます (DevTools からコピーした値をご確認ください)")
+      .max(8000),
+  })
+  .strict();
+export type NoteSessionCookieInput = z.infer<typeof zNoteSessionCookieInput>;
 
 /**
  * canonical: docs/module-contracts.md §4.8 (distribution 分)
@@ -136,6 +157,9 @@ export type ChannelPostView = {
   attempt_count: number;
   last_error_code: string | null;
   last_error_detail: string | null;
+  /** §8 MAJOR-3: note チャネルのみ意味を持つ付加情報 (channel_posts.status とは独立) */
+  note_draft_status: NoteDraftStatus;
+  note_draft_url: string | null;
   created_at: string;
   updated_at: string;
 };
