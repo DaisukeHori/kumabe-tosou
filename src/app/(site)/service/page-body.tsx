@@ -13,108 +13,19 @@ import { Reveal } from "@/components/site/reveal";
 import { SlotText } from "@/components/site/slot-text";
 import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
-const PROCESS_ROWS = [
-  {
-    grit: "#800",
-    step: "STEP 01 / SAND",
-    title: "素地研磨",
-    body: "積層痕を面で捉えて研ぎ落とします。FDMも光造形も、ここで平滑の土台を作ります。塗装の出来の大半は、この工程で決まります。",
-  },
-  {
-    grit: "PS",
-    step: "STEP 02 / PRIME",
-    title: "プラサフ吹付",
-    body: "プライマーサフェーサーを厚めに吹き、研磨で残った微細な段差を膜で埋めます。海外の3Dプリント仕上げでも、自動車用厚膜プラサフによる積層痕埋めは定番手法です。",
-  },
-  {
-    grit: "#1200",
-    step: "STEP 03 / WET-SAND",
-    title: "水研ぎ仕上げ",
-    body: "プロの板金塗装は #600〜800 で平滑化し、#1000〜1200 で仕上げます。一般的なDIY標準より1〜2段丁寧な、上塗りにとって十分以上の平滑面です。",
-  },
-  {
-    grit: "2K",
-    step: "STEP 04 / TOPCOAT",
-    title: "上塗り",
-    body: "ソリッド＋クリア、または3コートパール。市販の調色済み自動車補修塗料と2液ウレタンで、硬く艶やかに仕上げます。",
-  },
-  {
-    grit: "CURE",
-    step: "STEP 05 / 硬化・検品",
-    title: "硬化・検品",
-    body: "主剤と硬化剤の化学反応で常温硬化（表面乾燥1〜3時間、完全硬化5〜7日）。硬化を確認し、検品してから発送します。",
-  },
-] as const;
+// PROCESS_ROWS / FLOW_CELLS / QC_ITEMS の文言は text-registry (slots/service.ts) に
+// 一本化した (service.process.step.N.* / service.flow.cell.N.* / service.qc.item.N.*)。
+// ここでは反復回数のみを保持する (単一ソース化、旧ハードコード文字列との重複drift防止)。
+const PROCESS_STEP_COUNT = 5;
+const FLOW_CELL_COUNT = 7;
+const QC_ITEM_COUNT = 8;
 
-const FLOW_CELLS = [
-  {
-    title: "ご相談・お見積もり",
-    body: "サイズ × 個数 × グレードの3点で概算をお出しします。",
-  },
-  {
-    title: "造形物を工房へ発送",
-    body: "データ入稿 → 提携出力 → 工房直送の流れにも対応します。",
-  },
-  {
-    title: "受入検品・ビフォー撮影",
-    body: "状態を記録してから工程に入ります。",
-  },
-  { title: "下地工程", body: "#800 研磨 → プラサフ → #1200 水研ぎ。" },
-  {
-    title: "上塗り",
-    body: "グレード別に施工。火気厳禁・換気管理のもとで行います。",
-  },
-  {
-    title: "硬化・アフター撮影",
-    body: "常温または赤外線ヒーターで硬化。仕上がりを記録します。",
-  },
-  {
-    title: "梱包・発送",
-    body: "完全硬化前後の取り扱い注意点を添えてお届けします。",
-  },
-] as const;
-
-const QC_ITEMS = [
-  {
-    title: "タレ・ダレ",
-    en: "RUNS / SAGS",
-    body: "塗料が流れて溜まった跡がないか。厚塗りを避け、薄く重ねることで防ぎます。",
-  },
-  {
-    title: "ゆず肌",
-    en: "ORANGE PEEL",
-    body: "表面がミカンの皮のように凸凹していないか。吹き付けの距離と量で管理します。",
-  },
-  {
-    title: "色ムラ",
-    en: "COLOR CONSISTENCY",
-    body: "光の当たり方を変えても、色が均一に見えるか。特にメタリック・パールで重要です。",
-  },
-  {
-    title: "塗り残し",
-    en: "COVERAGE",
-    body: "エッジや奥まった箇所に、薄い部分・塗り残しがないか。角と縁を重点的に確認します。",
-  },
-  {
-    title: "異物混入",
-    en: "CONTAMINATION",
-    body: "塗膜にホコリ・毛・ゴミが噛み込んでいないか。塗装環境の清浄度で防ぎます。",
-  },
-  {
-    title: "密着",
-    en: "ADHESION",
-    body: "塗膜が素地にしっかり食いついているか。洗浄・脱脂・下地の徹底で担保します。",
-  },
-  {
-    title: "エッジの被り",
-    en: "EDGE QUALITY",
-    body: "角・縁まで塗膜が回り込み、めくれや欠けがないか。輸送に耐える塗り際に整えます。",
-  },
-  {
-    title: "硬化状態",
-    en: "CURE",
-    body: "2液ウレタンが完全硬化しているか。硬化を確認してから梱包・発送します。",
-  },
+// QUANTITY スライドの帯幅・強調フラグ (非テキストの表示ロジック) のみ保持。
+// label/value のテキストは service.quantity.row.N.{label,value} を参照する。
+const QUANTITY_ROWS = [
+  { w: "100%", best: false },
+  { w: "85%", best: false },
+  { w: "75%", best: true },
 ] as const;
 
 export function ServicePageBody({
@@ -129,8 +40,20 @@ export function ServicePageBody({
   return (
     <>
       <PageHead
-        index="INDEX 03 — SERVICE"
-        en="PROCESS / GRADE / PRICE / FLOW"
+        index={
+          <SlotText
+            slotKey="service.hero.index"
+            resolved={texts["service.hero.index"]}
+            editMode={editMode}
+          />
+        }
+        en={
+          <SlotText
+            slotKey="service.hero.en"
+            resolved={texts["service.hero.en"]}
+            editMode={editMode}
+          />
+        }
         title={
           <SlotText
             slotKey="service.hero.heading"
@@ -150,21 +73,45 @@ export function ServicePageBody({
 
       {/* ============ 工程 ============ */}
       <Section>
-        <SectionMark no="SEC. 01" label="PROCESS — 全メニュー共通の下地" />
+        <SectionMark
+          no="SEC. 01"
+          label={texts["service.sec.1.label"].text}
+          labelSlotKey="service.sec.1.label"
+          editMode={editMode}
+        />
         <Reveal as="div" className="mt-10 divide-y divide-hair border-y border-hair">
-          {PROCESS_ROWS.map((row) => (
+          {Array.from({ length: PROCESS_STEP_COUNT }, (_, i) => i + 1).map((n) => (
             <div
-              key={row.step}
+              key={n}
               className="grid gap-3 py-6 sm:grid-cols-[140px_180px_minmax(0,1fr)] sm:gap-8"
             >
               <span className="font-mono text-2xl font-semibold tracking-[0.06em]">
-                {row.grit}
+                <SlotText
+                  slotKey={`service.process.step.${n}.grit`}
+                  resolved={texts[`service.process.step.${n}.grit`]}
+                  editMode={editMode}
+                />
                 <small className="mt-1 block text-[10px] font-normal tracking-[0.18em] text-carbon-soft">
-                  {row.step}
+                  <SlotText
+                    slotKey={`service.process.step.${n}.step`}
+                    resolved={texts[`service.process.step.${n}.step`]}
+                    editMode={editMode}
+                  />
                 </small>
               </span>
-              <h3 className="text-lg font-bold tracking-wider">{row.title}</h3>
-              <p className="text-sm leading-7 text-carbon-mid">{row.body}</p>
+              <h3 className="text-lg font-bold tracking-wider">
+                <SlotText
+                  slotKey={`service.process.step.${n}.title`}
+                  resolved={texts[`service.process.step.${n}.title`]}
+                  editMode={editMode}
+                />
+              </h3>
+              <SlotText
+                slotKey={`service.process.step.${n}.body`}
+                resolved={texts[`service.process.step.${n}.body`]}
+                editMode={editMode}
+                className="text-sm leading-7 text-carbon-mid"
+              />
             </div>
           ))}
         </Reveal>
@@ -176,9 +123,12 @@ export function ServicePageBody({
             resolved={texts["service.process.aside.heading"]}
             editMode={editMode}
           />
-          <p className="mt-3 text-sm leading-7 text-carbon-mid">
-            #2000〜コンパウンドの鏡面磨き工程は、あえて行いません。2液ウレタンは吹きっぱなしで自動車外板と同等の艶が出るためです。磨きに時間を使わないぶん、同じ品質で数量に応え、価格に還元します。
-          </p>
+          <SlotText
+            slotKey="service.process.aside.body"
+            resolved={texts["service.process.aside.body"]}
+            editMode={editMode}
+            className="mt-3 text-sm leading-7 text-carbon-mid"
+          />
         </aside>
         <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <PhotoFigure
@@ -186,165 +136,364 @@ export function ServicePageBody({
             slotKey="service.process.1"
             resolved={slots["service.process.1"]}
             editMode={editMode}
-            capJa="吹き付けの工程"
-            capEn="SPRAY APPLICATION"
-            credit="Photo: createasea / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="service.process.photo.1.capja"
+                resolved={texts["service.process.photo.1.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="service.process.photo.1.capen"
+                resolved={texts["service.process.photo.1.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="service.process.photo.1.credit"
+                resolved={texts["service.process.photo.1.credit"]}
+                editMode={editMode}
+              />
+            }
           />
           <PhotoFigure
             figNo="FIG.02"
             slotKey="service.process.2"
             resolved={slots["service.process.2"]}
             editMode={editMode}
-            capJa="調色済みの補修塗料"
-            capEn="AUTOMOTIVE PAINT"
-            credit="Photo: jacobsoup / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="service.process.photo.2.capja"
+                resolved={texts["service.process.photo.2.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="service.process.photo.2.capen"
+                resolved={texts["service.process.photo.2.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="service.process.photo.2.credit"
+                resolved={texts["service.process.photo.2.credit"]}
+                editMode={editMode}
+              />
+            }
           />
         </Reveal>
         <Reveal as="div" className="mt-10">
-          <ArrowButton href="/process">全9工程を、層構造から見る</ArrowButton>
+          <ArrowButton href="/process">
+            <SlotText
+              slotKey="service.process.cta"
+              resolved={texts["service.process.cta"]}
+              editMode={editMode}
+            />
+          </ArrowButton>
         </Reveal>
       </Section>
 
       {/* ============ グレード ============ */}
       <Section>
-        <SectionMark no="SEC. 02" label="GRADE — 差分はトップコートだけ" />
+        <SectionMark
+          no="SEC. 02"
+          label={texts["service.sec.2.label"].text}
+          labelSlotKey="service.sec.2.label"
+          editMode={editMode}
+        />
         <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-3">
           <div className="border border-hair bg-paper p-6">
             <span className="font-mono text-[10px] tracking-[0.2em] text-carbon-soft">
-              GRADE 01
+              <SlotText
+                slotKey="service.grade.1.badge"
+                resolved={texts["service.grade.1.badge"]}
+                editMode={editMode}
+              />
             </span>
-            <h3 className="mt-3 text-xl font-bold tracking-wider">下地仕上げ</h3>
-            <p className="mt-4 text-sm leading-7 text-carbon-mid">
-              #800 研磨＋プラサフ＋#1200 仕上げで納品。塗装はしません。
-            </p>
+            <h3 className="mt-3 text-xl font-bold tracking-wider">
+              <SlotText
+                slotKey="service.grade.1.title"
+                resolved={texts["service.grade.1.title"]}
+                editMode={editMode}
+              />
+            </h3>
+            <SlotText
+              slotKey="service.grade.1.body"
+              resolved={texts["service.grade.1.body"]}
+              editMode={editMode}
+              className="mt-4 text-sm leading-7 text-carbon-mid"
+            />
             <p className="mt-4 border-t border-hair-soft pt-4 text-[13px] leading-6 text-carbon-soft">
-              最終色をご自身で吹く造形作家・ガレージキット層・試作会社の方へ。
+              <SlotText
+                slotKey="service.grade.1.note"
+                resolved={texts["service.grade.1.note"]}
+                editMode={editMode}
+              />
             </p>
           </div>
           <div className="border border-hair bg-paper p-6">
             <span className="font-mono text-[10px] tracking-[0.2em] text-carbon-soft">
-              GRADE 02
+              <SlotText
+                slotKey="service.grade.2.badge"
+                resolved={texts["service.grade.2.badge"]}
+                editMode={editMode}
+              />
             </span>
-            <h3 className="mt-3 text-xl font-bold tracking-wider">スタンダード</h3>
-            <p className="mt-4 text-sm leading-7 text-carbon-mid">
-              下地＋ソリッドカラー＋2液ウレタンクリア。
-            </p>
+            <h3 className="mt-3 text-xl font-bold tracking-wider">
+              <SlotText
+                slotKey="service.grade.2.title"
+                resolved={texts["service.grade.2.title"]}
+                editMode={editMode}
+              />
+            </h3>
+            <SlotText
+              slotKey="service.grade.2.body"
+              resolved={texts["service.grade.2.body"]}
+              editMode={editMode}
+              className="mt-4 text-sm leading-7 text-carbon-mid"
+            />
             <p className="mt-4 border-t border-hair-soft pt-4 text-[13px] leading-6 text-carbon-soft">
-              単色の製品試作・小ロット生産品の外観仕上げに。
+              <SlotText
+                slotKey="service.grade.2.note"
+                resolved={texts["service.grade.2.note"]}
+                editMode={editMode}
+              />
             </p>
           </div>
           <div className="border border-carbon bg-carbon p-6 text-paper">
             <span className="font-mono text-[10px] tracking-[0.2em] text-paper/60">
-              GRADE 03
+              <SlotText
+                slotKey="service.grade.3.badge"
+                resolved={texts["service.grade.3.badge"]}
+                editMode={editMode}
+              />
             </span>
-            <h3 className="mt-3 text-xl font-bold tracking-wider">プレミアム</h3>
-            <p className="mt-4 text-sm leading-7 text-paper/80">
-              下地＋3コートパール（ベース＋パール＋クリア）。
-            </p>
+            <h3 className="mt-3 text-xl font-bold tracking-wider">
+              <SlotText
+                slotKey="service.grade.3.title"
+                resolved={texts["service.grade.3.title"]}
+                editMode={editMode}
+              />
+            </h3>
+            <SlotText
+              slotKey="service.grade.3.body"
+              resolved={texts["service.grade.3.body"]}
+              editMode={editMode}
+              className="mt-4 text-sm leading-7 text-paper/80"
+            />
             <p className="mt-4 text-lg font-bold tracking-wider">
-              ¥15,000–35,000 / 1点
+              <SlotText
+                slotKey="service.grade.3.price"
+                resolved={texts["service.grade.3.price"]}
+                editMode={editMode}
+              />
               <small className="mt-1 block text-[11px] font-normal text-paper/60">
-                目安。サイズにより変動します
+                <SlotText
+                  slotKey="service.grade.3.price.note"
+                  resolved={texts["service.grade.3.price.note"]}
+                  editMode={editMode}
+                />
               </small>
             </p>
             <p className="mt-4 border-t border-paper/20 pt-4 text-[13px] leading-6 text-paper/70">
-              商談・展示会・クラウドファンディング掲載写真のための最上位仕上げ。
+              <SlotText
+                slotKey="service.grade.3.note"
+                resolved={texts["service.grade.3.note"]}
+                editMode={editMode}
+              />
             </p>
           </div>
         </Reveal>
         <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-2">
           <div className="border border-hair bg-paper p-6">
             <h4 className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-              QUANTITY — 数量スライド（目安）
+              <SlotText
+                slotKey="service.quantity.heading"
+                resolved={texts["service.quantity.heading"]}
+                editMode={editMode}
+              />
             </h4>
             <div className="mt-5 space-y-3">
-              {[
-                { label: "〜9個", w: "100%", val: "定価", best: false },
-                { label: "10〜29個", w: "85%", val: "−15%", best: false },
-                { label: "30個〜", w: "75%", val: "−25%", best: true },
-              ].map((row) => (
-                <div
-                  key={row.label}
-                  className="grid grid-cols-[5.5em_minmax(0,1fr)_4em] items-center gap-3"
-                >
-                  <span className="text-[13px] tracking-wider">{row.label}</span>
-                  <span className="kt-qty-track">
-                    <span
-                      className={`kt-qty-fill${row.best ? " kt-qty-fill--best" : ""}`}
-                      style={{ "--w": row.w } as React.CSSProperties}
-                    />
-                  </span>
-                  <span className="text-right font-mono text-[12px]">
-                    {row.val}
-                  </span>
-                </div>
-              ))}
+              {QUANTITY_ROWS.map((row, i) => {
+                const n = i + 1;
+                return (
+                  <div
+                    key={n}
+                    className="grid grid-cols-[5.5em_minmax(0,1fr)_4em] items-center gap-3"
+                  >
+                    <span className="text-[13px] tracking-wider">
+                      <SlotText
+                        slotKey={`service.quantity.row.${n}.label`}
+                        resolved={texts[`service.quantity.row.${n}.label`]}
+                        editMode={editMode}
+                      />
+                    </span>
+                    <span className="kt-qty-track">
+                      <span
+                        className={`kt-qty-fill${row.best ? " kt-qty-fill--best" : ""}`}
+                        style={{ "--w": row.w } as React.CSSProperties}
+                      />
+                    </span>
+                    <span className="text-right font-mono text-[12px]">
+                      <SlotText
+                        slotKey={`service.quantity.row.${n}.value`}
+                        resolved={texts[`service.quantity.row.${n}.value`]}
+                        editMode={editMode}
+                      />
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            <p className="mt-5 text-xs leading-6 text-carbon-soft">
-              同一品のバッチ仕上げ・カラーバリエーション展開に対応。初回のみ治具・段取り費をいただき、リピート時は免除します。繰り返すほど、双方に有利な構造です。
-            </p>
+            <SlotText
+              slotKey="service.quantity.footnote"
+              resolved={texts["service.quantity.footnote"]}
+              editMode={editMode}
+              className="mt-5 text-xs leading-6 text-carbon-soft"
+            />
           </div>
           <div className="border border-hair bg-paper p-6">
             <h4 className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-              OPTIONS — 加算・個別対応
+              <SlotText
+                slotKey="service.options.heading"
+                resolved={texts["service.options.heading"]}
+                editMode={editMode}
+              />
             </h4>
             <div className="mt-5 divide-y divide-hair-soft text-sm">
               <div className="flex items-baseline justify-between py-3">
-                <span>特急仕上げ</span>
-                <span className="font-mono">+50%</span>
+                <span>
+                  <SlotText
+                    slotKey="service.options.row.1.label"
+                    resolved={texts["service.options.row.1.label"]}
+                    editMode={editMode}
+                  />
+                </span>
+                <span className="font-mono">
+                  <SlotText
+                    slotKey="service.options.row.1.value"
+                    resolved={texts["service.options.row.1.value"]}
+                    editMode={editMode}
+                  />
+                </span>
               </div>
               <div className="flex items-baseline justify-between py-3">
-                <span>大型・特殊案件</span>
-                <span className="font-mono">個別見積もり</span>
+                <span>
+                  <SlotText
+                    slotKey="service.options.row.2.label"
+                    resolved={texts["service.options.row.2.label"]}
+                    editMode={editMode}
+                  />
+                </span>
+                <span className="font-mono">
+                  <SlotText
+                    slotKey="service.options.row.2.value"
+                    resolved={texts["service.options.row.2.value"]}
+                    editMode={editMode}
+                  />
+                </span>
               </div>
               <div className="flex items-baseline justify-between gap-4 py-3">
-                <span>色番号指定（日塗工・自動車カラーコード）</span>
-                <span className="font-mono">対応</span>
+                <span>
+                  <SlotText
+                    slotKey="service.options.row.3.label"
+                    resolved={texts["service.options.row.3.label"]}
+                    editMode={editMode}
+                  />
+                </span>
+                <span className="font-mono">
+                  <SlotText
+                    slotKey="service.options.row.3.value"
+                    resolved={texts["service.options.row.3.value"]}
+                    editMode={editMode}
+                  />
+                </span>
               </div>
             </div>
-            <p className="mt-5 text-xs leading-6 text-carbon-soft">
-              価格は「サイズ帯別の基本料金＋グレード加算」で算出します。立ち上げ期につき実績価格でご提供中——正式価格表は作業実測に基づいて確定し、このページで公開します。
-            </p>
+            <SlotText
+              slotKey="service.options.footnote"
+              resolved={texts["service.options.footnote"]}
+              editMode={editMode}
+              className="mt-5 text-xs leading-6 text-carbon-soft"
+            />
           </div>
         </Reveal>
         <Reveal as="div" className="mt-10">
           <ArrowButton href="/shop#sim">
-            SHOPのシミュレータで概算を出す
+            <SlotText
+              slotKey="service.grades.cta"
+              resolved={texts["service.grades.cta"]}
+              editMode={editMode}
+            />
           </ArrowButton>
         </Reveal>
       </Section>
 
       {/* ============ 依頼の流れ ============ */}
       <Section>
-        <SectionMark no="SEC. 03" label="FLOW — 郵送で、全国から" />
-        <SecTitle>依頼の流れ</SecTitle>
+        <SectionMark
+          no="SEC. 03"
+          label={texts["service.sec.3.label"].text}
+          labelSlotKey="service.sec.3.label"
+          editMode={editMode}
+        />
+        <SecTitle>
+          <SlotText
+            slotKey="service.flow.heading"
+            resolved={texts["service.flow.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
-          主戦場は手のひら〜200×200mm級の小〜中型品。送料が軽微なサイズ帯なら、地方立地のハンデはありません。
+          <SlotText
+            slotKey="service.flow.lead"
+            resolved={texts["service.flow.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {FLOW_CELLS.map((cell, i) => (
-            <div key={cell.title} className="border border-hair bg-paper p-5">
+          {Array.from({ length: FLOW_CELL_COUNT }, (_, i) => i + 1).map((n) => (
+            <div key={n} className="border border-hair bg-paper p-5">
               <span className="font-mono text-[11px] tracking-[0.14em] text-soul">
-                {String(i + 1).padStart(2, "0")}
+                {String(n).padStart(2, "0")}
               </span>
               <h3 className="mt-2 text-[15px] font-bold tracking-wider">
-                {cell.title}
+                <SlotText
+                  slotKey={`service.flow.cell.${n}.title`}
+                  resolved={texts[`service.flow.cell.${n}.title`]}
+                  editMode={editMode}
+                />
               </h3>
-              <p className="mt-2 text-[13px] leading-6 text-carbon-mid">
-                {cell.body}
-              </p>
+              <SlotText
+                slotKey={`service.flow.cell.${n}.body`}
+                resolved={texts[`service.flow.cell.${n}.body`]}
+                editMode={editMode}
+                className="mt-2 text-[13px] leading-6 text-carbon-mid"
+              />
             </div>
           ))}
         </Reveal>
         <MapNote>
-          ※
-          進行中の写真は守秘義務の範囲で管理し、実績としての掲載は案件ごとに許諾をいただきます。NDA対応可。
+          <SlotText
+            slotKey="service.flow.note"
+            resolved={texts["service.flow.note"]}
+            editMode={editMode}
+          />
         </MapNote>
       </Section>
 
       {/* ============ 正直な条件 ============ */}
       <Section>
-        <SectionMark no="SEC. 04" label="HONEST TERMS" />
+        <SectionMark
+          no="SEC. 04"
+          label={texts["service.sec.4.label"].text}
+          labelSlotKey="service.sec.4.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="service.terms.heading"
@@ -354,47 +503,53 @@ export function ServicePageBody({
         </SecTitle>
         <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-2">
           <div className="border border-hair bg-paper p-6">
-            <h3 className="text-lg font-bold tracking-wider">できること</h3>
+            <h3 className="text-lg font-bold tracking-wider">
+              <SlotText
+                slotKey="service.terms.can.heading"
+                resolved={texts["service.terms.can.heading"]}
+                editMode={editMode}
+              />
+            </h3>
             <ul className="mt-5 text-sm leading-7 text-carbon-mid">
-              {[
-                "色番号指定（日塗工番号・自動車カラーコード）",
-                "同一品のバッチ仕上げ・カラーバリエーション展開",
-                "NDA対応・掲載許諾の案件ごと管理",
-                "大型・特殊案件の個別見積もり",
-                "未経験素材のテストピース確認",
-              ].map((item) => (
+              {[1, 2, 3, 4, 5].map((n) => (
                 <li
-                  key={item}
+                  key={n}
                   className="flex gap-3 border-b border-dashed border-hair-soft py-[11px] last:border-b-0"
                 >
                   <span aria-hidden="true" className="font-mono text-[12px] text-carbon">
                     +
                   </span>
-                  {item}
+                  <SlotText
+                    slotKey={`service.terms.can.${n}`}
+                    resolved={texts[`service.terms.can.${n}`]}
+                    editMode={editMode}
+                  />
                 </li>
               ))}
             </ul>
           </div>
           <div className="border border-hair bg-paper p-6">
             <h3 className="text-lg font-bold tracking-wider">
-              ご了承いただきたいこと
+              <SlotText
+                slotKey="service.terms.cannot.heading"
+                resolved={texts["service.terms.cannot.heading"]}
+                editMode={editMode}
+              />
             </h3>
             <ul className="mt-5 text-sm leading-7 text-carbon-mid">
-              {[
-                "純正色のピタリ合わせ（調色）は対象外です。市販の調色済み補修塗料による「参考色」仕上げです。",
-                "2液ウレタンの完全硬化は5〜7日。発送は硬化を確認してからになります。",
-                "経験のない樹脂素材は、テストピースでの相性確認を挟みます。",
-                "繁忙期は「納期◯週間待ち」を表示して受注を絞ります。品質を落とさないためです。",
-                "輸送中の破損に備え、梱包基準と保証条件を事前に明示します。",
-              ].map((item) => (
+              {[1, 2, 3, 4, 5].map((n) => (
                 <li
-                  key={item}
+                  key={n}
                   className="flex gap-3 border-b border-dashed border-hair-soft py-[11px] last:border-b-0"
                 >
                   <span aria-hidden="true" className="font-mono text-[12px] text-soul">
                     ※
                   </span>
-                  {item}
+                  <SlotText
+                    slotKey={`service.terms.cannot.${n}`}
+                    resolved={texts[`service.terms.cannot.${n}`]}
+                    editMode={editMode}
+                  />
                 </li>
               ))}
             </ul>
@@ -404,7 +559,12 @@ export function ServicePageBody({
 
       {/* ============ 品質管理 ============ */}
       <Section>
-        <SectionMark no="SEC. 05" label="QUALITY CONTROL" />
+        <SectionMark
+          no="SEC. 05"
+          label={texts["service.sec.5.label"].text}
+          labelSlotKey="service.sec.5.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="service.qc.heading"
@@ -413,21 +573,36 @@ export function ServicePageBody({
           />
         </SecTitle>
         <SecLead>
-          自動車補修の現場で使われる検品項目を、そのまま持ち込んでいます。仕上がりは主観ではなく、チェックリストで確認してから梱包します。
+          <SlotText
+            slotKey="service.qc.lead"
+            resolved={texts["service.qc.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {QC_ITEMS.map((item) => (
-            <div key={item.title} className="border border-hair bg-paper p-5">
+          {Array.from({ length: QC_ITEM_COUNT }, (_, i) => i + 1).map((n) => (
+            <div key={n} className="border border-hair bg-paper p-5">
               <span aria-hidden="true" className="kt-qc-check" />
               <h4 className="mt-3 text-[15px] font-bold tracking-wider">
-                {item.title}
+                <SlotText
+                  slotKey={`service.qc.item.${n}.title`}
+                  resolved={texts[`service.qc.item.${n}.title`]}
+                  editMode={editMode}
+                />
                 <span className="ml-2 font-mono text-[9px] font-normal tracking-[0.16em] text-carbon-soft">
-                  {item.en}
+                  <SlotText
+                    slotKey={`service.qc.item.${n}.en`}
+                    resolved={texts[`service.qc.item.${n}.en`]}
+                    editMode={editMode}
+                  />
                 </span>
               </h4>
-              <p className="mt-2 text-[13px] leading-6 text-carbon-mid">
-                {item.body}
-              </p>
+              <SlotText
+                slotKey={`service.qc.item.${n}.body`}
+                resolved={texts[`service.qc.item.${n}.body`]}
+                editMode={editMode}
+                className="mt-2 text-[13px] leading-6 text-carbon-mid"
+              />
             </div>
           ))}
         </Reveal>
@@ -435,7 +610,12 @@ export function ServicePageBody({
 
       {/* ============ GALLERY ============ */}
       <Section>
-        <SectionMark no="GALLERY" label="THE HANDS" />
+        <SectionMark
+          no="GALLERY"
+          label={texts["service.gallery.label"].text}
+          labelSlotKey="service.gallery.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="service.gallery.heading"
@@ -444,7 +624,11 @@ export function ServicePageBody({
           />
         </SecTitle>
         <SecLead>
-          工程の一つひとつに、自動車補修で培った手が入ります。
+          <SlotText
+            slotKey="service.gallery.lead"
+            resolved={texts["service.gallery.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <PhotoFigure
@@ -452,18 +636,54 @@ export function ServicePageBody({
             slotKey="service.gallery.1"
             resolved={slots["service.gallery.1"]}
             editMode={editMode}
-            capJa="研ぐ"
-            capEn="SANDING"
-            credit="Photo: mazinomron / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="service.gallery.photo.1.capja"
+                resolved={texts["service.gallery.photo.1.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="service.gallery.photo.1.capen"
+                resolved={texts["service.gallery.photo.1.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="service.gallery.photo.1.credit"
+                resolved={texts["service.gallery.photo.1.credit"]}
+                editMode={editMode}
+              />
+            }
           />
           <PhotoFigure
             figNo="FIG.04"
             slotKey="service.gallery.2"
             resolved={slots["service.gallery.2"]}
             editMode={editMode}
-            capJa="仕上げる"
-            capEn="THE FINISH"
-            credit="Photo: avenir_visuals / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="service.gallery.photo.2.capja"
+                resolved={texts["service.gallery.photo.2.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="service.gallery.photo.2.capen"
+                resolved={texts["service.gallery.photo.2.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="service.gallery.photo.2.credit"
+                resolved={texts["service.gallery.photo.2.credit"]}
+                editMode={editMode}
+              />
+            }
           />
         </Reveal>
       </Section>
@@ -485,7 +705,9 @@ export function ServicePageBody({
           />
         }
         href="/contact"
-        label="相談する"
+        label={texts["shared.cta.consult"].text}
+        labelSlotKey="shared.cta.consult"
+        editMode={editMode}
       />
     </>
   );
