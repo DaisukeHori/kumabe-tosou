@@ -538,6 +538,8 @@ export const EDITABLE_ROUTES: readonly string[] = [
   "/voices",
   "/notes",
   "/blog",
+  "/tokushoho",
+  "/privacy",
   "works/[slug]",
   "notes/[slug]",
   "blog/[slug]",

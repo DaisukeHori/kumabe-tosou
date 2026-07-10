@@ -12,6 +12,10 @@ import { COLORS_TEXT_SLOTS } from "./slots/colors";
 import { SHOP_TEXT_SLOTS } from "./slots/shop";
 import { NOTES_TEXT_SLOTS } from "./slots/notes";
 import { CONTACT_TEXT_SLOTS } from "./slots/contact";
+import { WORKS_TEXT_SLOTS } from "./slots/works";
+import { VOICES_TEXT_SLOTS } from "./slots/voices";
+import { TOKUSHOHO_TEXT_SLOTS } from "./slots/tokushoho";
+import { PRIVACY_TEXT_SLOTS } from "./slots/privacy";
 
 /**
  * page-text (ビジュアルテキストエディタ) の canonical レジストリ。
@@ -65,6 +69,10 @@ export const TEXT_REGISTRY: readonly PageTextSlot[] = [
   ...SHOP_TEXT_SLOTS,
   ...NOTES_TEXT_SLOTS,
   ...CONTACT_TEXT_SLOTS,
+  ...WORKS_TEXT_SLOTS,
+  ...VOICES_TEXT_SLOTS,
+  ...TOKUSHOHO_TEXT_SLOTS,
+  ...PRIVACY_TEXT_SLOTS,
 ];
 
 /**
