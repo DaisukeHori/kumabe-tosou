@@ -17,13 +17,20 @@ export type EditRouteMatch =
   | { kind: "notes-detail"; slug: string }
   | { kind: "blog-detail"; slug: string };
 
-/** SLOT_REGISTRY の page フィールドと 1:1 (page-media/registry.ts 参照)。"" は home (route "/") */
+/**
+ * SLOT_REGISTRY の page フィールドと 1:1 (page-media/registry.ts 参照)。"" は home (route "/")。
+ * v2 Wave 1: "privacy" は画像スロットを持たない (SLOT_REGISTRY に無い) が、テキストスロット
+ * (text-registry/slots/privacy.ts, route "/privacy") を EDITABLE_ROUTES に含めるため
+ * (page-media-text-registry.test.ts の route 部分集合検証)、slot-page 種別として
+ * "画像スロット0件のページ" を追加する (renderSlotPage は slots を使わない)。
+ */
 export type SlotPageKey =
   | ""
   | "about"
   | "colors"
   | "contact"
   | "materials"
+  | "privacy"
   | "process"
   | "service"
   | "shop"
@@ -34,6 +41,7 @@ const SLOT_PAGE_SEGMENTS = new Set<SlotPageKey>([
   "colors",
   "contact",
   "materials",
+  "privacy",
   "process",
   "service",
   "shop",

@@ -20,6 +20,7 @@ import { MaterialsPageBody } from "@/app/(site)/materials/page-body";
 import { NoteDetailPageBody } from "@/app/(site)/notes/[slug]/page-body";
 import { NotesPageBody } from "@/app/(site)/notes/page-body";
 import { HomePageBody } from "@/app/(site)/page-body";
+import { PrivacyPageBody } from "@/app/(site)/privacy/page-body";
 import { ProcessPageBody } from "@/app/(site)/process/page-body";
 import { ServicePageBody } from "@/app/(site)/service/page-body";
 import { ShopPageBody } from "@/app/(site)/shop/page-body";
@@ -117,6 +118,9 @@ async function renderSlotPage(page: SlotPageKey): Promise<React.ReactNode> {
       return <ContactPageBody slots={slots} texts={texts} editMode={true} />;
     case "materials":
       return <MaterialsPageBody slots={slots} texts={texts} editMode={true} />;
+    case "privacy":
+      // privacy は画像スロットを持たないため slots は使わない (テキストのみ)。
+      return <PrivacyPageBody texts={texts} editMode={true} />;
     case "process":
       return <ProcessPageBody slots={slots} texts={texts} editMode={true} />;
     case "service":

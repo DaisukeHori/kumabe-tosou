@@ -538,6 +538,10 @@ export const EDITABLE_ROUTES: readonly string[] = [
   "/voices",
   "/notes",
   "/blog",
+  // v2 Wave 1: /privacy はページスロット (画像) を持たないため SLOT_ROUTES に含まれないが、
+  // privacy テキストスロット (text-registry/slots/privacy.ts) の route として必要
+  // (tests/page-media-text-registry.test.ts の EDITABLE_ROUTES 部分集合検証)。
+  "/privacy",
   "works/[slug]",
   "notes/[slug]",
   "blog/[slug]",
