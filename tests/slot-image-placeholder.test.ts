@@ -32,6 +32,13 @@ const WITH_SRC = {
   isDefault: false,
 } as const;
 
+// StoryPortraitPlaceholder (修正1) は v2 Wave 1 で story.portrait.initial /
+// story.portrait.caption の SlotText に配線されたため、texts (ResolvedTexts) が必須になった。
+const STORY_PORTRAIT_TEXTS = {
+  "story.portrait.initial": { text: "信之", isDefault: true },
+  "story.portrait.caption": { text: "PORTRAIT — COMING SOON", isDefault: true },
+} as const;
+
 describe("SlotImage: placeholder prop (修正1)", () => {
   it("resolved.src が null かつ placeholder 未指定なら、従来どおり汎用 NO IMAGE を描画する (非退行)", () => {
     const html = renderToStaticMarkup(
@@ -104,7 +111,12 @@ describe("SlotImage: placeholder prop (修正1)", () => {
 
 describe("StoryPortraitPlaceholder (story.portrait の旧装飾復元)", () => {
   it("V2a 以前の代表ポートレート装飾 (信之 大漢字 + aria-label + COMING SOON ラベル) を再現する", () => {
-    const html = renderToStaticMarkup(createElement(StoryPortraitPlaceholder));
+    const html = renderToStaticMarkup(
+      createElement(StoryPortraitPlaceholder, {
+        texts: STORY_PORTRAIT_TEXTS,
+        editMode: false,
+      }),
+    );
     expect(html).toContain("信之");
     expect(html).toContain("PORTRAIT — COMING SOON");
     expect(html).toContain("代表・隈部信之（近日、実際の写真に差し替え予定）");
@@ -117,7 +129,10 @@ describe("StoryPortraitPlaceholder (story.portrait の旧装飾復元)", () => {
         slotKey: "story.portrait",
         resolved: NO_SRC,
         editMode: false,
-        placeholder: createElement(StoryPortraitPlaceholder),
+        placeholder: createElement(StoryPortraitPlaceholder, {
+          texts: STORY_PORTRAIT_TEXTS,
+          editMode: false,
+        }),
       }),
     );
     expect(html).toContain("信之");
