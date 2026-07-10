@@ -272,6 +272,11 @@ export function HotspotMenu({
                   disabled={savePending}
                 />
               )}
+              {textMeta.kind === "rich" && (
+                <p className="text-[11px] text-muted-foreground">
+                  `文字` = 等幅 / **文字** = 太字 / [文字](/パス) = リンク / 空行 = 段落
+                </p>
+              )}
               <div className="flex items-center justify-between text-[11px]">
                 <span
                   className={cn(

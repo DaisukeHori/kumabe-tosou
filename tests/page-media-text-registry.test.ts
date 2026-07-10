@@ -370,6 +370,26 @@ describe("validateSlotText", () => {
     defaultText: "para1",
     maxLines: 2, // 段落数上限 (v1 の registry では未使用だが機能としては検証する)
   };
+  // v2 Wave 0f: kind="rich" 専用の検証 (docs/design/visual-text-editor-v2.md §3.3)。
+  const richSlot: PageTextSlot = {
+    key: "test.rich",
+    page: "test",
+    route: "/",
+    label: "test",
+    kind: "rich",
+    maxLen: 30,
+    defaultText: "`#800`で研ぎます。",
+  };
+  const richSlotWithCap: PageTextSlot = {
+    key: "test.rich.cap",
+    page: "test",
+    route: "/",
+    label: "test",
+    kind: "rich",
+    maxLen: 100,
+    defaultText: "para1",
+    maxLines: 2, // 段落数上限 (multiline と同基準)
+  };
 
   it("maxLen 以内・kind 違反なしなら issues は空", () => {
     expect(validateSlotText(textSlot, "hi")).toEqual([]);
@@ -415,6 +435,40 @@ describe("validateSlotText", () => {
 
   it("前後に空白を含むが trim 後に非空なら許可する (下限チェックのみの観点)", () => {
     expect(validateSlotText(textSlot, "  hi  ")).toEqual([]);
+  });
+
+  // v2 Wave 0f: kind="rich" 分岐 (docs/design/visual-text-editor-v2.md §3.3)
+  it("kind=rich は maxLen 以内・マークアップ記号込みの raw 長で判定し issues は空", () => {
+    expect(validateSlotText(richSlot, "`#800`で研ぎます。")).toEqual([]);
+  });
+
+  it("kind=rich は raw 長 (マークアップ記号込み) で maxLen 超過を検出する", () => {
+    // マークアップ記号を含めて 30 字を超える入力
+    const over = "`" + "あ".repeat(29) + "`"; // 31 字 (バッククォート込み)
+    expect(validateSlotText(richSlot, over)).not.toEqual([]);
+  });
+
+  it("kind=rich は改行を含めても拒否しない (kind=text と異なり multiline 相当)", () => {
+    expect(validateSlotText(richSlot, "1行目\n2行目")).toEqual([]);
+  });
+
+  it("kind=rich は maxLines (段落数) が設定されていれば multiline と同基準で段落数超過を検出する", () => {
+    expect(validateSlotText(richSlotWithCap, "p1\n\np2\n\np3")).not.toEqual([]);
+    expect(validateSlotText(richSlotWithCap, "p1\n\np2")).toEqual([]);
+  });
+
+  it("kind=rich は maxLines 未設定なら段落数を制限しない", () => {
+    expect(validateSlotText(richSlot, "p1\n\np2\n\np3\n\np4")).toEqual([]);
+  });
+
+  it("kind=rich は未対応マーカー (奇数個のバッククォート/**) をエラーにしない (パーサがリテラル安全描画するため)", () => {
+    expect(validateSlotText(richSlot, "これは`未閉じです")).toEqual([]);
+    expect(validateSlotText(richSlot, "これは**未閉じです")).toEqual([]);
+  });
+
+  it("kind=rich も空文字列 (空白のみ) は拒否する", () => {
+    expect(validateSlotText(richSlot, "")).not.toEqual([]);
+    expect(validateSlotText(richSlot, "   ")).not.toEqual([]);
   });
 });
 
