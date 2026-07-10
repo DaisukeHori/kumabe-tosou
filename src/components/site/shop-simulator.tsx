@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { textEditableAttrs } from "@/components/site/editable-attrs";
-import type { ResolvedText } from "@/modules/page-media/contracts";
+import type { ResolvedTexts } from "@/modules/page-media/contracts";
 import type { PriceOption, PriceTable } from "@/modules/pricing/contracts";
 import { computeEstimate } from "@/modules/pricing/estimate";
 
@@ -16,13 +16,17 @@ import { computeEstimate } from "@/modules/pricing/estimate";
   計算そのものは @/modules/pricing/estimate の computeEstimate() (副作用なしの純関数) に委譲し、
   UI/UX・操作感は旧実装 (ハードコード PRICE_TABLE 版) と同一に保つ。
 
-  注文ボタンの文言 (shop.simulator.cta) は visual-text-editor 対象スロットだが、この
-  コンポーネントは "use client" であり、facade.ts ("server-only") を import する
-  <SlotText> を直接使うとクライアントバンドルがビルド時に壊れる (docs/design/
-  visual-text-editor.md §4.1 の SlotText は page-media/facade 経由で TEXT_REGISTRY を
-  読む)。そのため、resolved テキストと editMode を props で受け取り、"server-only" を
+  注文ボタンの文言 (shop.simulator.cta) 等、この画面の静的文言は visual-text-editor 対象
+  スロットだが、このコンポーネントは "use client" であり、facade.ts ("server-only") を
+  import する <SlotText>/<SlotRichText> を直接使うとクライアントバンドルがビルド時に
+  壊れる (docs/design/visual-text-editor.md §4.1 の SlotText は page-media/facade 経由で
+  TEXT_REGISTRY を読む)。そのため、ShopPageBody から resolveAllTexts() 済みの
+  `texts: ResolvedTexts` (全スロット分) と editMode を props で受け取り、"server-only" を
   持たない純関数 textEditableAttrs (editable-attrs.ts) だけを使って data-editable-text を
   手動で付与する (SlotText と同じ見た目・同じ data 属性契約を、import せずに再現する)。
+  v2 Wave 1: GRADE/SIZE/QUANTITY 見出し・サイズ帯補足・内訳ラベル・フォールバック文言・
+  注記・トースト等の残り全静的文言も同じ手動パターンで編集可能にする (DB駆動の
+  grade.label/description・size.label は対象外)。
 */
 
 export type Grade = string;
@@ -33,14 +37,6 @@ export function dispatchShopSelectGrade(grade: Grade) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<Grade>(SHOP_SELECT_GRADE_EVENT, { detail: grade }));
 }
-
-// 装飾用の補助テキスト (DB が持たない UI フレーバーのみ。価格データそのものは PriceTable が正)。
-const SIZE_SUB: Record<string, string> = {
-  s: "手のひらサイズ",
-  m: "主戦場サイズ",
-  l: "大きめの造形",
-  xl: "個別見積もり",
-};
 
 function clampQty(n: number): number {
   if (Number.isNaN(n) || n < 1) return 1;
@@ -60,18 +56,32 @@ function describeMultiplier(value: number): string {
 
 function OptGroup<T extends string>({
   label,
+  labelEditableAttrs,
   options,
   value,
   onChange,
 }: {
   label: string;
-  options: { value: T; label: string; sub: string }[];
+  /** v2 Wave 1: label が UI 固定文言 (SIZE 帯等) のときだけ渡す。DB駆動ラベルには渡さない */
+  labelEditableAttrs?: Record<string, string>;
+  options: {
+    value: T;
+    label: string;
+    sub: string;
+    /** v2 Wave 1: sub が UI 固定文言 (SIZE_SUB 由来) のときだけ渡す。DB駆動 description には渡さない */
+    subEditableAttrs?: Record<string, string>;
+  }[];
   value: T;
   onChange: (v: T) => void;
 }) {
   return (
     <div>
-      <span className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">{label}</span>
+      <span
+        className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft"
+        {...labelEditableAttrs}
+      >
+        {label}
+      </span>
       <div role="group" aria-label={label} className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {options.map((opt) => (
           <button
@@ -90,6 +100,7 @@ function OptGroup<T extends string>({
               className={`mt-1 block font-mono text-[9px] font-normal tracking-[0.14em] ${
                 value === opt.value ? "text-paper/60" : "text-carbon-soft"
               }`}
+              {...opt.subEditableAttrs}
             >
               {opt.sub}
             </small>
@@ -102,11 +113,11 @@ function OptGroup<T extends string>({
 
 export function ShopSimulator({
   priceTable,
-  ctaText,
+  texts,
   editMode,
 }: {
   priceTable: PriceTable | null;
-  ctaText: ResolvedText;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   const router = useRouter();
@@ -168,8 +179,11 @@ export function ShopSimulator({
 
   if (!priceTable || grades.length === 0 || sizes.length === 0 || !grade || !size || !result) {
     return (
-      <div className="border border-hair bg-paper p-8 text-center text-sm leading-7 text-carbon-mid sm:p-10">
-        価格はお問い合わせください。
+      <div
+        className="border border-hair bg-paper p-8 text-center text-sm leading-7 text-carbon-mid sm:p-10"
+        {...textEditableAttrs("shop.simulator.fallback", editMode)}
+      >
+        {texts["shop.simulator.fallback"].text}
       </div>
     );
   }
@@ -177,15 +191,15 @@ export function ShopSimulator({
   const sizeIndex = sizes.findIndex((s) => s.key === size.key);
   const prevSize = sizeIndex > 0 ? sizes[sizeIndex - 1] : null;
   const quoteOnlyMessage = prevSize?.max_mm
-    ? `${prevSize.max_mm}mmを超える造形は、形状を確認のうえ個別にお見積もりします`
-    : "この帯の造形は、形状を確認のうえ個別にお見積もりします";
+    ? `${prevSize.max_mm}${texts["shop.simulator.quoteonly.withmax_suffix"].text}`
+    : texts["shop.simulator.quoteonly.default"].text;
 
   const totalText = result.quote_only
-    ? "個別見積もり"
+    ? texts["shop.simulator.total.quoteonly"].text
     : `${yen(result.total_min)} 〜 ${yen(result.total_max)}`;
   const perText = result.quote_only
     ? quoteOnlyMessage
-    : `1点あたり ${yen(result.total_min / qty)} 〜 ${yen(result.total_max / qty)}（税込・目安）`;
+    : `${texts["shop.simulator.per.prefix"].text}${yen(result.total_min / qty)} 〜 ${yen(result.total_max / qty)}${texts["shop.simulator.per.suffix"].text}`;
 
   const firstTier = tiers[0] ?? null;
   const quantitySlideText = result.applied_tier
@@ -224,16 +238,16 @@ export function ShopSimulator({
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(text).then(
         () => {
-          setCopied("内容をコピーしました。相談ページへ移動します…");
+          setCopied(texts["shop.simulator.toast.copied"].text);
           goContact();
         },
         () => {
-          setCopied("相談ページへ移動します…");
+          setCopied(texts["shop.simulator.toast.redirect"].text);
           goContact();
         },
       );
     } else {
-      setCopied("相談ページへ移動します…");
+      setCopied(texts["shop.simulator.toast.redirect"].text);
       goContact();
     }
   };
@@ -242,24 +256,32 @@ export function ShopSimulator({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <div className="space-y-8 border border-hair bg-paper p-6 sm:p-8">
         <OptGroup
-          label="GRADE — グレード"
+          label={texts["shop.simulator.grade.optgroup.label"].text}
+          labelEditableAttrs={textEditableAttrs("shop.simulator.grade.optgroup.label", editMode)}
           options={grades.map((g) => ({ value: g.key, label: g.label, sub: g.description }))}
           value={grade.key}
           onChange={setGradeKey}
         />
         <OptGroup
-          label="SIZE — 最長辺の目安"
+          label={texts["shop.simulator.size.optgroup.label"].text}
+          labelEditableAttrs={textEditableAttrs("shop.simulator.size.optgroup.label", editMode)}
           options={sizes.map((s) => ({
             value: s.key,
             label: s.label,
-            sub: SIZE_SUB[s.key] ?? "",
+            sub: texts[`shop.simulator.size.sub.${s.key}`]?.text ?? "",
+            subEditableAttrs: texts[`shop.simulator.size.sub.${s.key}`]
+              ? textEditableAttrs(`shop.simulator.size.sub.${s.key}`, editMode)
+              : undefined,
           }))}
           value={size.key}
           onChange={setSizeKey}
         />
         <div>
-          <span className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-            QUANTITY — 個数（同一品）
+          <span
+            className="font-mono text-[11px] tracking-[0.2em] text-carbon-soft"
+            {...textEditableAttrs("shop.simulator.qty.label", editMode)}
+          >
+            {texts["shop.simulator.qty.label"].text}
           </span>
           <div className="mt-3 flex items-stretch">
             <button
@@ -316,46 +338,77 @@ export function ShopSimulator({
         aria-live="polite"
         className="flex flex-col border border-carbon bg-carbon p-6 text-paper sm:p-8"
       >
-        <span className="font-mono text-[10px] tracking-[0.2em] text-paper/60">
-          ESTIMATED TOTAL — 概算合計（税込・目安）
+        <span
+          className="font-mono text-[10px] tracking-[0.2em] text-paper/60"
+          {...textEditableAttrs("shop.simulator.total.label", editMode)}
+        >
+          {texts["shop.simulator.total.label"].text}
         </span>
-        <p className="mt-4 text-[clamp(24px,3vw,34px)] font-bold leading-tight tracking-[0.02em]">
+        <p
+          className="mt-4 text-[clamp(24px,3vw,34px)] font-bold leading-tight tracking-[0.02em]"
+          {...textEditableAttrs("shop.simulator.total.quoteonly", editMode)}
+        >
           {totalText}
         </p>
         <p className="mt-2 text-[13px] leading-6 text-paper/70">{perText}</p>
         <div className="mt-6 divide-y divide-paper/15 border-y border-paper/15 text-[13px]">
           <div className="flex justify-between py-2.5">
-            <span className="text-paper/60">グレード</span>
+            <span
+              className="text-paper/60"
+              {...textEditableAttrs("shop.simulator.row.grade", editMode)}
+            >
+              {texts["shop.simulator.row.grade"].text}
+            </span>
             <span className="font-mono">{grade.label}</span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-paper/60">サイズ帯</span>
+            <span
+              className="text-paper/60"
+              {...textEditableAttrs("shop.simulator.row.size", editMode)}
+            >
+              {texts["shop.simulator.row.size"].text}
+            </span>
             <span className="font-mono">{size.label}</span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-paper/60">個数</span>
+            <span
+              className="text-paper/60"
+              {...textEditableAttrs("shop.simulator.row.qty", editMode)}
+            >
+              {texts["shop.simulator.row.qty"].text}
+            </span>
             <span className="font-mono">{qty} 個</span>
           </div>
           <div className="flex justify-between py-2.5">
-            <span className="text-paper/60">数量スライド</span>
+            <span
+              className="text-paper/60"
+              {...textEditableAttrs("shop.simulator.row.slide", editMode)}
+            >
+              {texts["shop.simulator.row.slide"].text}
+            </span>
             <span className="font-mono">{quantitySlideText}</span>
           </div>
           {options.map((opt) => (
             <div key={opt.key} className="flex justify-between py-2.5">
               <span className="text-paper/60">{opt.label}</span>
-              <span className="font-mono">
+              <span
+                className="font-mono"
+                {...textEditableAttrs("shop.simulator.opt.none", editMode)}
+              >
                 {selectedOptionKeys.includes(opt.key)
                   ? opt.kind === "multiplier"
                     ? describeMultiplier(opt.value)
                     : `+¥${opt.value.toLocaleString("ja-JP")}`
-                  : "なし"}
+                  : texts["shop.simulator.opt.none"].text}
               </span>
             </div>
           ))}
         </div>
-        <p className="mt-5 text-[11px] leading-5 text-paper/50">
-          ※
-          立ち上げ期の概算目安です。形状の複雑さ・素材・色により変動します。初回のみ治具・段取り費を別途（リピート時免除）。送料は実費です。正式なお見積もりでご確定ください。
+        <p
+          className="mt-5 text-[11px] leading-5 text-paper/50"
+          {...textEditableAttrs("shop.simulator.footnote", editMode)}
+        >
+          {texts["shop.simulator.footnote"].text}
         </p>
         <button
           type="button"
@@ -363,7 +416,7 @@ export function ShopSimulator({
           className="mt-6 flex items-center justify-center gap-1 bg-paper py-3.5 text-sm font-medium tracking-[0.12em] text-carbon transition-colors hover:bg-paper/85"
           {...textEditableAttrs("shop.simulator.cta", editMode)}
         >
-          {ctaText.text}
+          {texts["shop.simulator.cta"].text}
           <span aria-hidden="true">→</span>
         </button>
         {copied ? (

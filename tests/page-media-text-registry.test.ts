@@ -26,12 +26,18 @@ import {
  * (それだと転記ミスを検出できない — テストが常に registry と同じ値を再計算してしまう)。
  */
 
-// PLAN.md §3.2 の確定 75 件から、下記 1 件を除いた 74 件が T1 時点の確定 A。
+// PLAN.md §3.2 の確定 75 件から、下記 1 件を除いた 74 件が T1 時点の確定 A (v1)。
 // story.message.body は本文 3 段落目に <strong> インライン装飾を含むため
 // (src/app/(site)/story/page-body.tsx を実測)、SlotText の dangerouslySetInnerHTML 禁止
 // 制約と両立できず、PLAN.md §3.2 自身が用意した退避条項 (「あれば B へ戻す」) に従って
-// 本レジストリには含めない (text-registry.ts 冒頭コメント参照)。
-const EXPECTED_COUNT = 74;
+// 本レジストリには含めない (text-registry.ts 冒頭コメント参照)。story.message.body 自体は
+// v2 の rich kind で再挑戦できるが、本 wave (shop) の対象外。
+//
+// v2 Wave 1 (docs/design/visual-text-editor-v2.md §5): shop ページの残り全静的テキスト
+// (rich 19件を含む 125件) を追加し、74 - 9 (旧 shop) + 134 (新 shop) = 199 件 (shop.ts 側の
+// 詳細な内訳・rich マークアップ確定根拠は同ファイル冒頭コメント参照)。他ページの追加は
+// 後続 wave で本カウント・フィクスチャを同様に更新する。
+const EXPECTED_COUNT = 199;
 
 const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "shared.cta.consult": "相談する",
@@ -119,6 +125,131 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "shop.flow.heading": "注文から、お届けまで。",
   "shop.cta.heading": "概算が出たら、\nあとは送るだけ。",
   "shop.cta.note": "シミュレータの内容をコピーして、そのまま貼り付けてご相談ください。",
+  "shop.grades.lead": "下地はどのグレードも共通です。`#800` で積層痕を研ぎ落とし、プラサフで微細な段差を埋め、`#1200` で水研ぎ。違いはトップコートの層数だけ——塗らずに下地で仕上げるか、ソリッド1色か、パール3層か。あなたの造形物を工房へ送るだけで、射出成形品と見分けのつかない外観になって還ります。",
+  "shop.grade.1.badge": "GRADE 01",
+  "shop.grade.1.label": "SERVICE 01",
+  "shop.grade.1.title": "下地仕上げ",
+  "shop.grade.1.subtitle": "PRIMER-READY FINISH",
+  "shop.grade.1.badge.grit": "研磨 **#800**",
+  "shop.grade.1.badge.wetsand": "水研ぎ **#1200**",
+  "shop.grade.1.badge.paint": "塗装 **なし**",
+  "shop.grade.1.body": "積層痕を消し、プラサフまで入れた「塗る直前」の状態で納品します。縞は跡形もなく消え、面はなめらか。ここから先の色は、あなたの手に委ねます。塗装費が乗らないぶん、最も手に取りやすいグレードです。",
+  "shop.grade.1.steps.label": "含まれる工程",
+  "shop.grade.1.steps": "・#800 による積層痕の面研ぎ\n・プラサフ（下塗り・中塗り）で段差を充填\n・#1200 水研ぎで塗装可能面に",
+  "shop.grade.1.suited.label": "こんな方に",
+  "shop.grade.1.suited.body": "最終色をご自身で吹く造形作家・ガレージキット層・試作会社。「下地だけ、プロにやってほしい」という方へ。",
+  "shop.grade.1.price": "¥7,000〜",
+  "shop.grade.1.price.note": "1点あたり / サイズ別目安・税込",
+  "shop.grade.1.cta": "サイズと個数で概算",
+  "shop.grade.2.badge": "GRADE 02",
+  "shop.grade.2.label": "SERVICE 02",
+  "shop.grade.2.title": "スタンダード",
+  "shop.grade.2.subtitle": "SOLID COLOR + 2K CLEAR",
+  "shop.grade.2.badge.common": "共通下地",
+  "shop.grade.2.badge.coat": "コート **2層**",
+  "shop.grade.2.badge.urethane": "2液ウレタン",
+  "shop.grade.2.body": "共通下地の上に、ソリッドカラーのベースコートと2液ウレタンクリアを重ねます。吹きっぱなしで自動車外板と同等の艶が出るため、磨き工程は不要。単色の製品試作・小ロット生産品の外観仕上げに、過不足のないグレードです。",
+  "shop.grade.2.steps.label": "含まれる工程",
+  "shop.grade.2.steps": "・共通下地（研磨〜水研ぎ）一式\n・ソリッドカラー ベースコート\n・2液ウレタンクリア（常温硬化）",
+  "shop.grade.2.suited.label": "こんな方に",
+  "shop.grade.2.suited.body": "単色でいい製品試作・小ロット生産品。「量産品のような、均一な単色の艶」が欲しい方へ。",
+  "shop.grade.2.price": "¥10,000〜",
+  "shop.grade.2.price.note": "1点あたり / サイズ別目安・税込",
+  "shop.grade.2.cta": "サイズと個数で概算",
+  "shop.grade.3.badge": "GRADE 03 — 最上位",
+  "shop.grade.3.label": "SERVICE 03 — 最上位",
+  "shop.grade.3.title": "プレミアム",
+  "shop.grade.3.subtitle": "3-COAT PEARL",
+  "shop.grade.3.badge.common": "共通下地",
+  "shop.grade.3.badge.coat": "コート **3層**",
+  "shop.grade.3.badge.colors": "参考色 **8色**",
+  "shop.grade.3.body": "ベース＋パール＋クリアの3コート。角度で表情を変える、名車の象徴色そのものの深みです。「絶対に外せない一個」——商談・展示会・クラウドファンディングの一枚のための、最上位仕上げ。下記の8色から選べます。",
+  "shop.grade.3.colors.label": "選べる参考色（8色）",
+  "shop.grade.3.suited.label": "こんな方に",
+  "shop.grade.3.suited.body": "商談・展示会・クラファン掲載の勝負試作。「写真で一目で伝わる、最高の質感」が要る方へ。",
+  "shop.grade.3.price": "¥15,000–35,000",
+  "shop.grade.3.price.note": "1点あたり / 目安・税込",
+  "shop.grade.3.cta": "サイズと個数で概算",
+  "shop.grades.footnote": "※ 価格は「サイズ帯別の基本料金＋グレード」で決まる立ち上げ期の目安です。上記は最小サイズ（〜100mm）からの参考価格で、サイズが上がると変動します。正式価格表は作業実測に基づいて確定し、このページを更新します。色番号指定（日塗工・自動車カラーコード）にも対応。[8色の色見本を一枚ずつ見る](/colors)／[工程と品質管理の詳細](/service)。",
+  "shop.simulator.lead": "数量スライド（10個以上 −15% / 30個以上 −25%）と特急（＋50%）も反映した概算レンジを、その場で計算します。面を埋めるほど1個あたりの手間は下がる——だから、数を出すほど有利になります。内容はワンタップでコピーして、そのまま相談に貼り付けられます。",
+  "shop.products.lead": "工房で仕上げた「そのまま買える」製品の販売枠です。第一弾として、画面では絶対に伝わらない粒子感・深みを手元で確かめられる、実物の色見本パネルを準備しています。掲載製品は順次追加していきます。",
+  "shop.product.1.badge": "COMING SOON",
+  "shop.product.1.title": "六角色見本パネル・8色セット",
+  "shop.product.1.sku": "HEX-SET-08",
+  "shop.product.1.body": "8色の参考色を、実物の塗り板で。画面では絶対に伝わらない、パールの粒子感と深みを手元で確認できるセットです。制作検討の色決めに。",
+  "shop.product.1.spec.1.label": "形状",
+  "shop.product.1.spec.1.value": "対辺70mm 六角形 × 8枚",
+  "shop.product.1.spec.2.label": "仕様",
+  "shop.product.1.spec.2.value": "裏面にカラーコード刻印",
+  "shop.product.1.spec.3.label": "用途",
+  "shop.product.1.spec.3.value": "色決め・貸出プラン準備中",
+  "shop.product.1.price": "価格未定",
+  "shop.product.1.price.note": "準備中",
+  "shop.product.2.badge": "COMING SOON",
+  "shop.product.2.title": "六角色見本パネル・単色",
+  "shop.product.2.sku": "HEX-01",
+  "shop.product.2.body": "気になる1色だけを手元に。ソウルレッド、ベイサイドブルー、ホワイトパールなど、8色から選べる単品パネル。まずは狙いの色を、実物で確かめてください。",
+  "shop.product.2.spec.1.label": "形状",
+  "shop.product.2.spec.1.value": "対辺70mm 六角形 × 1枚",
+  "shop.product.2.spec.2.label": "選択",
+  "shop.product.2.spec.2.value": "8色から1色を指定",
+  "shop.product.2.spec.3.label": "仕様",
+  "shop.product.2.spec.3.value": "裏面にカラーコード刻印",
+  "shop.product.2.price": "価格未定",
+  "shop.product.2.price.note": "準備中",
+  "shop.product.3.badge": "受注制作",
+  "shop.product.3.title": "あなたの造形物・一点仕上げ",
+  "shop.product.3.sku": "CUSTOM-01",
+  "shop.product.3.body": "この枠の主役は、あなたの造形物です。上のシミュレータで概算を出して、そのままご相談ください。仕上がった実例は、許可をいただいた上でここに並びます。",
+  "shop.product.3.spec.1.label": "対応",
+  "shop.product.3.spec.1.value": "郵送受託・全国対応",
+  "shop.product.3.spec.2.label": "数量",
+  "shop.product.3.spec.2.value": "1点〜1,000個",
+  "shop.product.3.spec.3.label": "グレード",
+  "shop.product.3.spec.3.value": "下地／スタンダード／プレミアム",
+  "shop.product.3.price": "¥7,000〜",
+  "shop.product.3.price.note": "シミュレータで概算",
+  "shop.products.footnote": "※ 製品ビジュアルは現在イメージ（塗り板の色をCSSで再現したもの）です。実物の写真・価格・在庫は、販売開始時にこのページで公開します。",
+  "shop.flow.lead": "遠く離れた工房でも、安心して預けられるように。受入から発送まで、記録を残しながら進めます。オンライン決済が整うまでは、下記のとおり相談ベースでお受けしています。",
+  "shop.flow.1.meta": "必要なもの — **造形物 or データ・希望グレード・色**",
+  "shop.flow.2.meta": "支払い — **銀行振込（カード決済は準備中）**",
+  "shop.flow.3.meta": "記録 — **ビフォー／アフターを撮影**",
+  "shop.flow.4.meta": "品質 — **完全硬化＋8項目検品**",
+  "shop.flow.1.no": "STEP 01",
+  "shop.flow.1.title": "注文・相談",
+  "shop.flow.1.body": "上のシミュレータで概算を出し、内容をコピーして相談ページからご連絡ください。造形データ（STL/STEP）や写真、素材の種類が分かると、より正確なお見積もりになります。",
+  "shop.flow.2.no": "STEP 02",
+  "shop.flow.2.title": "正式見積もり・お支払い",
+  "shop.flow.2.body": "形状・素材・色を確認し、正式なお見積もりを提示します。ご了承いただいてから、お支払い（銀行振込・前払い）。未発表製品にはNDAで対応します。",
+  "shop.flow.3.no": "STEP 03",
+  "shop.flow.3.title": "発送 → 施工",
+  "shop.flow.3.body": "造形物を工房へお送りください。受入検品とビフォー撮影ののち、研磨・脱脂・プラサフ・足付け・塗装まで、全9工程で仕上げます。未経験素材はテストピースで確認してから。",
+  "shop.flow.4.no": "STEP 04",
+  "shop.flow.4.title": "硬化・検品 → お届け",
+  "shop.flow.4.body": "2液ウレタンの完全硬化（5〜7日）を待ち、ブツ・タレ・肌・艶など8項目の検品を通してから、丁寧に梱包して返送します。生乾きで送ることはしません。",
+  "shop.flow.footnote": "お支払い方法・時期、送料、返品条件などの取引条件は[特定商取引法に基づく表記](/tokushoho)を、よくある質問は[相談ページのFAQ](/contact)をご確認ください。オンライン決済（クレジットカード）は現在準備中で、対応開始時に各商品の「購入」ボタンが有効になります。",
+  "shop.simulator.fallback": "価格はお問い合わせください。",
+  "shop.simulator.quoteonly.default": "この帯の造形は、形状を確認のうえ個別にお見積もりします",
+  "shop.simulator.quoteonly.withmax_suffix": "mmを超える造形は、形状を確認のうえ個別にお見積もりします",
+  "shop.simulator.total.quoteonly": "個別見積もり",
+  "shop.simulator.per.prefix": "1点あたり ",
+  "shop.simulator.per.suffix": "（税込・目安）",
+  "shop.simulator.grade.optgroup.label": "GRADE — グレード",
+  "shop.simulator.size.optgroup.label": "SIZE — 最長辺の目安",
+  "shop.simulator.size.sub.s": "手のひらサイズ",
+  "shop.simulator.size.sub.m": "主戦場サイズ",
+  "shop.simulator.size.sub.l": "大きめの造形",
+  "shop.simulator.size.sub.xl": "個別見積もり",
+  "shop.simulator.qty.label": "QUANTITY — 個数（同一品）",
+  "shop.simulator.total.label": "ESTIMATED TOTAL — 概算合計（税込・目安）",
+  "shop.simulator.row.grade": "グレード",
+  "shop.simulator.row.size": "サイズ帯",
+  "shop.simulator.row.qty": "個数",
+  "shop.simulator.row.slide": "数量スライド",
+  "shop.simulator.opt.none": "なし",
+  "shop.simulator.footnote": "※ 立ち上げ期の概算目安です。形状の複雑さ・素材・色により変動します。初回のみ治具・段取り費を別途（リピート時免除）。送料は実費です。正式なお見積もりでご確定ください。",
+  "shop.simulator.toast.copied": "内容をコピーしました。相談ページへ移動します…",
+  "shop.simulator.toast.redirect": "相談ページへ移動します…",
 
   "notes.hero.heading": "なぜ綺麗なのかは、\n写真だけでは伝わらない。",
   "notes.hero.lead": "工程と色の裏側を、言葉で残しています。専門性は、言語化してはじめて伝わる——それがこの工房の考え方です。",
@@ -131,7 +262,7 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
 };
 
 describe("TEXT_REGISTRY", () => {
-  it(`実測 ${EXPECTED_COUNT} 件 (PLAN.md 記載の 75 件から story.message.body を除外)`, () => {
+  it(`実測 ${EXPECTED_COUNT} 件 (v1: PLAN.md 75件からstory.message.body除外=74。v2 Wave1: shopページ125件追加=199)`, () => {
     expect(TEXT_REGISTRY.length).toBe(EXPECTED_COUNT);
   });
 
@@ -155,9 +286,9 @@ describe("TEXT_REGISTRY", () => {
     }
   });
 
-  it("kind は text | lines | multiline のいずれかである", () => {
+  it("kind は text | lines | multiline | rich のいずれかである (v2 Wave 1: rich 追加)", () => {
     for (const slot of TEXT_REGISTRY) {
-      expect(["text", "lines", "multiline"]).toContain(slot.kind);
+      expect(["text", "lines", "multiline", "rich"]).toContain(slot.kind);
     }
   });
 
