@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { zMediaId } from "@/modules/platform/contracts";
+
 /**
  * canonical: docs/design/ai-studio-v2.md §1/§2、docs/module-contracts.md v2.5 §1/§5。
  * ai-providers モジュールの値契約。乖離時はドキュメントを正とし本ファイルを直す。
@@ -285,3 +287,64 @@ export const zUsageRange = z
   })
   .strict();
 export type UsageRange = z.infer<typeof zUsageRange>;
+
+// ---------------------------------------------------------
+// 画像生成カスケード (P3: docs/design/ai-studio-v2.md §4、module-contracts.md v2.5)
+// ---------------------------------------------------------
+
+/** ai_image_generations.status の DDL check 制約と 1:1 (migration 20260710000015) */
+export const zImageGenerationStatus = z.enum(["pending", "succeeded", "failed"]);
+export type ImageGenerationStatus = z.infer<typeof zImageGenerationStatus>;
+
+/**
+ * generateImageCascade の入力契約。ai-providers はサイト構造 (works/posts/hero 等) を
+ * 知らないため、「サイトの文脈を使う」トグルは呼び出し元 (admin UI 層) が構築済みの
+ * テキストを siteContext として渡す形にする (依存方向 §2 の逸脱回避)。
+ */
+export const zGenerateImageCascadeInput = z
+  .object({
+    prompt: z.string().min(1).max(32_000),
+    model: z.string().min(1).max(200),
+    n: z.number().int().min(1).max(4).default(4),
+    size: z.string().max(20).optional(),
+    quality: z.enum(["low", "medium", "high", "auto"]).optional(),
+    /** カスケード元 (選択済みの ai_image_generations.id)。null = 新規バッチ */
+    parentId: z.string().uuid().nullable().default(null),
+    /**
+     * 追加の参照画像 (既存 media ライブラリから選択、最大 4 枚)。parentId 指定時は
+     * カスケード元の画像が自動的に 1 枚目として合成されるため、ここには「追加分」のみを渡す
+     * (parentId の画像自体を重複して渡す必要は無い)。
+     */
+    sourceMediaIds: z.array(zMediaId).max(4).default([]),
+    /** ライブラリに未保存の参照画像 (自然言語レタッチ用アップロード等) */
+    rawSourceImages: z.array(zGenerateImageInput).max(4).default([]),
+    /** 「サイトの文脈を使う」トグル ON 時、呼び出し元が構築済みのコンテキスト MD */
+    siteContext: z.string().max(20_000).nullable().default(null),
+  })
+  .strict();
+export type GenerateImageCascadeInput = z.infer<typeof zGenerateImageCascadeInput>;
+
+/** グリッド 1 枚 / パンくず 1 ノードの共通射影 */
+export type ImageCascadeNode = {
+  id: string;
+  requestGroupId: string;
+  parentId: string | null;
+  /** BLOCKER (2026-07-10 確定): root_id は常に非 null。ルート行は自身の id を指す */
+  rootId: string;
+  prompt: string;
+  provider: Provider;
+  model: string;
+  mediaId: string;
+  url: string;
+  isSelected: boolean;
+  createdAt: string;
+};
+
+export type ImageCascadeResult = {
+  requestGroupId: string;
+  images: ImageCascadeNode[];
+  /** 要求 n 件のうち画像化 or media 保存できなかった件数 */
+  failedCount: number;
+  /** parentId 指定時のみ非空。root → ... → parent の順 */
+  breadcrumb: ImageCascadeNode[];
+};

@@ -402,4 +402,180 @@ export async function getCurrentMonthBudget(client: SupabaseClient): Promise<Res
   };
 }
 
+// ---------------------------------------------------------
+// ai_image_generations / ai_image_generation_sources (P3: 画像生成カスケード系譜)
+// ---------------------------------------------------------
+
+export type ImageGenerationRow = {
+  id: string;
+  request_group_id: string;
+  parent_id: string | null;
+  root_id: string | null;
+  prompt: string;
+  provider: Provider;
+  model: string;
+  params: Record<string, unknown>;
+  status: "pending" | "succeeded" | "failed";
+  provider_interaction_id: string | null;
+  media_id: string | null;
+  is_selected: boolean;
+  usage_log_id: string | null;
+  error_code: string | null;
+  created_at: string;
+};
+
+const IMAGE_GENERATION_SELECT =
+  "id, request_group_id, parent_id, root_id, prompt, provider, model, params, status, provider_interaction_id, media_id, is_selected, usage_log_id, error_code, created_at";
+
+export type InsertImageGenerationInput = {
+  requestGroupId: string;
+  /** null = 新規バッチ (ルート行)。非 null = カスケード先 */
+  parentId: string | null;
+  /**
+   * parentId が null の場合は無視され、INSERT 後に自身の id で上書きされる
+   * (オーケストレーター確定 2026-07-10: ルート行の root_id = 自身の id。null 扱いにしない)。
+   * parentId が非 null の場合は親の root_id (常に非 null) をそのまま渡すこと。
+   */
+  rootId: string | null;
+  prompt: string;
+  provider: Provider;
+  model: string;
+  params: Record<string, unknown>;
+  status: "pending" | "succeeded" | "failed";
+  mediaId: string | null;
+  usageLogId: string | null;
+  errorCode: string | null;
+};
+
+/**
+ * 1 行 INSERT。parentId が null (=新規バッチのルート行) の場合のみ、INSERT 直後に
+ * root_id を自身の id へ UPDATE する (2 段構成。root_id は自己参照 FK のため INSERT 時点では
+ * 自身の id を知り得ない)。子孫行 (parentId 非 null) は渡された rootId をそのまま保存し
+ * 追加 UPDATE は行わない。
+ */
+export async function insertImageGenerationRow(
+  client: SupabaseClient,
+  input: InsertImageGenerationInput,
+): Promise<Result<ImageGenerationRow>> {
+  const { data, error } = await client
+    .from("ai_image_generations")
+    .insert({
+      request_group_id: input.requestGroupId,
+      parent_id: input.parentId,
+      root_id: input.rootId,
+      prompt: input.prompt,
+      provider: input.provider,
+      model: input.model,
+      params: input.params,
+      status: input.status,
+      media_id: input.mediaId,
+      usage_log_id: input.usageLogId,
+      error_code: input.errorCode,
+    })
+    .select(IMAGE_GENERATION_SELECT)
+    .single();
+  if (error) return pgErrorToResult(error);
+  let row = data as unknown as ImageGenerationRow;
+
+  if (input.parentId === null) {
+    // ルート規約 (オーケストレーター確定 2026-07-10): parent_id=null の行は root_id = 自身の id。
+    // COALESCE(root_id, id) 分岐を呼び出し側に持たせないための自己参照確定 UPDATE。
+    const { data: updated, error: updateError } = await client
+      .from("ai_image_generations")
+      .update({ root_id: row.id })
+      .eq("id", row.id)
+      .select(IMAGE_GENERATION_SELECT)
+      .single();
+    if (updateError) return pgErrorToResult(updateError);
+    row = updated as unknown as ImageGenerationRow;
+  }
+
+  return { ok: true, value: row };
+}
+
+export async function insertImageGenerationSources(
+  client: SupabaseClient,
+  requestGroupId: string,
+  mediaIds: string[],
+): Promise<Result<void>> {
+  if (mediaIds.length === 0) return { ok: true, value: undefined };
+  const rows = mediaIds.map((mediaId, ord) => ({
+    generation_group_id: requestGroupId,
+    media_id: mediaId,
+    ord,
+  }));
+  const { error } = await client.from("ai_image_generation_sources").insert(rows);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+export async function getImageGenerationRow(
+  client: SupabaseClient,
+  id: string,
+): Promise<Result<ImageGenerationRow | null>> {
+  const { data, error } = await client
+    .from("ai_image_generations")
+    .select(IMAGE_GENERATION_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data as ImageGenerationRow | null) ?? null };
+}
+
+export async function markImageGenerationSelected(
+  client: SupabaseClient,
+  id: string,
+  selected: boolean,
+): Promise<Result<void>> {
+  const { error } = await client.from("ai_image_generations").update({ is_selected: selected }).eq("id", id);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+/**
+ * ai_usage_log.ref_table/ref_id (監査列) で逆引きする。generateImageCascade は
+ * requestGroupId を refId として generateImages に渡すため、生成直後にこの関数で
+ * usage_log_id を取得し ai_image_generations.usage_log_id に書き戻せる
+ * (バッチ複数枚が同一 usage ログを共有する設計。router.ts はレスポンスに usage_log_id を
+ * 含めないため、この逆引きが唯一の取得経路)。
+ */
+export async function findUsageLogIdByRef(
+  client: SupabaseClient,
+  refTable: string,
+  refId: string,
+): Promise<Result<string | null>> {
+  const { data, error } = await client
+    .from("ai_usage_log")
+    .select("id")
+    .eq("ref_table", refTable)
+    .eq("ref_id", refId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data as { id: string } | null)?.id ?? null };
+}
+
+// ---------------------------------------------------------
+// ai-draft 掃除 cron (P3): ai_draft_cleanup_run RPC ラッパ (migration 20260710000016)
+// ---------------------------------------------------------
+
+export type AiDraftCleanupRow = { mediaId: string; storagePath: string };
+
+/**
+ * DB 側 (ai_draft_cleanup_run RPC) が候補の特定 + media 行の削除まで一括で行う
+ * (tags @> ai-draft かつ ai_image_generations.is_selected=false かつ p_cutoff より古い
+ * かつ他コンテンツ/カスケード参照ゼロ)。JS 側は返ってきた storage_path を使って
+ * Storage オブジェクトを削除するのみ (service_role のみ実行可能。cron ワーカー専用)。
+ */
+export async function runAiDraftCleanup(
+  serviceClient: SupabaseClient,
+  cutoffIso: string,
+): Promise<Result<AiDraftCleanupRow[]>> {
+  const { data, error } = await serviceClient.rpc("ai_draft_cleanup_run", { p_cutoff: cutoffIso });
+  if (error) return { ok: false, code: "KMB-E901", detail: error.message };
+  const rows = (Array.isArray(data) ? data : []) as { media_id: string; storage_path: string }[];
+  return { ok: true, value: rows.map((r) => ({ mediaId: r.media_id, storagePath: r.storage_path })) };
+}
+
 export { pgErrorToResult };
