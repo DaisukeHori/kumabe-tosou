@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   cancelScheduledChannelPost,
   claimDueScheduledPosts,
+  claimNoteDraftCreating,
   retryFailedToScheduled,
 } from "@/modules/distribution/repository";
 
@@ -51,6 +52,10 @@ class FakeUpdateQuery {
   ) {}
   eq(col: string, value: unknown): this {
     this.eqCalls.push([col, value]);
+    return this;
+  }
+  in(col: string, values: unknown): this {
+    this.eqCalls.push([col, values]);
     return this;
   }
   select(): this {
@@ -118,6 +123,37 @@ describe("retryFailedToScheduled: CAS 条件 (failed → scheduled)", () => {
     expect(result).toEqual({ ok: true, value: true });
     expect(recordedEq).toContainEqual(["id", "post-3"]);
     expect(recordedEq).toContainEqual(["status", "failed"]);
+  });
+});
+
+describe("claimNoteDraftCreating: CAS 条件 (none/failed/unknown → creating のみ許可。§8 MAJOR-3 実装レビューで発見・修正)", () => {
+  it("id と note_draft_status in (none,failed,unknown) の両方を条件に含め、成功時は note_draft_status='creating'/note_draft_url=null へ更新する", async () => {
+    const recordedEq: EqCall[] = [];
+    let updatePayload: Record<string, unknown> | undefined;
+    const client = {
+      from() {
+        return {
+          update: (payload: Record<string, unknown>) => {
+            updatePayload = payload;
+            return new FakeUpdateQuery({ data: { id: "post-1" }, error: null }, (eqCalls) =>
+              recordedEq.push(...eqCalls),
+            );
+          },
+        };
+      },
+    } as unknown as SupabaseClient;
+
+    const result = await claimNoteDraftCreating(client, "post-1");
+    expect(result).toEqual({ ok: true, value: true });
+    expect(recordedEq).toContainEqual(["id", "post-1"]);
+    expect(recordedEq).toContainEqual(["note_draft_status", ["none", "failed", "unknown"]]);
+    expect(updatePayload).toEqual({ note_draft_status: "creating", note_draft_url: null });
+  });
+
+  it("対象が既に他プロセスに creating を先取りされていた場合 (0 行更新) は value=false を返し、外部 API 呼び出し側が早期リターンできるようにする (二重作成防止)", async () => {
+    const client = buildFakeClient({ updateResponses: [{ data: null, error: null }] });
+    const result = await claimNoteDraftCreating(client, "post-2");
+    expect(result).toEqual({ ok: true, value: false });
   });
 });
 

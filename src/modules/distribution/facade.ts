@@ -598,16 +598,27 @@ async function createNoteDraft(
   }
   const content = draftResult.value.content as NoteContent;
 
-  // 前回 unknown (タイムアウト/応答不明) だった場合、新規作成の前にまず下書き一覧と照合する
-  // (§8 MAJOR-3: 重複下書きの防止)。照合自体が失敗してもベストエフォートで通常フローへ進む。
+  // 'creating' への遷移は CAS (条件付き UPDATE: none/failed/unknown → creating) で行う
+  // (§8 MAJOR-3。実装レビューで発見・修正: 従来は CAS 無しで creating へ更新してから note API を
+  // 呼んでいたため、並列呼び出しが両方とも下書き一覧照合 [reconcile] に失敗した場合、
+  // 同じ post の下書きを二重作成しうる不具合があった)。
   //
-  // 'creating' も同様に扱う: この状態は note API 呼び出しの「直前」(下の updateNoteDraftStatus
-  // 呼び出し) で書き込まれるため、サーバーレス関数のタイムアウト/クラッシュが
-  // 「note.com 側で作成は成功したが、その後の状態更新 (created へのマーキング) が完了する前に
-  // プロセスが死んだ」場合にも 'creating' のまま永続化されうる。'unknown' と同じく
-  // 「作成されたかどうか実際には分からない」状態のため、reconcile を経ずに新規作成へ進むと
-  // 実際に note 側へ二重下書きを作成してしまう (実装レビューで発見・修正)。
-  if (post.note_draft_status === "unknown" || post.note_draft_status === "creating") {
+  // 影響行数 0 (claim 失敗) は「既に他プロセスが creating に遷移済み」を意味する。これは
+  // post.note_draft_status が (この関数に入ってきた時点で既に) 'creating' だった場合を含む —
+  // 別プロセスが今まさに作成中か、前回プロセスがクラッシュし成否未確定のいずれかであり、
+  // どちらであっても外部 API を呼ばずここで早期リターンする (二重作成しない)。
+  const claimResult = await repo.claimNoteDraftCreating(serviceClient, postId);
+  if (!claimResult.ok) return claimResult;
+  if (!claimResult.value) {
+    return { ok: true, value: { status: "creating", url: null } };
+  }
+
+  // CAS で creating を勝ち取った側のみ reconcile する。前回 unknown (タイムアウト/応答不明)
+  // だった場合、新規作成の前にまず下書き一覧と照合する (§8 MAJOR-3: 重複下書きの防止)。
+  // 照合自体が失敗してもベストエフォートで通常フローへ進む。
+  // ('creating' からの CAS 遷移は上で常に失敗し早期リターンするため、ここに来る時点で
+  // post.note_draft_status は 'none' | 'failed' | 'unknown' のいずれかであることが保証される。)
+  if (post.note_draft_status === "unknown") {
     try {
       const found = await reconcileNoteDraftByTitle(cookie, content.title);
       if (found) {
@@ -618,8 +629,6 @@ async function createNoteDraft(
       // 照合失敗は無視し、以降の新規作成試行を続ける
     }
   }
-
-  await repo.updateNoteDraftStatus(serviceClient, postId, "creating", null);
 
   const outcome = await callNoteCreateDraftApi(cookie, {
     title: content.title,

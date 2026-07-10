@@ -388,9 +388,40 @@ export async function markManualRequired(
 }
 
 /**
+ * note 下書き作成の CAS 排他 (§8 MAJOR-3。実装レビューで発見・修正: CAS 無しで
+ * `creating` へ更新してから note API を呼んでいたため、並列呼び出しが両方とも下書き一覧照合
+ * (reconcile) に失敗した場合、同じ post の下書きを二重作成しうる不具合があった)。
+ *
+ * `none`/`failed`/`unknown` からのみ `creating` へ遷移させる。`creating` 自体は遷移元に含めない
+ * — 既にこの状態なら「別プロセスが今まさに作成中」か「前回プロセスがクラッシュし成否未確定」の
+ * いずれかであり、どちらであっても呼び出し元は新規作成を試行せず早期リターンすべきため
+ * (facade.ts の createNoteDraft 参照)。
+ *
+ * 影響行数 0 (戻り値 false) は「既に他プロセスが creating に遷移済み (またはそれ以外の状態)」を
+ * 意味する。status (manual_required 等) など note_draft_status/note_draft_url 以外のカラムは
+ * 変更しない。service client 専用 (RLS 上 admin は cancel 遷移のみ許可のため)。
+ */
+export async function claimNoteDraftCreating(
+  serviceClient: SupabaseClient,
+  id: string,
+): Promise<Result<boolean>> {
+  const { data, error } = await serviceClient
+    .from("channel_posts")
+    .update({ note_draft_status: "creating", note_draft_url: null })
+    .eq("id", id)
+    .in("note_draft_status", ["none", "failed", "unknown"])
+    .select("id")
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: Boolean(data) };
+}
+
+/**
  * note 下書き自動作成の状態更新 (§8 MAJOR-3)。channel_posts.status (manual_required 等) は
  * 変更しない — note_draft_status/note_draft_url は独立の付加情報のため (既存の人間照合
  * フローに影響を与えない)。service client 専用 (RLS 上 admin は cancel 遷移のみ許可のため)。
+ * `creating` への遷移自体は CAS が必要なため claimNoteDraftCreating を使うこと — 本関数は
+ * created/failed/unknown (note API 呼び出し後の終端遷移) 専用。
  */
 export async function updateNoteDraftStatus(
   serviceClient: SupabaseClient,
