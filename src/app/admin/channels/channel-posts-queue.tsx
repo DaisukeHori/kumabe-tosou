@@ -17,14 +17,23 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { ChannelPostStatus, ChannelPostView } from "@/modules/distribution/contracts";
+import type { ChannelPostStatus, ChannelPostView, NoteDraftStatus } from "@/modules/distribution/contracts";
 
 import {
   cancelChannelPostAction,
+  createNoteDraftAction,
   getNoteCopyContentAction,
   resolveManualRequiredAction,
   retryFailedChannelPostAction,
 } from "./actions";
+
+const NOTE_DRAFT_STATUS_LABELS: Record<NoteDraftStatus, string> = {
+  none: "未作成",
+  creating: "作成中...",
+  created: "下書き作成済み",
+  unknown: "応答不明 (要確認)",
+  failed: "作成失敗",
+};
 
 const STATUS_LABELS: Record<ChannelPostStatus, string> = {
   scheduled: "予約済み",
@@ -101,6 +110,29 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
     setCopyDialog({ post, content: result.content, error: null });
   }
 
+  /**
+   * 「note に下書きを作成」ボタン (設計書 §8)。失敗時は必ず既存の半自動 (コピー + note 新規タブを
+   * 開く) にフォールバックする — ここで作成に失敗してもユーザーが手詰まりにならないようにする。
+   */
+  function createNoteDraft(post: ChannelPostView) {
+    startTransition(async () => {
+      const result = await createNoteDraftAction(post.id);
+      if (!result.ok) {
+        toast.error(`下書き作成に失敗しました: ${result.error}`);
+        await openCopyDialog(post); // フォールバック
+        return;
+      }
+      if (result.status === "created") {
+        toast.success("note に下書きを作成しました。");
+      } else if (result.status === "unknown") {
+        toast.warning("note の応答が確認できませんでした。もう一度試すと下書き一覧と照合します。");
+        await openCopyDialog(post); // フォールバック (念のため手動でも確認できるようにする)
+      } else {
+        toast.info(`状態: ${NOTE_DRAFT_STATUS_LABELS[result.status]}`);
+      }
+    });
+  }
+
   async function copyText(text: string, label: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -135,7 +167,22 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
           {items.map((item) => (
             <TableRow key={item.id}>
               <TableCell>{new Date(item.scheduled_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</TableCell>
-              <TableCell>{CHANNEL_LABELS[item.channel] ?? item.channel}</TableCell>
+              <TableCell>
+                {CHANNEL_LABELS[item.channel] ?? item.channel}
+                {item.channel === "note" && item.note_draft_status !== "none" && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    下書き: {NOTE_DRAFT_STATUS_LABELS[item.note_draft_status]}
+                    {item.note_draft_status === "created" && item.note_draft_url && (
+                      <>
+                        {" "}
+                        <a href={item.note_draft_url} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                          開く
+                        </a>
+                      </>
+                    )}
+                  </div>
+                )}
+              </TableCell>
               <TableCell>
                 <Badge variant={statusBadgeVariant(item.status)}>{STATUS_LABELS[item.status]}</Badge>
               </TableCell>
@@ -162,6 +209,11 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
                     onClick={() => runAction(retryFailedChannelPostAction(item.id))}
                   >
                     再試行
+                  </Button>
+                )}
+                {item.status === "manual_required" && item.channel === "note" && item.note_draft_status !== "created" && (
+                  <Button size="xs" variant="outline" disabled={isPending} onClick={() => createNoteDraft(item)}>
+                    note に下書きを作成
                   </Button>
                 )}
                 {item.status === "manual_required" && item.channel === "note" && (

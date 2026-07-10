@@ -36,6 +36,8 @@ export type ChannelPostRow = {
   attempt_count: number;
   last_error_code: string | null;
   last_error_detail: string | null;
+  note_draft_status: string;
+  note_draft_url: string | null;
   idempotency_key: string;
   created_at: string;
   updated_at: string;
@@ -73,7 +75,7 @@ function pgErrorToResult(error: PgError): { ok: false; code: KmbErrorCode; detai
 }
 
 const CHANNEL_POST_SELECT =
-  "id, draft_id, channel, status, scheduled_at, published_at, external_id, external_url, tweet_count, url_count, estimated_cost_cents, attempt_count, last_error_code, last_error_detail, idempotency_key, created_at, updated_at";
+  "id, draft_id, channel, status, scheduled_at, published_at, external_id, external_url, tweet_count, url_count, estimated_cost_cents, attempt_count, last_error_code, last_error_detail, note_draft_status, note_draft_url, idempotency_key, created_at, updated_at";
 
 // ---------------------------------------------------------
 // channel_posts: 読み取り
@@ -381,6 +383,25 @@ export async function markManualRequired(
   };
   if (input.externalId !== undefined) patch.external_id = input.externalId;
   const { error } = await serviceClient.from("channel_posts").update(patch).eq("id", id);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+/**
+ * note 下書き自動作成の状態更新 (§8 MAJOR-3)。channel_posts.status (manual_required 等) は
+ * 変更しない — note_draft_status/note_draft_url は独立の付加情報のため (既存の人間照合
+ * フローに影響を与えない)。service client 専用 (RLS 上 admin は cancel 遷移のみ許可のため)。
+ */
+export async function updateNoteDraftStatus(
+  serviceClient: SupabaseClient,
+  id: string,
+  status: "none" | "creating" | "created" | "unknown" | "failed",
+  url: string | null,
+): Promise<Result<void>> {
+  const { error } = await serviceClient
+    .from("channel_posts")
+    .update({ note_draft_status: status, note_draft_url: url })
+    .eq("id", id);
   if (error) return pgErrorToResult(error);
   return { ok: true, value: undefined };
 }

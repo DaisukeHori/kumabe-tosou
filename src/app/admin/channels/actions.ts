@@ -7,8 +7,10 @@ import { decryptCookiePayload } from "@/lib/oauth/state-cookie";
 import {
   zManualReconcileAction,
   zNoteAccountInput,
+  zNoteSessionCookieInput,
   zStyleProfileInput,
   type ManualReconcileAction,
+  type NoteDraftStatus,
 } from "@/modules/distribution/contracts";
 import { distributionFacade } from "@/modules/distribution/facade";
 import type { Channel } from "@/modules/platform/contracts";
@@ -39,6 +41,26 @@ export async function updateNoteAccountAction(
   }
 
   const result = await distributionFacade.updateNoteAccount(parsed.data);
+  if (!result.ok) return { error: result.detail ?? getErrorInfo(result.code).message, success: false };
+
+  revalidatePath("/admin/channels");
+  return { error: null, success: true };
+}
+
+/** note セッション Cookie 登録フォーム (§8)。DevTools でコピーした生の Cookie ヘッダ値を Vault に保存する */
+export async function saveNoteSessionCookieAction(
+  _prevState: ChannelsFormState,
+  formData: FormData,
+): Promise<ChannelsFormState> {
+  const adminError = await requireAdminError();
+  if (adminError) return { error: adminError, success: false };
+
+  const parsed = zNoteSessionCookieInput.safeParse({ cookie: String(formData.get("cookie") ?? "") });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "入力内容を確認してください。", success: false };
+  }
+
+  const result = await distributionFacade.saveNoteSessionCookie(parsed.data);
   if (!result.ok) return { error: result.detail ?? getErrorInfo(result.code).message, success: false };
 
   revalidatePath("/admin/channels");
@@ -122,6 +144,25 @@ export async function getNoteCopyContentAction(draftId: string): Promise<NoteCop
   const result = await distributionFacade.getNoteDraftForCopy(draftId);
   if (!result.ok) return { ok: false, error: result.detail ?? getErrorInfo(result.code).message };
   return { ok: true, content: result.value };
+}
+
+export type CreateNoteDraftState =
+  | { ok: true; status: NoteDraftStatus; url: string | null }
+  | { ok: false; error: string };
+
+/**
+ * 「note に下書きを作成」ボタン (設計書 §8)。失敗時は呼び出し元 UI が既存の半自動
+ * (コピー + note 新規タブを開く) にフォールバックする前提のため、エラー時も status/url を
+ * 返さず error のみを返す (UI 側で必ずコピペ支援を提示できるようにする)。
+ */
+export async function createNoteDraftAction(postId: string): Promise<CreateNoteDraftState> {
+  const adminError = await requireAdminError();
+  if (adminError) return { ok: false, error: adminError };
+
+  const result = await distributionFacade.createNoteDraft(postId);
+  revalidatePath("/admin/channels");
+  if (!result.ok) return { ok: false, error: result.detail ?? getErrorInfo(result.code).message };
+  return { ok: true, status: result.value.status, url: result.value.url };
 }
 
 /** Meta OAuth callback 後のページ選択 UI から呼ばれる (契約書 §7.4 の残り) */

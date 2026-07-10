@@ -11,6 +11,7 @@ import {
   zAccountChannel,
   zChannelAuthStatus,
   zChannelPostStatus,
+  zNoteDraftStatus,
 } from "@/modules/distribution/contracts";
 import { zAiKeyStatus, zProvider, zUsageKind, zUsageStatus } from "@/modules/ai-providers/contracts";
 
@@ -38,24 +39,39 @@ type EnumCheck = { table: string; column: string; values: string[] };
  * このリポジトリの migration ファイルの記法 (各 create table は行頭 ");" で閉じる) に依拠する
  * 軽量パーサ。
  */
+function parseCheckClausesInto(checks: EnumCheck[], table: string, body: string): void {
+  const checkRegex = /check \((\w+) in \(([^)]*)\)\)/g;
+  let checkMatch: RegExpExecArray | null;
+  while ((checkMatch = checkRegex.exec(body))) {
+    const column = checkMatch[1];
+    const values = checkMatch[2]
+      .split(",")
+      .map((v) => v.trim().replace(/^'|'$/g, ""))
+      .filter((v) => v.length > 0);
+    checks.push({ table, column, values });
+  }
+}
+
 function extractEnumChecks(sql: string): EnumCheck[] {
   const checks: EnumCheck[] = [];
+
   const tableRegex = /create table (\w+) \(([\s\S]*?)\n\);/g;
   let tableMatch: RegExpExecArray | null;
   while ((tableMatch = tableRegex.exec(sql))) {
-    const table = tableMatch[1];
-    const body = tableMatch[2];
-    const checkRegex = /check \((\w+) in \(([^)]*)\)\)/g;
-    let checkMatch: RegExpExecArray | null;
-    while ((checkMatch = checkRegex.exec(body))) {
-      const column = checkMatch[1];
-      const values = checkMatch[2]
-        .split(",")
-        .map((v) => v.trim().replace(/^'|'$/g, ""))
-        .filter((v) => v.length > 0);
-      checks.push({ table, column, values });
-    }
+    parseCheckClausesInto(checks, tableMatch[1], tableMatch[2]);
   }
+
+  // `alter table <table>\n  add column ... check (col in (...))` パターン (既存テーブルへの
+  // 列追加。migration 20260710000016 の note_draft_status で新規に必要になった記法)。
+  // create table 本体と区別するため「テーブル名の直後に改行 + add column」という本リポジトリの
+  // 記法に限定してマッチさせる (単純な `alter table x enable row level security;` 等の
+  // 1 行ステートメントを誤って巻き込まないため)。
+  const alterTableRegex = /alter table (\w+)\s*\n\s*add column ([\s\S]*?);/g;
+  let alterMatch: RegExpExecArray | null;
+  while ((alterMatch = alterTableRegex.exec(sql))) {
+    parseCheckClausesInto(checks, alterMatch[1], alterMatch[2]);
+  }
+
   return checks;
 }
 
@@ -136,6 +152,12 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
   it("channel_accounts.auth_status ↔ distribution の zChannelAuthStatus (Wave2-F で追加)", () => {
     const expected = [...zChannelAuthStatus.options].sort();
     const actual = findCheck(checks, "channel_accounts", "auth_status").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("channel_posts.note_draft_status ↔ distribution の zNoteDraftStatus (P6: migration 20260710000016)", () => {
+    const expected = [...zNoteDraftStatus.options].sort();
+    const actual = findCheck(checks, "channel_posts", "note_draft_status").sort();
     expect(actual).toEqual(expected);
   });
 

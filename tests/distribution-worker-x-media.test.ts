@@ -111,6 +111,8 @@ function basePost(overrides: Partial<ChannelPostRow> = {}): ChannelPostRow {
     attempt_count: 1,
     last_error_code: null,
     last_error_detail: null,
+    note_draft_status: "none",
+    note_draft_url: null,
     idempotency_key: "idem-1",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
