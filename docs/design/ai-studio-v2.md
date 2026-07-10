@@ -1,8 +1,10 @@
 # AI スタジオ v2 設計書 — マルチプロバイダ AI 基盤・文言候補・画像生成カスケード・SNS 画像・note 下書き・料金ダッシュボード
 
-- 版: v1.1 (Codex レビュー BLOCKER 4 / MAJOR 6 / MINOR 3 を全反映)
+- 版: **v1.2** (Codex R2 反映 — v1.1 が「説明文だけで DDL/facade/契約に落ちていない」とした BLOCKER 5 / MAJOR 7 を canonical へ実反映。ただし実コード照合の結果、うち BLOCKER 1・2 と MAJOR の大半は **migration 0015・P1 実装で既に解決済みで設計書の記述遅延のみ**だったため本書を実装に合わせて更新。実コード欠陥は BLOCKER-5 (media 保存 facade 欠落) のみで、MediaFacade.createFromBytes 新設として P3 に反映指示済み)
+- 旧版: v1.1 (Codex レビュー BLOCKER 4 / MAJOR 6 / MINOR 3 を全反映)
 - 作成日: 2026-07-10
 - 作成: メインセッション直接執筆 (Fable 5)
+- **Codex R2 切り分け** (2026-07-10): BLOCKER 1 予算RPC=実装済(予約台帳+reservation_id+枚数+10分TTL自動回収) / BLOCKER 2 key cooldown=DDL・router一致済 / BLOCKER 3 image_generation stage=契約書 §4.6 に実追加(P4でコード追随) / BLOCKER 4 X media=チャンク実装は research事実と整合・STATUS URLのみP4実API検証 / **BLOCKER 5 media保存facade=実欠陥→createFromBytes新設(P3)**
 - 入力資料: [research/ai-studio-v2/](../research/ai-studio-v2/) — **9 論点のリサーチと統合裁定 (SYNTHESIS.md) が事実の正**。API 仕様・料金・リスク評価は本書に転記せず参照する
 - 関連: [cms-ai-pipeline.md](./cms-ai-pipeline.md) (既存 ai-studio/distribution)、[visual-text-editor.md](./visual-text-editor.md) (T2b テキストメニューに統合)、[module-contracts.md](../module-contracts.md)
 
@@ -54,13 +56,16 @@ export interface AiProvidersFacade {
   listAvailableModels(kind: "text" | "image"): Promise<Result<DetectedModel[]>>;
 
   // 生成 (すべて usage 記録込み。feature はダッシュボード分類用)
-  generateText(req: GenerateTextReq): Promise<Result<TextResult>>;   // req: { model, messages, feature, maxTokens?, temperature?, images? (vision 入力) }
+  generateText(req: GenerateTextReq): Promise<Result<TextResult>>;   // req: { model, messages, feature, maxTokens?, temperature?, images? (vision 入力), tools? (web_search 等), responseFormat? (structured output), stream? }
   generateImages(req: GenerateImageReq): Promise<Result<ImageResult>>; // req: { model, prompt, n(1..4), sourceImages? (1..4), size?, quality?, feature }
+  transcribe(req: TranscribeReq): Promise<Result<TranscribeResult>>; // 既存 gpt-4o-transcribe 経路の移行先 (kind='text', feature='transcribe' で usage 記録)
 
   // 料金 (ダッシュボード用)
   getUsageSummary(range: { from: string; to: string }): Promise<Result<UsageSummary>>; // モデル/キー/日別集計
 }
 ```
+
+> **MAJOR-6 (Codex R2)**: `generateText` の `tools`/`responseFormat`/`stream` は既存 web_search 移行 (P1) の受入条件。P1 実装の `GenerateTextReq` 実シグネチャと本 interface が一致しているかは Wave D の統合検証で照合する (乖離時は本書=canonical を正として P1 を追随)。
 
 - **キー選択 (MAJOR-1 で精緻化)**: 同一プロバイダに複数キー → priority 昇順 (同値は created_at 昇順で決定的) に試行。エラー分類:
   - 401/403 (キー無効・org 権限) → 当該キーを status='failed' に落とし次のキーへ
@@ -70,7 +75,10 @@ export interface AiProvidersFacade {
   - **全キー失敗** → KMB-E408 (detail に最後のエラー分類)。usage には試行ごとに記録
 - **モデル検知**: OpenAI `GET /v1/models` / Anthropic `GET /v1/models` / Gemini `models.list`。画像対応の判別は research/models-discovery.md の方式 (Gemini は supportedGenerationMethods、OpenAI は既知 prefix 表、Anthropic は常に text)。検知結果は `ai_provider_keys.detected_models` (jsonb) にキャッシュし、設定画面の「再検知」で更新
 - **usage 記録**: レスポンスの usage フィールド (research/llm-usage-tracking.md の各社仕様差) → `ai_usage_log` に 1 呼び出し 1 行。**cost_micro_usd はレート表から計算して記録時に確定** (レート改定が過去に波及しない)。usage が取れない失敗呼び出しも status='error' で記録
-- **予算ガード (BLOCKER-2: 並行呼び出し競合を DB で排他)**: `ops_limits.ai_monthly_budget_micro_usd` (既定 50_000_000 = $50)。**atomic RPC `ai_budget_reserve(p_estimate_micro_usd)`** が月次カウンタ行 (`ai_budget_months(month PK, reserved, settled)`) を `insert on conflict + FOR UPDATE` で予約 → 呼び出し完了時に `ai_budget_settle(reservation_id, actual)` で確定 (失敗時は解放)。予約時点で reserved+settled が上限超過なら **KMB-E407**。画像枚数上限 (`ai_monthly_image_limit`) も同 RPC で加算管理
+- **予算ガード (BLOCKER-2: 並行呼び出し競合を DB で排他。migration 0015 実装済み)**: `ops_limits.ai_monthly_budget_micro_usd` (既定 50_000_000 = $50)。
+  - **atomic RPC `ai_budget_reserve(p_estimate_micro_usd bigint, p_image_count int default 0) returns table(reservation_id uuid, ok boolean, error_code text)`**: 月次カウンタ行 `ai_budget_months(month PK, reserved_micro_usd, settled_micro_usd, reserved_image_count, settled_image_count)` を `insert on conflict + FOR UPDATE` でロックし、**予約台帳 `ai_budget_reservations(id, month, estimate_micro_usd, image_count, expires_at, settled)` に 1 行 insert** して reservation_id を返す。予約時点で `reserved+settled` が上限超過なら **KMB-E407** (reservation_id=null)。画像枚数上限 (`ai_monthly_image_limit`) も同 RPC で判定・加算。
+  - **確定 `ai_budget_settle(p_reservation_id uuid, p_actual_micro_usd bigint, p_actual_image_count int default 0)`**: reservation 行を `FOR UPDATE` で引き、reserved を戻して settled を実額で加算。**二重 settle は no-op** (settled=true を検知)。
+  - **恒久ロック防止 (P1 tester HIGH)**: reserve/settle 間でプロセス死しても、`expires_at = now() + 10 分` を過ぎた未 settle 予約は**次回 reserve 時に自動回収** (reserved から減算) されるため月次枠が永久ロックされない。設計書 v1.0 の「失敗時は解放」を TTL + 自動回収で恒久化した形。
 
 ## 2. データモデル (migration 0015)
 
@@ -81,7 +89,9 @@ create table ai_provider_keys (
   label text not null,                    -- 表示名 '本番キー' '検証キー'
   vault_secret_name text not null unique, -- 実キーは Vault (前例: vault_upsert_secret)
   priority int not null default 100,      -- 小さいほど優先
-  status text not null default 'untested' check (status in ('untested','ok','failed')),
+  status text not null default 'untested' check (status in ('untested','ok','failed','limited')),
+  cooldown_until timestamptz,             -- 429 時に Retry-After から算出 (status='limited' の間はスキップ)
+  last_error text,                        -- 直近エラー分類 (MAJOR-1)
   last_tested_at timestamptz,
   detected_models jsonb not null default '[]'::jsonb, -- [{id, kind, display}] 検知キャッシュ
   enabled_models jsonb not null default '[]'::jsonb,  -- 管理者が有効化した model id 配列
@@ -100,17 +110,14 @@ create trigger handle_updated_at before update on ai_provider_keys
   for each row execute procedure extensions.moddatetime (updated_at);
 -- MINOR-3: priority 同値の決定順は (priority, created_at)。provider+label は unique
 create unique index on ai_provider_keys (provider, label);
--- MAJOR-1 のフォールバック状態列:
---   status に 'limited' を追加 / cooldown_until timestamptz / last_error text を列に含める
---   (check 制約: status in ('untested','ok','failed','limited'))
 
 create table ai_usage_log (
   id uuid primary key default gen_random_uuid(),
   provider text not null,
   model text not null,
   key_id uuid references ai_provider_keys(id) on delete set null,
-  kind text not null check (kind in ('text','image')),
-  feature text not null,                  -- 'text-suggest' | 'image-gen' | 'image-cascade' | 'sns-text' | 'sns-image' | 'studio' | 'test'
+  kind text not null check (kind in ('text','image')), -- 粗い課金軸のみ。transcribe/web_search 等は kind='text' に丸め、粒度は feature で担保 (MAJOR-6 の裁定)
+  feature text not null,                  -- 'text-suggest' | 'image-gen' | 'image-cascade' | 'sns-text' | 'sns-image' | 'studio' | 'transcribe' | 'web-search' | 'test'
   input_tokens int,
   output_tokens int,
   image_count int,
@@ -119,7 +126,9 @@ create table ai_usage_log (
   error_code text,
   created_at timestamptz not null default now()
 );
--- RLS/grant: ai_provider_keys と同型 (admin only 4 ポリシー + revoke anon)。migration に全文を明示すること
+-- RLS/grant: 全 AI テーブル (ai_provider_keys / ai_usage_log / ai_image_generations /
+--   ai_image_generation_sources / ai_budget_months / ai_budget_reservations) に
+--   admin only 4 ポリシー + revoke anon を **全文明示** (MAJOR-2。migration 0015 に実装済み)
 create index on ai_usage_log (created_at);
 -- MINOR-2 (監査列): raw_usage jsonb (プロバイダ応答の usage 原文) / rate_snapshot jsonb (適用単価) /
 --   ref_table text, ref_id uuid (どの機能実体から呼ばれたか — ai_image_generations.id / ai_runs.id 等) を列に含める
@@ -130,7 +139,7 @@ create table ai_image_generations (
   id uuid primary key default gen_random_uuid(),
   request_group_id uuid not null,         -- 同一「4 枚生成」バッチの束
   parent_id uuid references ai_image_generations(id) on delete set null, -- カスケード親 (選択された 1 枚の行)
-  root_id uuid references ai_image_generations(id) on delete set null,   -- 系譜ルート (パンくず用の非正規化)
+  root_id uuid references ai_image_generations(id) on delete set null,   -- 系譜ルート (非正規化)。MINOR: ルート行は insert 後に root_id=id へ update (全ノードで非 NULL・ルートは自身を指す) → 系譜取得は `where root_id = :rootId` で一発
   prompt text not null,                   -- このノードで入力されたプロンプト
   provider text not null,
   model text not null,
@@ -154,10 +163,31 @@ create table ai_image_generation_sources (
 );
 -- RLS: 両テーブルとも admin only。media 削除ガード (media_admin_delete) に
 -- ai_image_generations.media_id / ai_image_generation_sources.media_id の参照ゼロ判定を追加
+
+-- BLOCKER-1 (予算): 月次カウンタ + 予約台帳。ai_budget_reserve/settle が FOR UPDATE で排他
+create table ai_budget_months (
+  month text primary key,                 -- 'YYYY-MM'
+  reserved_micro_usd bigint not null default 0,
+  settled_micro_usd  bigint not null default 0,
+  reserved_image_count int not null default 0,
+  settled_image_count  int not null default 0,
+  updated_at timestamptz not null default now()
+);
+create table ai_budget_reservations (
+  id uuid primary key default gen_random_uuid(),
+  month text not null references ai_budget_months(month),
+  estimate_micro_usd bigint not null,
+  image_count int not null default 0,
+  expires_at timestamptz not null,        -- now()+10min。超過した未 settle は次回 reserve で自動回収
+  settled boolean not null default false, -- 二重 settle 防止
+  created_at timestamptz not null default now()
+);
+create index on ai_budget_reservations (month, settled, expires_at);
+-- 両テーブルとも admin only RLS + revoke anon。RPC は security definer で reserve/settle
 ```
 
 - `zOpsLimits` に `ai_monthly_budget_micro_usd` (bigint、既定 50_000_000) / `ai_monthly_image_limit` (既定 200 枚) を追加 (契約書 §4.2 更新。USD 小数は使わない — µUSD 整数で統一、MINOR-1)
-- 生成画像は **media テーブルに通常の media として保存** (tags に `ai-generated` を自動付与、credit にモデル名)。既存のレンディション/参照管理/削除ガードがそのまま効く
+- 生成画像は **`MediaFacade.createFromBytes({ bytes, contentType, tags: ['ai-generated','ai-draft'], credit: モデル名 })` で media テーブルに保存** (BLOCKER-5。サーバ内 Buffer→Storage upload→media 行 insert を facade 1 発で。completeUpload の行 insert を共有)。既存のレンディション/参照管理/削除ガードがそのまま効く
 
 ## 3. 文言候補 (テキスト編集メニュー統合)
 
@@ -184,7 +214,7 @@ create table ai_image_generation_sources (
 
 ## 5. フルページスクショ基盤
 
-- 方式 (research/fullpage-screenshot.md の裁定): **@sparticuz/chromium + puppeteer-core を Vercel Function で自前実行** (ランニングコスト 0)。`POST /api/ai/screenshot { route }` → 自サイトの公開 URL を fullPage で撮影 → webp 圧縮 (長辺 1568px、vision 入力最適) → 一時保存 (Storage `ai-context/` 512KB 目標)
+- 方式 (research/fullpage-screenshot.md の裁定): **@sparticuz/chromium + puppeteer-core を Vercel Function で自前実行** (ランニングコスト 0)。`POST /api/ai/screenshot { routeKey }` → **routeKey は EDITABLE_ROUTES のキーのみ受理** (絶対 URL・`//`・クエリ・エンコード済みスラッシュは Zod で拒否、§11 の SSRF 対策と一致)。サーバー側で `new URL(route, SITE_URL)` を構築し fullPage 撮影 → webp 圧縮 (長辺 1568px、vision 入力最適) → 一時保存 (Storage `ai-context/` 512KB 目標)
 - 制約対策: 関数サイズ 250MB 制限内 (chromium-min + リモート pack)。日本語フォント (Noto Sans JP subset) を同梱。タイムアウト 60s (Fluid Compute)
 - **失敗時は常に graceful degradation**: 文言候補・画像生成とも MD のみで続行 (スクショは品質向上のオプション)。失敗を UI に小さく表示
 - 撮影は編集セッション中キャッシュ (route + 最終更新で 10 分)
@@ -199,15 +229,16 @@ create table ai_image_generation_sources (
 ## 7. SNS 生成の画像統合 + 画像付き投稿
 
 - **ai_runs に stage `image_generation` を追加** (既存 stage machine の拡張。cms-ai-pipeline §7 の advance/lease 方式踏襲): チャネル文面生成後、X/IG 向けに「本文に合う画像プロンプト」を LLM が起案 → generateImages(n=4) → **draft レビュー画面で 4 枚から選択** (skip 可)。選択画像は channel_drafts.content に media_id として保存
-- **X 画像付き投稿**: media upload v2 (research/sns-image-posting.md) — INIT/APPEND/FINALIZE のチャンクアップロード → media_id を tweet payload に添付。distribution worker の X 経路を拡張
+- **X 画像付き投稿**: media upload v2 (`api.x.com/2/media/upload`、`media.write` スコープ)。**実装 `distribution/internal/x-media.ts` は INIT/APPEND/FINALIZE のチャンクアップロードで既に存在** (設計書 P0 指示どおり)。research §2.2 はチャンク方式を「現行 API の事実」として有効と確認しており矛盾しない (Codex R2 BLOCKER-4 は research §2.4 の「≤5MB JPEG なら simple upload で十分」という**推奨**を指したもので、チャンクは上位互換のため実装は妥当)。→ media_id を tweet payload に添付、distribution worker の X 経路を配線 (P4)。
+  - **要 P4 実 API 検証**: STATUS ポーリング URL (`GET /2/media/upload?command=STATUS`) は research 未明記の推測 (x-media.ts 冒頭コメント)。P4 で X 再認可後に疎通確認する。
 - **IG**: 既存コンテナ方式に image_url (公開 media URL) を渡す (既に画像必須の設計 — 生成画像で自動充足)
-- billing guard は画像アップロード分も estimated_cost_cents に加算
+- **課金軸 (MINOR)**: X 投稿の課金ガードは従来どおり `estimated_cost_cents` (cents) を維持。AI 画像**生成**コストは別軸で `ai_usage_log.cost_micro_usd` (µUSD) に記録 — 両者を混ぜない (X media アップロード自体は X 側課金でありコスト計上対象外)。
 
 ## 8. note 下書き自動化 (オプトイン、堀さん GO 済み)
 
 - **方式** (research/note-posting.md): 非公式 API。`_note_session_v5` Cookie を設定画面から手動登録 (Vault 保存、有効期限 ~30 日を UI に表示)。`POST /api/v1/text_notes` → `draft_save` の 2 段階で**下書き作成まで**。公開はしない (note を開いて手動)
 - ai_runs の note チャネル: 従来のコピー支援に加え「**note に下書きを作成**」ボタン。**状態意味論 (MAJOR-3)**:
-  - channel_posts に `note_draft_status` ('none'|'creating'|'created'|'unknown'|'failed') と `note_draft_url` を追加 (migration 0015)
+  - channel_posts に `note_draft_status` ('none'|'creating'|'created'|'unknown'|'failed') と `note_draft_url` を追加 (**migration 0016**、P6。0015 は ai-providers 専用のため分離)。契約書 §5 distribution / cms-ai-pipeline §2 の channel_posts DDL は P6 マージ時に追随
   - 成功 → 'created' + URL 保存・表示。明示的失敗 → 'failed' + 半自動フォールバック UI
   - **タイムアウト/応答不明 → 'unknown'**: 再試行前に note の下書き一覧 API で同タイトルの直近下書きを照合し、あれば 'created' に昇格 (重複下書きの防止)。照合も失敗したら「note 側をご確認ください」と半自動へ
   - 既存の manual_required ステータス機構はそのまま (note_draft_status は付加情報)
@@ -239,7 +270,7 @@ create table ai_image_generation_sources (
 - API キー・note Cookie は **Vault のみ** (vault_upsert_secret / vault_read_secret の既存 RPC。DB 平文・クライアント露出なし。保存後の UI は末尾 4 桁)
 - ai_provider_keys / ai_usage_log / ai_image_generations は **RLS admin only** (anon 不可 — page_media と違い公開する理由がない)
 - 生成系 Server Action / Route Handler はすべて requireAdmin 先頭
-- プロンプトインジェクション: §3 の資料タグ方式 + structured output。**サイトコンテンツ由来のテキストを system prompt に入れない**
+- プロンプトインジェクション: §3 の **JSON 決定的シリアライズ (JSON.stringify) + untrusted policy** + structured output (資料タグ方式ではない — `</tag>` 混入で境界を破れないため JSON 文字列で渡す)。**サイトコンテンツ由来のテキストを system prompt に入れない**
 - SSRF 対策 (MAJOR-5 で強化): スクショ API は **URL を受け取らない**。`routeKey` (EDITABLE_ROUTES のキー) のみを受け、URL はサーバー側で `new URL(route, SITE_URL)` により構築。絶対 URL・`//`・エンコード済みスラッシュ・クエリ付き入力は Zod で拒否。Puppeteer 側は request interception で **自オリジン + Supabase Storage 以外の全 subresource をブロック**、リダイレクトは同一オリジンのみ許可
 
 ## 12. フェーズ分割 (常に動く状態を保つ順序)

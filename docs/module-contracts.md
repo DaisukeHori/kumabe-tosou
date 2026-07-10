@@ -1,6 +1,7 @@
 # モジュール契約書 (canonical)
 
-- 版: v2.5 (2026-07-10: ai-providers モジュール新設 (ai-studio-v2.md v1.1) — テーブル 5 本所有・E407〜E409・AI SDK 直 import 禁止・ai_runs に image_generation stage・zOpsLimits に AI 予算)
+- 版: v2.6 (2026-07-10: Codex R2 反映 — zRunStage/zRunStatus に image_generation を実追加 (v2.5 はヘッダ宣言のみで enum 未更新だった)・MediaFacade に createFromBytes 追加 (生成画像のサーバ内保存、BLOCKER-5)。ai-providers §1 は ai-studio-v2.md v1.2 が canonical)
+- 旧版: v2.5 (2026-07-10: ai-providers モジュール新設 (ai-studio-v2.md v1.1) — テーブル 5 本所有・E407〜E409・AI SDK 直 import 禁止・ai_runs に image_generation stage・zOpsLimits に AI 予算)
 - 旧版: v2.4 (2026-07-10: page_text テーブルを page-media 所有に追加、PageMediaFacade にテキストスロット 4 メソッド追加 — visual-text-editor.md v1.0)
 - 旧版: v2.3 (2026-07-09: page-media モジュール新設を §1/§5 に反映 / ContentFacade にビジュアルエディタ用 CAS メソッド 4 件を追加 / KMB-E107〜E109 の所有を明記)
 - 旧版: v2.1 (価格契約を行列モデル v2 に改訂 — Wave 0 実装で legacy 実構造との乖離が判明したため。zEstimateInput は size_key 必須・数量値引き自動適用・レンジ結果に変更)
@@ -296,12 +297,15 @@ export const zNoteAccountMeta = z.object({
 ### 4.6 SSE イベント (/api/ai/runs/[id]/stream)
 
 ```ts
-/** run の stage。整文 (cleaning) は run 開始前の /api/ai/clean で完結するため含まない (設計書 §4.2 と 1:1) */
-export const zRunStage = z.enum(["extracting", "researching", "drafting"]);
+/** run の stage。整文 (cleaning) は run 開始前の /api/ai/clean で完結するため含まない。
+ *  image_generation は SNS 画像生成 (ai-studio-v2.md §7、P4) で drafting 完了後に走る任意ステージ
+ *  (X/IG 以外の run では skip)。P4 で ai_runs.status CHECK 制約に 'image_generation' を追加する
+ *  マイグレーションが必要 (現行 code は 3 stage、契約が先行)。 */
+export const zRunStage = z.enum(["extracting", "researching", "drafting", "image_generation"]);
 export const zRunStatus = z.enum([
-  "pending", "extracting", "researching", "drafting",
+  "pending", "extracting", "researching", "drafting", "image_generation",
   "ready_for_review", "completed", "failed", "cancelled",
-]); // ai_runs.status の check 制約と 1:1
+]); // ai_runs.status の check 制約と 1:1 (image_generation は P4 マイグレーションで追加)
 
 export const zRunProgressEvent = z.discriminatedUnion("type", [
   z.object({
@@ -588,6 +592,12 @@ export interface MediaFacade {
   getJpegRenditionUrl(mediaId: string): Promise<Result<string>>; // IG 用。未生成なら生成
   listByTags(tags: string[]): Promise<Result<MediaItem[]>>;      // ai-studio の画像候補提案用
   assertDeletable(mediaId: string): Promise<Result<void>>;        // 参照ゼロ検証 (E301)
+  // サーバ内生成画像 (AI 画像生成) の保存。バイナリ→Storage サーバサイド upload→media 行 insert。
+  // completeUpload (クライアント署名 URL 経路) の行 insert ロジックを共有する (ai-studio-v2.md §4/BLOCKER-5)。
+  createFromBytes(input: {
+    bytes: Uint8Array; contentType: string;
+    alt?: string; credit?: string; tags: string[]; isPlaceholder?: boolean;
+  }): Promise<Result<{ id: string; storagePath: string }>>;
 }
 
 // ai-studio/facade.ts
@@ -644,7 +654,7 @@ export interface AiProvidersFacade {
   transcribe(req: TranscribeReq): Promise<Result<TranscribeResult>>;     // 既存 gpt-4o-transcribe 経路の移行先
   getUsageSummary(range: { from: string; to: string }): Promise<Result<UsageSummary>>;
 }
-// ai_runs の stage に 'image_generation' を追加 (ai-studio-v2.md §7。zRunStage 更新)
+// ai_runs の stage 'image_generation' は §4.6 zRunStage/zRunStatus に反映済み (P4 でコード追随)
 
 // pricing/facade.ts
 export interface PricingFacade {
