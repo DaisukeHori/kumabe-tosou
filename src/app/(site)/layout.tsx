@@ -5,7 +5,6 @@ import { CustomCursor } from "@/components/motion/custom-cursor";
 import { SectionIndicator } from "@/components/motion/section-indicator";
 import { PaperNoise } from "@/components/motion/paper-noise";
 import { pageMediaFacade } from "@/modules/page-media/facade";
-import type { ResolvedText } from "@/modules/page-media/contracts";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
@@ -36,10 +35,12 @@ const LOCAL_BUSINESS_JSON_LD = {
   (site) は URL には出現しないため、配下ページの公開 URL は一切変わらない。
 */
 /**
- * shared.cta.consult / chrome.footer.tagline の配線 (canonical:
- * docs/design/visual-text-editor.md §4.1 MAJOR-1)。公開 (site) は resolveAllTexts()
- * (unstable_cache 経由・request-time API ではないため SSG を壊さない) を editMode=false で
- * SiteHeader/SiteFooter に渡す。
+ * SiteHeader/SiteFooter の全表示テキスト (shared.cta.consult / chrome.footer.tagline /
+ * common.header.* / common.footer.*) の配線 (canonical: docs/design/visual-text-editor.md
+ * §4.1 MAJOR-1、v2 Wave 1 W1-1)。公開 (site) は resolveAllTexts() (unstable_cache 経由・
+ * request-time API ではないため SSG を壊さない) を editMode=false で、解決済み全件
+ * (`texts`) をそのまま SiteHeader/SiteFooter に渡す (両コンポーネントが内部で
+ * slotKey ごとに引く)。
  */
 export default async function SiteLayout({
   children,
@@ -48,8 +49,6 @@ export default async function SiteLayout({
 }>) {
   const textsResult = await pageMediaFacade.resolveAllTexts();
   const texts = textsResult.ok ? textsResult.value : {};
-  const ctaText: ResolvedText = texts["shared.cta.consult"];
-  const footerTagline: ResolvedText = texts["chrome.footer.tagline"];
 
   return (
     <>
@@ -60,11 +59,11 @@ export default async function SiteLayout({
         }}
       />
       <PaperNoise />
-      <SiteHeader ctaText={ctaText} editMode={false} />
+      <SiteHeader texts={texts} editMode={false} />
       <main className="flex-1">
         <PageTransition>{children}</PageTransition>
       </main>
-      <SiteFooter footerTagline={footerTagline} editMode={false} />
+      <SiteFooter texts={texts} editMode={false} />
       {/* 署名演出オーバーレイ (M1)。/edit iframe に載せないため (site) 限定 */}
       <CustomCursor />
       <SectionIndicator />
