@@ -10,133 +10,18 @@ import {
   SectionMark,
 } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
+import { SlotRichText } from "@/components/site/slot-rich-text";
 import { SlotText } from "@/components/site/slot-text";
 import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
-const STEPS = [
-  {
-    no: "01",
-    title: "受け入れ・確認",
-    en: "INTAKE & INSPECTION",
-    desc: "届いた造形物を確認します。造形方式と素材、積層痕の状態、欠けや反りの有無を見ます。初めての素材なら、いきなり本番にはせず、テストピースで塗料の相性を確かめてから進めます。",
-    why: (
-      <>
-        <strong>なぜ</strong> —
-        素材ごとに塗料の乗り方が違うから。最初の見極めが、後の失敗を防ぎます。
-      </>
-    ),
-  },
-  {
-    no: "02",
-    title: "積層痕の研磨",
-    en: "SANDING — #800",
-    desc: (
-      <>
-        <span className="font-mono">#800</span>{" "}
-        の紙やすりで、積層痕を面ごと研ぎ落とします。ここで縞の大半を物理的に消します。細いディテールや薄い壁は、力を入れすぎないよう手加減しながら。
-      </>
-    ),
-    why: (
-      <>
-        <strong>なぜ</strong> — 積層痕は塗料では消えません。
-        <strong>縞を消すのは、塗料ではなく研ぎ</strong>です。
-      </>
-    ),
-  },
-  {
-    no: "03",
-    title: "洗浄・脱脂",
-    en: "CLEANING & DEGREASING",
-    desc: "研磨後、水洗いで削りカスを流し、脱脂剤（シリコンオフ）で油分を除去、タッククロスで微粉を拭き取ります。光造形品は、未硬化レジンの洗浄と二次硬化もここまでに済ませます。",
-    why: (
-      <>
-        <strong>なぜ</strong> —
-        油分が残ると塗料が弾き（ハジキ）、密着不良や膨れの原因に。
-        <strong>脱脂を怠ると、あとで必ず出ます。</strong>
-      </>
-    ),
-  },
-  {
-    no: "04",
-    title: "マスキング",
-    en: "MASKING",
-    desc: "塗料を乗せない部分、塗り分ける境界を養生します。曲面や細部に沿ってテープを貼る精度が、塗り際の美しさを決めます。可動部や勘合部があれば、噛み合わせを保つよう保護します。",
-    why: (
-      <>
-        <strong>なぜ</strong> —
-        マスキングの技術は、そのまま仕上がりの輪郭に出ます。地味ですが、差が出る工程です。
-      </>
-    ),
-  },
-  {
-    no: "05",
-    title: "プラサフ（下塗り・中塗り）",
-    en: "PRIMER-SURFACER",
-    desc: "プライマー（密着）とサーフェイサー（凹凸埋め）を兼ねたプラサフを吹きます。厚膜タイプで微細な段差を埋め、研磨で残った細かな傷を覆う。塗料が乗る土台を、ここでつくります。",
-    why: (
-      <>
-        <strong>なぜ</strong> — サーフェイサーを省くと密着も発色も落ちます。
-        <strong>塗装の出来の大半は、この下地で決まる。</strong>
-      </>
-    ),
-  },
-  {
-    no: "06",
-    title: "足付け・水研ぎ",
-    en: "WET-SANDING — #1200",
-    desc: (
-      <>
-        プラサフが乾いたら、<span className="font-mono">#1200</span>{" "}
-        の耐水ペーパーで水研ぎします。摩擦熱を抑えながら表面を整え、あえて細かな傷（足）をつけて、上塗り塗料の食いつきを良くします。
-      </>
-    ),
-    why: (
-      <>
-        <strong>なぜ</strong> —
-        つるつるより、わずかに足がある方が塗料は密着します。平滑さと密着の、両立点です。
-      </>
-    ),
-  },
-  {
-    no: "07",
-    title: "ベースコート（色）",
-    en: "BASE COAT",
-    desc: "いよいよ色を吹きます。一度に厚く吹かず、薄く数回に分けて重ねる。塗る方向を層ごとに変え、乾燥間隔（フラッシュタイム）を取りながら発色を積み上げます。メタリック・パールは、この膜厚の管理が仕上がりを左右します。",
-    why: (
-      <>
-        <strong>なぜ</strong> —
-        厚塗りはタレ・ゆず肌・ディテールの潰れを招く。
-        <strong>薄く、数回。</strong>これが均一な発色の条件です。
-      </>
-    ),
-  },
-  {
-    no: "08",
-    title: "クリアコート",
-    en: "CLEAR COAT — 2K URETHANE",
-    desc: "2液ウレタンクリアを吹きます。3コートパールの場合は、ベースとクリアの間にパール層を挟みます。主剤と硬化剤が反応し、硬く平滑な塗膜そのものを形成する——だから、吹きっぱなしで深い艶が出ます。",
-    why: (
-      <>
-        <strong>なぜ</strong> — 2液ウレタンは磨かずとも光る。
-        <strong>だから鏡面磨きをしません。</strong>
-        その時間を、数量対応と価格の還元に回します。
-      </>
-    ),
-  },
-  {
-    no: "09",
-    title: "常温硬化・検品・発送",
-    en: "CURING & SHIPPING",
-    desc: "2液ウレタンを常温で5〜7日かけて完全硬化させます。硬化を確認したら、発送前の検品へ。タレ・ゆず肌・色ムラ・異物・密着・エッジ・硬化——項目を確認し、養生・梱包して発送します。",
-    why: (
-      <>
-        <strong>なぜ</strong> — 硬化を待たずに送れば、輸送で傷みます。
-        <strong>急がば、回る。</strong>
-        完全硬化を待つのは、届いてからの品質のためです。
-      </>
-    ),
-  },
-] as const;
+/* 9工程の連番表記 ("01".."09")。SectionMark の no / PhotoFigure の figNo と同じ理由で
+   構造的な連番のため slot化しない (非退行の対象外)。title/en/desc/why/固定ラベルは
+   texts["process.step.N.*"] (N = 1-based index) から SlotText/SlotRichText で描画する。 */
+const STEP_NOS = ["01", "02", "03", "04", "05", "06", "07", "08", "09"] as const;
+
+/* desc に研磨番手 (#800 / #1200) を文中インライン mono で含む工程 (STEP02, STEP06) のみ rich。
+   他7工程の desc は装飾なしのため plain (SlotText) で描画する。 */
+const RICH_DESC_STEP_NUMBERS = new Set([2, 6]);
 
 function CoatDiagram() {
   return (
@@ -313,34 +198,16 @@ function CoatDiagram() {
   );
 }
 
-const COAT_LEGEND = [
+/* 塗膜凡例のスウォッチ (色見本の見た目のみ)。name/en/desc は texts["process.legend.N.*"]
+   (N = 1-based index) から SlotText で描画する。 */
+const COAT_LEGEND_SWATCHES = [
+  { background: "#CBCBC3" },
+  { background: "#E6E6E1", border: "1px solid rgba(23,25,27,0.2)" },
+  { background: "linear-gradient(90deg,#B21226,#8E0F1E)" },
   {
-    swatch: { background: "#CBCBC3" },
-    name: "造形物",
-    en: "3D PRINT",
-    desc: "出発点。表面には積層痕という横縞がある。",
-  },
-  {
-    swatch: { background: "#E6E6E1", border: "1px solid rgba(23,25,27,0.2)" },
-    name: "プラサフ",
-    en: "PRIMER-SURFACER",
-    desc: "積層痕を埋めて平滑化し、塗料の密着をつくる下地。",
-  },
-  {
-    swatch: { background: "linear-gradient(90deg,#B21226,#8E0F1E)" },
-    name: "ベースコート",
-    en: "BASE COAT",
-    desc: "色を決める発色層。メタリック・パールもこの層。",
-  },
-  {
-    swatch: {
-      background:
-        "linear-gradient(90deg,rgba(255,255,255,0.7),rgba(216,216,208,0.7))",
-      border: "1px solid rgba(23,25,27,0.15)",
-    },
-    name: "クリア",
-    en: "CLEAR (2K)",
-    desc: "2液ウレタン。色を守り、磨かずとも深い艶を出す。",
+    background:
+      "linear-gradient(90deg,rgba(255,255,255,0.7),rgba(216,216,208,0.7))",
+    border: "1px solid rgba(23,25,27,0.15)",
   },
 ] as const;
 
@@ -356,8 +223,20 @@ export function ProcessPageBody({
   return (
     <>
       <PageHead
-        index="PROCESS — 塗りが仕上がるまで"
-        en="9 STEPS"
+        index={
+          <SlotText
+            slotKey="process.hero.index"
+            resolved={texts["process.hero.index"]}
+            editMode={editMode}
+          />
+        }
+        en={
+          <SlotText
+            slotKey="process.hero.en"
+            resolved={texts["process.hero.en"]}
+            editMode={editMode}
+          />
+        }
         title={
           <SlotText
             slotKey="process.hero.heading"
@@ -377,7 +256,12 @@ export function ProcessPageBody({
 
       {/* ============ 塗膜の層構造 ============ */}
       <Section>
-        <SectionMark no="SEC. 01" label="COATING STRUCTURE" />
+        <SectionMark
+          no="SEC. 01"
+          label={texts["process.sec.1.label"].text}
+          labelSlotKey="process.sec.1.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="process.coating.heading"
@@ -386,32 +270,56 @@ export function ProcessPageBody({
           />
         </SecTitle>
         <SecLead>
-          仕上がった塗面は一枚に見えますが、実際は役割の違う層の積み重ねです。下から順に、造形物・プラサフ・ベースコート・クリア。積層痕は、下の層で吸収して消します。
+          <SlotText
+            slotKey="process.coating.lead"
+            resolved={texts["process.coating.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="mt-10 border border-hair bg-paper p-4 sm:p-8">
           <CoatDiagram />
           <div className="mt-6 grid gap-4 border-t border-hair-soft pt-6 sm:grid-cols-2 lg:grid-cols-4">
-            {COAT_LEGEND.map((item) => (
-              <div key={item.name}>
-                <div className="h-4 w-full" style={item.swatch} />
-                <p className="mt-2 text-sm font-bold tracking-wider">
-                  {item.name}
-                  <span className="ml-2 font-mono text-[9px] font-normal tracking-[0.16em] text-carbon-soft">
-                    {item.en}
-                  </span>
-                </p>
-                <p className="mt-1 text-[12px] leading-5 text-carbon-mid">
-                  {item.desc}
-                </p>
-              </div>
-            ))}
+            {COAT_LEGEND_SWATCHES.map((swatch, i) => {
+              const n = i + 1;
+              return (
+                <div key={n}>
+                  <div className="h-4 w-full" style={swatch} />
+                  <p className="mt-2 text-sm font-bold tracking-wider">
+                    <SlotText
+                      slotKey={`process.legend.${n}.name`}
+                      resolved={texts[`process.legend.${n}.name`]}
+                      editMode={editMode}
+                    />
+                    <span className="ml-2 font-mono text-[9px] font-normal tracking-[0.16em] text-carbon-soft">
+                      <SlotText
+                        slotKey={`process.legend.${n}.en`}
+                        resolved={texts[`process.legend.${n}.en`]}
+                        editMode={editMode}
+                      />
+                    </span>
+                  </p>
+                  <SlotText
+                    slotKey={`process.legend.${n}.desc`}
+                    resolved={texts[`process.legend.${n}.desc`]}
+                    editMode={editMode}
+                    as="p"
+                    className="mt-1 text-[12px] leading-5 text-carbon-mid"
+                  />
+                </div>
+              );
+            })}
           </div>
         </Reveal>
       </Section>
 
       {/* ============ 9工程 ============ */}
       <Section>
-        <SectionMark no="SEC. 02" label="THE 9 STEPS" />
+        <SectionMark
+          no="SEC. 02"
+          label={texts["process.sec.2.label"].text}
+          labelSlotKey="process.sec.2.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="process.steps.heading"
@@ -425,63 +333,157 @@ export function ProcessPageBody({
             slotKey="process.steps.1"
             resolved={slots["process.steps.1"]}
             editMode={editMode}
-            capJa="下地をつくる"
-            capEn="SANDING & PRIMER"
-            credit="Photo: mazinomron / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="process.steps.1.capja"
+                resolved={texts["process.steps.1.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="process.steps.1.capen"
+                resolved={texts["process.steps.1.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="process.steps.1.credit"
+                resolved={texts["process.steps.1.credit"]}
+                editMode={editMode}
+              />
+            }
           />
           <PhotoFigure
             figNo="FIG.02b"
             slotKey="process.steps.2"
             resolved={slots["process.steps.2"]}
             editMode={editMode}
-            capJa="色を吹く"
-            capEn="BASE & CLEAR"
-            credit="Photo: createasea / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="process.steps.2.capja"
+                resolved={texts["process.steps.2.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="process.steps.2.capen"
+                resolved={texts["process.steps.2.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="process.steps.2.credit"
+                resolved={texts["process.steps.2.credit"]}
+                editMode={editMode}
+              />
+            }
           />
           <PhotoFigure
             figNo="FIG.02c"
             slotKey="process.steps.3"
             resolved={slots["process.steps.3"]}
             editMode={editMode}
-            capJa="仕上がり"
-            capEn="THE FINISH"
-            credit="Photo: cmreflections / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="process.steps.3.capja"
+                resolved={texts["process.steps.3.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="process.steps.3.capen"
+                resolved={texts["process.steps.3.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="process.steps.3.credit"
+                resolved={texts["process.steps.3.credit"]}
+                editMode={editMode}
+              />
+            }
           />
         </Reveal>
         <Reveal as="div" className="mt-10 divide-y divide-hair border-y border-hair">
-          {STEPS.map((step) => (
-            <div
-              key={step.no}
-              className="kt-process-step grid gap-4 py-8 sm:grid-cols-[96px_minmax(0,1fr)] sm:gap-10"
-            >
-              <span className="kt-ps-no" aria-hidden="true">
-                {step.no}
-              </span>
-              <div>
-                <p className="font-mono text-[10px] tracking-[0.2em] text-soul">
-                  STEP {step.no}
-                </p>
-                <h3 className="mt-2 text-xl font-bold tracking-wider">
-                  {step.title}
-                </h3>
-                <p className="mt-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
-                  {step.en}
-                </p>
-                <p className="mt-4 text-sm leading-7 text-carbon-mid">
-                  {step.desc}
-                </p>
-                <p className="mt-3 border-l-2 border-hair pl-4 text-sm leading-7 text-carbon-mid [&_strong]:font-bold [&_strong]:text-carbon">
-                  {step.why}
-                </p>
+          {STEP_NOS.map((no, i) => {
+            const n = i + 1;
+            const isRichDesc = RICH_DESC_STEP_NUMBERS.has(n);
+            return (
+              <div
+                key={no}
+                className="kt-process-step grid gap-4 py-8 sm:grid-cols-[96px_minmax(0,1fr)] sm:gap-10"
+              >
+                <span className="kt-ps-no" aria-hidden="true">
+                  {no}
+                </span>
+                <div>
+                  <p className="font-mono text-[10px] tracking-[0.2em] text-soul">
+                    <SlotText
+                      slotKey={`process.step.${n}.label`}
+                      resolved={texts[`process.step.${n}.label`]}
+                      editMode={editMode}
+                    />{" "}
+                    {no}
+                  </p>
+                  <h3 className="mt-2 text-xl font-bold tracking-wider">
+                    <SlotText
+                      slotKey={`process.step.${n}.title`}
+                      resolved={texts[`process.step.${n}.title`]}
+                      editMode={editMode}
+                    />
+                  </h3>
+                  <SlotText
+                    slotKey={`process.step.${n}.en`}
+                    resolved={texts[`process.step.${n}.en`]}
+                    editMode={editMode}
+                    as="p"
+                    className="mt-1 font-mono text-[10px] tracking-[0.18em] text-carbon-soft"
+                  />
+                  {isRichDesc ? (
+                    <SlotRichText
+                      slotKey={`process.step.${n}.desc`}
+                      resolved={texts[`process.step.${n}.desc`]}
+                      editMode={editMode}
+                      as="p"
+                      className="mt-4 text-sm leading-7 text-carbon-mid"
+                    />
+                  ) : (
+                    <SlotText
+                      slotKey={`process.step.${n}.desc`}
+                      resolved={texts[`process.step.${n}.desc`]}
+                      editMode={editMode}
+                      as="p"
+                      className="mt-4 text-sm leading-7 text-carbon-mid"
+                    />
+                  )}
+                  <SlotRichText
+                    slotKey={`process.step.${n}.why`}
+                    resolved={texts[`process.step.${n}.why`]}
+                    editMode={editMode}
+                    as="p"
+                    className="mt-3 border-l-2 border-hair pl-4 text-sm leading-7 text-carbon-mid [&_strong]:font-bold [&_strong]:text-carbon"
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </Reveal>
       </Section>
 
       {/* ============ 塗装環境 ============ */}
       <Section>
-        <SectionMark no="SEC. 03" label="THE BOOTH" />
+        <SectionMark
+          no="SEC. 03"
+          label={texts["process.sec.3.label"].text}
+          labelSlotKey="process.sec.3.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="process.booth.heading"
@@ -490,54 +492,65 @@ export function ProcessPageBody({
           />
         </SecTitle>
         <SecLead>
-          塗装の大敵は、宙を舞うホコリです。だから塗装は、専用のブースの中で行います。フィルターを通した清浄な空気を上から下へ流し、オーバーミストとともに床下へ排気する——異物混入をふせぐ、目に見えない設備です。
+          <SlotText
+            slotKey="process.booth.lead"
+            resolved={texts["process.booth.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="mt-10 grid gap-4 sm:grid-cols-3">
-          {[
-            {
-              num: "5",
-              unit: "ミクロン",
-              label: "二次フィルターが捕集する埃の大きさ",
-              en: "DUST CAPTURED",
-            },
-            {
-              num: "90",
-              unit: "%超",
-              label: "一次フィルターの外気ダスト捕集率",
-              en: "PRIMARY FILTER",
-            },
-            {
-              num: "上→下",
-              unit: "",
-              label: "清浄空気の流れ（ダウンフロー）",
-              en: "DOWNDRAFT AIRFLOW",
-            },
-          ].map((fact) => (
-            <div key={fact.en} className="border border-hair bg-paper p-6">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="border border-hair bg-paper p-6">
               <p className="text-[clamp(30px,4vw,44px)] font-bold leading-none tracking-[0.04em]">
-                {fact.num}
+                <SlotText
+                  slotKey={`process.booth.fact.${n}.num`}
+                  resolved={texts[`process.booth.fact.${n}.num`]}
+                  editMode={editMode}
+                />
                 <span className="ml-1 text-base font-medium text-carbon-mid">
-                  {fact.unit}
+                  {n === 3 ? null : (
+                    <SlotText
+                      slotKey={`process.booth.fact.${n}.unit`}
+                      resolved={texts[`process.booth.fact.${n}.unit`]}
+                      editMode={editMode}
+                    />
+                  )}
                 </span>
               </p>
               <p className="mt-4 text-[13px] leading-6 text-carbon-mid">
-                {fact.label}
+                <SlotText
+                  slotKey={`process.booth.fact.${n}.label`}
+                  resolved={texts[`process.booth.fact.${n}.label`]}
+                  editMode={editMode}
+                />
                 <span className="mt-1 block font-mono text-[9px] tracking-[0.16em] text-carbon-soft">
-                  {fact.en}
+                  <SlotText
+                    slotKey={`process.booth.fact.${n}.en`}
+                    resolved={texts[`process.booth.fact.${n}.en`]}
+                    editMode={editMode}
+                  />
                 </span>
               </p>
             </div>
           ))}
         </Reveal>
         <MapNote>
-          ※
-          一般的な自動車塗装ブースの仕組みです。それでも極小のゴミは付着し得るため、最終的な確認は検品工程（サービスページ参照）で行います。
+          <SlotText
+            slotKey="process.booth.note"
+            resolved={texts["process.booth.note"]}
+            editMode={editMode}
+          />
         </MapNote>
       </Section>
 
       {/* ============ 関連導線 ============ */}
       <Section>
-        <SectionMark no="SEC. 04" label="RELATED" />
+        <SectionMark
+          no="SEC. 04"
+          label={texts["process.sec.4.label"].text}
+          labelSlotKey="process.sec.4.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="process.related.heading"
@@ -546,18 +559,45 @@ export function ProcessPageBody({
           />
         </SecTitle>
         <SecLead>
-          グレード別の料金や数量スライドはサービスページに、素材ごとの下地の作り分けは素材対応ページにまとめています。工程の思想を、色の実例で見たいときは色見本へ。
+          <SlotText
+            slotKey="process.related.lead"
+            resolved={texts["process.related.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="mt-8 flex flex-wrap gap-3">
-          <ArrowButton href="/service">サービス・料金</ArrowButton>
-          <ArrowButton href="/materials">素材対応</ArrowButton>
-          <ArrowButton href="/colors">色見本</ArrowButton>
+          <ArrowButton href="/service">
+            <SlotText
+              slotKey="process.related.link.1"
+              resolved={texts["process.related.link.1"]}
+              editMode={editMode}
+            />
+          </ArrowButton>
+          <ArrowButton href="/materials">
+            <SlotText
+              slotKey="process.related.link.2"
+              resolved={texts["process.related.link.2"]}
+              editMode={editMode}
+            />
+          </ArrowButton>
+          <ArrowButton href="/colors">
+            <SlotText
+              slotKey="process.related.link.3"
+              resolved={texts["process.related.link.3"]}
+              editMode={editMode}
+            />
+          </ArrowButton>
         </Reveal>
       </Section>
 
       {/* ============ GALLERY ============ */}
       <Section>
-        <SectionMark no="GALLERY" label="BEHIND THE STEPS" />
+        <SectionMark
+          no="GALLERY"
+          label={texts["process.sec.5.label"].text}
+          labelSlotKey="process.sec.5.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="process.gallery.heading"
@@ -566,7 +606,11 @@ export function ProcessPageBody({
           />
         </SecTitle>
         <SecLead>
-          地味な工程の積み重ねが、量産品と見分けがつかない顔をつくります。
+          <SlotText
+            slotKey="process.gallery.lead"
+            resolved={texts["process.gallery.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-3">
           <PhotoFigure
@@ -574,27 +618,81 @@ export function ProcessPageBody({
             slotKey="process.gallery.1"
             resolved={slots["process.gallery.1"]}
             editMode={editMode}
-            capJa="設備"
-            capEn="SPRAY EQUIPMENT"
-            credit="Photo: kagan_4854 / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="process.gallery.1.capja"
+                resolved={texts["process.gallery.1.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="process.gallery.1.capen"
+                resolved={texts["process.gallery.1.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="process.gallery.1.credit"
+                resolved={texts["process.gallery.1.credit"]}
+                editMode={editMode}
+              />
+            }
           />
           <PhotoFigure
             figNo="FIG.04"
             slotKey="process.gallery.2"
             resolved={slots["process.gallery.2"]}
             editMode={editMode}
-            capJa="精度"
-            capEn="PRECISION"
-            credit="Photo: kadircelep / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="process.gallery.2.capja"
+                resolved={texts["process.gallery.2.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="process.gallery.2.capen"
+                resolved={texts["process.gallery.2.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="process.gallery.2.credit"
+                resolved={texts["process.gallery.2.credit"]}
+                editMode={editMode}
+              />
+            }
           />
           <PhotoFigure
             figNo="FIG.05"
             slotKey="process.gallery.3"
             resolved={slots["process.gallery.3"]}
             editMode={editMode}
-            capJa="質感"
-            capEn="THE SURFACE"
-            credit="Photo: apryan_cahyo / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="process.gallery.3.capja"
+                resolved={texts["process.gallery.3.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="process.gallery.3.capen"
+                resolved={texts["process.gallery.3.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="process.gallery.3.credit"
+                resolved={texts["process.gallery.3.credit"]}
+                editMode={editMode}
+              />
+            }
           />
         </Reveal>
       </Section>
@@ -616,7 +714,9 @@ export function ProcessPageBody({
           />
         }
         href="/contact"
-        label="相談する"
+        label={texts["shared.cta.consult"].text}
+        labelSlotKey="shared.cta.consult"
+        editMode={editMode}
       />
     </>
   );
