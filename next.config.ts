@@ -25,7 +25,14 @@ const nextConfig: NextConfig = {
    * serverExternalPackages 指定でサーバーバンドル対象から外し、Node の素の require()
    * (プレーン CJS 解決。全プロパティが揃うことを実測済み) に委ねることで解決する。
    */
-  serverExternalPackages: ["twitter-text"],
+  /**
+   * puppeteer-core / @sparticuz/chromium (docs/design/ai-studio-v2.md §5 フルページスクショ基盤):
+   * Vercel 公式テンプレート (Deploying Puppeteer with Next.js on Vercel) の推奨どおり
+   * serverExternalPackages に追加する。@sparticuz/chromium はバイナリ同梱 (brotli 圧縮の
+   * Chromium パック) のため、webpack のサーバーバンドル対象に含めるとトレース漏れ・
+   * サイズ肥大が起きる。素の require() でファイルパスごと解決させる。
+   */
+  serverExternalPackages: ["twitter-text", "puppeteer-core", "@sparticuz/chromium"],
   images: {
     remotePatterns: supabaseHostname
       ? [

@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { contentFacade } from "@/modules/content/facade";
 import { mediaFacade } from "@/modules/media/facade";
 import type { Result } from "@/modules/platform/contracts";
 
@@ -62,7 +63,21 @@ export interface PageMediaFacade {
   listTextsForAdmin(route?: string): Promise<Result<PageTextState[]>>;
   /** null = 既定に戻す (行削除)。defaultText と同一文字列の保存も同様に削除へ正規化する (v1.1) */
   setText(slotKey: string, text: string | null): Promise<Result<void>>;
+
+  /**
+   * AI 文言候補のコンテキスト構築器 (ai-studio-v2.md §3。P2 追加)。
+   * TEXT_REGISTRY の現況 (resolved) + SLOT_REGISTRY の画像 alt + works/posts の公開タイトル群を
+   * 決定的 JSON にシリアライズして返す (タグ包みではなく JSON.stringify — §3 MAJOR-4)。
+   * 対象スロットは label に `<<<編集対象>>>` を前置してマークする。
+   */
+  buildSiteContextMd(targetSlotKey: string): Promise<Result<SiteContextResult>>;
 }
+
+/** buildSiteContextMd() の戻り値 (ai-studio-v2.md §3)。contextJson は既に決定的 JSON.stringify 済み */
+export type SiteContextResult = {
+  contextJson: string;
+  targetRoute: string;
+};
 
 // re-export (admin UI / edit ルートが registry を直接読みたいケース用の利便 export。
 // facade を経由しない registry の値自体は「静的メタの単一ソース」であり秘匿情報ではない)
@@ -355,6 +370,87 @@ async function setText(slotKey: string, text: string | null): Promise<Result<voi
   }
 }
 
+// ---------------------------------------------------------------------------
+// buildSiteContextMd (AI 文言候補のコンテキスト構築器。ai-studio-v2.md §3、P2 追加)
+// ---------------------------------------------------------------------------
+
+/** 対象スロットを識別可能にするマーカー (§3: 「対象スロットは <<<編集対象>>> でマーク」) */
+const TARGET_SLOT_MARKER = "<<<編集対象>>>";
+
+const PUBLISHED_TITLES_SCAN_PARAMS = { cursor: null, limit: 100 } as const;
+
+/**
+ * works / posts (blog・reading) の公開タイトル群 (§3「works/posts の公開タイトル群」)。
+ * ベストエフォート: 取得に失敗したカテゴリは空配列にフォールバックする (コンテキスト構築全体を
+ * 失敗させない。site-public の allDefaultFallback と同じ「落とさない」思想)。
+ * news (お知らせ) は actions.ts の POST_KIND_PATH 同様、専用の公開一覧ルートが無いため対象外。
+ */
+async function fetchPublishedTitles(): Promise<{ works: string[]; posts: string[] }> {
+  const [worksResult, blogResult, readingResult] = await Promise.all([
+    contentFacade.listPublished("work", PUBLISHED_TITLES_SCAN_PARAMS),
+    contentFacade.listPublished("blog", PUBLISHED_TITLES_SCAN_PARAMS),
+    contentFacade.listPublished("reading", PUBLISHED_TITLES_SCAN_PARAMS),
+  ]);
+  return {
+    works: worksResult.ok ? worksResult.value.items.map((item) => item.title) : [],
+    posts: [
+      ...(blogResult.ok ? blogResult.value.items.map((item) => item.title) : []),
+      ...(readingResult.ok ? readingResult.value.items.map((item) => item.title) : []),
+    ],
+  };
+}
+
+/**
+ * サイト全文 MD の構築 (§3)。決定的シリアライズの実体は末尾の JSON.stringify のみ
+ * (対象は静的 registry の走査順 + admin セッションの現況値であり、タイムスタンプ等の
+ * 揮発値は含めない — text-suggestion-ux.md のキャッシュ無効化リスクへの対応)。
+ *
+ * 判断点 (オーケストレーターへ報告済み): module-contracts.md §2 の依存方向表に
+ * `page-media → content` は明記されていない (新設モジュールのため単純な記載漏れと判断)。
+ * 本関数は「works/posts の公開タイトル群」(§3 原文) を得るために contentFacade.listPublished
+ * (read専用・facade 経由) に依存する。循環依存は無い (content モジュールは page-media に
+ * 依存しない) ため ESLint 上も構造上も問題は無いが、契約書更新が必要であれば要確認。
+ */
+async function buildSiteContextMd(targetSlotKey: string): Promise<Result<SiteContextResult>> {
+  if (!isValidTextSlotKey(targetSlotKey)) {
+    return { ok: false, code: "KMB-E107", detail: `未知の slot_key です: ${targetSlotKey}` };
+  }
+  const targetSlot = textSlotByKey(targetSlotKey)!;
+
+  const textsResult = await listTextsForAdmin();
+  if (!textsResult.ok) return textsResult;
+  const slotsResult = await listForAdmin();
+  if (!slotsResult.ok) return slotsResult;
+
+  const texts = textsResult.value.map((item) => ({
+    key: item.slot.key,
+    route: item.slot.route,
+    kind: item.slot.kind,
+    label: item.slot.key === targetSlotKey ? `${TARGET_SLOT_MARKER} ${item.slot.label}` : item.slot.label,
+    text: item.text,
+  }));
+
+  const images = slotsResult.value.map((item) => ({
+    key: item.slot.key,
+    route: item.slot.route,
+    label: item.slot.label,
+    alt: item.alt,
+  }));
+
+  const publishedTitles = await fetchPublishedTitles();
+
+  const payload = {
+    source: "site_content" as const,
+    targetSlotKey,
+    targetRoute: targetSlot.route,
+    texts,
+    images,
+    publishedTitles,
+  };
+
+  return { ok: true, value: { contextJson: JSON.stringify(payload), targetRoute: targetSlot.route } };
+}
+
 export const pageMediaFacade: PageMediaFacade = {
   resolveAll,
   resolveAllFresh,
@@ -365,4 +461,5 @@ export const pageMediaFacade: PageMediaFacade = {
   resolveAllTextsFresh,
   listTextsForAdmin,
   setText,
+  buildSiteContextMd,
 };

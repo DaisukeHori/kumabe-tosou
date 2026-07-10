@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import type { DetectedModel } from "@/modules/ai-providers/contracts";
 import type { KmbErrorCode } from "@/modules/platform/contracts";
 import { getErrorInfo } from "@/modules/platform/errors";
 
@@ -12,9 +13,11 @@ import { MediaPicker, type PickerMediaItem } from "@/app/admin/_ui/media-picker"
 
 import {
   listSidePanel,
+  listTextModels,
   setImage,
   setSlotAlt,
   setSlotText,
+  suggestText,
   type ContentGapItem,
   type EditableTarget,
   type SlotPanelItem,
@@ -22,7 +25,7 @@ import {
   type WorksNavItem,
 } from "./actions";
 import { computeScale, mapChildRectToContainer } from "./coordinate-mapping";
-import { HotspotMenu } from "./hotspot-menu";
+import { HotspotMenu, type AiSuggestPanelState } from "./hotspot-menu";
 import { SidePanel } from "./side-panel";
 import type { Hotspot, MenuState, PageTab, TextTarget } from "./types";
 
@@ -201,6 +204,25 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
   const [altValue, setAltValue] = useState("");
   const [textValue, setTextValue] = useState("");
   const [savePending, startSaveTransition] = useTransition();
+
+  // ---- AI 候補パネル (ai-studio-v2.md §3、P2 追加) ----
+  // モデル一覧は「AI 候補」初回展開時に 1 回だけ取得し、以後のホットスポット切り替えでも
+  // 再取得しない (listAvailableModels は全ホットスポット共通の一覧のため)。
+  const [aiModels, setAiModels] = useState<DetectedModel[]>([]);
+  const [aiModelsLoading, setAiModelsLoading] = useState(false);
+  const aiModelsLoadedRef = useRef(false);
+  type AiSuggestOwnState = Omit<AiSuggestPanelState, "models" | "modelsLoading" | "pending">;
+  const AI_SUGGEST_INITIAL_STATE: AiSuggestOwnState = {
+    open: false,
+    selectedModel: "",
+    instruction: "",
+    useScreenshot: false,
+    candidates: null,
+    screenshotUsed: null,
+    error: null,
+  };
+  const [aiSuggestState, setAiSuggestState] = useState<AiSuggestOwnState>(AI_SUGGEST_INITIAL_STATE);
+  const [aiPending, startAiTransition] = useTransition();
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerTarget, setPickerTarget] = useState<{ target: EditableTarget; oldMediaId: string | null } | null>(
@@ -398,6 +420,9 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
     const slotKey = hotspot.target.slotKey;
     const current = sidePanel.texts.find((t) => t.slotKey === slotKey);
     setTextValue(current?.text ?? "");
+    // ホットスポットが変わるたびに AI 候補パネルもリセットする (前のスロットの候補を
+    // 別スロットに誤って適用させない、§3)。
+    setAiSuggestState(AI_SUGGEST_INITIAL_STATE);
     setMenu({ hotspot, mode: "text-edit" });
   }
 
@@ -429,6 +454,77 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
       closeMenu();
       reloadIframe();
     });
+  }
+
+  // ---- AI 候補 (ai-studio-v2.md §3、P2 追加) ----
+
+  /** モデル一覧は「AI 候補」を初めて開いたときの 1 回だけ取得する (全ホットスポット共通)。 */
+  function ensureAiModelsLoaded() {
+    if (aiModelsLoadedRef.current) return;
+    aiModelsLoadedRef.current = true;
+    setAiModelsLoading(true);
+    listTextModels()
+      .then((result) => {
+        if (result.ok) {
+          setAiModels(result.value);
+        } else {
+          toast.error(errorMessage(result));
+        }
+      })
+      .finally(() => setAiModelsLoading(false));
+  }
+
+  function handleToggleAiSuggest() {
+    setAiSuggestState((prev) => {
+      const next = !prev.open;
+      if (next) ensureAiModelsLoaded();
+      return { ...prev, open: next };
+    });
+  }
+
+  function handleAiModelChange(modelId: string) {
+    setAiSuggestState((prev) => ({ ...prev, selectedModel: modelId }));
+  }
+
+  function handleAiInstructionChange(value: string) {
+    setAiSuggestState((prev) => ({ ...prev, instruction: value }));
+  }
+
+  function handleAiUseScreenshotChange(value: boolean) {
+    setAiSuggestState((prev) => ({ ...prev, useScreenshot: value }));
+  }
+
+  function handleAiGenerate() {
+    if (!menu || menu.hotspot.target.type !== "text") return;
+    const slotKey = menu.hotspot.target.slotKey;
+    const { instruction, selectedModel, useScreenshot } = aiSuggestState;
+    setAiSuggestState((prev) => ({ ...prev, error: null }));
+    startAiTransition(async () => {
+      const result = await suggestText({
+        slotKey,
+        instruction,
+        model: selectedModel.trim().length > 0 ? selectedModel : undefined,
+        useScreenshot,
+      });
+      if (!result.ok) {
+        setAiSuggestState((prev) => ({ ...prev, candidates: null, error: errorMessage(result) }));
+        return;
+      }
+      setAiSuggestState((prev) => ({
+        ...prev,
+        candidates: result.value.candidates,
+        screenshotUsed: result.value.screenshotUsed,
+        error:
+          result.value.candidates.length === 0
+            ? "条件を満たす候補がありませんでした。指示を変えて再度お試しください。"
+            : null,
+      }));
+    });
+  }
+
+  /** 候補クリックで textarea へ反映するのみ (保存は既存の「保存」ボタンで明示的に行う、§3) */
+  function handleAiApplyCandidate(candidate: string) {
+    setTextValue(candidate);
   }
 
   function startAltEdit(hotspot: Hotspot) {
@@ -667,6 +763,13 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
               onSaveAlt={handleSaveAlt}
               onSaveText={handleSaveText}
               onResetTextToDefault={handleResetTextToDefault}
+              aiSuggest={{ ...aiSuggestState, models: aiModels, modelsLoading: aiModelsLoading, pending: aiPending }}
+              onToggleAiSuggest={handleToggleAiSuggest}
+              onAiModelChange={handleAiModelChange}
+              onAiInstructionChange={handleAiInstructionChange}
+              onAiUseScreenshotChange={handleAiUseScreenshotChange}
+              onAiGenerate={handleAiGenerate}
+              onAiApplyCandidate={handleAiApplyCandidate}
             />
           )}
         </div>
