@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { getPublishedVoices } from "@/app/_lib/public-content";
+import { pageMediaFacade } from "@/modules/page-media/facade";
 
 import { VoicesPageBody } from "./page-body";
 
@@ -19,5 +20,7 @@ export const metadata: Metadata = {
 
 export default async function VoicesPage() {
   const voices = await getPublishedVoices();
-  return <VoicesPageBody voices={voices} editMode={false} />;
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
+  return <VoicesPageBody voices={voices} texts={texts} editMode={false} />;
 }
