@@ -10,147 +10,34 @@ import {
   SectionMark,
 } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
+import { SlotRichText } from "@/components/site/slot-rich-text";
 import { SlotText } from "@/components/site/slot-text";
 import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 
-const METHODS = [
-  {
-    tag: "METHOD 01",
-    title: "FDM / FFF方式",
-    en: "FUSED DEPOSITION MODELING",
-    desc: "熱で溶かした樹脂を層状に積み上げる方式。3方式の中で積層痕が最も目立ち、研磨とサーフェイサーによる下地づくりが仕上がりを大きく左右します。",
-    diff: (
-      <>
-        <strong className="font-bold text-carbon">この工房での位置づけ</strong>{" "}
-        — 最も下地に手がかかる＝研磨の技術が最も活きる素材。
-        <span className="font-mono">#800</span>{" "}
-        で面出しし、厚膜プラサフで積層痕を埋め、
-        <span className="font-mono">#1200</span> で仕上げます。
-      </>
-    ),
-  },
-  {
-    tag: "METHOD 02",
-    title: "光造形方式（レジン）",
-    en: "SLA / MSLA / DLP",
-    desc: "液体樹脂を光で硬化させる方式。もともと積層痕が少なく滑らかですが、未硬化レジンの洗浄と二次硬化を済ませないと塗料が乗りません。レジンはアクリル系で、塗料との相性は良好です。",
-    diff: (
-      <>
-        <strong className="font-bold text-carbon">この工房での位置づけ</strong>{" "}
-        —
-        洗浄・脱脂・二次硬化の状態を確認してから工程へ。滑らかなぶん下地は軽く、意匠塗装の美しさが素直に出ます。
-      </>
-    ),
-  },
-  {
-    tag: "METHOD 03",
-    title: "SLS方式（粉末）",
-    en: "SELECTIVE LASER SINTERING",
-    desc: "ナイロン粉末をレーザーで焼結する方式。表面は多孔質で、ビーズブラストで均一化するのが一般的。塗装には粉末特有の下地づくりが必要です。",
-    diff: (
-      <>
-        <strong className="font-bold text-carbon">この工房での位置づけ</strong>{" "}
-        —
-        要相談・テストピース確認を推奨。多孔質を活かした下地で、艶を作り込みます。
-      </>
-    ),
-  },
-] as const;
+// v2 Wave 1: tag/title/en/desc/diff の実テキストは TEXT_REGISTRY (materials.method.N.*) から
+// 引くため、ここでは 1〜3 の連番のみ保持する。
+const METHOD_IDS = [1, 2, 3] as const;
 
+// v2 Wave 1: name/sub/method/point/weather の実テキストは TEXT_REGISTRY
+// (materials.matrix.row.N.*) から引くため、ここでは行ごとの構造フラグ (sub の有無・UV安定
+// バッジの色) のみ保持する。
 const MATERIALS: {
-  name: string;
-  sub?: string;
-  method: string;
-  point: string;
-  weather: string;
+  hasSub: boolean;
   uv: boolean;
 }[] = [
-  {
-    name: "PLA",
-    sub: "ポリ乳酸",
-    method: "FDM",
-    point:
-      "アセトンは効かないため、研磨とスプレーパテで物理的に平滑化。サーフェイサーで密着を確保します。",
-    weather: "屋内向き",
-    uv: false,
-  },
-  {
-    name: "PETG",
-    method: "FDM",
-    point: "研磨・サーフェイサー・塗装が基本。密着のため脱脂を丁寧に行います。",
-    weather: "UV安定",
-    uv: true,
-  },
-  {
-    name: "ABS",
-    method: "FDM",
-    point:
-      "研磨に加え、アセトン蒸気処理で光沢化する手もあります。塗装前は必ず脱脂。",
-    weather: "屋内向き",
-    uv: false,
-  },
-  {
-    name: "ASA",
-    method: "FDM",
-    point:
-      "ABSに近い扱い。屋外用途に向く素材で、クリアのUVカットと相性良好です。",
-    weather: "UV安定",
-    uv: true,
-  },
-  {
-    name: "標準レジン",
-    sub: "アクリル系",
-    method: "光造形",
-    point:
-      "IPA洗浄とUV二次硬化を前提に。滑らかで下地は軽く、意匠塗装が映えます。黄変対策のクリアを推奨。",
-    weather: "屋内向き",
-    uv: false,
-  },
-  {
-    name: "タフレジン",
-    sub: "ABSライク",
-    method: "光造形",
-    point:
-      "靭性が高く、割れにくい。標準レジン同様の下地で、扱いやすい素材です。",
-    weather: "屋内向き",
-    uv: false,
-  },
-  {
-    name: "クリアレジン",
-    method: "光造形",
-    point:
-      "段階研磨とクリアコートで透明感を出せます。透過部を活かした意匠にも対応。",
-    weather: "屋内向き",
-    uv: false,
-  },
-  {
-    name: "ナイロン",
-    sub: "PA12 / PA11",
-    method: "SLS",
-    point:
-      "多孔質のため下地を作り込む。ブラスト後の均一な面に艶を重ねます。要テスト。",
-    weather: "UV安定",
-    uv: true,
-  },
+  { hasSub: true, uv: false }, // 1: PLA
+  { hasSub: false, uv: true }, // 2: PETG
+  { hasSub: false, uv: false }, // 3: ABS
+  { hasSub: false, uv: true }, // 4: ASA
+  { hasSub: true, uv: false }, // 5: 標準レジン
+  { hasSub: true, uv: false }, // 6: タフレジン
+  { hasSub: false, uv: false }, // 7: クリアレジン
+  { hasSub: true, uv: true }, // 8: ナイロン
 ];
 
-const CAUSES = [
-  {
-    no: "CAUSE 01",
-    title: "洗浄・脱脂の不足",
-    body: "造形物に残った離型剤・削りカス・指の脂は、塗料の密着を著しく下げます。研磨後に水洗いし、イソプロピルアルコールで脱脂、タッククロスで微粉を除いてから塗装に入ります。光造形品は未硬化レジンの洗浄も欠かせません。",
-  },
-  {
-    no: "CAUSE 02",
-    title: "サーフェイサーの省略",
-    body: "下地のサーフェイサー（プラサフ）を省くと、密着も発色も落ちます。厚膜タイプで微細な段差を埋め、塗料が乗る土台をつくる——この一手間を飛ばさないことが、量産品のような均一な面につながります。",
-  },
-  {
-    no: "CAUSE 03",
-    title: "厚塗りによる細部の潰れ",
-    body: "一度に厚く吹くと、タレ・ゆず肌が出て、細かな造形ディテールも埋まります。塗る方向を層ごとに変えながら、薄く数回に分けて重ねる——地味ですが、これが仕上がりの質を決めます。",
-  },
-] as const;
+// v2 Wave 1: no/title/body の実テキストは TEXT_REGISTRY (materials.cause.N.*) から引くため、
+// ここでは 1〜3 の連番のみ保持する。
+const CAUSE_IDS = [1, 2, 3] as const;
 
 export function MaterialsPageBody({
   slots,
@@ -164,8 +51,20 @@ export function MaterialsPageBody({
   return (
     <>
       <PageHead
-        index="INDEX 06 — MATERIALS"
-        en="FDM / SLA / SLS"
+        index={
+          <SlotText
+            slotKey="materials.hero.index"
+            resolved={texts["materials.hero.index"]}
+            editMode={editMode}
+          />
+        }
+        en={
+          <SlotText
+            slotKey="materials.hero.en"
+            resolved={texts["materials.hero.en"]}
+            editMode={editMode}
+          />
+        }
         title={
           <SlotText
             slotKey="materials.hero.heading"
@@ -185,7 +84,12 @@ export function MaterialsPageBody({
 
       {/* ============ 3方式 ============ */}
       <Section>
-        <SectionMark no="SEC. 01" label="PRINTING METHODS" />
+        <SectionMark
+          no="SEC. 01"
+          label={texts["materials.methods.sec.label"].text}
+          labelSlotKey="materials.methods.sec.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="materials.methods.heading"
@@ -194,23 +98,42 @@ export function MaterialsPageBody({
           />
         </SecTitle>
         <Reveal as="div" className="mt-10 grid gap-5 md:grid-cols-3">
-          {METHODS.map((method) => (
-            <div key={method.tag} className="border border-hair bg-paper p-6">
+          {METHOD_IDS.map((id) => (
+            <div key={id} className="border border-hair bg-paper p-6">
               <p className="font-mono text-[10px] tracking-[0.2em] text-soul">
-                {method.tag}
+                <SlotText
+                  slotKey={`materials.method.${id}.tag`}
+                  resolved={texts[`materials.method.${id}.tag`]}
+                  editMode={editMode}
+                />
               </p>
               <h3 className="mt-3 text-lg font-bold tracking-wider">
-                {method.title}
+                <SlotText
+                  slotKey={`materials.method.${id}.title`}
+                  resolved={texts[`materials.method.${id}.title`]}
+                  editMode={editMode}
+                />
               </h3>
               <p className="mt-1 font-mono text-[10px] tracking-[0.16em] text-carbon-soft">
-                {method.en}
+                <SlotText
+                  slotKey={`materials.method.${id}.en`}
+                  resolved={texts[`materials.method.${id}.en`]}
+                  editMode={editMode}
+                />
               </p>
-              <p className="mt-4 text-sm leading-7 text-carbon-mid">
-                {method.desc}
-              </p>
-              <p className="mt-4 border-t border-hair-soft pt-4 text-[13px] leading-6 text-carbon-mid">
-                {method.diff}
-              </p>
+              <SlotText
+                slotKey={`materials.method.${id}.desc`}
+                resolved={texts[`materials.method.${id}.desc`]}
+                editMode={editMode}
+                className="mt-4 text-sm leading-7 text-carbon-mid"
+              />
+              <SlotRichText
+                slotKey={`materials.method.${id}.diff`}
+                resolved={texts[`materials.method.${id}.diff`]}
+                editMode={editMode}
+                as="p"
+                className="mt-4 border-t border-hair-soft pt-4 text-[13px] leading-6 text-carbon-mid"
+              />
             </div>
           ))}
         </Reveal>
@@ -220,25 +143,66 @@ export function MaterialsPageBody({
             slotKey="materials.methods.1"
             resolved={slots["materials.methods.1"]}
             editMode={editMode}
-            capJa="FDMの造形"
-            capEn="FDM PRINTING"
-            credit="Photo: zmorph3d / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="materials.methods.1.photo.capja"
+                resolved={texts["materials.methods.1.photo.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="materials.methods.1.photo.capen"
+                resolved={texts["materials.methods.1.photo.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="materials.methods.1.photo.credit"
+                resolved={texts["materials.methods.1.photo.credit"]}
+                editMode={editMode}
+              />
+            }
           />
           <PhotoFigure
             figNo="FIG.02"
             slotKey="materials.methods.2"
             resolved={slots["materials.methods.2"]}
             editMode={editMode}
-            capJa="精密な造形機械"
-            capEn="PRECISION MACHINE"
-            credit="Photo: kadircelep / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="materials.methods.2.photo.capja"
+                resolved={texts["materials.methods.2.photo.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="materials.methods.2.photo.capen"
+                resolved={texts["materials.methods.2.photo.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="materials.methods.2.photo.credit"
+                resolved={texts["materials.methods.2.photo.credit"]}
+                editMode={editMode}
+              />
+            }
           />
         </Reveal>
       </Section>
 
       {/* ============ 素材別対応表 ============ */}
       <Section>
-        <SectionMark no="SEC. 02" label="MATERIAL MATRIX" />
+        <SectionMark
+          no="SEC. 02"
+          label={texts["materials.matrix.sec.label"].text}
+          labelSlotKey="materials.matrix.sec.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="materials.matrix.heading"
@@ -247,70 +211,123 @@ export function MaterialsPageBody({
           />
         </SecTitle>
         <SecLead>
-          代表的な樹脂ごとの下地処理・注意点・耐候性の目安です。ここに無い素材も、テストピースで相性を確認してからお受けできます。
+          <SlotText
+            slotKey="materials.matrix.lead"
+            resolved={texts["materials.matrix.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="mt-10 overflow-x-auto">
           <table className="w-full min-w-[720px] border-t border-hair text-sm">
             <thead>
               <tr className="border-b border-hair text-left font-mono text-[10px] tracking-[0.18em] text-carbon-soft">
                 <th scope="col" className="py-3 pr-4 font-normal">
-                  素材
+                  <SlotText
+                    slotKey="materials.matrix.col.1"
+                    resolved={texts["materials.matrix.col.1"]}
+                    editMode={editMode}
+                  />
                 </th>
                 <th scope="col" className="py-3 pr-4 font-normal">
-                  造形方式
+                  <SlotText
+                    slotKey="materials.matrix.col.2"
+                    resolved={texts["materials.matrix.col.2"]}
+                    editMode={editMode}
+                  />
                 </th>
                 <th scope="col" className="py-3 pr-4 font-normal">
-                  下地の勘所
+                  <SlotText
+                    slotKey="materials.matrix.col.3"
+                    resolved={texts["materials.matrix.col.3"]}
+                    editMode={editMode}
+                  />
                 </th>
                 <th scope="col" className="py-3 font-normal">
-                  耐候性の目安
+                  <SlotText
+                    slotKey="materials.matrix.col.4"
+                    resolved={texts["materials.matrix.col.4"]}
+                    editMode={editMode}
+                  />
                 </th>
               </tr>
             </thead>
             <tbody>
-              {MATERIALS.map((mat) => (
-                <tr key={mat.name} className="border-b border-hair align-top">
-                  <th
-                    scope="row"
-                    className="py-4 pr-4 text-left font-bold tracking-wider"
-                  >
-                    {mat.name}
-                    {mat.sub ? (
-                      <small className="block text-[11px] font-normal text-carbon-soft">
-                        {mat.sub}
-                      </small>
-                    ) : null}
-                  </th>
-                  <td className="py-4 pr-4 text-carbon-mid">{mat.method}</td>
-                  <td className="py-4 pr-4 leading-6 text-carbon-mid">
-                    {mat.point}
-                  </td>
-                  <td className="py-4">
-                    <Badge
-                      variant="outline"
-                      className={`rounded-none font-mono text-[10px] tracking-[0.1em] ${
-                        mat.uv
-                          ? "border-soul/50 text-soul"
-                          : "border-hair text-carbon-mid"
-                      }`}
+              {MATERIALS.map((mat, i) => {
+                const idx = i + 1;
+                return (
+                  <tr key={idx} className="border-b border-hair align-top">
+                    <th
+                      scope="row"
+                      className="py-4 pr-4 text-left font-bold tracking-wider"
                     >
-                      {mat.weather}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
+                      <SlotText
+                        slotKey={`materials.matrix.row.${idx}.name`}
+                        resolved={texts[`materials.matrix.row.${idx}.name`]}
+                        editMode={editMode}
+                      />
+                      {mat.hasSub ? (
+                        <small className="block text-[11px] font-normal text-carbon-soft">
+                          <SlotText
+                            slotKey={`materials.matrix.row.${idx}.sub`}
+                            resolved={texts[`materials.matrix.row.${idx}.sub`]}
+                            editMode={editMode}
+                          />
+                        </small>
+                      ) : null}
+                    </th>
+                    <td className="py-4 pr-4 text-carbon-mid">
+                      <SlotText
+                        slotKey={`materials.matrix.row.${idx}.method`}
+                        resolved={texts[`materials.matrix.row.${idx}.method`]}
+                        editMode={editMode}
+                      />
+                    </td>
+                    <td className="py-4 pr-4 leading-6 text-carbon-mid">
+                      <SlotText
+                        slotKey={`materials.matrix.row.${idx}.point`}
+                        resolved={texts[`materials.matrix.row.${idx}.point`]}
+                        editMode={editMode}
+                      />
+                    </td>
+                    <td className="py-4">
+                      <Badge
+                        variant="outline"
+                        className={`rounded-none font-mono text-[10px] tracking-[0.1em] ${
+                          mat.uv
+                            ? "border-soul/50 text-soul"
+                            : "border-hair text-carbon-mid"
+                        }`}
+                      >
+                        <SlotText
+                          slotKey={`materials.matrix.row.${idx}.weather`}
+                          resolved={texts[`materials.matrix.row.${idx}.weather`]}
+                          editMode={editMode}
+                        />
+                      </Badge>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </Reveal>
         <MapNote>
-          ※
-          耐候性は一般的な目安です。標準レジンは紫外線で黄変・脆化が進むため、屋外長期使用には向きません。撮影・展示・商談用の高品質仕上げとしての運用を前提にしています。屋外で長く使う想定がある場合は、素材段階からご相談ください。
+          <SlotText
+            slotKey="materials.matrix.note"
+            resolved={texts["materials.matrix.note"]}
+            editMode={editMode}
+          />
         </MapNote>
       </Section>
 
       {/* ============ 下地の作り分け ============ */}
       <Section>
-        <SectionMark no="SEC. 03" label="WHY IT MATTERS" />
+        <SectionMark
+          no="SEC. 03"
+          label={texts["materials.why.sec.label"].text}
+          labelSlotKey="materials.why.sec.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="materials.why.heading"
@@ -319,20 +336,35 @@ export function MaterialsPageBody({
           />
         </SecTitle>
         <SecLead>
-          塗料の食いつき不良やムラは、塗装技術以前の「素地の準備」で起きることがほとんどです。だから、この工房は塗る前の工程に最も神経を使います。
+          <SlotText
+            slotKey="materials.why.lead"
+            resolved={texts["materials.why.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="kt-timeline mt-10">
-          {CAUSES.map((cause) => (
-            <div key={cause.no} className="kt-timeline-item">
+          {CAUSE_IDS.map((id) => (
+            <div key={id} className="kt-timeline-item">
               <span className="font-mono text-[10.5px] tracking-[0.14em] text-soul">
-                {cause.no}
+                <SlotText
+                  slotKey={`materials.cause.${id}.no`}
+                  resolved={texts[`materials.cause.${id}.no`]}
+                  editMode={editMode}
+                />
               </span>
               <h4 className="mt-2 text-[17px] font-bold tracking-[0.04em]">
-                {cause.title}
+                <SlotText
+                  slotKey={`materials.cause.${id}.title`}
+                  resolved={texts[`materials.cause.${id}.title`]}
+                  editMode={editMode}
+                />
               </h4>
-              <p className="mt-2 max-w-[44em] text-[13.5px] leading-[1.95] text-carbon-mid">
-                {cause.body}
-              </p>
+              <SlotText
+                slotKey={`materials.cause.${id}.body`}
+                resolved={texts[`materials.cause.${id}.body`]}
+                editMode={editMode}
+                className="mt-2 max-w-[44em] text-[13.5px] leading-[1.95] text-carbon-mid"
+              />
             </div>
           ))}
         </Reveal>
@@ -340,7 +372,12 @@ export function MaterialsPageBody({
 
       {/* ============ 入稿 ============ */}
       <Section>
-        <SectionMark no="SEC. 04" label="DATA INTAKE" />
+        <SectionMark
+          no="SEC. 04"
+          label={texts["materials.intake.sec.label"].text}
+          labelSlotKey="materials.intake.sec.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="materials.intake.heading"
@@ -349,43 +386,75 @@ export function MaterialsPageBody({
           />
         </SecTitle>
         <SecLead>
-          完成した造形物を送っていただくのはもちろん、データ入稿 → 提携出力 →
-          工房直送の流れにも対応します。出力先と塗装先を別々に手配する手間を省けます。
+          <SlotText
+            slotKey="materials.intake.lead"
+            resolved={texts["materials.intake.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
         <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <div className="border border-hair bg-paper p-6">
             <p className="font-mono text-2xl font-semibold tracking-[0.08em]">
-              STL
+              <SlotText
+                slotKey="materials.intake.stl.title"
+                resolved={texts["materials.intake.stl.title"]}
+                editMode={editMode}
+              />
               <small className="ml-3 text-[11px] font-normal tracking-[0.14em] text-carbon-soft">
-                汎用フォーマット
+                <SlotText
+                  slotKey="materials.intake.stl.sub"
+                  resolved={texts["materials.intake.stl.sub"]}
+                  editMode={editMode}
+                />
               </small>
             </p>
-            <p className="mt-4 text-sm leading-7 text-carbon-mid">
-              ほぼすべての3Dプリント環境で扱える標準形式。造形するだけなら、これで十分です。メッシュ（三角形の集合）でモデルを表現します。
-            </p>
+            <SlotText
+              slotKey="materials.intake.stl.body"
+              resolved={texts["materials.intake.stl.body"]}
+              editMode={editMode}
+              className="mt-4 text-sm leading-7 text-carbon-mid"
+            />
           </div>
           <div className="border border-hair bg-paper p-6">
             <p className="font-mono text-2xl font-semibold tracking-[0.08em]">
-              STEP
+              <SlotText
+                slotKey="materials.intake.step.title"
+                resolved={texts["materials.intake.step.title"]}
+                editMode={editMode}
+              />
               <small className="ml-3 text-[11px] font-normal tracking-[0.14em] text-carbon-soft">
-                精密フォーマット
+                <SlotText
+                  slotKey="materials.intake.step.sub"
+                  resolved={texts["materials.intake.step.sub"]}
+                  editMode={editMode}
+                />
               </small>
             </p>
-            <p className="mt-4 text-sm leading-7 text-carbon-mid">
-              正確な形状を保持する形式（ISO
-              10303）。寸法精度が重要な場合や、任意の解像度で再メッシュしたい場合に向きます。精密案件ではこちらを推奨します。
-            </p>
+            <SlotText
+              slotKey="materials.intake.step.body"
+              resolved={texts["materials.intake.step.body"]}
+              editMode={editMode}
+              className="mt-4 text-sm leading-7 text-carbon-mid"
+            />
           </div>
         </Reveal>
         <MapNote>
-          ※
-          ご相談時に、造形方式・素材・希望色（カラーコード可）・希望納期をあわせてお知らせいただけると、概算が正確になります。未発表製品はNDA対応可。
+          <SlotText
+            slotKey="materials.intake.note"
+            resolved={texts["materials.intake.note"]}
+            editMode={editMode}
+          />
         </MapNote>
       </Section>
 
       {/* ============ GALLERY ============ */}
       <Section>
-        <SectionMark no="GALLERY" label="BEYOND MATERIAL" />
+        <SectionMark
+          no="GALLERY"
+          label={texts["materials.gallery.sec.label"].text}
+          labelSlotKey="materials.gallery.sec.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="materials.gallery.heading"
@@ -393,25 +462,67 @@ export function MaterialsPageBody({
             editMode={editMode}
           />
         </SecTitle>
-        <SecLead>素材ごとに手を変える。それが下地づくりの本質です。</SecLead>
+        <SecLead>
+          <SlotText
+            slotKey="materials.gallery.lead"
+            resolved={texts["materials.gallery.lead"]}
+            editMode={editMode}
+          />
+        </SecLead>
         <Reveal as="div" className="mt-10 grid gap-5 sm:grid-cols-2">
           <PhotoFigure
             figNo="FIG.03"
             slotKey="materials.gallery.1"
             resolved={slots["materials.gallery.1"]}
             editMode={editMode}
-            capJa="質感"
-            capEn="TEXTURE"
-            credit="Photo: apryan_cahyo / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="materials.gallery.1.photo.capja"
+                resolved={texts["materials.gallery.1.photo.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="materials.gallery.1.photo.capen"
+                resolved={texts["materials.gallery.1.photo.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="materials.gallery.1.photo.credit"
+                resolved={texts["materials.gallery.1.photo.credit"]}
+                editMode={editMode}
+              />
+            }
           />
           <PhotoFigure
             figNo="FIG.04"
             slotKey="materials.gallery.2"
             resolved={slots["materials.gallery.2"]}
             editMode={editMode}
-            capJa="仕上がり"
-            capEn="THE FINISH"
-            credit="Photo: avenir_visuals / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="materials.gallery.2.photo.capja"
+                resolved={texts["materials.gallery.2.photo.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="materials.gallery.2.photo.capen"
+                resolved={texts["materials.gallery.2.photo.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="materials.gallery.2.photo.credit"
+                resolved={texts["materials.gallery.2.photo.credit"]}
+                editMode={editMode}
+              />
+            }
           />
         </Reveal>
       </Section>
@@ -433,7 +544,9 @@ export function MaterialsPageBody({
           />
         }
         href="/contact"
-        label="相談する"
+        label={texts["shared.cta.consult"].text}
+        labelSlotKey="shared.cta.consult"
+        editMode={editMode}
       />
     </>
   );
