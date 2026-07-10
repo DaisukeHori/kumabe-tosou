@@ -22,6 +22,7 @@ import {
   listMediaRows,
   patchMediaRow,
   removeOriginalAndRenditions,
+  removeOriginalBytes,
   renditionExists,
   uploadOriginalBytes,
   uploadRendition,
@@ -84,15 +85,20 @@ export interface MediaFacadeExtended extends MediaFacade {
   /** 署名付き URL への PUT 完了後に呼ぶ。原本 DL → sharp でレンディション生成 → DB 行作成 */
   completeUpload(input: CompleteMediaUploadInput): Promise<Result<MediaListItem>>;
   /**
-   * 契約外拡張 (2026-07-10、ai-studio-v2.md P3 判断点・オーケストレーター指示):
+   * 契約外拡張 (2026-07-10、ai-studio-v2.md P3 判断点・オーケストレーター指示。
+   * 2026-07-10 Codex MAJOR 指摘反映: docs/module-contracts.md §MediaFacade / §4 の
+   * canonical 定義に合わせ Result 返却に統一):
    * サーバ内で生成したバイト列 (AI 生成画像等) を直接 media として保存する。
    * completeUpload の「署名付き URL アップロード → クライアント PUT」を経由できない
    * サーバ内生成専用の経路。service role client で Storage 直アップロード + media 行
    * INSERT までを行う (呼び出し元にブラウザセッションが無い自動化コンテキストからも
-   * 使えるようにするため)。Result<T> でラップせず、失敗時は例外を投げる
-   * (呼び出し元 — ai-providers の画像カスケード等 — で catch する)。
+   * 使えるようにするため)。他 facade メソッド同様 Result<T> で失敗を返す
+   * (例外はモジュール境界を越えない)。Storage upload 成功後に DB insert が失敗した
+   * 場合はアップロード済みの Storage オブジェクトを削除してから err を返す (orphan 防止)。
    */
-  createFromBytes(input: CreateMediaFromBytesInput): Promise<{ id: string; storagePath: string }>;
+  createFromBytes(
+    input: CreateMediaFromBytesInput,
+  ): Promise<Result<{ id: string; storagePath: string }>>;
   patch(id: string, patch: MediaPatch): Promise<Result<void>>;
   /** 参照ゼロなら実削除 (Storage 含む)。参照ありは E301 */
   remove(id: string): Promise<Result<void>>;
@@ -283,23 +289,38 @@ export const mediaFacade: MediaFacadeExtended = {
   },
 
   async createFromBytes(input) {
-    const serviceClient = createSupabaseServiceClient();
-    const buffer = Buffer.from(input.bytes);
-    const ext = extensionForContentType(input.contentType);
-    const storagePath = `ai-generated/${randomUUID()}.${ext}`;
+    try {
+      const serviceClient = createSupabaseServiceClient();
+      const buffer = Buffer.from(input.bytes);
+      const ext = extensionForContentType(input.contentType);
+      const storagePath = `ai-generated/${randomUUID()}.${ext}`;
 
-    await uploadOriginalBytes(serviceClient, storagePath, buffer, input.contentType);
+      try {
+        await uploadOriginalBytes(serviceClient, storagePath, buffer, input.contentType);
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+      }
 
-    const { id } = await ingestMediaBuffer(serviceClient, buffer, {
-      storagePath,
-      alt: input.alt ?? "",
-      credit: input.credit ?? null,
-      tags: input.tags,
-      isPlaceholder: input.isPlaceholder ?? false,
-      createdBy: null,
-    });
-
-    return { id, storagePath };
+      try {
+        const { id } = await ingestMediaBuffer(serviceClient, buffer, {
+          storagePath,
+          alt: input.alt ?? "",
+          credit: input.credit ?? null,
+          tags: input.tags,
+          isPlaceholder: input.isPlaceholder ?? false,
+          createdBy: null,
+        });
+        return { ok: true, value: { id, storagePath } };
+      } catch (err) {
+        // DB insert (またはレンディションアップロード) 失敗。レンディションは
+        // ingestMediaBuffer 内で自己クリーンアップ済みのため、ここでは既に
+        // アップロード済みの原本のみ削除して orphan を残さない。
+        await removeOriginalBytes(serviceClient, storagePath);
+        return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+      }
+    } catch (err) {
+      return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+    }
   },
 
   async patch(id, patch) {

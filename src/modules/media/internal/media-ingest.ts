@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { insertMediaRow, uploadRendition } from "../repository";
+import { insertMediaRow, removeRenditions, uploadRendition } from "../repository";
 import { processImageForRenditions } from "./image-processing";
 
 /**
@@ -34,6 +34,11 @@ export async function ingestMediaBuffer(
   original: Buffer,
   input: IngestMediaInput,
 ): Promise<IngestedMedia> {
+  // 例外はそのまま呼び出し元 (facade.ts) に伝播させる。境界での catch/Result 化は
+  // 呼び出し元 (completeUpload/createFromBytes) の責務。ただし「原本のアップロードは
+  // 呼び出し元の責務・レンディションのアップロードはここの責務」という分担のため、
+  // レンディションアップロード後に insert が失敗した場合の orphan レンディション削除は
+  // ここで自己クリーンアップしてから rethrow する (createFromBytes 側は原本のみ削除すればよい)。
   const { webp, jpeg, width, height } = await processImageForRenditions(original);
   const mediaId = randomUUID();
 
@@ -42,21 +47,35 @@ export async function ingestMediaBuffer(
   // この境界でのみ any 経由の構造的キャストを許容する。
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const repoClient = supabase as any;
-  await uploadRendition(repoClient, `${mediaId}.webp`, webp, "image/webp");
-  await uploadRendition(repoClient, `${mediaId}.jpg`, jpeg, "image/jpeg");
 
-  await insertMediaRow(repoClient, {
-    id: mediaId,
-    storagePath: input.storagePath,
-    alt: input.alt,
-    width,
-    height,
-    mimeType: "image/webp",
-    credit: input.credit,
-    isPlaceholder: input.isPlaceholder,
-    tags: input.tags,
-    createdBy: input.createdBy,
-  });
+  const webpPath = `${mediaId}.webp`;
+  const jpgPath = `${mediaId}.jpg`;
+  const uploadedRenditionPaths: string[] = [];
+
+  try {
+    await uploadRendition(repoClient, webpPath, webp, "image/webp");
+    uploadedRenditionPaths.push(webpPath);
+    await uploadRendition(repoClient, jpgPath, jpeg, "image/jpeg");
+    uploadedRenditionPaths.push(jpgPath);
+
+    await insertMediaRow(repoClient, {
+      id: mediaId,
+      storagePath: input.storagePath,
+      alt: input.alt,
+      width,
+      height,
+      mimeType: "image/webp",
+      credit: input.credit,
+      isPlaceholder: input.isPlaceholder,
+      tags: input.tags,
+      createdBy: input.createdBy,
+    });
+  } catch (err) {
+    if (uploadedRenditionPaths.length > 0) {
+      await removeRenditions(repoClient, uploadedRenditionPaths);
+    }
+    throw err;
+  }
 
   return { id: mediaId, width, height };
 }

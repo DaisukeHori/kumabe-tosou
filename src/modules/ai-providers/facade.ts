@@ -526,6 +526,11 @@ export const aiProvidersFacade: AiProvidersFacadeExtended = {
             tags: ["ai-generated", "ai-draft"],
             isPlaceholder: false,
           });
+          if (!saved.ok) {
+            saveFailedCount += 1;
+            console.error("KMB-E901: AI 生成画像の media 保存に失敗しました", saved.detail ?? saved.code);
+            continue;
+          }
 
           const rowResult = await insertImageGenerationRow(supabase, {
             requestGroupId,
@@ -541,7 +546,7 @@ export const aiProvidersFacade: AiProvidersFacadeExtended = {
               siteContextUsed: Boolean(data.siteContext),
             },
             status: "succeeded",
-            mediaId: saved.id,
+            mediaId: saved.value.id,
             usageLogId,
             errorCode: null,
           });

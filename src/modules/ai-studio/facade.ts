@@ -310,7 +310,11 @@ async function runOneStage(
               tags: ["ai-generated", "sns-draft"],
               isPlaceholder: false,
             });
-            candidates.push({ media_id: saved.id, selected: false });
+            if (!saved.ok) {
+              console.error("KMB-E901: SNS 画像候補の media 保存に失敗しました", saved.detail ?? saved.code);
+              continue;
+            }
+            candidates.push({ media_id: saved.value.id, selected: false });
           } catch (err) {
             console.error(
               "KMB-E901: SNS 画像候補の media 保存に失敗しました",

@@ -122,7 +122,7 @@ describe("generateImageCascade: 新規バッチ (parentId なし)", () => {
     let counter = 0;
     createFromBytesMock.mockImplementation(async () => {
       counter += 1;
-      return { id: `media-${counter}`, storagePath: `ai-generated/media-${counter}.png` };
+      return { ok: true, value: { id: `media-${counter}`, storagePath: `ai-generated/media-${counter}.png` } };
     });
 
     insertImageGenerationRowMock.mockImplementation(async (_client: unknown, input: Record<string, unknown>) => ({
@@ -201,7 +201,7 @@ describe("generateImageCascade: カスケード (parentId 指定)", () => {
         failedCount: 0,
       },
     });
-    createFromBytesMock.mockResolvedValue({ id: "media-child", storagePath: "ai-generated/child.png" });
+    createFromBytesMock.mockResolvedValue({ ok: true, value: { id: "media-child", storagePath: "ai-generated/child.png" } });
     insertImageGenerationRowMock.mockImplementation(async (_client: unknown, input: Record<string, unknown>) => ({
       ok: true,
       value: makeRow({
@@ -301,7 +301,7 @@ describe("generateImageCascade: 参照画像 4 枚上限 (tester 追加)", () =>
         failedCount: 0,
       },
     });
-    createFromBytesMock.mockResolvedValue({ id: "media-x", storagePath: "ai-generated/x.png" });
+    createFromBytesMock.mockResolvedValue({ ok: true, value: { id: "media-x", storagePath: "ai-generated/x.png" } });
     insertImageGenerationRowMock.mockResolvedValue({ ok: true, value: makeRow({ id: "gen-x", media_id: "media-x" }) });
 
     const result = await aiProvidersFacade.generateImageCascade({
@@ -370,7 +370,7 @@ describe("generateImageCascade: 参照画像 4 枚上限 (tester 追加)", () =>
         failedCount: 0,
       },
     });
-    createFromBytesMock.mockResolvedValue({ id: "media-x", storagePath: "ai-generated/x.png" });
+    createFromBytesMock.mockResolvedValue({ ok: true, value: { id: "media-x", storagePath: "ai-generated/x.png" } });
     insertImageGenerationRowMock.mockResolvedValue({ ok: true, value: makeRow({ id: "gen-x", media_id: "media-x" }) });
 
     // sourceMediaIds に parentMediaId を重複して含めても、実質の参照枚数は 4 枚
@@ -388,6 +388,77 @@ describe("generateImageCascade: 参照画像 4 枚上限 (tester 追加)", () =>
     expect(result.ok).toBe(true);
     // fetch は重複除去後の 4 件 (parent + 3 件) のみ呼ばれる
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("generateImageCascade: media 保存失敗の graceful 挙動 (Codex MAJOR 反映: createFromBytes が Result を返す)", () => {
+  it("createFromBytes が一部 err Result を返しても、成功分だけで前進し failedCount に計上する", async () => {
+    routeGenerateImagesMock.mockResolvedValue({
+      ok: true,
+      value: {
+        images: [
+          { dataBase64: Buffer.from("img1").toString("base64"), mimeType: "image/png" },
+          { dataBase64: Buffer.from("img2").toString("base64"), mimeType: "image/png" },
+        ],
+        provider: "openai",
+        model: "gpt-image-2",
+        costMicroUsd: 2000,
+        failedCount: 0,
+      },
+    });
+
+    createFromBytesMock
+      .mockResolvedValueOnce({ ok: true, value: { id: "media-1", storagePath: "ai-generated/1.png" } })
+      .mockResolvedValueOnce({ ok: false, code: "KMB-E901", detail: "DB insert failed" });
+
+    insertImageGenerationRowMock.mockResolvedValue({
+      ok: true,
+      value: makeRow({ id: "gen-1", media_id: "media-1" }),
+    });
+
+    const result = await aiProvidersFacade.generateImageCascade({
+      prompt: "a cat",
+      model: "gpt-image-2",
+      n: 2,
+      parentId: null,
+      sourceMediaIds: [],
+      rawSourceImages: [],
+      siteContext: null,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.images).toHaveLength(1);
+    expect(result.value.failedCount).toBe(1);
+    // err Result のケースでは media 行 INSERT は試みられない
+    expect(insertImageGenerationRowMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("createFromBytes が全件 err Result を返した場合は KMB-E901 を返す", async () => {
+    routeGenerateImagesMock.mockResolvedValue({
+      ok: true,
+      value: {
+        images: [{ dataBase64: Buffer.from("img1").toString("base64"), mimeType: "image/png" }],
+        provider: "openai",
+        model: "gpt-image-2",
+        costMicroUsd: 1000,
+        failedCount: 0,
+      },
+    });
+    createFromBytesMock.mockResolvedValue({ ok: false, code: "KMB-E901", detail: "storage upload failed" });
+
+    const result = await aiProvidersFacade.generateImageCascade({
+      prompt: "a cat",
+      model: "gpt-image-2",
+      n: 1,
+      parentId: null,
+      sourceMediaIds: [],
+      rawSourceImages: [],
+      siteContext: null,
+    });
+
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: "生成画像の保存にすべて失敗しました" });
+    expect(insertImageGenerationRowMock).not.toHaveBeenCalled();
   });
 });
 

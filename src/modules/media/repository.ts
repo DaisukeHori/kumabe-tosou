@@ -219,6 +219,31 @@ export async function uploadRendition(
   if (error) throw new Error(`レンディションのアップロードに失敗しました (${renditionPath}): ${error.message}`);
 }
 
+/**
+ * createFromBytes の部分失敗クリーンアップ用: DB insert 失敗時に
+ * アップロード済みの原本 (media-originals バケット) を削除し orphan を残さない。
+ * ベストエフォート (削除自体の失敗は元のエラーをマスクしないようログのみ)。
+ */
+export async function removeOriginalBytes(supabase: Supa, storagePath: string): Promise<void> {
+  const { error } = await supabase.storage.from(MEDIA_ORIGINALS_BUCKET).remove([storagePath]);
+  if (error) {
+    console.error(`原本の削除に失敗しました (クリーンアップ, ${storagePath}): ${error.message}`);
+  }
+}
+
+/**
+ * ingestMediaBuffer の部分失敗クリーンアップ用: insertMediaRow 失敗時に
+ * 既にアップロード済みのレンディション (webp/jpg) を削除し orphan を残さない。
+ * ベストエフォート (削除自体の失敗は元のエラーをマスクしないようログのみ)。
+ */
+export async function removeRenditions(supabase: Supa, renditionPaths: string[]): Promise<void> {
+  if (renditionPaths.length === 0) return;
+  const { error } = await supabase.storage.from(MEDIA_PUBLIC_BUCKET).remove(renditionPaths);
+  if (error) {
+    console.error(`レンディションの削除に失敗しました (クリーンアップ, ${renditionPaths.join(", ")}): ${error.message}`);
+  }
+}
+
 export function buildPublicRenditionUrl(supabase: Supa, renditionPath: string): string {
   const { data } = supabase.storage.from(MEDIA_PUBLIC_BUCKET).getPublicUrl(renditionPath);
   return data.publicUrl;
