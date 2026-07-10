@@ -150,8 +150,20 @@ export function ShopPageBody({
   return (
     <>
       <PageHead
-        index="INDEX 09 — SHOP"
-        en="ORDER FINISHING ONLINE"
+        index={
+          <SlotText
+            slotKey="shop.hero.index"
+            resolved={texts["shop.hero.index"]}
+            editMode={editMode}
+          />
+        }
+        en={
+          <SlotText
+            slotKey="shop.hero.en"
+            resolved={texts["shop.hero.en"]}
+            editMode={editMode}
+          />
+        }
         title={
           <SlotText
             slotKey="shop.hero.heading"
@@ -175,15 +187,38 @@ export function ShopPageBody({
           slotKey="shop.hero"
           resolved={slots["shop.hero"]}
           editMode={editMode}
-          capJa="あなたが手にするのは、この深さ。自動車グレードの艶を、造形物に。"
-          capEn="AUTOMOTIVE-GRADE FINISH, DELIVERED"
-          credit="Photo: cmreflections / Unsplash"
+          capJa={
+            <SlotText
+              slotKey="shop.hero.photo.capja"
+              resolved={texts["shop.hero.photo.capja"]}
+              editMode={editMode}
+            />
+          }
+          capEn={
+            <SlotText
+              slotKey="shop.hero.photo.capen"
+              resolved={texts["shop.hero.photo.capen"]}
+              editMode={editMode}
+            />
+          }
+          credit={
+            <SlotText
+              slotKey="shop.hero.photo.credit"
+              resolved={texts["shop.hero.photo.credit"]}
+              editMode={editMode}
+            />
+          }
         />
       </Section>
 
       {/* ============ SEC.01 サービスを買う ============ */}
       <Section>
-        <SectionMark no="SEC. 01" label="FINISHING SERVICES — 受託仕上げ" />
+        <SectionMark
+          no="SEC. 01"
+          label={texts["shop.sec.1.label"].text}
+          labelSlotKey="shop.sec.1.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="shop.grades.heading"
@@ -589,7 +624,12 @@ export function ShopPageBody({
 
       {/* ============ SEC.02 見積もりシミュレータ ============ */}
       <Section id="sim" className="scroll-mt-20">
-        <SectionMark no="SEC. 02" label="ESTIMATE SIMULATOR" />
+        <SectionMark
+          no="SEC. 02"
+          label={texts["shop.sec.2.label"].text}
+          labelSlotKey="shop.sec.2.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="shop.simulator.heading"
@@ -615,7 +655,12 @@ export function ShopPageBody({
 
       {/* ============ SEC.03 塗装済み製品 ============ */}
       <Section>
-        <SectionMark no="SEC. 03" label="READY-MADE — 塗装済み製品" />
+        <SectionMark
+          no="SEC. 03"
+          label={texts["shop.sec.3.label"].text}
+          labelSlotKey="shop.sec.3.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="shop.products.heading"
@@ -956,7 +1001,12 @@ export function ShopPageBody({
 
       {/* ============ SEC.04 購入の流れ ============ */}
       <Section>
-        <SectionMark no="SEC. 04" label="HOW TO ORDER" />
+        <SectionMark
+          no="SEC. 04"
+          label={texts["shop.sec.4.label"].text}
+          labelSlotKey="shop.sec.4.label"
+          editMode={editMode}
+        />
         <SecTitle>
           <SlotText
             slotKey="shop.flow.heading"

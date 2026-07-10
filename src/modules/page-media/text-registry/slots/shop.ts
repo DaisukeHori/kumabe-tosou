@@ -1,16 +1,104 @@
 import type { PageTextSlot } from "../types";
 
 // ---------------------------------------------------------------------------
-// shop (134, route: "/shop")
+// shop (143, route: "/shop")
 // v2 Wave 1 (docs/design/visual-text-editor-v2.md §5): 既存9件 (hero/grades/simulator/
 // products/flow/cta 見出し・CTA・リード文) はそのまま維持し、page-body.tsx / shop-simulator.tsx
 // の残り全静的テキスト (rich 19件含む) を追加。defaultText は現行描画テキストと1文字も違わない
 // (非退行)。rich kind の語彙は mono(`text`) / strong(**text**) / link([text](url)) の3種のみ
-// (§3.1)。PageHead index/en・SectionMark label ×4・PhotoFigure capJa/capEn/credit は
-// page-blocks.tsx が該当propを string 型 (ReactNode不可) で持つため本waveでは対象外
-// (W1-1 のスコープ、page-blocks.tsx 非変更が本waveの制約)。
+// (§3.1)。
+//
+// 追補 (page-blocks.tsx 基盤整備後): 当初は PageHead index/en・SectionMark label ×4・
+// PhotoFigure capJa/capEn/credit の9件が「page-blocks.tsx が該当propを string 型
+// (ReactNode不可) で持つため対象外」だったが、page-blocks.tsx 側を (a) ReactNode へ型を広げる
+// (index/en/capJa/capEn/credit) / (b) optional slotKey ラッパーを追加 (SectionMark の
+// label/no は data-sec-* 属性値としても使われるため string のまま保持) の2方針で対応した
+// ことで、9件とも配線可能になった。SectionMark の `no` ("SEC. 01" 等) は noSlotKey capability
+// が page-blocks.tsx 側に存在するが、本 wave の配線スコープ (仕様の9件) には含めない
+// (将来 wave で必要になれば noSlotKey を配線するだけで良い)。
 // ---------------------------------------------------------------------------
 export const SHOP_TEXT_SLOTS: readonly PageTextSlot[] = [
+  {
+    key: "shop.hero.index",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / PageHead 連番表記 (INDEX NN — ページ名)",
+    kind: "text",
+    maxLen: 25,
+    defaultText: "INDEX 09 — SHOP",
+  },
+  {
+    key: "shop.hero.en",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / PageHead 英字サブラベル",
+    kind: "text",
+    maxLen: 35,
+    defaultText: "ORDER FINISHING ONLINE",
+  },
+  {
+    key: "shop.sec.1.label",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / SEC.01 セクションラベル",
+    kind: "text",
+    maxLen: 40,
+    defaultText: "FINISHING SERVICES — 受託仕上げ",
+  },
+  {
+    key: "shop.sec.2.label",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / SEC.02 セクションラベル",
+    kind: "text",
+    maxLen: 30,
+    defaultText: "ESTIMATE SIMULATOR",
+  },
+  {
+    key: "shop.sec.3.label",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / SEC.03 セクションラベル",
+    kind: "text",
+    maxLen: 35,
+    defaultText: "READY-MADE — 塗装済み製品",
+  },
+  {
+    key: "shop.sec.4.label",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / SEC.04 セクションラベル",
+    kind: "text",
+    maxLen: 25,
+    defaultText: "HOW TO ORDER",
+  },
+  {
+    key: "shop.hero.photo.capja",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / FIG.00 (ヒーロー写真) 日本語キャプション",
+    kind: "text",
+    maxLen: 45,
+    defaultText: "あなたが手にするのは、この深さ。自動車グレードの艶を、造形物に。",
+  },
+  {
+    key: "shop.hero.photo.capen",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / FIG.00 (ヒーロー写真) 英語キャプション",
+    kind: "text",
+    maxLen: 45,
+    defaultText: "AUTOMOTIVE-GRADE FINISH, DELIVERED",
+  },
+  {
+    key: "shop.hero.photo.credit",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / FIG.00 (ヒーロー写真) クレジット表記",
+    kind: "text",
+    maxLen: 45,
+    defaultText: "Photo: cmreflections / Unsplash",
+  },
   {
     key: "shop.hero.heading",
     page: "shop",

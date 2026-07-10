@@ -37,7 +37,11 @@ import {
 // (rich 19件を含む 125件) を追加し、74 - 9 (旧 shop) + 134 (新 shop) = 199 件 (shop.ts 側の
 // 詳細な内訳・rich マークアップ確定根拠は同ファイル冒頭コメント参照)。他ページの追加は
 // 後続 wave で本カウント・フィクスチャを同様に更新する。
-const EXPECTED_COUNT = 199;
+//
+// 追補 (page-blocks.tsx 基盤整備): PageHead index/en・SectionMark label ×4・PhotoFigure
+// capJa/capEn/credit の 9 件を追加配線し、199 + 9 = 208 件 (shop.ts 側の内訳詳細は同ファイル
+// 冒頭コメント参照)。
+const EXPECTED_COUNT = 208;
 
 const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "shared.cta.consult": "相談する",
@@ -115,6 +119,15 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "colors.cta.heading": "この8色以外も、\n色番号でご指定いただけます。",
   "colors.cta.note": "日塗工番号・自動車カラーコードに対応。まずはサイズ×個数×グレードでご相談ください。",
 
+  "shop.hero.index": "INDEX 09 — SHOP",
+  "shop.hero.en": "ORDER FINISHING ONLINE",
+  "shop.sec.1.label": "FINISHING SERVICES — 受託仕上げ",
+  "shop.sec.2.label": "ESTIMATE SIMULATOR",
+  "shop.sec.3.label": "READY-MADE — 塗装済み製品",
+  "shop.sec.4.label": "HOW TO ORDER",
+  "shop.hero.photo.capja": "あなたが手にするのは、この深さ。自動車グレードの艶を、造形物に。",
+  "shop.hero.photo.capen": "AUTOMOTIVE-GRADE FINISH, DELIVERED",
+  "shop.hero.photo.credit": "Photo: cmreflections / Unsplash",
   "shop.hero.heading": "仕上げを、\n通販のように買う。",
   "shop.hero.lead":
     "受託の表面仕上げを、商品のように選べるようにしました。グレードを選び、サイズと個数で概算を出し、そのまま注文のご相談へ。オンライン決済は現在準備中のため、いまは「注文の意思表示 → 相談 → 正式見積もり → お支払い」の流れでお受けしています。手のひらの造形物を送るだけで、量産品の顔になって還ってきます。",
@@ -262,7 +275,7 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
 };
 
 describe("TEXT_REGISTRY", () => {
-  it(`実測 ${EXPECTED_COUNT} 件 (v1: PLAN.md 75件からstory.message.body除外=74。v2 Wave1: shopページ125件追加=199)`, () => {
+  it(`実測 ${EXPECTED_COUNT} 件 (v1: PLAN.md 75件からstory.message.body除外=74。v2 Wave1: shopページ125件追加=199。page-blocks.tsx基盤整備でPageHead/SectionMark/PhotoFigure配線9件追加=208)`, () => {
     expect(TEXT_REGISTRY.length).toBe(EXPECTED_COUNT);
   });
 
