@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,8 +27,20 @@ export function NotesPageBody({
     <>
       <LegacyNoteAnchorRedirect />
       <PageHead
-        index="INDEX 08 — NOTES"
-        en="READING ON PAINT & COLOR"
+        index={
+          <SlotText
+            slotKey="notes.hero.index"
+            resolved={texts["notes.hero.index"]}
+            editMode={editMode}
+          />
+        }
+        en={
+          <SlotText
+            slotKey="notes.hero.en"
+            resolved={texts["notes.hero.en"]}
+            editMode={editMode}
+          />
+        }
         title={
           <SlotText
             slotKey="notes.hero.heading"
@@ -46,7 +59,12 @@ export function NotesPageBody({
       />
 
       <Section className="pt-6 sm:pt-8">
-        <SectionMark no="SEC. 01" label="ARTICLES" />
+        <SectionMark
+          no="SEC. 01"
+          label={texts["notes.articles.label"].text}
+          labelSlotKey="notes.articles.label"
+          editMode={editMode}
+        />
         {posts.length > 1 ? (
           <Reveal
             as="nav"
@@ -76,7 +94,11 @@ export function NotesPageBody({
         {posts.length === 0 ? (
           <div className="mt-10">
             <EmptyState>
-              読みものは現在準備中です。工程・色の裏側を、順次言葉にして公開していきます。
+              <SlotText
+                slotKey="notes.empty.message"
+                resolved={texts["notes.empty.message"]}
+                editMode={editMode}
+              />
             </EmptyState>
           </div>
         ) : (
@@ -118,12 +140,30 @@ export function NotesPageBody({
           as="div"
           className="mt-[clamp(48px,6vw,72px)] border border-dashed border-hair p-[clamp(26px,3.4vw,40px)] text-center text-[13px] leading-[2.1] text-carbon-soft"
         >
-          <p className="font-mono text-[10.5px] tracking-[0.22em]">COMING SOON</p>
-          <p className="mt-2.5">
-            今後、デモピースの製作記録や案件の実績（掲載許諾をいただいたもの）を、ここで発信していきます。
-            <br />
-            note・X・Instagram との連携も準備中です。
-          </p>
+          <SlotText
+            as="p"
+            className="font-mono text-[10.5px] tracking-[0.22em]"
+            slotKey="notes.comingsoon.label"
+            resolved={texts["notes.comingsoon.label"]}
+            editMode={editMode}
+          />
+          <SlotText
+            as="p"
+            className="mt-2.5"
+            slotKey="notes.comingsoon.body"
+            resolved={texts["notes.comingsoon.body"]}
+            editMode={editMode}
+            renderLines={(lines) => (
+              <>
+                {lines.map((line, i) => (
+                  <Fragment key={i}>
+                    {i > 0 ? <br /> : null}
+                    {line}
+                  </Fragment>
+                ))}
+              </>
+            )}
+          />
         </Reveal>
       </Section>
 
@@ -143,7 +183,9 @@ export function NotesPageBody({
           />
         }
         href="/contact"
-        label="相談する"
+        label={texts["shared.cta.consult"].text}
+        labelSlotKey="shared.cta.consult"
+        editMode={editMode}
       />
     </>
   );
