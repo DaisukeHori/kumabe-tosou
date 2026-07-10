@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 
 const POLL_INTERVAL_MS = 2000;
 const TERMINAL_STATUSES: readonly RunStatus[] = ["ready_for_review", "completed", "failed", "cancelled"];
-const STAGE_STATUSES: readonly RunStage[] = ["extracting", "researching", "drafting"];
+const STAGE_STATUSES: readonly RunStage[] = ["extracting", "researching", "drafting", "image_generation"];
 
 function isStage(status: RunStatus): status is RunStage {
   return (STAGE_STATUSES as readonly string[]).includes(status);

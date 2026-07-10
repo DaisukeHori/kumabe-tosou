@@ -9,11 +9,13 @@ import {
   zChannelDraftOutput,
   zCleanedTranscript,
   zResearchNotes,
+  zSnsImagePromptOutput,
   type Brief,
   type CleanedTranscript,
   type Claim,
   type ChannelContent,
   type ResearchNotes,
+  type SnsImagePromptOutput,
   type TokenUsage,
 } from "../contracts";
 import {
@@ -21,8 +23,16 @@ import {
   channelDraftOutputFormat,
   cleanedTranscriptOutputFormat,
   researchNotesOutputFormat,
+  snsImagePromptOutputFormat,
 } from "./json-schema";
-import { BRAND_SYSTEM_PROMPT, buildCleanUserPrompt, buildDraftUserPrompt, buildExtractUserPrompt, buildResearchUserPrompt } from "./prompts";
+import {
+  BRAND_SYSTEM_PROMPT,
+  buildCleanUserPrompt,
+  buildDraftUserPrompt,
+  buildExtractUserPrompt,
+  buildResearchUserPrompt,
+  buildSnsImagePromptUserPrompt,
+} from "./prompts";
 
 /**
  * Claude 呼び出し (canonical: docs/design/cms-ai-pipeline.md §7.2)。
@@ -60,6 +70,8 @@ type StructuredCallParams = {
   responseSchema: { name: string; schema: Record<string, unknown> };
   webSearch?: { maxUses: number };
   onDelta?: (delta: string) => void;
+  /** usage 記録の feature 分類 (ダッシュボード用)。省略時は既存の "studio" (非退行)。 */
+  feature?: string;
 };
 
 async function runStructured<T>(
@@ -68,7 +80,7 @@ async function runStructured<T>(
 ): Promise<Result<{ data: T; usage: TokenUsage }>> {
   const result = await aiProvidersFacade.generateText({
     model: MODEL,
-    feature: "studio",
+    feature: params.feature ?? "studio",
     system: BRAND_SYSTEM_PROMPT,
     messages: [{ role: "user", content: params.userPrompt }],
     maxTokens: MAX_TOKENS,
@@ -153,4 +165,20 @@ export async function draftChannel(
     responseSchema: channelDraftOutputFormat(channel),
     onDelta,
   }) as Promise<Result<{ data: { content: ChannelContent[Channel]; claims: Claim[] }; usage: TokenUsage }>>;
+}
+
+/**
+ * P4 (ai-studio-v2.md §7): image_generation ステージ。生成済みの SNS 本文 (sourceText) から
+ * 画像生成プロンプトを 1 件起案する。feature='sns-image' で usage 記録する
+ * (ai_usage_log.feature の分類。ai-studio-v2.md §2 の feature 列挙に含まれる値)。
+ * 失敗時 (KMB-E408 等) は呼び出し元 (facade.ts runOneStage) が graceful に 0 候補で進める。
+ */
+export async function buildSnsImagePrompt(
+  sourceText: string,
+): Promise<Result<{ data: SnsImagePromptOutput; usage: TokenUsage }>> {
+  return runStructured(zSnsImagePromptOutput, {
+    userPrompt: buildSnsImagePromptUserPrompt(sourceText),
+    responseSchema: snsImagePromptOutputFormat(),
+    feature: "sns-image",
+  });
 }

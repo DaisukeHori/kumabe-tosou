@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { Channel } from "@/modules/platform/contracts";
-import type { DraftRow, RunRow, SourceRow } from "@/modules/ai-studio/facade";
+import type { DraftRow, RunImageCandidate, RunRow, SourceRow } from "@/modules/ai-studio/facade";
 import type { RunProgressEvent, RunStage } from "@/modules/ai-studio/contracts";
 
 import { ALL_CHANNELS, CHANNEL_LABELS, channelContentToText } from "./channel-content";
@@ -26,6 +26,8 @@ type Props = {
   selectedRunId: string | null;
   selectedRun: RunRow | null;
   drafts: DraftRow[];
+  /** P4 (ai-studio-v2.md §7): image_generation ステージの候補画像 (最大4件)。 */
+  imageCandidates: RunImageCandidate[];
 };
 
 const RUN_TERMINAL_STATUSES = new Set(["ready_for_review", "completed", "failed", "cancelled"]);
@@ -33,6 +35,7 @@ const STAGE_LABELS: Record<RunStage, string> = {
   extracting: "要旨抽出",
   researching: "リサーチ",
   drafting: "チャネル別生成",
+  image_generation: "画像生成",
 };
 
 async function postJson<T>(url: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; message: string; status: number }> {
@@ -49,7 +52,8 @@ async function postJson<T>(url: string, body: unknown): Promise<{ ok: true; data
 }
 
 export function StudioWorkspace(props: Props) {
-  const { aiConfigured, sources, selectedSourceId, selectedSource, runsForSource, selectedRun, drafts } = props;
+  const { aiConfigured, sources, selectedSourceId, selectedSource, runsForSource, selectedRun, drafts, imageCandidates } =
+    props;
   const router = useRouter();
 
   return (
@@ -93,8 +97,10 @@ export function StudioWorkspace(props: Props) {
         {selectedRun && (selectedRun.status === "ready_for_review" || selectedRun.status === "completed") && (
           <ReviewPanel
             key={selectedRun.id}
+            runId={selectedRun.id}
             drafts={drafts}
             cleanedText={selectedSource?.cleaned_text ?? ""}
+            imageCandidates={imageCandidates}
             onChanged={() => router.refresh()}
           />
         )}
@@ -570,12 +576,16 @@ function RunProgress({ run, onDone }: { run: RunRow; onDone: () => void }) {
 }
 
 function ReviewPanel({
+  runId,
   drafts,
   cleanedText,
+  imageCandidates,
   onChanged,
 }: {
+  runId: string;
   drafts: DraftRow[];
   cleanedText: string;
+  imageCandidates: RunImageCandidate[];
   onChanged: () => void;
 }) {
   const [active, setActive] = useState<Channel | "distribution">(drafts[0]?.channel ?? "distribution");
@@ -583,6 +593,11 @@ function ReviewPanel({
   return (
     <div className="flex flex-col gap-4">
       <h2 className="font-semibold">3. レビュー</h2>
+
+      {imageCandidates.length > 0 && (
+        <ImageSelectionPanel runId={runId} candidates={imageCandidates} onChanged={onChanged} />
+      )}
+
       <Tabs value={active} onValueChange={(v) => setActive(v as Channel | "distribution")}>
         <TabsList variant="line">
           {drafts.map((d) => (
@@ -612,6 +627,82 @@ function ReviewPanel({
           </div>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/**
+ * P4 (ai-studio-v2.md §7): image_generation ステージで生成された候補 4 枚から 1 枚を選ぶ
+ * (skip 可)。選択すると x (先頭ツイート) / instagram の channel_drafts.content に
+ * media_id として反映される (POST /api/ai/runs/{id}/select-image)。
+ */
+function ImageSelectionPanel({
+  runId,
+  candidates,
+  onChanged,
+}: {
+  runId: string;
+  candidates: RunImageCandidate[];
+  onChanged: () => void;
+}) {
+  const [isBusy, setIsBusy] = useState(false);
+  const alreadySelected = candidates.find((c) => c.selected) ?? null;
+
+  async function select(mediaId: string | null) {
+    setIsBusy(true);
+    try {
+      const res = await postJson("/api/ai/runs/" + runId + "/select-image", { media_id: mediaId });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      toast.success(mediaId ? "画像を選択しました。" : "画像選択をスキップしました。");
+      onChanged();
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">SNS投稿用の画像候補 (X/Instagram)</h3>
+        <Button size="sm" variant="outline" onClick={() => select(null)} disabled={isBusy}>
+          スキップ
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {candidates.map((c) => (
+          <button
+            key={c.mediaId}
+            onClick={() => select(c.mediaId)}
+            disabled={isBusy}
+            className={
+              "relative overflow-hidden rounded-lg border-2 transition-colors " +
+              (c.selected ? "border-primary" : "border-transparent hover:border-muted-foreground/40")
+            }
+          >
+            {c.url ? (
+              // eslint-disable-next-line @next/next/no-img-element -- AI 生成画像の候補プレビュー (外部/動的 URL のため next/image 最適化対象外)
+              <img src={c.url} alt="AI生成画像候補" className="aspect-square w-full object-cover" />
+            ) : (
+              <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+                取得失敗
+              </div>
+            )}
+            {c.selected && (
+              <Badge className="absolute top-1 right-1" variant="default">
+                選択中
+              </Badge>
+            )}
+          </button>
+        ))}
+      </div>
+      {!alreadySelected && (
+        <p className="text-xs text-muted-foreground">
+          1枚選択すると X (先頭ツイート) / Instagram の投稿画像として反映されます。Instagram は画像必須です。
+        </p>
+      )}
     </div>
   );
 }

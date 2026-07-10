@@ -72,11 +72,30 @@ function extractEnumChecks(sql: string): EnumCheck[] {
     parseCheckClausesInto(checks, alterMatch[1], alterMatch[2]);
   }
 
+  // `alter table <table>\n  add constraint <name>\n  check (col in (...));` パターン
+  // (既存の CHECK 制約を drop+add で再定義するケース。P4: migration 20260710000019 が
+  // ai_runs.status の check 制約に 'image_generation' を追加する際に新規に必要になった記法。
+  // create table 本体からの区別は「テーブル名の直後に改行 + add constraint」で行う
+  // (posts_source_run_fk のような 1 行の FK 制約追加を誤って巻き込まないため)。
+  // グループはネストした括弧 (check(col in (...))) を丸ごと含める必要があるため、
+  // 閉じ括弧 2 個を明示的にリテラルとして group 内に含める。
+  const addConstraintRegex = /alter table (\w+)\s*\n\s*add constraint \w+\s*\n\s*(check \([\s\S]*?\)\));/g;
+  let addConstraintMatch: RegExpExecArray | null;
+  while ((addConstraintMatch = addConstraintRegex.exec(sql))) {
+    parseCheckClausesInto(checks, addConstraintMatch[1], addConstraintMatch[2]);
+  }
+
   return checks;
 }
 
+/**
+ * 同一 (table, column) の check が複数見つかった場合は「最後 (=最新) の定義」を有効とする。
+ * P4 で `alter table X add constraint Y check(...)` による既存制約の再定義パターンが
+ * 初めて登場したため対応 (extractEnumChecks は create table → add column → add constraint の
+ * 順に走査するため、drop+add で再定義された制約は配列の後方に来る)。
+ */
 function findCheck(checks: EnumCheck[], table: string, column: string): string[] {
-  const found = checks.find((c) => c.table === table && c.column === column);
+  const found = [...checks].reverse().find((c) => c.table === table && c.column === column);
   if (!found) {
     throw new Error(
       `migration に ${table}.${column} の check (... in (...)) 制約が見つかりません。` +

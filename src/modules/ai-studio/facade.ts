@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSessionAndClient } from "@/lib/supabase/session";
+import { aiProvidersFacade } from "@/modules/ai-providers/facade";
+import { mediaFacade } from "@/modules/media/facade";
+import { settingsFacade } from "@/modules/settings/facade";
 import type { Channel, KmbErrorCode, Result } from "@/modules/platform/contracts";
 import { zCreateUploadUrlReq, type CreateUploadUrlInput } from "@/modules/platform/contracts";
 
@@ -11,17 +14,22 @@ import {
   zCreateSourceReq,
   zResearchNotes,
   type ApprovedDraft,
+  type Brief,
   type CreateSourceInput,
+  type ImageCandidate,
+  type InstagramContent,
   type RunStage,
   type RunStatus,
   type TokenUsage,
+  type XContent,
 } from "./contracts";
-import { cleanTranscript, draftChannel, extractBrief, researchBrief } from "./internal/claude";
+import { buildSnsImagePrompt, cleanTranscript, draftChannel, extractBrief, researchBrief } from "./internal/claude";
 import { HEARTBEAT_INTERVAL_MS, interpretAcquireLeaseResult } from "./internal/lease";
-import { MAX_STAGE_ATTEMPTS, nextStatusAfterStage } from "./internal/stage-machine";
+import { MAX_STAGE_ATTEMPTS, needsImageStage, nextStatusAfterStage } from "./internal/stage-machine";
 import { transcribeAudio } from "./internal/transcribe";
 import {
   acquireLease,
+  commitImageStage,
   commitStage,
   confirmCleanedText as repoConfirmCleanedText,
   createAudioSignedUploadUrl,
@@ -40,6 +48,7 @@ import {
   listSources,
   releaseLeaseAfterFailure,
   setDraftReviewStatus,
+  updateRunImageSelection,
   updateSourceTranscript,
   type ChannelDraftCommitInput,
   type DraftRow,
@@ -95,6 +104,9 @@ export type AdvanceOutcome =
   | { kind: "not_found" }
   | { kind: "error"; code: KmbErrorCode; detail?: string };
 
+/** P4: レビュー画面向けの画像候補射影 (ai_runs.image_candidates + mediaFacade.getPublicUrl)。 */
+export type RunImageCandidate = { mediaId: string; url: string; selected: boolean };
+
 export interface AiStudioFacadeExtended extends AiStudioFacade {
   advanceRunDetailed(runId: string): Promise<AdvanceOutcome>;
   getSourceDetail(id: string): Promise<Result<SourceRow>>;
@@ -117,6 +129,18 @@ export interface AiStudioFacadeExtended extends AiStudioFacade {
   listRevisionsDetail(draftId: string): Promise<Result<RevisionRow[]>>;
   /** 修正指示付きの再生成。draft_revisions に ai 版として積む (§5.3)。 */
   regenerateDraft(draftId: string, instruction: string): Promise<Result<{ revision: number }>>;
+  /**
+   * P4 (ai-studio-v2.md §7): image_generation ステージが生成した候補 (最大4件) を
+   * URL 付きで返す (レビュー画面の「4枚から選択」表示用)。
+   */
+  listRunImageCandidates(runId: string): Promise<Result<RunImageCandidate[]>>;
+  /**
+   * P4: レビュー画面での画像選択。mediaId=null は skip (channel_drafts は変更しない)。
+   * 選択時は run の候補一覧に含まれる media_id であることを検証したうえで、
+   * x (thread[0].media_id) / instagram (media_ids=[mediaId]) の channel_drafts.content を
+   * human revision として更新する (§7)。
+   */
+  selectRunImage(runId: string, mediaId: string | null): Promise<Result<void>>;
 }
 
 function errFrom(err: unknown): Result<never> {
@@ -194,39 +218,138 @@ async function runOneStage(
     return { kind: "advanced", status: status as RunStatus };
   }
 
-  // stage === "drafting"
-  const brief = zBrief.parse(row.brief);
-  const researchNotes = row.research_notes ? zResearchNotes.parse(row.research_notes) : null;
-  const channels = row.target_channels as Channel[];
+  if (stage === "drafting") {
+    const brief = zBrief.parse(row.brief);
+    const researchNotes = row.research_notes ? zResearchNotes.parse(row.research_notes) : null;
+    const channels = row.target_channels as Channel[];
 
-  const results = await Promise.all(channels.map((ch) => draftChannel(ch, brief, researchNotes, null)));
-  const firstFailure = results.find((r) => !r.ok);
-  if (firstFailure && !firstFailure.ok) {
-    await releaseLeaseAfterFailure(supabase, runId, firstFailure.code);
-    return { kind: "error", code: firstFailure.code, detail: firstFailure.detail };
+    const results = await Promise.all(channels.map((ch) => draftChannel(ch, brief, researchNotes, null)));
+    const firstFailure = results.find((r) => !r.ok);
+    if (firstFailure && !firstFailure.ok) {
+      await releaseLeaseAfterFailure(supabase, runId, firstFailure.code);
+      return { kind: "error", code: firstFailure.code, detail: firstFailure.detail };
+    }
+
+    const channelDrafts: ChannelDraftCommitInput[] = channels.map((ch, i) => {
+      const r = results[i];
+      if (!r.ok) throw new Error("unreachable: checked above");
+      return { channel: ch, content: r.value.data.content, claims: r.value.data.claims };
+    });
+    const usageSum = sumTokenUsage(
+      results.map((r) => {
+        if (!r.ok) throw new Error("unreachable: checked above");
+        return r.value.usage;
+      }),
+    );
+
+    const nextStatus = nextStatusAfterStage("drafting", row.research_enabled, row.target_channels);
+    const status = await commitStage(supabase, {
+      runId,
+      expectedStatus: "drafting",
+      nextStatus,
+      channelDrafts,
+      tokenUsageDelta: usageSum,
+    });
+    return { kind: "advanced", status: status as RunStatus };
   }
 
-  const channelDrafts: ChannelDraftCommitInput[] = channels.map((ch, i) => {
-    const r = results[i];
-    if (!r.ok) throw new Error("unreachable: checked above");
-    return { channel: ch, content: r.value.data.content, claims: r.value.data.claims };
-  });
-  const usageSum = sumTokenUsage(
-    results.map((r) => {
-      if (!r.ok) throw new Error("unreachable: checked above");
-      return r.value.usage;
-    }),
-  );
+  // stage === "image_generation" (P4: ai-studio-v2.md §7)。
+  // 失敗要因 (プロンプト起案失敗・画像モデル未設定・予算超過 E407・全プロバイダ失敗 E408・
+  // 部分成功) のいずれも run 全体を止めない (graceful degradation)。releaseLeaseAfterFailure は
+  // 一切呼ばず、常に commitImageStage で ready_for_review へ前進させる。
+  if (!needsImageStage(row.target_channels)) {
+    // 到達しない想定 (nextStatusAfterStage が X/IG を含む run のみこのステージへ導くため) だが、
+    // 防御的に candidates=[] のまま前進させる。
+    const status = await commitImageStage(supabase, {
+      runId,
+      expectedStatus: "image_generation",
+      nextStatus: nextStatusAfterStage("image_generation", row.research_enabled),
+      imageCandidates: [],
+    });
+    return { kind: "advanced", status: status as RunStatus };
+  }
 
-  const nextStatus = nextStatusAfterStage("drafting", row.research_enabled);
-  const status = await commitStage(supabase, {
+  const brief = zBrief.parse(row.brief);
+  const drafts = await listDraftsForRun(supabase, runId);
+  const sourceText = buildImagePromptSourceText(drafts, brief);
+
+  const candidates: ImageCandidate[] = [];
+  let stageErrorCode: string | undefined;
+
+  const promptResult = await buildSnsImagePrompt(sourceText);
+  if (!promptResult.ok) {
+    stageErrorCode = promptResult.code;
+  } else {
+    const opsLimitsResult = await settingsFacade.get("ops_limits");
+    const defaultImageModel = opsLimitsResult.ok ? opsLimitsResult.value.ai_default_image_model : null;
+
+    if (!defaultImageModel) {
+      // 画像モデル未設定は「設定されていない」だけで実行時エラーではない。
+      // candidates=0 のまま graceful に進める (レビュー画面が 0 枚を警告表示する)。
+    } else {
+      const genResult = await aiProvidersFacade.generateImages({
+        model: defaultImageModel,
+        feature: "sns-image",
+        prompt: promptResult.value.data.image_prompt,
+        n: 4,
+        refTable: "ai_runs",
+        refId: runId,
+      });
+
+      if (!genResult.ok) {
+        stageErrorCode = genResult.code; // KMB-E407 (予算超過) or KMB-E408 (全キー失敗)
+      } else {
+        for (const image of genResult.value.images) {
+          try {
+            const buffer = Buffer.from(image.dataBase64, "base64");
+            const saved = await mediaFacade.createFromBytes({
+              bytes: buffer,
+              contentType: image.mimeType,
+              alt: promptResult.value.data.image_prompt.slice(0, 200),
+              credit: `AI生成 (${genResult.value.model})`,
+              tags: ["ai-generated", "sns-draft"],
+              isPlaceholder: false,
+            });
+            candidates.push({ media_id: saved.id, selected: false });
+          } catch (err) {
+            console.error(
+              "KMB-E901: SNS 画像候補の media 保存に失敗しました",
+              err instanceof Error ? err.message : String(err),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  const nextStatus = nextStatusAfterStage("image_generation", row.research_enabled);
+  const status = await commitImageStage(supabase, {
     runId,
-    expectedStatus: "drafting",
+    expectedStatus: "image_generation",
     nextStatus,
-    channelDrafts,
-    tokenUsageDelta: usageSum,
+    imageCandidates: candidates,
+    errorCode: stageErrorCode,
   });
   return { kind: "advanced", status: status as RunStatus };
+}
+
+/**
+ * P4: image_generation ステージの画像プロンプト起案の入力元テキスト (「本文」)。
+ * Instagram のキャプション (より写真描写向き) を優先し、無ければ X スレッド全文、
+ * どちらも無ければ brief.theme にフォールバックする (判断点。実装報告参照)。
+ */
+function buildImagePromptSourceText(drafts: DraftRow[], brief: Brief): string {
+  const igDraft = drafts.find((d) => d.channel === "instagram");
+  if (igDraft) {
+    const content = igDraft.content as InstagramContent;
+    return content.caption;
+  }
+  const xDraft = drafts.find((d) => d.channel === "x");
+  if (xDraft) {
+    const content = xDraft.content as XContent;
+    return content.thread.map((t) => t.text).join("\n");
+  }
+  return brief.theme;
 }
 
 export const aiStudioFacade: AiStudioFacadeExtended = {
@@ -553,6 +676,67 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
 
       const revision = await insertAiRevision(supabase, draftId, result.value.data.content, result.value.data.claims);
       return { ok: true, value: { revision } };
+    } catch (err) {
+      return errFrom(err);
+    }
+  },
+
+  async listRunImageCandidates(runId) {
+    try {
+      const { supabase, user } = await getSessionAndClient();
+      if (!user) return { ok: false, code: "KMB-E201" };
+
+      const run = await getRun(supabase, runId);
+      if (!run) return { ok: false, code: "KMB-E101", detail: "run が見つかりません" };
+
+      const items: RunImageCandidate[] = run.image_candidates.map((c) => {
+        const urlResult = mediaFacade.getPublicUrl(c.media_id);
+        return { mediaId: c.media_id, url: urlResult.ok ? urlResult.value : "", selected: c.selected };
+      });
+      return { ok: true, value: items };
+    } catch (err) {
+      return errFrom(err);
+    }
+  },
+
+  async selectRunImage(runId, mediaId) {
+    try {
+      const { supabase, user } = await getSessionAndClient();
+      if (!user) return { ok: false, code: "KMB-E201" };
+
+      const run = await getRun(supabase, runId);
+      if (!run) return { ok: false, code: "KMB-E101", detail: "run が見つかりません" };
+
+      if (mediaId === null) {
+        // skip: channel_drafts には触れない (§7「1枚選択(skip可)」)。
+        return { ok: true, value: undefined };
+      }
+
+      const isValidCandidate = run.image_candidates.some((c) => c.media_id === mediaId);
+      if (!isValidCandidate) {
+        return { ok: false, code: "KMB-E101", detail: "指定された画像はこの run の候補にありません" };
+      }
+
+      const drafts = await listDraftsForRun(supabase, runId);
+      for (const draft of drafts) {
+        if (draft.channel === "x") {
+          const content = draft.content as XContent;
+          if (content.thread.length === 0) continue;
+          const nextContent: XContent = {
+            thread: content.thread.map((t, i) => (i === 0 ? { ...t, media_id: mediaId } : t)),
+          };
+          CHANNEL_CONTENT_SCHEMAS.x.parse(nextContent);
+          await insertHumanRevision(supabase, draft.id, nextContent, user.id);
+        } else if (draft.channel === "instagram") {
+          const content = draft.content as InstagramContent;
+          const nextContent: InstagramContent = { ...content, media_ids: [mediaId] };
+          CHANNEL_CONTENT_SCHEMAS.instagram.parse(nextContent);
+          await insertHumanRevision(supabase, draft.id, nextContent, user.id);
+        }
+      }
+
+      await updateRunImageSelection(supabase, runId, mediaId);
+      return { ok: true, value: undefined };
     } catch (err) {
       return errFrom(err);
     }

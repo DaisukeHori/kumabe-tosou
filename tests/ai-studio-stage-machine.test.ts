@@ -4,6 +4,7 @@ import {
   MAX_STAGE_ATTEMPTS,
   RUNNABLE_STATUSES,
   isRunnableStatus,
+  needsImageStage,
   nextStatusAfterStage,
   stageToRun,
 } from "@/modules/ai-studio/internal/stage-machine";
@@ -14,8 +15,16 @@ import {
  * 呼び出しという設計と 1:1 であることを検証する (設計書 §11「stage 遷移表」)。
  */
 describe("ai-studio stage-machine", () => {
-  it("RUNNABLE_STATUSES に 'ready_for_review' 等の終端状態が含まれない", () => {
-    expect(RUNNABLE_STATUSES).toEqual(["pending", "extracting", "researching", "drafting"]);
+  it("RUNNABLE_STATUSES に 'ready_for_review' 等の終端状態が含まれない (P4: image_generation を含む)", () => {
+    expect(RUNNABLE_STATUSES).toEqual([
+      "pending",
+      "extracting",
+      "researching",
+      "drafting",
+      "image_generation",
+    ]);
+    expect(isRunnableStatus("drafting")).toBe(true);
+    expect(isRunnableStatus("image_generation")).toBe(true);
     expect(isRunnableStatus("ready_for_review")).toBe(false);
     expect(isRunnableStatus("completed")).toBe(false);
     expect(isRunnableStatus("failed")).toBe(false);
@@ -26,6 +35,17 @@ describe("ai-studio stage-machine", () => {
     expect(stageToRun("extracting")).toBe("extracting");
     expect(stageToRun("researching")).toBe("researching");
     expect(stageToRun("drafting")).toBe("drafting");
+    expect(stageToRun("image_generation")).toBe("image_generation");
+  });
+
+  it("needsImageStage: target_channels に x または instagram を含む場合のみ true (P4 §7)", () => {
+    expect(needsImageStage(["site_blog"])).toBe(false);
+    expect(needsImageStage(["site_blog", "note"])).toBe(false);
+    expect(needsImageStage(["x"])).toBe(true);
+    expect(needsImageStage(["instagram"])).toBe(true);
+    expect(needsImageStage(["site_blog", "x"])).toBe(true);
+    expect(needsImageStage(["note", "instagram"])).toBe(true);
+    expect(needsImageStage([])).toBe(false);
   });
 
   it("nextStatusAfterStage: extracting 完了後、research 有効なら researching へ", () => {
@@ -41,36 +61,63 @@ describe("ai-studio stage-machine", () => {
     expect(nextStatusAfterStage("researching", false)).toBe("drafting");
   });
 
-  it("nextStatusAfterStage: drafting 完了後は常に ready_for_review へ (これ以上 advance 不要)", () => {
+  it("nextStatusAfterStage: drafting 完了後、targetChannels 省略 (既定 []) なら ready_for_review へ直行 (非退行)", () => {
     expect(nextStatusAfterStage("drafting", true)).toBe("ready_for_review");
     expect(nextStatusAfterStage("drafting", false)).toBe("ready_for_review");
+  });
+
+  it("nextStatusAfterStage: drafting 完了後、X/Instagram を含まない run は image_generation を skip して ready_for_review へ (P4 §7)", () => {
+    expect(nextStatusAfterStage("drafting", true, ["site_blog"])).toBe("ready_for_review");
+    expect(nextStatusAfterStage("drafting", false, ["site_blog", "note"])).toBe("ready_for_review");
+  });
+
+  it("nextStatusAfterStage: drafting 完了後、X または Instagram を含む run は image_generation へ (P4 §7)", () => {
+    expect(nextStatusAfterStage("drafting", true, ["x"])).toBe("image_generation");
+    expect(nextStatusAfterStage("drafting", false, ["instagram"])).toBe("image_generation");
+    expect(nextStatusAfterStage("drafting", true, ["site_blog", "x", "instagram"])).toBe("image_generation");
+  });
+
+  it("nextStatusAfterStage: image_generation 完了後は常に ready_for_review へ (成功/部分成功/0枚いずれも graceful に前進)", () => {
+    expect(nextStatusAfterStage("image_generation", true)).toBe("ready_for_review");
+    expect(nextStatusAfterStage("image_generation", false, ["x"])).toBe("ready_for_review");
   });
 
   it("MAX_STAGE_ATTEMPTS は 3 (stage_attempts > 3 → failed、§7.6)", () => {
     expect(MAX_STAGE_ATTEMPTS).toBe(3);
   });
 
-  it("全 runnable status を通しで辿ると必ず ready_for_review に到達する (research 有効)", () => {
+  it("全 runnable status を通しで辿ると必ず ready_for_review に到達する (research 有効、SNS チャネル無し)", () => {
     let status: string = "pending";
     const visited: string[] = [status];
     // pending は lease 取得時に 'extracting' へ bootstrap される前提でシミュレート
     status = "extracting";
     for (let i = 0; i < 10 && status !== "ready_for_review"; i++) {
       visited.push(status);
-      status = nextStatusAfterStage(stageToRun(status as never), true);
+      status = nextStatusAfterStage(stageToRun(status as never), true, ["site_blog"]);
     }
     expect(status).toBe("ready_for_review");
     expect(visited).toEqual(["pending", "extracting", "researching", "drafting"]);
   });
 
-  it("全 runnable status を通しで辿ると必ず ready_for_review に到達する (research 無効、researching をスキップ)", () => {
+  it("全 runnable status を通しで辿ると必ず ready_for_review に到達する (research 無効、researching をスキップ、SNS チャネル無し)", () => {
     let status: string = "extracting";
     const visited: string[] = [];
     for (let i = 0; i < 10 && status !== "ready_for_review"; i++) {
       visited.push(status);
-      status = nextStatusAfterStage(stageToRun(status as never), false);
+      status = nextStatusAfterStage(stageToRun(status as never), false, ["site_blog"]);
     }
     expect(status).toBe("ready_for_review");
     expect(visited).toEqual(["extracting", "drafting"]);
+  });
+
+  it("全 runnable status を通しで辿ると必ず ready_for_review に到達する (X を含む run は image_generation を経由する、P4)", () => {
+    let status: string = "extracting";
+    const visited: string[] = [];
+    for (let i = 0; i < 10 && status !== "ready_for_review"; i++) {
+      visited.push(status);
+      status = nextStatusAfterStage(stageToRun(status as never), false, ["x"]);
+    }
+    expect(status).toBe("ready_for_review");
+    expect(visited).toEqual(["extracting", "drafting", "image_generation"]);
   });
 });

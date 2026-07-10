@@ -36,6 +36,10 @@ export default async function StudioPage({
   const draftsResult = runId ? await aiStudioFacade.listDraftsForRunDetail(runId) : null;
   const drafts = draftsResult && draftsResult.ok ? draftsResult.value : [];
 
+  // P4 (ai-studio-v2.md §7): image_generation ステージの候補画像 (レビュー画面の選択 UI 用)。
+  const imageCandidatesResult = runId ? await aiStudioFacade.listRunImageCandidates(runId) : null;
+  const imageCandidates = imageCandidatesResult && imageCandidatesResult.ok ? imageCandidatesResult.value : [];
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="AIスタジオ" />
@@ -48,6 +52,7 @@ export default async function StudioPage({
         selectedRunId={runId ?? null}
         selectedRun={selectedRun}
         drafts={drafts}
+        imageCandidates={imageCandidates}
       />
     </div>
   );
