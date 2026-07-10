@@ -589,8 +589,9 @@ export interface PageMediaFacade {
 
   // AI 文言候補/画像生成のサイト文脈 (ai-studio-v2.md §3。2026-07-10 P2)。
   // TEXT/SLOT レジストリ現況 + 対象ページ + content の公開 works/posts タイトルを
-  // JSON 決定的シリアライズ (untrusted policy)。対象スロットを <<<編集対象>>> でマーク
-  buildSiteContextMd(input: { routeKey?: string; targetSlotKey?: string }): Promise<Result<string>>;
+  // JSON 決定的シリアライズ (untrusted policy)。対象スロットを <<<編集対象>>> でマーク。
+  // 戻り値 SiteContextResult.contextJson は既に決定的 JSON.stringify 済み。
+  buildSiteContextMd(targetSlotKey: string): Promise<Result<SiteContextResult>>;
 }
 
 // media/facade.ts
