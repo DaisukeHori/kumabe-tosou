@@ -2,12 +2,15 @@ import "server-only";
 
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
+import type { Page } from "puppeteer-core";
 import sharp from "sharp";
 
+import { getEnv } from "@/lib/env";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type { Result } from "@/modules/platform/contracts";
 
 import { buildScreenshotTargetUrl } from "./route-key";
+import { isAllowedSubresource, isSameOriginAsSite } from "./subresource-policy";
 
 /**
  * フルページスクショ基盤 (canonical: docs/design/ai-studio-v2.md §5、入力資料:
@@ -70,7 +73,39 @@ function routeKeyToStoragePath(routeKey: string): string {
   return `${normalized || "root"}.webp`;
 }
 
+/**
+ * SSRF 対策 (§11 MAJOR-5) の subresource ブロック。routeKey 検証 (route-key.ts) は最初の
+ * ナビゲーション先を自オリジンに限定するが、遷移後のページが読み込む subresource
+ * (img/script/link/xhr/fetch 等) 経由で任意ホストにリクエストさせる余地が別途残るため、
+ * request interception で自オリジン + Supabase Storage オリジン以外を全てブロックする。
+ *
+ * メインフレームの document リクエスト (最初のナビゲーション、リダイレクトの各ホップ含む) は
+ * ここでは無条件に continue() し、ナビゲーション完了後に page.url() の最終オリジンを
+ * siteOrigin と突き合わせる (isSameOriginAsSite)。iframe 等サブフレームの document
+ * リクエストは「document」種別であってもメインフレームではないため subresource と同様に
+ * isAllowedSubresource で判定する (埋め込み iframe 経由の SSRF を防ぐ)。
+ */
+function installSubresourceGuard(page: Page, siteOrigin: string, storageOrigin: string): void {
+  page.on("request", (request) => {
+    const isMainFrameDocument =
+      request.resourceType() === "document" && request.frame() === page.mainFrame();
+    if (isMainFrameDocument) {
+      void request.continue();
+      return;
+    }
+    if (isAllowedSubresource(request.url(), { siteOrigin, storageOrigin })) {
+      void request.continue();
+    } else {
+      void request.abort("blockedbyclient");
+    }
+  });
+}
+
 async function launchAndCapturePng(url: string): Promise<Buffer> {
+  const env = getEnv();
+  const siteOrigin = new URL(env.NEXT_PUBLIC_SITE_URL).origin;
+  const storageOrigin = new URL(env.NEXT_PUBLIC_SUPABASE_URL).origin;
+
   const browser = await puppeteer.launch({
     args: chromium.args,
     defaultViewport: VIEWPORT,
@@ -79,10 +114,21 @@ async function launchAndCapturePng(url: string): Promise<Buffer> {
   });
   try {
     const page = await browser.newPage();
+    await page.setRequestInterception(true);
+    installSubresourceGuard(page, siteOrigin, storageOrigin);
     // スクロール連動アニメーション (docs/design/motion-specs) が中途半端な状態で写らないよう、
     // prefers-reduced-motion: reduce をエミュレートする (research/fullpage-screenshot.md §0)。
     await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
     await page.goto(url, { waitUntil: "networkidle0", timeout: NAVIGATION_TIMEOUT_MS });
+
+    // リダイレクト検証 (§11「リダイレクトは同一オリジンのみ許可」): 最終 URL が自オリジンから
+    // 外れている場合は撮影せずエラーにする。
+    if (!isSameOriginAsSite(page.url(), siteOrigin)) {
+      throw new Error(
+        `撮影対象が自オリジン以外へリダイレクトされたため中止しました (final url: ${page.url()})`,
+      );
+    }
+
     // 自己ホスト webfont のロード完了を待つ (研究資料 §0: 自サイト撮影では追加フォント配置は
     // 不要だが、document.fonts.ready 待ちは省略しない)。
     await page.evaluate(() => document.fonts?.ready).catch(() => undefined);
@@ -124,7 +170,9 @@ async function uploadToStorage(routeKey: string, webp: Buffer): Promise<Result<s
 
 /**
  * routeKey (EDITABLE_ROUTES のキー) を撮影し、webp base64 + Storage パスを返す。
- * routeKey の検証 (SSRF 対策) は buildScreenshotTargetUrl (route-key.ts) に委譲する。
+ * routeKey の検証 (SSRF 対策・最初のナビゲーション先の限定) は buildScreenshotTargetUrl
+ * (route-key.ts) に委譲する。遷移後の subresource ブロック + リダイレクト検証 (同じく SSRF
+ * 対策、§11 MAJOR-5) は launchAndCapturePng / installSubresourceGuard が担う。
  */
 export async function captureRouteScreenshot(routeKey: string): Promise<Result<ScreenshotCapture>> {
   const cached = getCached(routeKey);
