@@ -14,14 +14,18 @@ import {
   SectionMark,
 } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
+import { SlotText } from "@/components/site/slot-text";
 
 import type { PublicWorkListItem } from "@/app/_lib/public-content";
+import type { ResolvedTexts } from "@/modules/page-media/contracts";
 
 export function WorksPageBody({
   works,
+  texts,
   editMode,
 }: {
   works: PublicWorkListItem[];
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   const hasPlaceholderPhotos = works.some((w) => w.cover?.isPlaceholder);
@@ -32,21 +36,41 @@ export function WorksPageBody({
         index="INDEX 04 — WORKS"
         en="FINISHING SAMPLES"
         title={
-          <>
-            3Dプリントを、
-            <br />
-            量産品の顔に。
-          </>
+          <SlotText
+            slotKey="works.hero.heading"
+            resolved={texts["works.hero.heading"]}
+            editMode={editMode}
+          />
         }
-        lead="車両パーツからスマホカバー、小物、エアブラシ作品まで。素材や用途ごとに下地の作り方は変わりますが、狙う仕上がりはいつも「積層痕が消えて、量産品と見分けがつかない表面」です。"
+        lead={
+          <SlotText
+            slotKey="works.hero.lead"
+            resolved={texts["works.hero.lead"]}
+            editMode={editMode}
+            className="mt-8 max-w-3xl text-[15.5px] leading-[2.05] tracking-[0.03em] text-carbon-mid"
+          />
+        }
       />
 
       <Section className="pt-6 sm:pt-8">
-        <SectionMark no="SEC. 01" label="SAMPLES" />
+        <SectionMark
+          no="SEC. 01"
+          label={texts["works.sec.1.label"].text}
+          labelSlotKey="works.sec.1.label"
+          editMode={editMode}
+        />
         {works.length === 0 ? (
           <div className="mt-10">
-            <EmptyState>
-              施工事例は現在準備中です。実施工の写真・詳細が整い次第、順次公開します。
+            <EmptyState
+              label={texts["works.empty.label"].text}
+              labelSlotKey="works.empty.label"
+              editMode={editMode}
+            >
+              <SlotText
+                slotKey="works.empty.body"
+                resolved={texts["works.empty.body"]}
+                editMode={editMode}
+              />
             </EmptyState>
           </div>
         ) : (
@@ -88,8 +112,11 @@ export function WorksPageBody({
             </div>
             {hasPlaceholderPhotos ? (
               <MapNote>
-                ※
-                掲載画像の一部はイメージ素材です(実際の施工写真は準備が整い次第、順次差し替えます)。
+                <SlotText
+                  slotKey="works.gallery.placeholder.note"
+                  resolved={texts["works.gallery.placeholder.note"]}
+                  editMode={editMode}
+                />
               </MapNote>
             ) : null}
           </>
@@ -97,18 +124,47 @@ export function WorksPageBody({
       </Section>
 
       <Section>
-        <SectionMark no="SEC. 02" label="NOTE" />
-        <SecTitle>一覧はCMSで管理しています。</SecTitle>
+        <SectionMark
+          no="SEC. 02"
+          label={texts["works.sec.2.label"].text}
+          labelSlotKey="works.sec.2.label"
+          editMode={editMode}
+        />
+        <SecTitle>
+          <SlotText
+            slotKey="works.cms.heading"
+            resolved={texts["works.cms.heading"]}
+            editMode={editMode}
+          />
+        </SecTitle>
         <SecLead>
-          案件写真・素材・グレード・工程の一覧はCMS(管理画面)から更新され、このページへ即時反映されます。
+          <SlotText
+            slotKey="works.cms.lead"
+            resolved={texts["works.cms.lead"]}
+            editMode={editMode}
+          />
         </SecLead>
       </Section>
 
       <CtaBand
-        title={<>あなたの造形物も、この一覧に。</>}
-        note="サイズ・個数・グレードの3点がわかれば概算をお出しできます。"
+        title={
+          <SlotText
+            slotKey="works.cta.heading"
+            resolved={texts["works.cta.heading"]}
+            editMode={editMode}
+          />
+        }
+        note={
+          <SlotText
+            slotKey="works.cta.note"
+            resolved={texts["works.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
-        label="相談する"
+        label={texts["shared.cta.consult"].text}
+        labelSlotKey="shared.cta.consult"
+        editMode={editMode}
       />
     </>
   );

@@ -3,15 +3,19 @@ import { MediaCover } from "@/components/site/media-cover";
 import { ArrowButton, CtaBand, PageHead, Section } from "@/components/site/page-blocks";
 import { Reveal } from "@/components/site/reveal";
 import { workImageEditableAttrs } from "@/components/site/editable-attrs";
+import { SlotText } from "@/components/site/slot-text";
 
 import type { PublicWorkDetail } from "@/app/_lib/public-content";
 import { SimpleMarkdown } from "@/app/_lib/simple-markdown";
+import type { ResolvedTexts } from "@/modules/page-media/contracts";
 
 export function WorkDetailPageBody({
   work,
+  texts,
   editMode,
 }: {
   work: PublicWorkDetail;
+  texts: ResolvedTexts;
   editMode: boolean;
 }) {
   // work.images (実際の work_images ギャラリー) があればそれを、無ければ cover 1 枚を表示する。
@@ -23,8 +27,20 @@ export function WorkDetailPageBody({
   return (
     <>
       <PageHead
-        index="INDEX 04 — WORKS"
-        en="CASE DETAIL"
+        index={
+          <SlotText
+            slotKey="works.detail.hero.index"
+            resolved={texts["works.detail.hero.index"]}
+            editMode={editMode}
+          />
+        }
+        en={
+          <SlotText
+            slotKey="works.detail.hero.en"
+            resolved={texts["works.detail.hero.en"]}
+            editMode={editMode}
+          />
+        }
         title={work.title}
         lead={work.processNote ?? ""}
       />
@@ -84,15 +100,35 @@ export function WorkDetailPageBody({
         ) : null}
 
         <div className="mt-10 flex flex-wrap gap-3">
-          <ArrowButton href="/works">施工事例一覧に戻る</ArrowButton>
+          <ArrowButton href="/works">
+            <SlotText
+              slotKey="works.detail.back.label"
+              resolved={texts["works.detail.back.label"]}
+              editMode={editMode}
+            />
+          </ArrowButton>
         </div>
       </Section>
 
       <CtaBand
-        title={<>あなたの造形物も、この一覧に。</>}
-        note="サイズ・個数・グレードの3点がわかれば概算をお出しできます。"
+        title={
+          <SlotText
+            slotKey="works.cta.heading"
+            resolved={texts["works.cta.heading"]}
+            editMode={editMode}
+          />
+        }
+        note={
+          <SlotText
+            slotKey="works.cta.note"
+            resolved={texts["works.cta.note"]}
+            editMode={editMode}
+          />
+        }
         href="/contact"
-        label="相談する"
+        label={texts["shared.cta.consult"].text}
+        labelSlotKey="shared.cta.consult"
+        editMode={editMode}
       />
     </>
   );

@@ -56,7 +56,9 @@ export async function renderEditRouteBody(match: EditRouteMatch): Promise<React.
       return renderSlotPage(match.page);
     case "works-list": {
       const works = await fetchPublishedWorks();
-      return <WorksPageBody works={works} editMode={true} />;
+      const textsResult = await pageMediaFacade.resolveAllTextsFresh();
+      const texts = textsResult.ok ? textsResult.value : {};
+      return <WorksPageBody works={works} texts={texts} editMode={true} />;
     }
     case "voices-list": {
       const voices = await fetchPublishedVoices();
@@ -77,7 +79,9 @@ export async function renderEditRouteBody(match: EditRouteMatch): Promise<React.
     case "works-detail": {
       const work = await fetchPublishedWorkBySlug(match.slug);
       if (!work) return null;
-      return <WorkDetailPageBody work={work} editMode={true} />;
+      const textsResult = await pageMediaFacade.resolveAllTextsFresh();
+      const texts = textsResult.ok ? textsResult.value : {};
+      return <WorkDetailPageBody work={work} texts={texts} editMode={true} />;
     }
     case "notes-detail": {
       const [post, posts] = await Promise.all([
