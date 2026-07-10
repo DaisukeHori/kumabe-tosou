@@ -23,8 +23,20 @@ export function NoteDetailPageBody({
   return (
     <>
       <PageHead
-        index="INDEX 08 — NOTES"
-        en="READING ON PAINT & COLOR"
+        index={
+          <SlotText
+            slotKey="notes.hero.index"
+            resolved={texts["notes.hero.index"]}
+            editMode={editMode}
+          />
+        }
+        en={
+          <SlotText
+            slotKey="notes.hero.en"
+            resolved={texts["notes.hero.en"]}
+            editMode={editMode}
+          />
+        }
         title={
           <>
             {nav.noteNo !== null ? (
@@ -69,9 +81,13 @@ export function NoteDetailPageBody({
                 href={`/notes/${nav.prev.slug}`}
                 className="kt-note-nav-link flex flex-col gap-1.5 border-b border-hair px-1 py-5 transition-colors duration-[250ms] ease-[var(--ease)] hover:text-soul sm:border-b-0 sm:border-r sm:pr-6"
               >
-                <span className="font-mono text-[10px] tracking-[0.2em] text-carbon-soft">
-                  ← PREV — 前の記事
-                </span>
+                <SlotText
+                  as="span"
+                  className="font-mono text-[10px] tracking-[0.2em] text-carbon-soft"
+                  slotKey="notes.detail.prev.label"
+                  resolved={texts["notes.detail.prev.label"]}
+                  editMode={editMode}
+                />
                 <span className="text-[14.5px] font-medium leading-relaxed">
                   {nav.prev.title}
                 </span>
@@ -84,9 +100,13 @@ export function NoteDetailPageBody({
                 href={`/notes/${nav.next.slug}`}
                 className="kt-note-nav-link flex flex-col items-start gap-1.5 px-1 py-5 transition-colors duration-[250ms] ease-[var(--ease)] hover:text-soul sm:items-end sm:pl-6 sm:text-right"
               >
-                <span className="font-mono text-[10px] tracking-[0.2em] text-carbon-soft">
-                  NEXT — 次の記事 →
-                </span>
+                <SlotText
+                  as="span"
+                  className="font-mono text-[10px] tracking-[0.2em] text-carbon-soft"
+                  slotKey="notes.detail.next.label"
+                  resolved={texts["notes.detail.next.label"]}
+                  editMode={editMode}
+                />
                 <span className="text-[14.5px] font-medium leading-relaxed">
                   {nav.next.title}
                 </span>
@@ -96,7 +116,13 @@ export function NoteDetailPageBody({
         ) : null}
 
         <div className="mt-10 flex flex-wrap gap-3">
-          <ArrowButton href="/notes">読みもの一覧に戻る</ArrowButton>
+          <ArrowButton href="/notes">
+            <SlotText
+              slotKey="notes.detail.back"
+              resolved={texts["notes.detail.back"]}
+              editMode={editMode}
+            />
+          </ArrowButton>
         </div>
       </Section>
 
@@ -116,7 +142,9 @@ export function NoteDetailPageBody({
           />
         }
         href="/contact"
-        label="相談する"
+        label={texts["shared.cta.consult"].text}
+        labelSlotKey="shared.cta.consult"
+        editMode={editMode}
       />
     </>
   );

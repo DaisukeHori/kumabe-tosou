@@ -1,7 +1,11 @@
 import type { PageTextSlot } from "../types";
 
 // ---------------------------------------------------------------------------
-// notes (4, route: "/notes") — notes.cta.* は notes/[slug] とも共有 (PLAN.md §5.8)
+// notes (13, route: "/notes") — notes.cta.* / notes.hero.index / notes.hero.en は
+// notes/[slug] とも共有 (PLAN.md §5.8)。v2 Wave 1: 既存4件はそのまま維持し、
+// page-body.tsx (一覧) / [slug]/page-body.tsx (詳細) の残り全静的テキストを追加。
+// SectionMark の no ("SEC. 01") は home.ts と同じ precedent により対象外。
+// post.title / post.excerpt / post.body / formatNoteNo の連番表示は DB 由来のため対象外。
 // ---------------------------------------------------------------------------
 export const NOTES_TEXT_SLOTS: readonly PageTextSlot[] = [
   {
@@ -44,5 +48,91 @@ export const NOTES_TEXT_SLOTS: readonly PageTextSlot[] = [
     maxLen: 60,
     defaultText: "工程・色・素材の相性、どんな質問でも。",
     affectedRoutes: ["/notes", "notes/[slug]"],
+  },
+  {
+    key: "notes.hero.index",
+    page: "notes",
+    route: "/notes",
+    label: "読みもの / ヒーロー連番表記 (一覧・詳細で共有)",
+    kind: "text",
+    maxLen: 25,
+    defaultText: "INDEX 08 — NOTES",
+    affectedRoutes: ["/notes", "notes/[slug]"],
+  },
+  {
+    key: "notes.hero.en",
+    page: "notes",
+    route: "/notes",
+    label: "読みもの / ヒーロー英字サブラベル (一覧・詳細で共有)",
+    kind: "text",
+    maxLen: 35,
+    defaultText: "READING ON PAINT & COLOR",
+    affectedRoutes: ["/notes", "notes/[slug]"],
+  },
+  {
+    key: "notes.articles.label",
+    page: "notes",
+    route: "/notes",
+    label: "読みもの / SEC.01 セクションラベル",
+    kind: "text",
+    maxLen: 20,
+    defaultText: "ARTICLES",
+  },
+  {
+    key: "notes.empty.message",
+    page: "notes",
+    route: "/notes",
+    label: "読みもの / 記事0件時の空状態メッセージ",
+    kind: "text",
+    maxLen: 55,
+    defaultText: "読みものは現在準備中です。工程・色の裏側を、順次言葉にして公開していきます。",
+  },
+  {
+    key: "notes.comingsoon.label",
+    page: "notes",
+    route: "/notes",
+    label: "読みもの / COMING SOON ラベル",
+    kind: "text",
+    maxLen: 20,
+    defaultText: "COMING SOON",
+  },
+  {
+    key: "notes.comingsoon.body",
+    page: "notes",
+    route: "/notes",
+    label: "読みもの / COMING SOON 本文 (改行区切り)",
+    kind: "lines",
+    maxLen: 90,
+    defaultText:
+      "今後、デモピースの製作記録や案件の実績（掲載許諾をいただいたもの）を、ここで発信していきます。\nnote・X・Instagram との連携も準備中です。",
+    maxLines: 2,
+    maxLineLen: 60,
+  },
+  {
+    key: "notes.detail.prev.label",
+    page: "notes",
+    route: "notes/[slug]",
+    label: "読みもの詳細 / 前の記事ナビラベル",
+    kind: "text",
+    maxLen: 20,
+    defaultText: "← PREV — 前の記事",
+  },
+  {
+    key: "notes.detail.next.label",
+    page: "notes",
+    route: "notes/[slug]",
+    label: "読みもの詳細 / 次の記事ナビラベル",
+    kind: "text",
+    maxLen: 20,
+    defaultText: "NEXT — 次の記事 →",
+  },
+  {
+    key: "notes.detail.back",
+    page: "notes",
+    route: "notes/[slug]",
+    label: "読みもの詳細 / 一覧に戻るボタン",
+    kind: "text",
+    maxLen: 20,
+    defaultText: "読みもの一覧に戻る",
   },
 ];
