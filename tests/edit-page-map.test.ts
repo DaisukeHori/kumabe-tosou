@@ -83,16 +83,17 @@ describe("matchEditRoute: 個別パターン", () => {
     expect(matchEditRoute(["nonexistent"])).toBeNull();
   });
 
-  it("tokushoho は EDITABLE_ROUTES に含まれず、page-map でも null (未対応ページ)", () => {
-    expect(EDITABLE_ROUTES).not.toContain("/tokushoho");
-    expect(matchEditRoute(["tokushoho"])).toBeNull();
-  });
-
-  // v2 Wave 1: privacy はテキストスロット (画像スロットは無し) を持つため EDITABLE_ROUTES に
-  // 含まれ、slot-page (画像スロット0件) として matchEditRoute で解決できる。
+  // v2 Wave 1: privacy / tokushoho はテキストスロット (画像スロットは無し) を持つため
+  // EDITABLE_ROUTES に含まれ、slot-page (画像スロット0件) として matchEditRoute で
+  // 解決できる (法定ページも編集可能化する方針、docs/design/text-slots/rest-chrome.md 参照)。
   it("['privacy'] は slot-page / page='privacy'", () => {
     expect(EDITABLE_ROUTES).toContain("/privacy");
     expect(matchEditRoute(["privacy"])).toEqual({ kind: "slot-page", page: "privacy" });
+  });
+
+  it("['tokushoho'] は slot-page / page='tokushoho'", () => {
+    expect(EDITABLE_ROUTES).toContain("/tokushoho");
+    expect(matchEditRoute(["tokushoho"])).toEqual({ kind: "slot-page", page: "tokushoho" });
   });
 
   it("3 セグメント以上のパスは null", () => {

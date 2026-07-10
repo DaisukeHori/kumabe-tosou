@@ -75,6 +75,18 @@
 
 ## Tier C (74)
 
+> **v2 追記 (2026-07-11): 法定ページ (tokushoho/privacy) の tier C 判定は上書き済み。**
+> 本セクション以下の `tokushoho.*` / `privacy.*` エントリは、当初「法的文言のため個別
+> スロット化しない」という tier C 確定判断の記録として残しているが、ユーザー指示
+> 「全部の文字を変更できることが大事です」を受けて v2 Wave 1 でこの判定を撤回した。
+> 実際には `tokushoho.hero.*` / `tokushoho.spec.*.{th,td,note}` / `tokushoho.mapnote` の
+> 全 34 スロット、`privacy.hero.*` / `privacy.spec.*.{th,td,note}` / `privacy.mapnote` の
+> 全 22 スロットを text-registry (`src/modules/page-media/text-registry/slots/{tokushoho,
+> privacy}.ts`) に登録し、他ページと同じ粒度 (SpecTable の th/td・小活字開示注記単位まで)
+> で編集可能化した。ページ実装は `src/app/(site)/{tokushoho,privacy}/page-body.tsx` +
+> ビジュアルエディタ (`src/app/(editor)/edit/route-match.ts` / `page-map.tsx`) を参照。
+> 以下のリスト項目 (「tier C確定」「編集不可」等の記述) は歴史的経緯としてそのまま残す。
+
 - `notes.hero.index` [label/単行/max24] 「INDEX 08 — NOTES」 — SEC.xx/INDEXパターンの英語+番号装飾標識、意匠として固定
 - `notes.hero.en` [label/単行/max30] 「READING ON PAINT & COLOR」 — PageHeadの英語装飾サブラベル(smのみ表示)、意匠文言
 - `notes.articles.sectionMark.no` [label/単行/max10] 「SEC. 01」 — 構造上の連番標識

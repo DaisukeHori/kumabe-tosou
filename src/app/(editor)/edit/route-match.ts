@@ -19,10 +19,11 @@ export type EditRouteMatch =
 
 /**
  * SLOT_REGISTRY の page フィールドと 1:1 (page-media/registry.ts 参照)。"" は home (route "/")。
- * v2 Wave 1: "privacy" は画像スロットを持たない (SLOT_REGISTRY に無い) が、テキストスロット
- * (text-registry/slots/privacy.ts, route "/privacy") を EDITABLE_ROUTES に含めるため
- * (page-media-text-registry.test.ts の route 部分集合検証)、slot-page 種別として
- * "画像スロット0件のページ" を追加する (renderSlotPage は slots を使わない)。
+ * v2 Wave 1: "privacy" / "tokushoho" は画像スロットを持たない (SLOT_REGISTRY に無い) が、
+ * テキストスロット (text-registry/slots/{privacy,tokushoho}.ts, route "/privacy" /
+ * "/tokushoho") を EDITABLE_ROUTES に含めるため (page-media-text-registry.test.ts の route
+ * 部分集合検証)、slot-page 種別として "画像スロット0件のページ" を追加する
+ * (renderSlotPage は slots を使わない)。
  */
 export type SlotPageKey =
   | ""
@@ -34,7 +35,8 @@ export type SlotPageKey =
   | "process"
   | "service"
   | "shop"
-  | "story";
+  | "story"
+  | "tokushoho";
 
 const SLOT_PAGE_SEGMENTS = new Set<SlotPageKey>([
   "about",
@@ -46,6 +48,7 @@ const SLOT_PAGE_SEGMENTS = new Set<SlotPageKey>([
   "service",
   "shop",
   "story",
+  "tokushoho",
 ]);
 
 const STATIC_LIST_KIND: Record<string, EditRouteMatch["kind"]> = {

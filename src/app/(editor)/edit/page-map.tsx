@@ -25,6 +25,7 @@ import { ProcessPageBody } from "@/app/(site)/process/page-body";
 import { ServicePageBody } from "@/app/(site)/service/page-body";
 import { ShopPageBody } from "@/app/(site)/shop/page-body";
 import { StoryPageBody } from "@/app/(site)/story/page-body";
+import { TokushohoPageBody } from "@/app/(site)/tokushoho/page-body";
 import { VoicesPageBody } from "@/app/(site)/voices/page-body";
 import { WorkDetailPageBody } from "@/app/(site)/works/[slug]/page-body";
 import { WorksPageBody } from "@/app/(site)/works/page-body";
@@ -133,6 +134,9 @@ async function renderSlotPage(page: SlotPageKey): Promise<React.ReactNode> {
       return <ServicePageBody slots={slots} texts={texts} editMode={true} />;
     case "story":
       return <StoryPageBody slots={slots} texts={texts} editMode={true} />;
+    case "tokushoho":
+      // tokushoho は画像スロットを持たないため slots は使わない (テキストのみ、privacy と同型)。
+      return <TokushohoPageBody texts={texts} editMode={true} />;
     case "shop": {
       const facade = createPricingFacade();
       const priceTableResult = await facade.getActivePriceTable();
