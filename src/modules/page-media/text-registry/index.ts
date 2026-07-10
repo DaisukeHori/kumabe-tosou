@@ -12,6 +12,15 @@ import { COLORS_TEXT_SLOTS } from "./slots/colors";
 import { SHOP_TEXT_SLOTS } from "./slots/shop";
 import { NOTES_TEXT_SLOTS } from "./slots/notes";
 import { CONTACT_TEXT_SLOTS } from "./slots/contact";
+import { WORKS_TEXT_SLOTS } from "./slots/works";
+// tokushoho.ts (slots/tokushoho.ts) は実装済みだが TEXT_REGISTRY には未配線 (意図的)。
+// tests/edit-page-map.test.ts の "privacy / tokushoho は EDITABLE_ROUTES に含まれず、
+// page-map でも null" が /tokushoho をビジュアルエディタ対象から明示的に除外する回帰テストとして
+// 既に存在しており (法定表示ページを未レビューの編集から守る意図と判断)、これに反するため
+// 配線を保留した。詳細は当該 slots/tokushoho.ts 冒頭コメントおよび実装報告を参照。
+// オーケストレーター確認後、有効化する場合は下記 2 行のコメントアウトを解除し、
+// TEXT_REGISTRY のスプレッドにも ...TOKUSHOHO_TEXT_SLOTS を追加する。
+// import { TOKUSHOHO_TEXT_SLOTS } from "./slots/tokushoho";
 
 /**
  * page-text (ビジュアルテキストエディタ) の canonical レジストリ。
@@ -65,6 +74,8 @@ export const TEXT_REGISTRY: readonly PageTextSlot[] = [
   ...SHOP_TEXT_SLOTS,
   ...NOTES_TEXT_SLOTS,
   ...CONTACT_TEXT_SLOTS,
+  ...WORKS_TEXT_SLOTS,
+  // ...TOKUSHOHO_TEXT_SLOTS, — 未配線 (上記 import 直上のコメント参照)
 ];
 
 /**

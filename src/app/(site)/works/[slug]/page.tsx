@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { getPublishedWorkBySlug, listPublishedWorkSlugs } from "@/app/_lib/public-content";
+import { pageMediaFacade } from "@/modules/page-media/facade";
 
 import { WorkDetailPageBody } from "./page-body";
 
@@ -42,5 +43,8 @@ export default async function WorkDetailPage({
   const work = await getPublishedWorkBySlug(slug);
   if (!work) notFound();
 
-  return <WorkDetailPageBody work={work} editMode={false} />;
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
+
+  return <WorkDetailPageBody work={work} texts={texts} editMode={false} />;
 }

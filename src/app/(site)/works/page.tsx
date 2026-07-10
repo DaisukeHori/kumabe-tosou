@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { getPublishedWorks } from "@/app/_lib/public-content";
+import { pageMediaFacade } from "@/modules/page-media/facade";
 
 import { WorksPageBody } from "./page-body";
 
@@ -19,5 +20,7 @@ export const metadata: Metadata = {
 
 export default async function WorksPage() {
   const works = await getPublishedWorks();
-  return <WorksPageBody works={works} editMode={false} />;
+  const textsResult = await pageMediaFacade.resolveAllTexts();
+  const texts = textsResult.ok ? textsResult.value : {};
+  return <WorksPageBody works={works} texts={texts} editMode={false} />;
 }
