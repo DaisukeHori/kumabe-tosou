@@ -132,15 +132,19 @@ function Drawdown({
   a,
   b,
   pearl,
-  ddNo,
-  ddName,
+  n,
+  texts,
+  editMode,
 }: {
   a: string;
   b: string;
   pearl: boolean;
-  ddNo: string;
-  ddName: string;
+  n: number;
+  texts: ResolvedTexts;
+  editMode: boolean;
 }) {
+  const ddNoKey = `colors.swatch.${n}.dd.no`;
+  const ddNameKey = `colors.swatch.${n}.dd.name`;
   return (
     <div
       className="kt-dd kt-swatch-host border border-hair bg-paper p-2"
@@ -173,21 +177,45 @@ function Drawdown({
       />
       <div className="flex items-baseline justify-between px-1 pb-1 pt-3">
         <span className="font-mono text-[9px] tracking-[0.16em] text-carbon-soft">
-          {ddNo}
+          <SlotText
+            slotKey={ddNoKey}
+            resolved={texts[ddNoKey]}
+            editMode={editMode}
+          />
         </span>
-        <span className="text-xs font-medium tracking-wider">{ddName}</span>
+        <span className="text-xs font-medium tracking-wider">
+          <SlotText
+            slotKey={ddNameKey}
+            resolved={texts[ddNameKey]}
+            editMode={editMode}
+          />
+        </span>
       </div>
     </div>
   );
 }
 
-function ColorEntry({ sw }: { sw: (typeof SWATCHES)[number] }) {
+function ColorEntry({
+  sw,
+  n,
+  texts,
+  editMode,
+}: {
+  sw: (typeof SWATCHES)[number];
+  n: number;
+  texts: ResolvedTexts;
+  editMode: boolean;
+}) {
   // 透かし番号の色見本連動 (EXTRA①、統合計画 §3-5-5)。--wm を stroke の
   // color-mix ソースにする。DD-090 (プレシャスホワイトパール) は背景
   // (--paper #fbfbf8 / --primer #e6e6e1) とほぼ同色で連動させるとストロークが
   // 視認不能になるため、このエントリのみ既定グレー (--carbon) にフォールバックする
   // (受入: 淡色 DD-090 の視認性チェック)。
   const wm = sw.id === "c-090" ? "#17191b" : sw.a;
+  const indexKey = `colors.swatch.${n}.index`;
+  const titleKey = `colors.swatch.${n}.title`;
+  const enKey = `colors.swatch.${n}.en`;
+  const storyKey = `colors.swatch.${n}.story`;
   return (
     <Reveal
       as="article"
@@ -203,32 +231,56 @@ function ColorEntry({ sw }: { sw: (typeof SWATCHES)[number] }) {
           a={sw.a}
           b={sw.b}
           pearl={sw.pearl}
-          ddNo={sw.ddNo}
-          ddName={sw.ddName}
+          n={n}
+          texts={texts}
+          editMode={editMode}
         />
       </div>
       <div>
         <span className="font-mono text-[11px] tracking-[0.22em] text-soul">
-          {sw.index}
+          <SlotText
+            slotKey={indexKey}
+            resolved={texts[indexKey]}
+            editMode={editMode}
+          />
         </span>
         <h2 className="mt-4 text-[clamp(22px,2.8vw,32px)] font-bold leading-snug tracking-[0.04em]">
-          {sw.title}
+          <SlotText
+            slotKey={titleKey}
+            resolved={texts[titleKey]}
+            editMode={editMode}
+          />
           <span className="mt-2 block font-mono text-[11px] font-normal tracking-[0.18em] text-carbon-soft">
-            {sw.en}
+            <SlotText
+              slotKey={enKey}
+              resolved={texts[enKey]}
+              editMode={editMode}
+            />
           </span>
         </h2>
         <div className="mt-5 flex flex-wrap gap-2">
-          {sw.specs.map((spec) => (
-            <span
-              key={spec}
-              className="border border-hair bg-paper px-3 py-1 text-[11px] tracking-wider text-carbon-mid"
-            >
-              {spec}
-            </span>
-          ))}
+          {sw.specs.map((_spec, i) => {
+            const specKey = `colors.swatch.${n}.spec.${i + 1}`;
+            return (
+              <span
+                key={specKey}
+                className="border border-hair bg-paper px-3 py-1 text-[11px] tracking-wider text-carbon-mid"
+              >
+                <SlotText
+                  slotKey={specKey}
+                  resolved={texts[specKey]}
+                  editMode={editMode}
+                />
+              </span>
+            );
+          })}
         </div>
         <p className="mt-6 text-[15px] leading-[2.05] text-carbon-mid">
-          {sw.story}
+          <SlotText
+            slotKey={storyKey}
+            resolved={texts[storyKey]}
+            editMode={editMode}
+          />
         </p>
       </div>
     </Reveal>
@@ -253,8 +305,20 @@ export function ColorsPageBody({
           (実装計画 §5 W5-A)。同じ理由で editMode では載せない。 */}
       {editMode ? null : <InkRecorder />}
       <PageHead
-        index="INDEX 07 — COLORS"
-        en="8 SWATCHES / 5 ARE 3-COAT"
+        index={
+          <SlotText
+            slotKey="colors.hero.index"
+            resolved={texts["colors.hero.index"]}
+            editMode={editMode}
+          />
+        }
+        en={
+          <SlotText
+            slotKey="colors.hero.en"
+            resolved={texts["colors.hero.en"]}
+            editMode={editMode}
+          />
+        }
         title={
           <SlotText
             slotKey="colors.hero.heading"
@@ -278,16 +342,34 @@ export function ColorsPageBody({
           slotKey="colors.hero"
           resolved={slots["colors.hero"]}
           editMode={editMode}
-          capJa="名車の色は、塗る人の経験が発色させる。"
-          capEn="COLOR AS PROOF OF SKILL"
-          credit="Photo: aaronburden / Unsplash"
+          capJa={
+            <SlotText
+              slotKey="colors.hero.photo.capja"
+              resolved={texts["colors.hero.photo.capja"]}
+              editMode={editMode}
+            />
+          }
+          capEn={
+            <SlotText
+              slotKey="colors.hero.photo.capen"
+              resolved={texts["colors.hero.photo.capen"]}
+              editMode={editMode}
+            />
+          }
+          credit={
+            <SlotText
+              slotKey="colors.hero.photo.credit"
+              resolved={texts["colors.hero.photo.credit"]}
+              editMode={editMode}
+            />
+          }
         />
       </Section>
 
       {/* ============ 8色 ============ */}
       <Section className="kt-color-entries">
-        <ColorEntry sw={SWATCHES[0]} />
-        <ColorEntry sw={SWATCHES[1]} />
+        <ColorEntry sw={SWATCHES[0]} n={1} texts={texts} editMode={editMode} />
+        <ColorEntry sw={SWATCHES[1]} n={2} texts={texts} editMode={editMode} />
 
         <div className="py-8">
           <PhotoFigure
@@ -295,14 +377,32 @@ export function ColorsPageBody({
             slotKey="colors.band.1"
             resolved={slots["colors.band.1"]}
             editMode={editMode}
-            capJa="黒の深さは、研ぎで決まる。"
-            capEn="DEPTH OF BLACK"
-            credit="Photo: cmreflections / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="colors.band.1.capja"
+                resolved={texts["colors.band.1.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="colors.band.1.capen"
+                resolved={texts["colors.band.1.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="colors.band.1.credit"
+                resolved={texts["colors.band.1.credit"]}
+                editMode={editMode}
+              />
+            }
           />
         </div>
 
-        <ColorEntry sw={SWATCHES[2]} />
-        <ColorEntry sw={SWATCHES[3]} />
+        <ColorEntry sw={SWATCHES[2]} n={3} texts={texts} editMode={editMode} />
+        <ColorEntry sw={SWATCHES[3]} n={4} texts={texts} editMode={editMode} />
 
         <div className="py-8">
           <PhotoFigure
@@ -310,14 +410,32 @@ export function ColorsPageBody({
             slotKey="colors.band.2"
             resolved={slots["colors.band.2"]}
             editMode={editMode}
-            capJa="光の映り込みが、平滑さを映す。"
-            capEn="REFLECTION"
-            credit="Photo: avenir_visuals / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="colors.band.2.capja"
+                resolved={texts["colors.band.2.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="colors.band.2.capen"
+                resolved={texts["colors.band.2.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="colors.band.2.credit"
+                resolved={texts["colors.band.2.credit"]}
+                editMode={editMode}
+              />
+            }
           />
         </div>
 
-        <ColorEntry sw={SWATCHES[4]} />
-        <ColorEntry sw={SWATCHES[5]} />
+        <ColorEntry sw={SWATCHES[4]} n={5} texts={texts} editMode={editMode} />
+        <ColorEntry sw={SWATCHES[5]} n={6} texts={texts} editMode={editMode} />
 
         <div className="py-8">
           <PhotoFigure
@@ -325,18 +443,39 @@ export function ColorsPageBody({
             slotKey="colors.band.3"
             resolved={slots["colors.band.3"]}
             editMode={editMode}
-            capJa="色は、面の上に成立する。"
-            capEn="ON THE SURFACE"
-            credit="Photo: apryan_cahyo / Unsplash"
+            capJa={
+              <SlotText
+                slotKey="colors.band.3.capja"
+                resolved={texts["colors.band.3.capja"]}
+                editMode={editMode}
+              />
+            }
+            capEn={
+              <SlotText
+                slotKey="colors.band.3.capen"
+                resolved={texts["colors.band.3.capen"]}
+                editMode={editMode}
+              />
+            }
+            credit={
+              <SlotText
+                slotKey="colors.band.3.credit"
+                resolved={texts["colors.band.3.credit"]}
+                editMode={editMode}
+              />
+            }
           />
         </div>
 
-        <ColorEntry sw={SWATCHES[6]} />
-        <ColorEntry sw={SWATCHES[7]} />
+        <ColorEntry sw={SWATCHES[6]} n={7} texts={texts} editMode={editMode} />
+        <ColorEntry sw={SWATCHES[7]} n={8} texts={texts} editMode={editMode} />
 
         <MapNote>
-          ※
-          画面上の色はイメージです。日塗工番号・自動車カラーコードでの色番号指定に対応します。純正色のピタリ合わせ（調色）は対象外で、市販の調色済み補修塗料による「参考色」仕上げです。実在車の車体形状の複製は行いません。
+          <SlotText
+            slotKey="colors.disclaimer"
+            resolved={texts["colors.disclaimer"]}
+            editMode={editMode}
+          />
         </MapNote>
       </Section>
 
@@ -357,7 +496,9 @@ export function ColorsPageBody({
           />
         }
         href="/contact"
-        label="相談する"
+        label={texts["shared.cta.consult"].text}
+        labelSlotKey="shared.cta.consult"
+        editMode={editMode}
       />
     </>
   );
