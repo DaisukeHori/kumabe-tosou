@@ -13,5 +13,6 @@ export const ADMIN_NAV_ITEMS = [
   { href: "/admin/inquiries", label: "問い合わせ" },
   { href: "/admin/studio", label: "AIスタジオ" },
   { href: "/admin/channels", label: "チャネル管理" },
+  { href: "/admin/costs", label: "利用料金" },
   { href: "/admin/settings", label: "サイト設定" },
 ] as const;
