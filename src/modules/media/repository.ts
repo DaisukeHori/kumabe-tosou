@@ -190,6 +190,23 @@ export async function downloadOriginal(supabase: Supa, storagePath: string): Pro
   return Buffer.from(await data.arrayBuffer());
 }
 
+/**
+ * サーバ内で生成したバイト列を原本として直接アップロードする (createFromBytes 用)。
+ * 通常のクライアントアップロードは createSignedUploadUrl → クライアント PUT の 2 段だが、
+ * AI 生成画像等サーバ内で完結する経路はこちらを使う (署名付き URL を経由しない)。
+ */
+export async function uploadOriginalBytes(
+  supabase: Supa,
+  storagePath: string,
+  bytes: Buffer,
+  contentType: string,
+): Promise<void> {
+  const { error } = await supabase.storage
+    .from(MEDIA_ORIGINALS_BUCKET)
+    .upload(storagePath, bytes, { contentType, upsert: false });
+  if (error) throw new Error(`原本のアップロードに失敗しました (${storagePath}): ${error.message}`);
+}
+
 export async function uploadRendition(
   supabase: Supa,
   renditionPath: string,

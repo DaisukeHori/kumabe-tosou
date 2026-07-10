@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 
 import { getEnv } from "@/lib/env";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import type { Paged, Pagination, Result } from "@/modules/platform/contracts";
 
 import { zMediaPatch, type MediaItem, type MediaPatch } from "./contracts";
-import { processImageForRenditions, processImageToJpeg } from "./internal/image-processing";
+import { processImageToJpeg } from "./internal/image-processing";
+import { ingestMediaBuffer } from "./internal/media-ingest";
 import {
   buildPublicRenditionUrl,
   countMediaByPlaceholder,
@@ -16,12 +18,12 @@ import {
   getMediaRow,
   getReferenceCount,
   getReferenceCounts,
-  insertMediaRow,
   listMediaByTags,
   listMediaRows,
   patchMediaRow,
   removeOriginalAndRenditions,
   renditionExists,
+  uploadOriginalBytes,
   uploadRendition,
   type MediaRow,
 } from "./repository";
@@ -60,6 +62,15 @@ export type CompleteMediaUploadInput = {
   isPlaceholder: boolean;
 };
 
+export type CreateMediaFromBytesInput = {
+  bytes: Uint8Array;
+  contentType: string;
+  alt?: string;
+  credit?: string;
+  tags: string[];
+  isPlaceholder?: boolean;
+};
+
 /**
  * §5 に明記の無い admin メディアライブラリ画面向けの拡張
  * (一覧・作成・編集・削除。module-contracts.md 未更新分 — オーケストレーターへ報告済み)。
@@ -72,11 +83,29 @@ export interface MediaFacadeExtended extends MediaFacade {
   ): Promise<Result<{ uploadUrl: string; storagePath: string; token: string }>>;
   /** 署名付き URL への PUT 完了後に呼ぶ。原本 DL → sharp でレンディション生成 → DB 行作成 */
   completeUpload(input: CompleteMediaUploadInput): Promise<Result<MediaListItem>>;
+  /**
+   * 契約外拡張 (2026-07-10、ai-studio-v2.md P3 判断点・オーケストレーター指示):
+   * サーバ内で生成したバイト列 (AI 生成画像等) を直接 media として保存する。
+   * completeUpload の「署名付き URL アップロード → クライアント PUT」を経由できない
+   * サーバ内生成専用の経路。service role client で Storage 直アップロード + media 行
+   * INSERT までを行う (呼び出し元にブラウザセッションが無い自動化コンテキストからも
+   * 使えるようにするため)。Result<T> でラップせず、失敗時は例外を投げる
+   * (呼び出し元 — ai-providers の画像カスケード等 — で catch する)。
+   */
+  createFromBytes(input: CreateMediaFromBytesInput): Promise<{ id: string; storagePath: string }>;
   patch(id: string, patch: MediaPatch): Promise<Result<void>>;
   /** 参照ゼロなら実削除 (Storage 含む)。参照ありは E301 */
   remove(id: string): Promise<Result<void>>;
   /** ダッシュボードの仮素材残数バッジ用 (設計書 §5.2 ダッシュボード) */
   countPlaceholders(): Promise<Result<number>>;
+}
+
+/** image/jpeg → jpg 等、AI プロバイダの contentType から Storage 拡張子を推定する */
+function extensionForContentType(contentType: string): string {
+  const subtype = contentType.split("/")[1]?.split(";")[0]?.toLowerCase() ?? "bin";
+  if (subtype === "jpeg") return "jpg";
+  const safe = subtype.replace(/[^a-z0-9]/g, "");
+  return safe || "bin";
 }
 
 /**
@@ -236,22 +265,12 @@ export const mediaFacade: MediaFacadeExtended = {
       if (!user) return { ok: false, code: "KMB-E201" };
 
       const original = await downloadOriginal(supabase, input.storagePath);
-      const { webp, jpeg, width, height } = await processImageForRenditions(original);
-
-      const mediaId = randomUUID();
-      await uploadRendition(supabase, renditionPathFor(mediaId, "webp"), webp, "image/webp");
-      await uploadRendition(supabase, renditionPathFor(mediaId, "jpg"), jpeg, "image/jpeg");
-
-      await insertMediaRow(supabase, {
-        id: mediaId,
+      const { id: mediaId } = await ingestMediaBuffer(supabase, original, {
         storagePath: input.storagePath,
         alt: input.alt,
-        width,
-        height,
-        mimeType: "image/webp",
         credit: input.credit,
-        isPlaceholder: input.isPlaceholder,
         tags: input.tags,
+        isPlaceholder: input.isPlaceholder,
         createdBy: user.id,
       });
 
@@ -261,6 +280,26 @@ export const mediaFacade: MediaFacadeExtended = {
     } catch (err) {
       return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
     }
+  },
+
+  async createFromBytes(input) {
+    const serviceClient = createSupabaseServiceClient();
+    const buffer = Buffer.from(input.bytes);
+    const ext = extensionForContentType(input.contentType);
+    const storagePath = `ai-generated/${randomUUID()}.${ext}`;
+
+    await uploadOriginalBytes(serviceClient, storagePath, buffer, input.contentType);
+
+    const { id } = await ingestMediaBuffer(serviceClient, buffer, {
+      storagePath,
+      alt: input.alt ?? "",
+      credit: input.credit ?? null,
+      tags: input.tags,
+      isPlaceholder: input.isPlaceholder ?? false,
+      createdBy: null,
+    });
+
+    return { id, storagePath };
   },
 
   async patch(id, patch) {

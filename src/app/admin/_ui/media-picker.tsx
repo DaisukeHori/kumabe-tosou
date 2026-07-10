@@ -13,9 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { MediaThumbnail } from "@/app/admin/media/media-grid";
 
+import { AiImageGenerator } from "./ai-image-generator";
 import { listMediaForPickerAction } from "./media-picker-actions";
 import type { PickerMediaItem } from "./media-picker-data";
 
@@ -96,69 +98,99 @@ export function MediaPicker({
     });
   }
 
+  /**
+   * 「AI で生成」タブの「これを使う」。生成済み画像 (既に media 保存済み) をカタログへ
+   * 反映しつつ選択する。single モードは即座に確定して閉じる (design ai-studio-v2.md §4)。
+   */
+  function useGeneratedImage(item: PickerMediaItem) {
+    setItems((prev) => (prev.some((p) => p.id === item.id) ? prev : [item, ...prev]));
+    if (mode === "single") {
+      onConfirm([item.id]);
+      onOpenChange(false);
+      return;
+    }
+    setSelection((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {mode === "single"
-              ? "サムネイルをクリックして選択してください。もう一度クリックで選択解除できます。"
-              : "サムネイルをクリックして複数選択できます (追加分のみ。既存の並び替え・削除は下の一覧で行います)。"}
+            ライブラリから選ぶか、AI で新しく生成できます。
           </DialogDescription>
         </DialogHeader>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <div className="grid max-h-[55vh] grid-cols-3 gap-3 overflow-y-auto sm:grid-cols-4">
-          {items.length === 0 && (
-            <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
-              メディアがまだありません。「/admin/media」からアップロードしてください。
-            </p>
-          )}
-          {items.map((item) => {
-            const isSelected = selection.includes(item.id);
-            const order = mode === "multiple" && isSelected ? selection.indexOf(item.id) + 1 : null;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => toggle(item.id)}
-                aria-pressed={isSelected}
-                className={cn(
-                  "relative rounded-xl border border-border bg-card p-2 text-left shadow-sm outline-none transition-colors",
-                  isSelected ? "ring-2 ring-primary" : "hover:bg-muted/40",
-                )}
-              >
-                <MediaThumbnail src={item.url} alt={item.alt} />
-                <p className="mt-2 truncate text-xs">{item.alt || "(alt未設定)"}</p>
-                {item.is_placeholder && (
-                  <Badge variant="outline" className="mt-1 text-[10px]">
-                    仮素材
-                  </Badge>
-                )}
-                {order !== null && (
-                  <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-medium text-primary-foreground">
-                    {order}
-                  </span>
-                )}
-                {mode === "single" && isSelected && (
-                  <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-medium text-primary-foreground">
-                    ✓
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <Tabs defaultValue="library">
+          <TabsList>
+            <TabsTrigger value="library">ライブラリから選ぶ</TabsTrigger>
+            <TabsTrigger value="ai">AI で生成</TabsTrigger>
+          </TabsList>
 
-        {nextCursor && (
-          <div className="flex justify-center">
-            <Button type="button" variant="outline" size="sm" onClick={loadMore} disabled={isPending}>
-              {isPending ? "読み込み中..." : "もっと見る"}
-            </Button>
-          </div>
-        )}
+          <TabsContent value="library" className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {mode === "single"
+                ? "サムネイルをクリックして選択してください。もう一度クリックで選択解除できます。"
+                : "サムネイルをクリックして複数選択できます (追加分のみ。既存の並び替え・削除は下の一覧で行います)。"}
+            </p>
+            <div className="grid max-h-[55vh] grid-cols-3 gap-3 overflow-y-auto sm:grid-cols-4">
+              {items.length === 0 && (
+                <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
+                  メディアがまだありません。「/admin/media」からアップロードしてください。
+                </p>
+              )}
+              {items.map((item) => {
+                const isSelected = selection.includes(item.id);
+                const order = mode === "multiple" && isSelected ? selection.indexOf(item.id) + 1 : null;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => toggle(item.id)}
+                    aria-pressed={isSelected}
+                    className={cn(
+                      "relative rounded-xl border border-border bg-card p-2 text-left shadow-sm outline-none transition-colors",
+                      isSelected ? "ring-2 ring-primary" : "hover:bg-muted/40",
+                    )}
+                  >
+                    <MediaThumbnail src={item.url} alt={item.alt} />
+                    <p className="mt-2 truncate text-xs">{item.alt || "(alt未設定)"}</p>
+                    {item.is_placeholder && (
+                      <Badge variant="outline" className="mt-1 text-[10px]">
+                        仮素材
+                      </Badge>
+                    )}
+                    {order !== null && (
+                      <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-medium text-primary-foreground">
+                        {order}
+                      </span>
+                    )}
+                    {mode === "single" && isSelected && (
+                      <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-medium text-primary-foreground">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {nextCursor && (
+              <div className="flex justify-center">
+                <Button type="button" variant="outline" size="sm" onClick={loadMore} disabled={isPending}>
+                  {isPending ? "読み込み中..." : "もっと見る"}
+                </Button>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="ai">
+            <AiImageGenerator onUseImage={useGeneratedImage} />
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="items-center sm:justify-between">
           <Link href="/admin/media" target="_blank" className="text-xs underline underline-offset-4">
