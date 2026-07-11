@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { createSupabasePublicClient } from "@/lib/supabase/public";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import type {
@@ -23,10 +24,25 @@ import type {
  * 他モジュール・admin UI からの直接 import は ESLint (no-restricted-imports) で禁止されており、
  * 必ず facade.ts 経由で参照する。
  *
- * anon key (@/lib/supabase/server) をそのまま使う — price_grades/price_size_classes/
- * price_matrix/price_quantity_tiers/price_options はいずれも anon SELECT が RLS で
- * 許可されている (migration 20260708000001/20260708000007) ため、site-public (未ログイン)
- * からの読み取りも admin (cookie セッションあり) からの読み取り/書き込みもこの1関数で賄える。
+ * anon SELECT は price_grades/price_size_classes/price_matrix/price_quantity_tiers/
+ * price_options いずれも RLS で許可されている (migration 20260708000001/20260708000007)。
+ *
+ * ---- 🔴 本番 /shop fallback の真因と client の使い分け (#38) ----
+ * getPriceTable の読み取り側は、呼び出しコンテキストで client を使い分ける (getPriceTable 内で分岐):
+ *  - activeOnly=true  … 公開サイト /shop の unstable_cache 経由読み取り。
+ *    createSupabaseServerClient は next/headers の cookies() に依存するため、
+ *    **unstable_cache() 内部で呼ぶと Next.js が実行時エラーにする** (src/lib/supabase/public.ts の
+ *    コメント参照)。従来これを server client で呼んでいたため常に例外→facade で握りつぶし→
+ *    priceTable=null→ShopSimulator が「価格はお問い合わせください。」fallback を表示していた
+ *    (これが #38 の焼き付きに見えていた本当の原因。Data Cache の問題ではなかった)。
+ *    そのため cookie 非依存の createSupabasePublicClient (anon) を使う。anon RLS は
+ *    is_active=true 行のみ許可だが、公開読み取りは activeOnly=true なので過不足なし。
+ *  - activeOnly=false … admin (/admin/prices) の全件読み取り。is_active=false の行は
+ *    anon RLS では見えず public.is_admin() ポリシー越しにのみ読めるため、cookie セッションを
+ *    伴う createSupabaseServerClient が必須。admin は実リクエスト文脈なので cookies() は正常。
+ *
+ * 書き込み (upsert 系 / replace 系) は admin 専用で is_admin() ポリシーが必要なため引き続き
+ * createSupabaseServerClient (cookie セッション) を使う。
  */
 
 const GRADE_COLUMNS = "id, key, label, description, sort_order, is_active, updated_at";
@@ -36,7 +52,12 @@ const TIER_COLUMNS = "min_qty, discount_rate, label";
 const OPTION_COLUMNS = "id, key, label, kind, value, sort_order, is_active, updated_at";
 
 export async function getPriceTable(opts: { activeOnly: boolean }): Promise<PriceTable> {
-  const supabase = await createSupabaseServerClient();
+  // activeOnly=true は unstable_cache 経由の公開読み取り (cookies() を呼べない文脈) のため
+  // cookie 非依存の public client を使う。activeOnly=false は admin 全件読み取りで
+  // is_active=false 行を is_admin() RLS 越しに読むためセッション付き server client が必須。
+  const supabase = opts.activeOnly
+    ? createSupabasePublicClient()
+    : await createSupabaseServerClient();
 
   let gradesQuery = supabase.from("price_grades").select(GRADE_COLUMNS);
   if (opts.activeOnly) gradesQuery = gradesQuery.eq("is_active", true);
