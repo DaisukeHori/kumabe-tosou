@@ -80,9 +80,13 @@ export interface PricingFacade {
  * revalidateTag('prices') による即時反映 (既存) と、TTL による時間ベース自己修復の
  * 二重化。facade のシグネチャ・契約は不変 (キャッシュ戦略のみの変更)。
  */
-// 本番Data Cacheに焼き付いた空エントリを退避するための一度きりのキー更新 (#38)。
-// REVALIDATE_SECRETがSensitiveで外部revalidate不可のための代替。
-// tag='prices'は不変なので/admin/pricesのrevalidateTagは引き続き有効。
+// 🔴 本番 /shop fallback の真因は Data Cache の焼き付きではなく、getPriceTable が
+// cookies() 依存の server client を使っていたこと (unstable_cache 内で cookies() は
+// Next.js が実行時エラーにする → 例外 → null → 「価格はお問い合わせください。」)。
+// 恒久修正は repository.ts 側で activeOnly=true 時に cookie 非依存の public client を使うこと
+// (repository.ts の getPriceTable コメント参照)。keyParts の suffix は、修正後に新キーで
+// 確実にクリーンな実データを再取得させるための一度きりの退避 (旧キーの汚染エントリを回避)。
+// tag='prices' は不変なので /admin/prices の revalidateTag は引き続き有効。
 const getCachedActivePriceTable = unstable_cache(
   async () => getPriceTable({ activeOnly: true }),
   ["pricing-active-table", "cachebust-20260711"],
