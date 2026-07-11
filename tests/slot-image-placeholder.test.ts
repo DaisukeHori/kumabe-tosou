@@ -24,12 +24,19 @@ import { StoryPortraitPlaceholder } from "@/app/(site)/story/page-body";
  * JSX 構文は使わず React.createElement を直接呼ぶ。
  */
 
-const NO_SRC = { src: null, alt: "", mediaId: null, isDefault: true } as const;
+const NO_SRC = {
+  src: null,
+  alt: "",
+  mediaId: null,
+  isDefault: true,
+  source: "placeholder",
+} as const;
 const WITH_SRC = {
   src: "https://example.com/img.webp",
   alt: "テスト画像",
   mediaId: "11111111-1111-4111-8111-111111111111",
   isDefault: false,
+  source: "page_media",
 } as const;
 
 // StoryPortraitPlaceholder (修正1) は v2 Wave 1 で story.portrait.initial /
