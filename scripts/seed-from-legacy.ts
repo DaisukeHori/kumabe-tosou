@@ -477,6 +477,10 @@ async function main() {
   await seedSettings(supabase, batchId);
 
   console.log(`完了しました。batch_id=${batchId} (rollback-seed.ts の引数に使えます)`);
+  console.log(
+    "revalidate を忘れずに: npx tsx scripts/revalidate-tags.ts prices " +
+      "(docs/design/crm-suite/06-simulator.md §2.4 P3 / §6.3。実行しないと最長 約2時間 + 次回アクセスまで反映が遅れます)",
+  );
 }
 
 main().catch((err) => {

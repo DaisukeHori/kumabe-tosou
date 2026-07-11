@@ -20,6 +20,11 @@ export const metadata: Metadata = {
   },
 };
 
+// 恒久策 P1 (docs/design/crm-suite/06-simulator.md §2.4): ISR 安全網。
+// revalidateTag('prices') 信号が一切来なくても、遅くとも TTL 経過後の次アクセスで
+// 自己修復する (P2 の Data Cache TTL と独立に SWR 失効するため実効上限は約 2×TTL — §10.3)。
+export const revalidate = 3600;
+
 export default async function ShopPage() {
   const slotsResult = await pageMediaFacade.resolveAll();
   const slots = slotsResult.ok ? slotsResult.value : {};

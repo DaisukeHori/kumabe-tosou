@@ -74,11 +74,16 @@ export interface PricingFacade {
 /**
  * 公開サイト向け読み取りのキャッシュ (設計書 §6.1: unstable_cache + タグ方式、tag='prices')。
  * admin 側 (getFullPriceTable) はキャッシュせず常に最新を読む。
+ *
+ * 恒久策 P2 (docs/design/crm-suite/06-simulator.md §2.4): revalidate: 3600 を追加し、
+ * Data Cache 側の無期限エントリ (旧: tags のみ指定 = TTL なし) を廃止する。
+ * revalidateTag('prices') による即時反映 (既存) と、TTL による時間ベース自己修復の
+ * 二重化。facade のシグネチャ・契約は不変 (キャッシュ戦略のみの変更)。
  */
 const getCachedActivePriceTable = unstable_cache(
   async () => getPriceTable({ activeOnly: true }),
   ["pricing-active-table"],
-  { tags: ["prices"] },
+  { tags: ["prices"], revalidate: 3600 },
 );
 
 function errMessage(err: unknown): string {
