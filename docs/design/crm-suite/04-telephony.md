@@ -1369,7 +1369,7 @@ getCallAlertCounts(): Promise<Result<{ failed: number; needsReview: number; stal
 | 元コード | 変換先 | 規則 |
 |---|---|---|
 | KMB-E601 (matchCustomerByPhone 複数一致 — crm 所有コード) | **KMB-E823** | linking §6.5.4-2 のドメイン変換 (01-crm §7.3/P7 と対)。detail (候補 id 列挙) は link_result.warning に要約転記。E601 を不確定扱いに落とさない (§6.5.4-2) |
-| KMB-E403 (refusal) / KMB-E404 相当 (JSON/Zod 不一致) / stopReason='max_tokens' (打切り) | **KMB-E821** | analyzing の runStructured 後処理 (§6.5.3)。1 回再生成後に確定。※refusal を E821 に一本化する扱いは 00-overview §3.3 (E821 説明は「JSON/Zod 不一致」のみで §4.5 は「refusal→E403」) と現状ずれており、**00-overview §3.3 E821 の説明に「refusal (E403)・max_tokens 打切りを含む」の追記を canonical 差分として申請する** (admin の recovery が同一「再実行」のため一本化が運用上合理的) |
+| KMB-E403 (refusal) / KMB-E404 相当 (JSON/Zod 不一致) / stopReason='max_tokens' (打切り) | **KMB-E821** | analyzing の runStructured 後処理 (§6.5.3)。1 回再生成後に確定。※refusal を E821 に一本化する扱いは 00-overview §3.3 (E821 説明は「JSON/Zod 不一致」のみで §4.5 は「refusal→E403」) と現状ずれており、**00-overview §3.3 E821 の説明に「refusal (E403)・max_tokens 打切りを含む」の追記を canonical 差分として申請する** (admin の recovery が同一「再実行」のため一本化が運用上合理的) → 00 v1.2 で反映済み |
 | KMB-E405 相当 (転写失敗) | **KMB-E820** | transcribing (§6.5.2)。セグメント単位 1 回再試行後に確定 |
 | KMB-E407 (予算超過) | **透過** (job.error_code='KMB-E407') | 即 failed。retry で翌月再実行可 |
 | KMB-E408 (全キー失敗) | 変換しない (不確定扱い) | attempts 経由 → 3 回で KMB-E806 (detail に E408 履歴) |
