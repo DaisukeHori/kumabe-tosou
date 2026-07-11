@@ -80,9 +80,12 @@ export interface PricingFacade {
  * revalidateTag('prices') による即時反映 (既存) と、TTL による時間ベース自己修復の
  * 二重化。facade のシグネチャ・契約は不変 (キャッシュ戦略のみの変更)。
  */
+// 本番Data Cacheに焼き付いた空エントリを退避するための一度きりのキー更新 (#38)。
+// REVALIDATE_SECRETがSensitiveで外部revalidate不可のための代替。
+// tag='prices'は不変なので/admin/pricesのrevalidateTagは引き続き有効。
 const getCachedActivePriceTable = unstable_cache(
   async () => getPriceTable({ activeOnly: true }),
-  ["pricing-active-table"],
+  ["pricing-active-table", "cachebust-20260711"],
   { tags: ["prices"], revalidate: 3600 },
 );
 
