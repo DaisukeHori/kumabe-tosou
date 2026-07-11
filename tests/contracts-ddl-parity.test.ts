@@ -14,6 +14,7 @@ import {
   zNoteDraftStatus,
 } from "@/modules/distribution/contracts";
 import { zAiKeyStatus, zProvider, zUsageKind, zUsageStatus } from "@/modules/ai-providers/contracts";
+import { SETTINGS_SCHEMAS } from "@/modules/settings/contracts";
 
 /**
  * DB 接続不要の静的検証 (設計書 §11.1 1a: contracts-ddl-parity.test.ts)。
@@ -230,5 +231,48 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
       // 存在確認のみ (値集合の変更検知)。Zod 契約が増えたらここから正式な比較に格上げする。
       expect(findCheck(checks, table, column).length).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * settings-media-refs parity (#45: 05-site-settings.md §12.1 808行目)。
+ * 上記の enum-check パーサ (extractEnumChecks/findCheck) とは別ロジック — jsonb キー literal は
+ * `check (col in (...))` パターンではないため既存パーサでは検出できない。ここでは
+ * (1) SETTINGS_SCHEMAS のキー集合が 07-contracts-delta §D5 の 11 キー最終形と一致すること、
+ * (2) migration 0035 の SQL 本文中に jsonb キー literal 'favicon_media_id' が
+ *     media_admin_delete / media_reference_summary / ai_draft_cleanup_run の 3 箇所とも
+ *     存在すること (media 参照 3 点セット漏れ検知)、を単純な文字列マッチで検証する。
+ * DB 接続不要の静的検証。
+ */
+describe("settings-media-refs parity (DB 接続不要の静的検証)", () => {
+  const sql = loadAllMigrationSql();
+
+  it("SETTINGS_SCHEMAS のキー集合が 07-contracts-delta §D5 の 11 キー最終形と一致する", () => {
+    const expected = [
+      "analytics",
+      "branding",
+      "business_hours",
+      "company",
+      "hero",
+      "invoice_issuer",
+      "notifications",
+      "ops_limits",
+      "seo_defaults",
+      "telephony",
+      "work_capacity",
+    ].sort();
+    const actual = Object.keys(SETTINGS_SCHEMAS).sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("migration 0035 の favicon_media_id jsonb キー literal が媒体参照3点セット (media_admin_delete / media_reference_summary / ai_draft_cleanup_run) の3箇所とも存在する", () => {
+    const occurrences = (
+      sql.match(/jsonb_build_object\('favicon_media_id',/g) ?? []
+    ).length;
+    expect(occurrences).toBe(3);
+  });
+
+  it("migration に seal_media_id という jsonb キー literal が存在しない (v1.2 で撤回済み — 最大の地雷)", () => {
+    expect(sql.includes("jsonb_build_object('seal_media_id'")).toBe(false);
   });
 });

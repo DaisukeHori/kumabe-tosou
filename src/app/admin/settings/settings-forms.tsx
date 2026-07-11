@@ -43,8 +43,14 @@ export type SettingsTabsData = {
   notifications: SettingsMetaFor<"notifications">;
 };
 
-/** "ai" は site_settings の SettingsKey ではなく ai-providers 由来のタブのため、別ユニオンで扱う */
-type TabKey = SettingsKey | "ai";
+/**
+ * "ai" は site_settings の SettingsKey ではなく ai-providers 由来のタブのため、別ユニオンで扱う。
+ * #45 (07-contracts-delta §D5) で SettingsKey は 11 キーに拡張されたが、本管理画面がタブとして
+ * 描画するのは従来の 5 キーのみ (analytics/branding 等の新規 6 キーのタブ・Server Actions は
+ * #46/#47 のスコープ)。SettingsKey をそのまま使うと未実装タブの型要求が漏れ伝播するため、
+ * この画面が実際に扱うキーだけの明示ユニオンに固定する。
+ */
+type TabKey = Extract<SettingsKey, "company" | "hero" | "seo_defaults" | "ops_limits" | "notifications"> | "ai";
 
 const TAB_LABELS: Record<TabKey, string> = {
   company: "会社情報",
