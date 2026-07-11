@@ -238,6 +238,17 @@ export async function updateCompanyWithCas(
   return updateRowWithCas<CompanyRow>(client, "companies", id, input, expectedUpdatedAt);
 }
 
+/** batch 取得 (getDealRefs/listCustomers/listDeals 等の N+1 回避)。空配列入力は ok([]) — IN 句を投げない。 */
+export async function getCompaniesByIds(
+  client: SupabaseClient,
+  ids: string[],
+): Promise<Result<CompanyRow[]>> {
+  if (ids.length === 0) return { ok: true, value: [] };
+  const { data, error } = await client.from("companies").select("*").in("id", ids);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as CompanyRow[] };
+}
+
 export type CompanyListQuery = { q: string | null };
 
 export async function listCompaniesPage(
@@ -347,6 +358,17 @@ export async function updateCustomerWithCas(
   return updateRowWithCas<CustomerRow>(client, "customers", id, input, expectedUpdatedAt);
 }
 
+/** batch 取得 (getDealRefs 等)。空配列入力は ok([])。 */
+export async function getCustomersByIds(
+  client: SupabaseClient,
+  ids: string[],
+): Promise<Result<CustomerRow[]>> {
+  if (ids.length === 0) return { ok: true, value: [] };
+  const { data, error } = await client.from("customers").select("*").in("id", ids);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as CustomerRow[] };
+}
+
 export type CustomerListQuery = {
   q: string | null;
   lifecycle: CustomerLifecycle | "all" | "active";
@@ -414,6 +436,30 @@ export async function resolveMergedCustomerId(
     current = next;
   }
   return current;
+}
+
+/**
+ * `resolveMergedCustomerId` の Result 版 (facade / internal 向け公開ヘルパ)。
+ * `makeSupabaseMergePointerLookup` は DB エラー時に例外 (`MergePointerLookupError`、本ファイル
+ * 非公開) を投げる設計のため、外部呼び出し元は素の `resolveMergedCustomerId` を直接使えない
+ * (例外を catch して判別する術がない)。本関数がその try/catch を一箇所に集約する
+ * (facade.ts の getCustomerRef/getDealRef/appendActivity リンク解決・relinkActivity・
+ * internal/intake.ts の補修モードなど、複数の利用点が個別に hop ループを再実装しないための共通経路)。
+ * 対象顧客が存在しない場合は KMB-E603 を返す (§6.3 手順3 と同じ扱い)。
+ */
+export async function resolveMergedCustomerIdSafe(
+  client: SupabaseClient,
+  customerId: string,
+): Promise<Result<string>> {
+  let current = customerId;
+  for (let hop = 0; hop < MAX_MERGE_HOPS; hop++) {
+    const row = await getCustomerById(client, current);
+    if (!row.ok) return row;
+    if (!row.value) return { ok: false, code: "KMB-E603", detail: `顧客が見つかりません: ${current}` };
+    if (row.value.merged_into_customer_id === null) return { ok: true, value: current };
+    current = row.value.merged_into_customer_id;
+  }
+  return { ok: true, value: current };
 }
 
 /**
@@ -709,9 +755,18 @@ export async function updateDealWithCas(
   return updateRowWithCas<DealRow>(client, "deals", id, patch, expectedUpdatedAt);
 }
 
+/** batch 取得 (getDealRefs — 02-sales listDocuments の N+1 回避)。空配列入力は ok([])。不在 id は結果から除外。 */
+export async function getDealsByIds(client: SupabaseClient, ids: string[]): Promise<Result<DealRow[]>> {
+  if (ids.length === 0) return { ok: true, value: [] };
+  const { data, error } = await client.from("deals").select("*").in("id", ids);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as DealRow[] };
+}
+
 export type DealListQuery = { q: string | null; stage: DealStage | "all" | "open" };
 
-const NON_TERMINAL_STAGES: DealStage[] = [
+/** 非終端 7 ステージ (§4.2)。facade #43 の集計 (open_deal_count / KPI / カンバン列) も共用する。 */
+export const NON_TERMINAL_STAGES: DealStage[] = [
   "inquiry",
   "estimating",
   "quote_sent",
@@ -855,6 +910,28 @@ export async function getActivityById(
   return { ok: true, value: (data as ActivityRow | null) ?? null };
 }
 
+/**
+ * (activity_type, ref_table, ref_id) の存在確認 (INSERT を伴わない純粋な SELECT)。
+ * §6.5 手順 1 の冪等マーカー確認 (intake.ts) が使う — appendActivityRow の冪等 upsert とは別に、
+ * 「マーカーが既にあるか (=補修モードに入るべきか)」を INSERT せず判定する必要があるための専用関数。
+ */
+export async function findActivityByTypeRef(
+  client: SupabaseClient,
+  activityType: ActivityType,
+  refTable: string,
+  refId: string,
+): Promise<Result<ActivityRow | null>> {
+  const { data, error } = await client
+    .from("activities")
+    .select("*")
+    .eq("activity_type", activityType)
+    .eq("ref_table", refTable)
+    .eq("ref_id", refId)
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data as ActivityRow | null) ?? null };
+}
+
 /** note のみ編集可 (§4.4)。編集可否の判定は呼び出し元 (facade) の責務 — RLS も二重で拒否する */
 export type NoteUpdatePatch = { title: string; body: string | null; occurred_at: string };
 
@@ -892,9 +969,25 @@ export async function deleteNoteActivity(
   client: SupabaseClient,
   id: string,
 ): Promise<Result<void>> {
-  const { error } = await client.from("activities").delete().eq("id", id);
+  const { data, error } = await client.from("activities").delete().eq("id", id).select("id");
   if (error) return pgErrorToResult(error);
-  return { ok: true, value: undefined };
+  if (data && data.length > 0) return { ok: true, value: undefined };
+
+  // 0 行応答は「不在」と「activity_type != 'note' で RLS (activities_admin_delete) が対象外に
+  // した」のどちらか区別が付かない (DELETE が RLS に絞られてもエラーにはならない) ため、
+  // updateRowWithCas と同型の存在確認を追加して両者を切り分ける。
+  const { data: existing, error: existErr } = await client
+    .from("activities")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+  if (existErr) return pgErrorToResult(existErr);
+  if (!existing) return { ok: false, code: "KMB-E603", detail: "対象の記録が見つかりません。" };
+  return {
+    ok: false,
+    code: "KMB-E605",
+    detail: "この記録は削除できません (メモのみ削除可)。",
+  };
 }
 
 export type TimelineTargetColumn = "customer_id" | "company_id" | "deal_id";
@@ -1005,9 +1098,31 @@ export async function deleteActivityLinksByActivity(
   client: SupabaseClient,
   activityId: string,
 ): Promise<Result<void>> {
-  const { error } = await client.from("activity_links").delete().eq("activity_id", activityId);
+  const { data, error } = await client
+    .from("activity_links")
+    .delete()
+    .eq("activity_id", activityId)
+    .select("id");
   if (error) return pgErrorToResult(error);
-  return { ok: true, value: undefined };
+  if (data && data.length > 0) return { ok: true, value: undefined };
+
+  // 0 行応答は「元々リンクが無い (正常。新規 note 等)」と「note 以外で RLS
+  // (activity_links_admin_delete) が対象外にした」のどちらか区別が付かないため、残存確認を
+  // 追加する。残存 0 件なら削除対象自体が無かった (冪等に成功扱い)、残存ありなら削除が
+  // RLS に阻まれたとみなし呼び出し元に伝播する (relinkActivity は service client 前提だが、
+  // 誤って session client が渡された場合の二重防御)。
+  const { data: remaining, error: remainingErr } = await client
+    .from("activity_links")
+    .select("id")
+    .eq("activity_id", activityId)
+    .limit(1);
+  if (remainingErr) return pgErrorToResult(remainingErr);
+  if (!remaining || remaining.length === 0) return { ok: true, value: undefined };
+  return {
+    ok: false,
+    code: "KMB-E605",
+    detail: "このリンクは削除できません (メモのみ削除可)。",
+  };
 }
 
 // ============================================================
@@ -1147,4 +1262,132 @@ export async function findTaskBySourceActivity(
     .eq("source_activity_id", sourceActivityId);
   if (error) return pgErrorToResult(error);
   return { ok: true, value: (data ?? []) as TaskRow[] };
+}
+
+// ============================================================
+// facade #43 向け追加分: バッチ join・集計
+// (repository のみが companies/customers/deals/activities/activity_links/tasks へ
+//  直接クエリする境界を守ったまま、facade/internal が必要とする複合クエリをここに集約する。
+//  id バッチ取得は上記 getCompaniesByIds/getCustomersByIds/getDealsByIds を使う —
+//  listCustomers*/listCompanies*By Ids という同義の別名は作らない)
+// ============================================================
+
+/** CustomerListItem/CustomerDetail.open_deal_count (stage ∉ {paid, lost} の件数)。
+ *  対象顧客 id 群 (一覧 1 頁 = 最大 100 件、または詳細 1 件) に絞った bounded クエリ — 全件スキャンはしない。 */
+export async function countOpenDealsByCustomerIds(
+  client: SupabaseClient,
+  customerIds: string[],
+): Promise<Result<Record<string, number>>> {
+  if (customerIds.length === 0) return { ok: true, value: {} };
+  const { data, error } = await client
+    .from("deals")
+    .select("customer_id")
+    .in("customer_id", customerIds)
+    .in("stage", NON_TERMINAL_STAGES);
+  if (error) return pgErrorToResult(error);
+  const counts: Record<string, number> = {};
+  for (const row of (data ?? []) as Array<{ customer_id: string }>) {
+    counts[row.customer_id] = (counts[row.customer_id] ?? 0) + 1;
+  }
+  return { ok: true, value: counts };
+}
+
+/** CompanyListItem.customer_count (マージ敗者・merged_into 非 NULL 行は除く)。 */
+export async function countCustomersByCompanyIds(
+  client: SupabaseClient,
+  companyIds: string[],
+): Promise<Result<Record<string, number>>> {
+  if (companyIds.length === 0) return { ok: true, value: {} };
+  const { data, error } = await client
+    .from("customers")
+    .select("company_id")
+    .in("company_id", companyIds)
+    .is("merged_into_customer_id", null);
+  if (error) return pgErrorToResult(error);
+  const counts: Record<string, number> = {};
+  for (const row of (data ?? []) as Array<{ company_id: string }>) {
+    counts[row.company_id] = (counts[row.company_id] ?? 0) + 1;
+  }
+  return { ok: true, value: counts };
+}
+
+// ---- ダッシュボード KPI (§8.6) / ダイジェスト (§7.2) 集計 ----
+
+/** getDashboardKpi の awaiting_lead_count (stage='inquiry' の件数、DB 側 count) */
+export async function countDealsByStage(
+  client: SupabaseClient,
+  stage: DealStage,
+): Promise<Result<number>> {
+  const { count, error } = await client
+    .from("deals")
+    .select("id", { count: "exact", head: true })
+    .eq("stage", stage);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: count ?? 0 };
+}
+
+export type OpenDealAmount = { stage: DealStage; amount_jpy: number | null };
+
+/**
+ * getDashboardKpi の weighted_pipeline_jpy 計算対象行 (stage ∉ {paid, lost} のみ DB 側で絞る)。
+ * probability による加重 (registry 参照) はコード側 (internal/digest.ts の純関数) の責務
+ * ─ registry を SQL に複製しない (§4.2 の方針どおり)。
+ */
+export async function listOpenDealAmounts(client: SupabaseClient): Promise<Result<OpenDealAmount[]>> {
+  const { data, error } = await client
+    .from("deals")
+    .select("stage, amount_jpy")
+    .in("stage", NON_TERMINAL_STAGES);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as OpenDealAmount[] };
+}
+
+/** getDashboardKpi の overdue_task_count / week_open_task_count (DB 側 count)。JST 境界の date 文字列は呼び出し元 (internal/jst.ts) が算出する。 */
+export async function countTasksInRange(
+  client: SupabaseClient,
+  status: TaskStatus,
+  dueOnFrom: string | null,
+  dueOnTo: string | null,
+): Promise<Result<number>> {
+  let query = client.from("tasks").select("id", { count: "exact", head: true }).eq("status", status);
+  if (dueOnFrom !== null) query = query.gte("due_on", dueOnFrom);
+  if (dueOnTo !== null) query = query.lte("due_on", dueOnTo);
+  const { count, error } = await query;
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: count ?? 0 };
+}
+
+/** collectDigest の overdue_tasks / today_tasks (TaskListItem 相当。deal/customer 表示名を join)。 */
+export type DigestTaskRow = TaskRow & {
+  deal: { id: string; title: string } | null;
+  customer: { id: string; name: string } | null;
+};
+
+export async function listOpenTasksForDigest(
+  client: SupabaseClient,
+  dueOnFrom: string | null,
+  dueOnTo: string | null,
+): Promise<Result<DigestTaskRow[]>> {
+  let query = client
+    .from("tasks")
+    .select("*, deal:deals(id,title), customer:customers(id,name)")
+    .eq("status", "open")
+    .order("due_on", { ascending: true })
+    .order("created_at", { ascending: false });
+  if (dueOnFrom !== null) query = query.gte("due_on", dueOnFrom);
+  if (dueOnTo !== null) query = query.lte("due_on", dueOnTo);
+  const { data, error } = await query;
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as unknown as DigestTaskRow[] };
+}
+
+/** collectDigest の awaiting_leads (stage='inquiry' 全件、作成日昇順)。 */
+export async function listAwaitingLeadDeals(client: SupabaseClient): Promise<Result<DealRow[]>> {
+  const { data, error } = await client
+    .from("deals")
+    .select("*")
+    .eq("stage", "inquiry")
+    .order("created_at", { ascending: true });
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as DealRow[] };
 }
