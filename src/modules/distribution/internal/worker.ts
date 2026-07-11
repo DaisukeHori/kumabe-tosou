@@ -6,7 +6,6 @@ import { getEnv } from "@/lib/env";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { contentFacade } from "@/modules/content/facade";
 import { mediaFacade } from "@/modules/media/facade";
-import { settingsFacade } from "@/modules/settings/facade";
 import type {
   ApprovedDraft,
   InstagramContent,
@@ -22,6 +21,7 @@ import {
   publishContainer,
 } from "./instagram-api";
 import { currentJstMonthRangeUtc } from "./month-window";
+import { getOpsLimitsForService } from "./ops-limits";
 import { classifyPublishFailure, ConfirmedApiError } from "./publish-error-classify";
 import { appendCompletedTweet, nextThreadIndex, previousTweetId } from "./thread";
 import type { InstagramVaultSecret, XVaultSecret } from "./vault-names";
@@ -59,15 +59,37 @@ function extractRunId(draft: ApprovedDraft): string | null {
   return typeof withRunId.run_id === "string" ? withRunId.run_id : null;
 }
 
-async function checkXBillingGuardExceeded(client: SupabaseClient): Promise<boolean> {
-  const opsLimitsResult = await settingsFacade.get("ops_limits");
-  const limitCents = opsLimitsResult.ok ? opsLimitsResult.value.x_monthly_post_limit : Number.POSITIVE_INFINITY;
+/**
+ * X 課金ガードの判定結果 (敵対レビュー MAJOR#1)。
+ * - { blocked: false }: 上限内。投稿してよい。
+ * - { blocked: true, reason: "exceeded" }: ops_limits は正常に読めたが、真に月間上限を超過している
+ *   (KMB-E505 として顕在化させる)。
+ * - { blocked: true, reason: "unreadable" }: ops_limits 行が読めない (missing/invalid)。
+ *   上限を確認できないため安全側 (投稿ブロック) に倒すが、真の上限超過ではないため
+ *   KMB-E505 ではなく KMB-E901 (システムエラー) として区別して顕在化させる。
+ */
+type XBillingGuardResult = { blocked: false } | { blocked: true; reason: "exceeded" | "unreadable" };
+
+async function checkXBillingGuardExceeded(client: SupabaseClient): Promise<XBillingGuardResult> {
+  const opsLimitsResult = await getOpsLimitsForService(client);
+  if (opsLimitsResult.status !== "ok") {
+    // 上限が確認できない場合、無制限 (Infinity) へ静かにフォールバックするとコスト上限ガードが
+    // 事実上無効化される (KMB-E505 が二度と発火しなくなる)。安全側に倒し、投稿はブロックする
+    // (manual_required ではなく failed として顕在化させ、無言劣化にしない。ただし真の上限超過
+    // [KMB-E505] とは呼び出し元で明確に区別できるよう reason:"unreadable" を返す)。
+    return { blocked: true, reason: "unreadable" };
+  }
   const range = currentJstMonthRangeUtc();
   const sumResult = await repo.getMonthlyXCostCentsSum(client, range);
   const currentSum = sumResult.ok ? sumResult.value : 0;
   // 対象の post 自身の estimated_cost_cents は既に status='publishing' として合算に含まれるため
   // additionalCents=0 で「現在の合算が上限を超えていないか」だけを再確認する。
-  return exceedsMonthlyBillingGuard({ currentMonthCentsSum: currentSum, additionalCents: 0, limitCents });
+  const exceeded = exceedsMonthlyBillingGuard({
+    currentMonthCentsSum: currentSum,
+    additionalCents: 0,
+    limitCents: opsLimitsResult.limits.x_monthly_post_limit,
+  });
+  return exceeded ? { blocked: true, reason: "exceeded" } : { blocked: false };
 }
 
 async function getValidXAccessToken(
@@ -368,12 +390,21 @@ async function publishSiteBlogPost(
 
 async function publishSingleChannelPost(serviceClient: SupabaseClient, post: ChannelPostRow): Promise<void> {
   if (post.channel === "x") {
-    const exceeded = await checkXBillingGuardExceeded(serviceClient);
-    if (exceeded) {
-      await repo.markFailed(serviceClient, post.id, {
-        code: "KMB-E505",
-        detail: "X の月間コスト上限 (ops_limits.x_monthly_post_limit) を超過しています",
-      });
+    const guard = await checkXBillingGuardExceeded(serviceClient);
+    if (guard.blocked) {
+      if (guard.reason === "exceeded") {
+        await repo.markFailed(serviceClient, post.id, {
+          code: "KMB-E505",
+          detail: "X の月間コスト上限 (ops_limits.x_monthly_post_limit) を超過しています",
+        });
+      } else {
+        // 真の上限超過ではなく、ops_limits 行が読めない (missing/invalid) ケース。
+        // KMB-E505 として記録すると「本当に上限超過した」と誤読されるため区別する。
+        await repo.markFailed(serviceClient, post.id, {
+          code: "KMB-E901",
+          detail: "ops_limits が読めません。/admin/settings で再保存してください",
+        });
+      }
       return;
     }
   }

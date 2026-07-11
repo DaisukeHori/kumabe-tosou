@@ -2,8 +2,10 @@ import "server-only";
 
 import { Resend } from "resend";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { isResendConfigured } from "@/lib/env";
-import { createSupabasePublicClient } from "@/lib/supabase/public";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { zNotificationSettings } from "@/modules/settings/contracts";
 
 import type { InquiryInput } from "../contracts";
@@ -35,8 +37,28 @@ function fromAddress(): string {
   }
 }
 
-async function getInquiryNotificationEmail(): Promise<string | null> {
-  const client = createSupabasePublicClient();
+/**
+ * migration 20260711000021 (site_settings anon SELECT の許可リスト化 — 00-overview.md §3.1.2c /
+ * 07-contracts-delta.md §D5) 適用後、notifications キーは anon から読めなくなるため
+ * service client で読む。SUPABASE_SERVICE_ROLE_KEY 未設定環境では createSupabaseServiceClient()
+ * が例外を投げる仕様 (src/lib/supabase/service.ts) なので、ここで catch して
+ * KMB-E902 degrade (通知メールをベストエフォートでスキップ) にする。
+ *
+ * export はテスト専用 (tests/inquiry-notify.test.ts が直接呼び出す)。呼び出し元は
+ * 本モジュール内の notifyInquiryReceived のみ (公開 facade からは呼ばれない内部ヘルパ)。
+ */
+export async function getInquiryNotificationEmail(): Promise<string | null> {
+  let client: SupabaseClient;
+  try {
+    client = createSupabaseServiceClient();
+  } catch (err) {
+    console.warn(
+      "[KMB-E902] SUPABASE_SERVICE_ROLE_KEY 未設定のため通知先メールを取得できませんでした:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
+
   const { data, error } = await client
     .from("site_settings")
     .select("value")

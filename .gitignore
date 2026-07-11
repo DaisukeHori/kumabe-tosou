@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Claude Code セッション成果物 (worktree 等)
 .claude/
+
+# Supabase CLI 生成物
+supabase/.temp/

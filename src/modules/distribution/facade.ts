@@ -13,7 +13,6 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import type { Channel, Paged, Pagination, Result } from "@/modules/platform/contracts";
 import type { NoteContent, XContent } from "@/modules/ai-studio/contracts";
-import { settingsFacade } from "@/modules/settings/facade";
 
 import { resolveAiStudioFacade } from "./internal/ai-studio-bridge";
 import { estimateXCostCents, exceedsMonthlyBillingGuard } from "./internal/billing";
@@ -29,6 +28,7 @@ import {
   reconcileDraftByTitle as reconcileNoteDraftByTitle,
 } from "./internal/note-draft-client";
 import { notifyNoteSessionExpired } from "./internal/note-notify";
+import { getOpsLimitsForService } from "./internal/ops-limits";
 import { ConfirmedApiError } from "./internal/publish-error-classify";
 import { resolveInitialSchedule } from "./internal/schedule-policy";
 import type { InstagramVaultSecret, XVaultSecret } from "./internal/vault-names";
@@ -218,12 +218,30 @@ async function schedulePosts(entries: ScheduleEntry[]): Promise<Result<{ post_id
   const serviceClient = createSupabaseServiceClient();
 
   if (totalNewXCents > 0) {
-    const opsLimitsResult = await settingsFacade.get("ops_limits");
-    const limitCents = opsLimitsResult.ok ? opsLimitsResult.value.x_monthly_post_limit : Number.POSITIVE_INFINITY;
+    // worker.ts (distribution/internal/ops-limits.ts) と同一の共通 helper で service client
+    // 直読に統一する (敵対レビュー MAJOR#2)。従来は settingsFacade.get() が失敗すると
+    // Number.POSITIVE_INFINITY (無制限) へ静かにフォールバックしており、ops_limits 行が
+    // 読めない状態でも X 予約が事実上無制限に通ってしまう fail-open だった。
+    // 行不在/破損時は Infinity に倒さず fail-closed (KMB-E901) にする。真の上限超過のみ
+    // 引き続き KMB-E505。
+    const opsLimitsResult = await getOpsLimitsForService(serviceClient);
+    if (opsLimitsResult.status !== "ok") {
+      return {
+        ok: false,
+        code: "KMB-E901",
+        detail: "ops_limits が読めません。/admin/settings で再保存してください",
+      };
+    }
     const range = currentJstMonthRangeUtc();
     const sumResult = await repo.getMonthlyXCostCentsSum(serviceClient, range);
     const currentSum = sumResult.ok ? sumResult.value : 0;
-    if (exceedsMonthlyBillingGuard({ currentMonthCentsSum: currentSum, additionalCents: totalNewXCents, limitCents })) {
+    if (
+      exceedsMonthlyBillingGuard({
+        currentMonthCentsSum: currentSum,
+        additionalCents: totalNewXCents,
+        limitCents: opsLimitsResult.limits.x_monthly_post_limit,
+      })
+    ) {
       return { ok: false, code: "KMB-E505", detail: "X の月間コスト上限を超過するため予約できません" };
     }
   }
