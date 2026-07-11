@@ -26,6 +26,10 @@ const MODULES = [
   "distribution",
   "page-media",
   "ai-providers",
+  "crm",
+  "sales",
+  "scheduling",
+  "telephony",
 ];
 
 function restrictedModuleImportPatterns(excludeModule) {
@@ -67,6 +71,39 @@ function restrictedAiSdkImportPatterns() {
   ]);
 }
 
+/**
+ * Twilio SDK 直 import の構造的禁止 (docs/module-contracts.md §2 / 00-overview.md §2.2 — CRM スイート):
+ * 「twilio SDK の直 import は telephony/internal のみ」。AI_SDK_PACKAGES と同型の
+ * bare specifier アンカー方式 (先頭 "/" で root 相対に固定し、gitignore basename マッチの
+ * 落とし穴 — 上記コメント L53-61 参照 — を避ける)。
+ */
+const TWILIO_PACKAGES = ["twilio"];
+
+function restrictedTwilioImportPatterns() {
+  return TWILIO_PACKAGES.flatMap((pkg) => [
+    {
+      group: [`/${pkg}`, `/${pkg}/**`],
+      message: `Twilio SDK (${pkg}) の直 import は src/modules/telephony/internal/** からのみ許可されています。@/modules/telephony/facade 経由で呼び出してください (module-contracts.md §2)。`,
+    },
+  ]);
+}
+
+/**
+ * カレンダー SDK の全面禁止 (docs/module-contracts.md §2 / 00-overview.md §2.2):
+ * 「googleapis / @microsoft/microsoft-graph-client の import は禁止」— telephony/internal の
+ * ような例外パスを設けない (カレンダー API は scheduling/internal の薄い fetch ラッパで実装する)。
+ */
+const CALENDAR_SDK_PACKAGES = ["googleapis", "@microsoft/microsoft-graph-client"];
+
+function restrictedCalendarSdkImportPatterns() {
+  return CALENDAR_SDK_PACKAGES.flatMap((pkg) => [
+    {
+      group: [`/${pkg}`, `/${pkg}/**`],
+      message: `${pkg} の import は全面禁止です。カレンダー API は src/modules/scheduling/internal/** の薄い fetch ラッパで実装してください (module-contracts.md §2)。`,
+    },
+  ]);
+}
+
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
@@ -83,11 +120,18 @@ const eslintConfig = [
   },
   {
     // 既定: どのファイルからでも、全モジュールの internal/** と repository、
-    // および AI SDK の直 import を禁止する。
+    // および AI SDK / Twilio SDK / カレンダー SDK の直 import を禁止する。
     rules: {
       "no-restricted-imports": [
         "error",
-        { patterns: [...restrictedModuleImportPatterns(null), ...restrictedAiSdkImportPatterns()] },
+        {
+          patterns: [
+            ...restrictedModuleImportPatterns(null),
+            ...restrictedAiSdkImportPatterns(),
+            ...restrictedTwilioImportPatterns(),
+            ...restrictedCalendarSdkImportPatterns(),
+          ],
+        },
       ],
     },
   },
@@ -104,18 +148,52 @@ const eslintConfig = [
     rules: {
       "no-restricted-imports": [
         "error",
-        { patterns: [...restrictedModuleImportPatterns(moduleName), ...restrictedAiSdkImportPatterns()] },
+        {
+          patterns: [
+            ...restrictedModuleImportPatterns(moduleName),
+            ...restrictedAiSdkImportPatterns(),
+            ...restrictedTwilioImportPatterns(),
+            ...restrictedCalendarSdkImportPatterns(),
+          ],
+        },
       ],
     },
   })),
   // ai-providers/internal/** (+ 対応する単体テスト) のみ AI SDK 直 import を許可する
-  // (module-contracts.md §2 の唯一の例外パス)。他モジュールの internal/** import 禁止は維持。
+  // (module-contracts.md §2 の唯一の例外パス)。他モジュールの internal/** import 禁止・
+  // Twilio/カレンダー SDK 制限は維持。
   {
     files: ["src/modules/ai-providers/internal/**/*.ts", "tests/ai-providers-*.test.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
-        { patterns: restrictedModuleImportPatterns("ai-providers") },
+        {
+          patterns: [
+            ...restrictedModuleImportPatterns("ai-providers"),
+            ...restrictedTwilioImportPatterns(),
+            ...restrictedCalendarSdkImportPatterns(),
+          ],
+        },
+      ],
+    },
+  },
+  // telephony/internal/** (+ 対応する単体テスト) のみ Twilio SDK 直 import を許可する
+  // (module-contracts.md §2 / 00-overview.md §2.2 の唯一の例外パス)。他モジュールの
+  // internal/** import 禁止・AI SDK 制限・カレンダー SDK 全面禁止は維持
+  // (googleapis / @microsoft/microsoft-graph-client には telephony/internal のような
+  // 例外パスを設けない — 全面禁止のまま)。
+  {
+    files: ["src/modules/telephony/internal/**/*.ts", "tests/telephony-*.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            ...restrictedModuleImportPatterns("telephony"),
+            ...restrictedAiSdkImportPatterns(),
+            ...restrictedCalendarSdkImportPatterns(),
+          ],
+        },
       ],
     },
   },
@@ -136,6 +214,8 @@ const eslintConfig = [
               (pattern) => !pattern.group.includes("@/modules/media/internal/*"),
             ),
             ...restrictedAiSdkImportPatterns(),
+            ...restrictedTwilioImportPatterns(),
+            ...restrictedCalendarSdkImportPatterns(),
           ],
         },
       ],
