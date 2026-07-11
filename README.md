@@ -93,6 +93,18 @@ Vercel の GitHub 連携は **コードのみ**。migration は Supabase MCP か
 - ローカルで開発する場合: `supabase start`(Docker 必須)
 - 本番反映: Claude Code で MCP 経由 or Supabase Dashboard から
 
+### seed 投入後の反映
+
+価格・コンテンツを seed / スクリプトで投入した後は、必ず revalidate を届かせる(docs/design/crm-suite/06-simulator.md §2.4 P3 / §6.3)。
+
+```bash
+REVALIDATE_SECRET=... npx tsx scripts/revalidate-tags.ts prices
+```
+
+- `REVALIDATE_TARGET_URL` は省略時 `NEXT_PUBLIC_SITE_URL` を使う。
+- `REVALIDATE_SECRET` は必須(未設定は fail-closed で即エラー終了)。Vercel 本番 env に設定後は **redeploy が必須**(env はデプロイ時に焼き込まれる仕様)。
+- 実行を忘れても `/shop` は ISR (`revalidate = 3600`) + Data Cache の TTL により、最長 約 2 時間 + 次回アクセスで自己修復する(§10.3)。ただしタグ即時反映のほうが確実なため、価格 seed 後は必ず実行すること。
+
 ## 📜 開発ルール(要点)
 
 詳細は [HANDOFF.md §6](./HANDOFF.md) を参照。
