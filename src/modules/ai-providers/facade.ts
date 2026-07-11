@@ -7,7 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import { mediaFacade } from "@/modules/media/facade";
-import type { Result } from "@/modules/platform/contracts";
+import type { ExecutionContext, Result } from "@/modules/platform/contracts";
 
 import {
   zGenerateImageCascadeInput,
@@ -72,9 +72,9 @@ export interface AiProvidersFacade {
   setKeyPriority(id: string, priority: number): Promise<Result<void>>;
   setEnabledModels(id: string, models: string[], defaultModel: string | null): Promise<Result<void>>;
   listAvailableModels(kind: ModelKind): Promise<Result<DetectedModel[]>>;
-  generateText(req: GenerateTextReq): Promise<Result<TextResult>>;
-  generateImages(req: GenerateImageReq): Promise<Result<ImageResult>>;
-  transcribe(req: TranscribeReq): Promise<Result<TranscribeResult>>;
+  generateText(req: GenerateTextReq, ctx?: ExecutionContext): Promise<Result<TextResult>>;
+  generateImages(req: GenerateImageReq, ctx?: ExecutionContext): Promise<Result<ImageResult>>;
+  transcribe(req: TranscribeReq, ctx?: ExecutionContext): Promise<Result<TranscribeResult>>;
   getUsageSummary(range: UsageRange): Promise<Result<UsageSummary>>;
 }
 
@@ -404,25 +404,25 @@ export const aiProvidersFacade: AiProvidersFacadeExtended = {
     }
   },
 
-  async generateText(req) {
+  async generateText(req, ctx) {
     try {
-      return await routeGenerateText(req);
+      return await routeGenerateText(req, ctx);
     } catch (err) {
       return errFrom(err);
     }
   },
 
-  async generateImages(req) {
+  async generateImages(req, ctx) {
     try {
-      return await routeGenerateImages(req);
+      return await routeGenerateImages(req, ctx);
     } catch (err) {
       return errFrom(err);
     }
   },
 
-  async transcribe(req) {
+  async transcribe(req, ctx) {
     try {
-      return await routeTranscribe(req);
+      return await routeTranscribe(req, ctx);
     } catch (err) {
       return errFrom(err);
     }

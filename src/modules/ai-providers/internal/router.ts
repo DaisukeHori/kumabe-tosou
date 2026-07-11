@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
-import type { Result } from "@/modules/platform/contracts";
+import { DEFAULT_EXECUTION_CONTEXT, type ExecutionContext, type Result } from "@/modules/platform/contracts";
 
 import type {
   AiKeyStatus,
@@ -105,11 +105,11 @@ export type KeyCandidate = { id: string | null; apiKey: string; row: AiProviderK
  * (P1 移行要件: 「ai_provider_keys に登録があればそれ、無ければ env をフォールバック」)。
  */
 export async function resolveCandidates(
-  sessionClient: SupabaseClient,
+  dbClient: SupabaseClient,
   serviceClient: SupabaseClient,
   provider: Provider,
 ): Promise<Result<KeyCandidate[]>> {
-  const rowsResult = await listKeyRows(sessionClient, provider);
+  const rowsResult = await listKeyRows(dbClient, provider);
   if (!rowsResult.ok) return rowsResult;
 
   const usableRows = rowsResult.value.filter((r) => isUsableNow(r, new Date()));
@@ -131,9 +131,9 @@ export async function resolveCandidates(
 
 /** model 省略時: 全プロバイダ横断で最優先の「default_model を持つ使用可能キー」を採用する (§1) */
 async function resolveDefaultTextSelection(
-  sessionClient: SupabaseClient,
+  dbClient: SupabaseClient,
 ): Promise<{ provider: Provider; model: string } | null> {
-  const rowsResult = await listKeyRows(sessionClient);
+  const rowsResult = await listKeyRows(dbClient);
   if (!rowsResult.ok) return null;
   const candidate = rowsResult.value.find((r) => isUsableNow(r, new Date()) && r.default_model);
   return candidate ? { provider: candidate.provider, model: candidate.default_model! } : null;
@@ -304,14 +304,20 @@ async function callProviderText(
   });
 }
 
-export async function routeGenerateText(req: GenerateTextReq): Promise<Result<TextResult>> {
-  const sessionClient = await createSupabaseServerClient();
+export async function routeGenerateText(
+  req: GenerateTextReq,
+  ctx: ExecutionContext = DEFAULT_EXECUTION_CONTEXT,
+): Promise<Result<TextResult>> {
   let serviceClient: SupabaseClient;
   try {
     serviceClient = createSupabaseServiceClient();
   } catch (err) {
     return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
   }
+  // service 文脈は cookie 依存の createSupabaseServerClient() を呼ばず、DB アクセスは
+  // すべて service client (ctx.client 注入があればそちら) に一本化する (00-overview.md §3.1.2b:
+  // 現状バグ — service 文脈でも予算 RPC に sessionClient を渡すと auth.uid()=null で必ず失敗する)。
+  const dbClient: SupabaseClient = ctx.mode === "service" ? (ctx.client ?? serviceClient) : await createSupabaseServerClient();
 
   let provider: Provider;
   let model: string;
@@ -319,7 +325,7 @@ export async function routeGenerateText(req: GenerateTextReq): Promise<Result<Te
     model = req.model;
     provider = inferProviderFromModel(model);
   } else {
-    const resolved = await resolveDefaultTextSelection(sessionClient);
+    const resolved = await resolveDefaultTextSelection(dbClient);
     if (!resolved) {
       return { ok: false, code: "KMB-E408", detail: "model が未指定で、既定モデルも設定されていません" };
     }
@@ -327,7 +333,7 @@ export async function routeGenerateText(req: GenerateTextReq): Promise<Result<Te
     model = resolved.model;
   }
 
-  const candidatesResult = await resolveCandidates(sessionClient, serviceClient, provider);
+  const candidatesResult = await resolveCandidates(dbClient, serviceClient, provider);
   if (!candidatesResult.ok) return candidatesResult;
   if (candidatesResult.value.length === 0) {
     return {
@@ -344,7 +350,7 @@ export async function routeGenerateText(req: GenerateTextReq): Promise<Result<Te
     approxChars,
     req.maxTokens ?? DEFAULT_MAX_OUTPUT_TOKENS_FOR_ESTIMATE,
   );
-  const reserve = await budgetReserve(sessionClient, estimateMicroUsd, 0);
+  const reserve = await budgetReserve(dbClient, estimateMicroUsd, 0);
   if (!reserve.ok) return reserve;
   if (!reserve.value.ok) {
     return { ok: false, code: "KMB-E407", detail: reserve.value.errorCode ?? undefined };
@@ -358,12 +364,12 @@ export async function routeGenerateText(req: GenerateTextReq): Promise<Result<Te
     if (callResult.ok) {
       const { usage, stopReason, text } = callResult.value;
       const costMicroUsd = computeTextCostMicroUsd(provider, model, usage);
-      await budgetSettle(sessionClient, {
+      await budgetSettle(dbClient, {
         reservationId,
         actualMicroUsd: costMicroUsd,
         actualImageCount: 0,
       });
-      await recordUsage(sessionClient, {
+      await recordUsage(dbClient, {
         provider,
         model,
         keyId: candidate.id,
@@ -379,12 +385,12 @@ export async function routeGenerateText(req: GenerateTextReq): Promise<Result<Te
         refTable: req.refTable ?? null,
         refId: req.refId ?? null,
       });
-      await applyOutcomeToKey(sessionClient, candidate, null);
+      await applyOutcomeToKey(dbClient, candidate, null);
       return { ok: true, value: { text, provider, model, usage, costMicroUsd, stopReason } };
     }
 
     lastError = callResult.error;
-    await recordUsage(sessionClient, {
+    await recordUsage(dbClient, {
       provider,
       model,
       keyId: candidate.id,
@@ -400,11 +406,11 @@ export async function routeGenerateText(req: GenerateTextReq): Promise<Result<Te
       refTable: req.refTable ?? null,
       refId: req.refId ?? null,
     });
-    await applyOutcomeToKey(sessionClient, candidate, lastError);
+    await applyOutcomeToKey(dbClient, candidate, lastError);
     // ループ続行 (次の候補キーへ)
   }
 
-  await budgetSettle(sessionClient, { reservationId, actualMicroUsd: 0, actualImageCount: 0 });
+  await budgetSettle(dbClient, { reservationId, actualMicroUsd: 0, actualImageCount: 0 });
   return {
     ok: false,
     code: "KMB-E408",
@@ -412,21 +418,24 @@ export async function routeGenerateText(req: GenerateTextReq): Promise<Result<Te
   };
 }
 
-export async function routeGenerateImages(req: GenerateImageReq): Promise<Result<ImageResult>> {
-  const sessionClient = await createSupabaseServerClient();
+export async function routeGenerateImages(
+  req: GenerateImageReq,
+  ctx: ExecutionContext = DEFAULT_EXECUTION_CONTEXT,
+): Promise<Result<ImageResult>> {
   let serviceClient: SupabaseClient;
   try {
     serviceClient = createSupabaseServiceClient();
   } catch (err) {
     return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
   }
+  const dbClient: SupabaseClient = ctx.mode === "service" ? (ctx.client ?? serviceClient) : await createSupabaseServerClient();
 
   const provider = inferProviderFromModel(req.model);
   if (provider === "anthropic") {
     return { ok: false, code: "KMB-E408", detail: "Anthropic には画像生成モデルが存在しません" };
   }
 
-  const candidatesResult = await resolveCandidates(sessionClient, serviceClient, provider);
+  const candidatesResult = await resolveCandidates(dbClient, serviceClient, provider);
   if (!candidatesResult.ok) return candidatesResult;
   if (candidatesResult.value.length === 0) {
     return {
@@ -437,7 +446,7 @@ export async function routeGenerateImages(req: GenerateImageReq): Promise<Result
   }
 
   const estimateMicroUsd = estimateImageCostMicroUsd(provider, req.model, req.n, req.quality);
-  const reserve = await budgetReserve(sessionClient, estimateMicroUsd, req.n);
+  const reserve = await budgetReserve(dbClient, estimateMicroUsd, req.n);
   if (!reserve.ok) return reserve;
   if (!reserve.value.ok) {
     return { ok: false, code: "KMB-E407", detail: reserve.value.errorCode ?? undefined };
@@ -462,12 +471,12 @@ export async function routeGenerateImages(req: GenerateImageReq): Promise<Result
     if (callResult.ok) {
       const { images, usage, failedCount } = callResult.value;
       const costMicroUsd = computeImageCostMicroUsd(provider, req.model, images.length, usage, req.quality);
-      await budgetSettle(sessionClient, {
+      await budgetSettle(dbClient, {
         reservationId,
         actualMicroUsd: costMicroUsd,
         actualImageCount: images.length,
       });
-      await recordUsage(sessionClient, {
+      await recordUsage(dbClient, {
         provider,
         model: req.model,
         keyId: candidate.id,
@@ -483,12 +492,12 @@ export async function routeGenerateImages(req: GenerateImageReq): Promise<Result
         refTable: req.refTable ?? null,
         refId: req.refId ?? null,
       });
-      await applyOutcomeToKey(sessionClient, candidate, null);
+      await applyOutcomeToKey(dbClient, candidate, null);
       return { ok: true, value: { images, provider, model: req.model, costMicroUsd, failedCount } };
     }
 
     lastError = callResult.error;
-    await recordUsage(sessionClient, {
+    await recordUsage(dbClient, {
       provider,
       model: req.model,
       keyId: candidate.id,
@@ -504,10 +513,10 @@ export async function routeGenerateImages(req: GenerateImageReq): Promise<Result
       refTable: req.refTable ?? null,
       refId: req.refId ?? null,
     });
-    await applyOutcomeToKey(sessionClient, candidate, lastError);
+    await applyOutcomeToKey(dbClient, candidate, lastError);
   }
 
-  await budgetSettle(sessionClient, { reservationId, actualMicroUsd: 0, actualImageCount: 0 });
+  await budgetSettle(dbClient, { reservationId, actualMicroUsd: 0, actualImageCount: 0 });
   return {
     ok: false,
     code: "KMB-E408",
@@ -515,19 +524,22 @@ export async function routeGenerateImages(req: GenerateImageReq): Promise<Result
   };
 }
 
-export async function routeTranscribe(req: TranscribeReq): Promise<Result<TranscribeResult>> {
-  const sessionClient = await createSupabaseServerClient();
+export async function routeTranscribe(
+  req: TranscribeReq,
+  ctx: ExecutionContext = DEFAULT_EXECUTION_CONTEXT,
+): Promise<Result<TranscribeResult>> {
   let serviceClient: SupabaseClient;
   try {
     serviceClient = createSupabaseServiceClient();
   } catch (err) {
     return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
   }
+  const dbClient: SupabaseClient = ctx.mode === "service" ? (ctx.client ?? serviceClient) : await createSupabaseServerClient();
 
   const model = req.model ?? DEFAULT_TRANSCRIBE_MODEL;
   const provider: Provider = "openai"; // 文字起こしは OpenAI (gpt-4o-transcribe) のみ対応 (P1 移行対象)
 
-  const candidatesResult = await resolveCandidates(sessionClient, serviceClient, provider);
+  const candidatesResult = await resolveCandidates(dbClient, serviceClient, provider);
   if (!candidatesResult.ok) return candidatesResult;
   if (candidatesResult.value.length === 0) {
     return {
@@ -539,7 +551,7 @@ export async function routeTranscribe(req: TranscribeReq): Promise<Result<Transc
 
   const audioBytes = Buffer.from(req.audioBase64, "base64");
   const estimateMicroUsd = estimateTranscribeCostMicroUsd(provider, model, audioBytes.byteLength);
-  const reserve = await budgetReserve(sessionClient, estimateMicroUsd, 0);
+  const reserve = await budgetReserve(dbClient, estimateMicroUsd, 0);
   if (!reserve.ok) return reserve;
   if (!reserve.value.ok) {
     return { ok: false, code: "KMB-E407", detail: reserve.value.errorCode ?? undefined };
@@ -558,12 +570,12 @@ export async function routeTranscribe(req: TranscribeReq): Promise<Result<Transc
 
     if (callResult.ok) {
       const costMicroUsd = computeTranscribeCostMicroUsd(provider, model, audioBytes.byteLength);
-      await budgetSettle(sessionClient, {
+      await budgetSettle(dbClient, {
         reservationId,
         actualMicroUsd: costMicroUsd,
         actualImageCount: 0,
       });
-      await recordUsage(sessionClient, {
+      await recordUsage(dbClient, {
         provider,
         model,
         keyId: candidate.id,
@@ -579,12 +591,12 @@ export async function routeTranscribe(req: TranscribeReq): Promise<Result<Transc
         refTable: req.refTable ?? null,
         refId: req.refId ?? null,
       });
-      await applyOutcomeToKey(sessionClient, candidate, null);
+      await applyOutcomeToKey(dbClient, candidate, null);
       return { ok: true, value: { text: callResult.value.text, costMicroUsd } };
     }
 
     lastError = callResult.error;
-    await recordUsage(sessionClient, {
+    await recordUsage(dbClient, {
       provider,
       model,
       keyId: candidate.id,
@@ -600,10 +612,10 @@ export async function routeTranscribe(req: TranscribeReq): Promise<Result<Transc
       refTable: req.refTable ?? null,
       refId: req.refId ?? null,
     });
-    await applyOutcomeToKey(sessionClient, candidate, lastError);
+    await applyOutcomeToKey(dbClient, candidate, lastError);
   }
 
-  await budgetSettle(sessionClient, { reservationId, actualMicroUsd: 0, actualImageCount: 0 });
+  await budgetSettle(dbClient, { reservationId, actualMicroUsd: 0, actualImageCount: 0 });
   return {
     ok: false,
     code: "KMB-E408",

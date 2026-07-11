@@ -4,6 +4,12 @@
  */
 export const ADMIN_NAV_ITEMS = [
   { href: "/admin", label: "ダッシュボード" },
+  { href: "/admin/customers", label: "顧客" },
+  { href: "/admin/deals", label: "案件" },
+  { href: "/admin/tasks", label: "やること" },
+  { href: "/admin/documents", label: "帳票" },
+  { href: "/admin/calendar", label: "カレンダー" },
+  { href: "/admin/calls", label: "通話" },
   { href: "/admin/works", label: "施工事例" },
   { href: "/admin/posts", label: "記事" },
   { href: "/admin/voices", label: "お客様の声" },
