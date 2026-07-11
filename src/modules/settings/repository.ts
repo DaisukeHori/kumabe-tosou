@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import type { SettingsKey } from "./contracts";
@@ -7,15 +9,20 @@ import type { SettingsKey } from "./contracts";
 /**
  * settings モジュールの repository (契約書 §3)。所有テーブル: site_settings。
  *
- * admin の認証済みセッション (cookie, RLS 適用) をそのまま使う。
- * site_settings は admin に対して SELECT/INSERT/UPDATE 全権 (DELETE 不可) が
- * RLS で許可されているため (cms-ai-pipeline.md §3.2)、service role は不要。
+ * 通常は admin の認証済みセッション (cookie, RLS 適用) をそのまま使う
+ * (site_settings は admin に対して SELECT/INSERT/UPDATE 全権 (DELETE 不可) が
+ * RLS で許可されているため — cms-ai-pipeline.md §3.2)。
+ * getSettingRow は voice webhook / pg_cron worker 等の service 文脈 (07-contracts-delta v1.2
+ * D8 の `SettingsFacade.get(key, ctx?)`) からも呼ばれるため、引数型は具体的な server client 型
+ * ではなく汎用 SupabaseClient を受け取る (facade.ts が session/service いずれの client を渡すかを
+ * 選ぶ — 本ファイルは渡された client をそのまま使う。update/upsertSetting は admin 専用のまま
+ * session client 型を維持する)。
  */
 
 type SiteSettingsRow = { key: string; value: unknown; updated_at: string };
 
 export async function getSettingRow(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: SupabaseClient,
   key: SettingsKey,
 ): Promise<SiteSettingsRow | null> {
   const { data, error } = await supabase

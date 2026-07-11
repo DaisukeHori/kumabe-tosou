@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 
 import { isJobsSecretConfigured } from "@/lib/env";
+import { crmFacade, isDigestEmpty } from "@/modules/crm/facade";
 
 /**
  * 契約書 §7.2 / 00-overview.md §3.6: pg_cron → net.http_post → 本エンドポイント
@@ -9,9 +10,11 @@ import { isJobsSecretConfigured } from "@/lib/env";
  * ドメインイベント: crm.digest.due (期限切れ見積の失効処理・未入金請求書等のダイジェスト
  * 通知。07-contracts-delta §D9 が配線所掌 — route 骨格 = crm フェーズ / 配線有効化 =
  * sales フェーズ、との裁定に従う)。
- * TODO(crm フェーズ以降): CrmFacade / SalesFacade.getSalesDigest 実装後に
- * after() 内から呼び出す (現時点では facade 未実装のため import せず no-op —
- * 依存方向を汚さない)。
+ * 01-crm.md §7.2 手順どおり:
+ *   a. collectDigest({mode:'service'}) — CrmDigest.sales は v1 常に null 固定
+ *      (SalesFacade を import/参照しない — #51 が実配線するまでの意図的な骨格)
+ *   b. 全リスト空なら送信スキップ
+ *   c. sendDailyDigest(digest, {mode:'service'})
  */
 export const maxDuration = 60;
 
@@ -27,7 +30,20 @@ export async function POST(request: Request) {
 
   after(async () => {
     try {
-      // TODO(crm フェーズ以降): runCrmDigestBatch() 相当を呼び出す。
+      const digest = await crmFacade.collectDigest({ mode: "service" });
+      if (!digest.ok) {
+        console.error("KMB-E901: /api/jobs/crm-digest の collectDigest に失敗しました", digest.code, digest.detail);
+        return;
+      }
+
+      if (isDigestEmpty(digest.value)) {
+        return; // 空メールを毎朝送らない (§7.2 手順 b)
+      }
+
+      const sent = await crmFacade.sendDailyDigest(digest.value, { mode: "service" });
+      if (!sent.ok) {
+        console.error("KMB-E901: /api/jobs/crm-digest の sendDailyDigest に失敗しました", sent.code, sent.detail);
+      }
     } catch (err) {
       console.error(
         "KMB-E901: /api/jobs/crm-digest の after() 実行で例外が発生しました",

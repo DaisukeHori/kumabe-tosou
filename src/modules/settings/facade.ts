@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSessionAndClient } from "@/lib/supabase/session";
-import type { Result } from "@/modules/platform/contracts";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import type { ExecutionContext, Result } from "@/modules/platform/contracts";
 
 import { SETTINGS_SCHEMAS, type SettingsKey, type SettingsValue } from "./contracts";
 import { getSettingRow, upsertSetting } from "./repository";
@@ -9,7 +10,14 @@ import { getSettingRow, upsertSetting } from "./repository";
  * settings モジュールの公開 facade (契約書 §5)。
  */
 export interface SettingsFacade {
-  get<K extends SettingsKey>(key: K): Promise<Result<SettingsValue<K>>>;
+  /**
+   * ctx 省略時は現行挙動と完全一致 (session — cookie 付き server client)。
+   * ctx={mode:'service'} は voice webhook / pg_cron worker 等、cookie セッションを
+   * 持たない呼び出し元向け (07-contracts-delta v1.2 D8 — site_settings の anon SELECT は
+   * 公開キー許可リストに限定されるため、telephony の business_hours read や crm の
+   * notifications read はこの経路で service_role 相当の読み取りを行う)。
+   */
+  get<K extends SettingsKey>(key: K, ctx?: ExecutionContext): Promise<Result<SettingsValue<K>>>;
   /**
    * 楽観排他 (KMB-E103): expectedUpdatedAt が site_settings.updated_at と不一致なら失敗。
    * expectedUpdatedAt は getWithMeta で取得した updated_at の生文字列をそのまま渡すこと
@@ -39,9 +47,10 @@ export interface SettingsFacadeExtended extends SettingsFacade {
 }
 
 export const settingsFacade: SettingsFacadeExtended = {
-  async get(key) {
+  async get(key, ctx) {
     try {
-      const supabase = await createSupabaseServerClient();
+      const supabase =
+        ctx?.mode === "service" ? (ctx.client ?? createSupabaseServiceClient()) : await createSupabaseServerClient();
       const row = await getSettingRow(supabase, key);
       if (!row) {
         return {

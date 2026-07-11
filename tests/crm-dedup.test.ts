@@ -113,11 +113,23 @@ type Row = {
   merged_into_customer_id: string | null;
 };
 
+type FakePgError = { message: string; code?: string };
+
 function buildFakeClient(config: {
   emailRows?: Row[];
   telRows?: Row[];
   customersById?: Record<string, Row>;
   onIlike?: (col: string, pattern: string) => void;
+  /** email 検索クエリ (ilike) 自体が DB エラーを返すケースを注入する */
+  emailError?: FakePgError;
+  /** tel 検索クエリ (eq tel_e164) 自体が DB エラーを返すケースを注入する */
+  telError?: FakePgError;
+  /** マージポインタ終端解決 (makeSupabaseMergePointerLookup の eq("id",...).maybeSingle()) が
+   *  DB エラーを返すケースを注入する */
+  pointerLookupError?: FakePgError;
+  /** 終端解決後の勝者情報取得 (getCustomerById の select("*").maybeSingle()) が
+   *  DB エラーを返すケースを注入する */
+  winnerLookupError?: FakePgError;
 }) {
   const customersById = config.customersById ?? {};
   const client = {
@@ -131,20 +143,27 @@ function buildFakeClient(config: {
             return {
               ilike: (col: string, pattern: string) => {
                 config.onIlike?.(col, pattern);
+                if (config.emailError) return Promise.resolve({ data: null, error: config.emailError });
                 return Promise.resolve({ data: config.emailRows ?? [], error: null });
               },
               eq: (col: string, value: string) => {
                 if (col === "tel_e164") {
+                  if (config.telError) return Promise.resolve({ data: null, error: config.telError });
                   return Promise.resolve({ data: config.telRows ?? [], error: null });
                 }
                 if (col === "id") {
                   return {
-                    maybeSingle: async () => ({
-                      data: customersById[value]
-                        ? { merged_into_customer_id: customersById[value].merged_into_customer_id }
-                        : null,
-                      error: null,
-                    }),
+                    maybeSingle: async () => {
+                      if (config.pointerLookupError) {
+                        return { data: null, error: config.pointerLookupError };
+                      }
+                      return {
+                        data: customersById[value]
+                          ? { merged_into_customer_id: customersById[value].merged_into_customer_id }
+                          : null,
+                        error: null,
+                      };
+                    },
                   };
                 }
                 throw new Error(`unexpected eq column: ${col}`);
@@ -154,7 +173,12 @@ function buildFakeClient(config: {
           // getCustomerById 用 select("*")
           return {
             eq: (_col: string, value: string) => ({
-              maybeSingle: async () => ({ data: customersById[value] ?? null, error: null }),
+              maybeSingle: async () => {
+                if (config.winnerLookupError) {
+                  return { data: null, error: config.winnerLookupError };
+                }
+                return { data: customersById[value] ?? null, error: null };
+              },
             }),
           };
         },
@@ -257,5 +281,55 @@ describe("findDuplicateCandidates (結線: 検索 → 終端解決 → dedupe)",
       expect(result.value).toHaveLength(2);
       expect(result.value.map((v) => v.customer_id).sort()).toEqual(["c1", "c2"]);
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // DB エラー伝播 (敵対レビュー指摘: 握り潰し厳禁 — repository.ts のコメント参照)
+  // -------------------------------------------------------------------------
+
+  it("email 検索クエリ自体が DB エラーを返す場合、result.ok=false でエラーを伝播し空配列にフォールバックしない", async () => {
+    const client = buildFakeClient({ emailError: { message: "connection reset" } });
+    const result = await findDuplicateCandidates(client, "taro@example.com", null);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E901");
+  });
+
+  it("tel 検索クエリ自体が DB エラーを返す場合、result.ok=false でエラーを伝播し空配列にフォールバックしない", async () => {
+    const client = buildFakeClient({ telError: { message: "connection reset" } });
+    const result = await findDuplicateCandidates(client, null, "+819012345678");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E901");
+  });
+
+  it("マージポインタ終端解決中に DB エラーが起きた場合 (MergePointerLookupError)、result.ok=false に変換して伝播し、終端未解決のまま旧敗者情報を候補として返さない", async () => {
+    const client = buildFakeClient({
+      emailRows: [
+        { id: "loser", name: "旧表記の名前", lifecycle: "archived", merged_into_customer_id: "winner" },
+      ],
+      pointerLookupError: { message: "connection reset" },
+    });
+    const result = await findDuplicateCandidates(client, "taro@example.com", null);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E901");
+    expect(JSON.stringify(result)).not.toContain("旧表記の名前");
+  });
+
+  it("終端解決後の勝者情報取得 (getCustomerById) が DB エラーを返す場合、result.ok=false をそのまま伝播し旧敗者情報にフォールバックしない", async () => {
+    const client = buildFakeClient({
+      emailRows: [
+        { id: "loser", name: "旧表記の名前", lifecycle: "archived", merged_into_customer_id: "winner" },
+      ],
+      customersById: {
+        loser: { id: "loser", name: "旧表記の名前", lifecycle: "archived", merged_into_customer_id: "winner" },
+        winner: { id: "winner", name: "田中太郎 (現行)", lifecycle: "customer", merged_into_customer_id: null },
+      },
+      winnerLookupError: { message: "connection reset" },
+    });
+    const result = await findDuplicateCandidates(client, "taro@example.com", null);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E901");
+    // 旧敗者の name/lifecycle (archived) がそのまま候補として無言フォールバックしていないことを確認
+    expect(JSON.stringify(result)).not.toContain("旧表記の名前");
+    expect(JSON.stringify(result)).not.toContain("archived");
   });
 });

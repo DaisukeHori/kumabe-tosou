@@ -21,6 +21,14 @@ const ENTITY_TABLE: Record<string, { table: string; pk: string }> = {
   price_quantity_tiers: { table: "price_quantity_tiers", pk: "min_qty" },
   price_options: { table: "price_options", pk: "id" },
   site_settings: { table: "site_settings", pk: "key" },
+  // crm 取込 (scripts/crm-intake-inquiries.ts、01-crm §12.1 前提タスク(a))。いずれも pk='id'。
+  // 記録順 (customers→deals→activities→activity_links→tasks) の逆順削除で
+  // deals.customer_id (on delete 句なし = NO ACTION) との FK 整合を担保する (前提タスク(c))。
+  customers: { table: "customers", pk: "id" },
+  deals: { table: "deals", pk: "id" },
+  activities: { table: "activities", pk: "id" },
+  activity_links: { table: "activity_links", pk: "id" },
+  tasks: { table: "tasks", pk: "id" },
 };
 
 async function main() {
@@ -71,14 +79,20 @@ async function main() {
       } else {
         const mapping = ENTITY_TABLE[row.entity];
         if (!mapping) {
-          console.warn(`[warn] 未知の entity (${row.entity})。DB 削除をスキップします。`);
-        } else {
-          const { error: deleteError } = await supabase
-            .from(mapping.table)
-            .delete()
-            .eq(mapping.pk, row.ref_id);
-          if (deleteError) throw deleteError;
+          // 01-crm §12.1 前提タスク(b): 未知 entity は DB 削除をスキップしたまま manifest 行だけ
+          // 削除して「rolled back」成功ログを出す旧実装の欠陥 (=実データが本番に残留するのに
+          // 成功ログが出て追跡証跡=manifest も消える) を fail-fast に是正する。例外を投げて
+          // 下の catch (manifest 行を残す・failedCount 計上) に落とす — 既存 try/catch 構造に
+          // そのまま乗る。
+          throw new Error(
+            `未知の entity (${row.entity}) のため DB 削除方法が不明です。ENTITY_TABLE への追加が必要です。`,
+          );
         }
+        const { error: deleteError } = await supabase
+          .from(mapping.table)
+          .delete()
+          .eq(mapping.pk, row.ref_id);
+        if (deleteError) throw deleteError;
       }
 
       // 補償削除に成功した場合のみ manifest 行を削除する
