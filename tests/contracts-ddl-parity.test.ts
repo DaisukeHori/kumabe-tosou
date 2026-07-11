@@ -15,6 +15,16 @@ import {
 } from "@/modules/distribution/contracts";
 import { zAiKeyStatus, zProvider, zUsageKind, zUsageStatus } from "@/modules/ai-providers/contracts";
 import { SETTINGS_SCHEMAS } from "@/modules/settings/contracts";
+import {
+  ACTIVITY_PAYLOAD_SCHEMAS,
+  zCustomerInput,
+  zCustomerLifecycle,
+  zDealInput,
+  zDealStage,
+  zLeadSource,
+  zTaskOrigin,
+  zTaskStatus,
+} from "@/modules/crm/contracts";
 
 /**
  * DB 接続不要の静的検証 (設計書 §11.1 1a: contracts-ddl-parity.test.ts)。
@@ -209,6 +219,56 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
   it("ai_image_generations.status ↔ 固定 3 値 ('pending','succeeded','failed')", () => {
     const actual = findCheck(checks, "ai_image_generations", "status").sort();
     expect(actual).toEqual(["failed", "pending", "succeeded"]);
+  });
+
+  // ---- crm (#2-1: migration 20260711000023_crm_core.sql) ----
+  it("customers.kind ↔ crm の zCustomerInput.shape.kind (インライン enum。named export なし — 07-contracts-delta 原文どおり)", () => {
+    const expected = [...zCustomerInput.shape.kind.options].sort();
+    const actual = findCheck(checks, "customers", "kind").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("customers.lifecycle ↔ crm の zCustomerLifecycle", () => {
+    const expected = [...zCustomerLifecycle.options].sort();
+    const actual = findCheck(checks, "customers", "lifecycle").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("customers.source / deals.source ↔ crm の zLeadSource (customers と deals で共用)", () => {
+    const expected = [...zLeadSource.options].sort();
+    for (const table of ["customers", "deals"]) {
+      const actual = findCheck(checks, table, "source").sort();
+      expect(actual).toEqual(expected);
+    }
+  });
+
+  it("deals.pipeline ↔ crm の zDealInput.shape.pipeline (z.literal('default') — 1 値のみのため .options は使えず直接比較)", () => {
+    const actual = findCheck(checks, "deals", "pipeline").sort();
+    expect(actual).toEqual([zDealInput.shape.pipeline.value]);
+  });
+
+  it("deals.stage ↔ crm の zDealStage (9 値。zDealInput.shape.stage は作成時 3 値限定の部分集合であり比較対象外 — 01-crm §5.1 の裁定どおり zDealStage が DDL parity 対象)", () => {
+    const expected = [...zDealStage.options].sort();
+    const actual = findCheck(checks, "deals", "stage").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("activities.activity_type ↔ crm の ACTIVITY_PAYLOAD_SCHEMAS のキー (9 種。文字列 enum の二重列挙をしない設計)", () => {
+    const expected = Object.keys(ACTIVITY_PAYLOAD_SCHEMAS).sort();
+    const actual = findCheck(checks, "activities", "activity_type").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("tasks.status ↔ crm の zTaskStatus", () => {
+    const expected = [...zTaskStatus.options].sort();
+    const actual = findCheck(checks, "tasks", "status").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("tasks.origin ↔ crm の zTaskOrigin", () => {
+    const expected = [...zTaskOrigin.options].sort();
+    const actual = findCheck(checks, "tasks", "origin").sort();
+    expect(actual).toEqual(expected);
   });
 
   /**
