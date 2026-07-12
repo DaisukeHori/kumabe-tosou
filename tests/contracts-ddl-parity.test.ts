@@ -26,6 +26,13 @@ import {
   zTaskStatus,
 } from "@/modules/crm/contracts";
 import { DOC_NO_PREFIX, zDocType, zDocumentStatus, zPaymentInput } from "@/modules/sales/contracts";
+import {
+  zCallDirection,
+  zCallHandling,
+  zCallMatchStatus,
+  zCallRecordingChannels,
+  zCallRecordingSource,
+} from "@/modules/telephony/contracts";
 
 /**
  * DB 接続不要の静的検証 (設計書 §11.1 1a: contracts-ddl-parity.test.ts)。
@@ -392,5 +399,58 @@ describe("settings-media-refs parity (DB 接続不要の静的検証)", () => {
 
   it("migration に seal_media_id という jsonb キー literal が存在しない (v1.2 で撤回済み — 最大の地雷)", () => {
     expect(sql.includes("jsonb_build_object('seal_media_id'")).toBe(false);
+  });
+});
+
+/**
+ * telephony ddl parity (#56: migration 20260711000032_telephony_core.sql)。
+ * canonical: docs/design/crm-suite/04-telephony.md §2.2 (DDL 全文) / §2.6 (自モジュール所有の
+ * enum は DB check ↔ Zod enum 1:1 で parity テストに追加する)。上記の enum-check パーサ
+ * (extractEnumChecks/findCheck) をそのまま再利用する (独立した describe として再計算する —
+ * 上の describe 内の記述には一切手を加えない)。
+ */
+describe("telephony ddl parity (#56: migration 20260711000032_telephony_core.sql)", () => {
+  const sql = loadAllMigrationSql();
+  const checks = extractEnumChecks(sql);
+
+  it("calls.direction ↔ telephony の zCallDirection", () => {
+    const expected = [...zCallDirection.options].sort();
+    const actual = findCheck(checks, "calls", "direction").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("calls.handling ↔ telephony の zCallHandling (nullable 列。check 制約自体は非 null 値のみ列挙するため findCheck の対象と単純比較できる — 既存の ai_runs.status 等と同じ扱い)", () => {
+    const expected = [...zCallHandling.options].sort();
+    const actual = findCheck(checks, "calls", "handling").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("calls.match_status ↔ telephony の zCallMatchStatus (07-contracts-delta/04-telephony のコードブロックに export 記載が無かったため telephony/contracts.ts に追加 export したもの — issue-56 計画書「未解決点」#1 参照。DDL の check 制約が正)", () => {
+    const expected = [...zCallMatchStatus.options].sort();
+    const actual = findCheck(checks, "calls", "match_status").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("call_recordings.source ↔ telephony の zCallRecordingSource", () => {
+    const expected = [...zCallRecordingSource.options].sort();
+    const actual = findCheck(checks, "call_recordings", "source").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("call_recordings.channels ↔ telephony の zCallRecordingChannels (数値 literal union — z.enum ではないため .options は各メンバー ZodLiteral スキーマの配列を返す。各要素の .value で実値 [1,2] を取り出し、文字列化してから比較する)", () => {
+    const expected = zCallRecordingChannels.options.map((option) => String(option.value)).sort();
+    const actual = findCheck(checks, "call_recordings", "channels").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  /**
+   * calls.twilio_status は意図的に check 制約を持たない (04-telephony.md §2.6: 外部所有の
+   * Twilio CallStatus 語彙は将来値が追加されても DDL 変更不要にするため check を張らない設計判断。
+   * 「自モジュール所有の enum のみ check+Zod parity」の対象外 — 受入基準に明記の注記コメント)。
+   * findCheck は見つからない場合に例外を投げる実装のため、その例外が起きることをもって
+   * 「check 制約が存在しない」ことの検証とする。
+   */
+  it("(注記) calls.twilio_status は意図的に check 制約を持たない (外部所有語彙 — Zod parity 対象外)", () => {
+    expect(() => findCheck(checks, "calls", "twilio_status")).toThrow();
   });
 });
