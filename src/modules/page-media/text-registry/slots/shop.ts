@@ -1,7 +1,7 @@
 import type { PageTextSlot } from "../types";
 
 // ---------------------------------------------------------------------------
-// shop (143, route: "/shop")
+// shop (151, route: "/shop")
 // v2 Wave 1 (docs/design/visual-text-editor-v2.md §5): 既存9件 (hero/grades/simulator/
 // products/flow/cta 見出し・CTA・リード文) はそのまま維持し、page-body.tsx / shop-simulator.tsx
 // の残り全静的テキスト (rich 19件含む) を追加。defaultText は現行描画テキストと1文字も違わない
@@ -16,6 +16,12 @@ import type { PageTextSlot } from "../types";
 // ことで、9件とも配線可能になった。SectionMark の `no` ("SEC. 01" 等) は noSlotKey capability
 // が page-blocks.tsx 側に存在するが、本 wave の配線スコープ (仕様の9件) には含めない
 // (将来 wave で必要になれば noSlotKey を配線するだけで良い)。
+//
+// Issue #60 (docs/design/crm-suite/06-simulator.md §7.1): 143 → 151 件 (+10 -2)。
+// shop.simulator.toast.copied / .redirect (クリップボードコピー UX) を削除し、
+// shop.simulator.lead.* (インライン展開型リードフォーム) を10件新設。
+// shop.simulator.cta の defaultText/label、shop.grade.{1,2,3}.price の label のみ変更
+// (defaultText/maxLen は不変 — フォールバック文言として残す)。
 // ---------------------------------------------------------------------------
 export const SHOP_TEXT_SLOTS: readonly PageTextSlot[] = [
   {
@@ -145,10 +151,10 @@ export const SHOP_TEXT_SLOTS: readonly PageTextSlot[] = [
     key: "shop.simulator.cta",
     page: "shop",
     route: "/shop",
-    label: "SHOP / シミュレータ注文ボタン (固定高+矢印、折返し厳禁)",
+    label: "SHOP / シミュレータ問い合わせボタン (固定高+矢印、折返し厳禁)",
     kind: "text",
     maxLen: 16,
-    defaultText: "この内容で注文・相談する",
+    defaultText: "この内容で問い合わせる",
   },
   {
     key: "shop.products.heading",
@@ -323,7 +329,7 @@ export const SHOP_TEXT_SLOTS: readonly PageTextSlot[] = [
     key: "shop.grade.1.price",
     page: "shop",
     route: "/shop",
-    label: "SHOP / GRADE01 価格",
+    label: "SHOP / GRADE01 価格 (フォールバック — 通常は価格表から自動表示)",
     kind: "text",
     maxLen: 20,
     defaultText:
@@ -474,7 +480,7 @@ export const SHOP_TEXT_SLOTS: readonly PageTextSlot[] = [
     key: "shop.grade.2.price",
     page: "shop",
     route: "/shop",
-    label: "SHOP / GRADE02 価格",
+    label: "SHOP / GRADE02 価格 (フォールバック — 通常は価格表から自動表示)",
     kind: "text",
     maxLen: 20,
     defaultText:
@@ -614,7 +620,7 @@ export const SHOP_TEXT_SLOTS: readonly PageTextSlot[] = [
     key: "shop.grade.3.price",
     page: "shop",
     route: "/shop",
-    label: "SHOP / GRADE03 価格",
+    label: "SHOP / GRADE03 価格 (フォールバック — 通常は価格表から自動表示)",
     kind: "text",
     maxLen: 25,
     defaultText:
@@ -1420,24 +1426,100 @@ export const SHOP_TEXT_SLOTS: readonly PageTextSlot[] = [
     defaultText:
       "※ 立ち上げ期の概算目安です。形状の複雑さ・素材・色により変動します。初回のみ治具・段取り費を別途（リピート時免除）。送料は実費です。正式なお見積もりでご確定ください。",
   },
+  // shop.simulator.toast.copied / shop.simulator.toast.redirect は削除済み
+  // (裁定 J6-(a)。クリップボードコピー UX 廃止 — 06-simulator.md §7.1。
+  // page_text は本番0行のため孤児データは生じない — gap-prod-db §6)。
+  // 以下 10 件は新設 (06-simulator.md §7.1 の表を転記。kind は全て "text" —
+  // 単一行ラベル・文言のため lines/multiline 不要)。
   {
-    key: "shop.simulator.toast.copied",
+    key: "shop.simulator.lead.name.label",
     page: "shop",
     route: "/shop",
-    label: "SHOP / シミュレータ コピー成功トースト",
-    kind: "text",
-    maxLen: 35,
-    defaultText:
-      "内容をコピーしました。相談ページへ移動します…",
-  },
-  {
-    key: "shop.simulator.toast.redirect",
-    page: "shop",
-    route: "/shop",
-    label: "SHOP / シミュレータ 相談ページ遷移トースト",
+    label: "SHOP / リード 氏名ラベル",
     kind: "text",
     maxLen: 20,
+    defaultText: "お名前",
+  },
+  {
+    key: "shop.simulator.lead.email.label",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / リード メールラベル",
+    kind: "text",
+    maxLen: 20,
+    defaultText: "メールアドレス",
+  },
+  {
+    key: "shop.simulator.lead.tel.label",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / リード 電話ラベル",
+    kind: "text",
+    maxLen: 25,
+    defaultText: "お電話番号（任意）",
+  },
+  {
+    key: "shop.simulator.lead.message.label",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / リード メッセージラベル",
+    kind: "text",
+    maxLen: 25,
+    defaultText: "補足メッセージ（任意）",
+  },
+  {
+    key: "shop.simulator.lead.privacy.label",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / リード 同意ラベル",
+    kind: "text",
+    maxLen: 40,
+    defaultText: "プライバシーポリシーに同意する",
+  },
+  {
+    key: "shop.simulator.lead.submit",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / リード 送信ボタン",
+    kind: "text",
+    maxLen: 20,
+    defaultText: "この内容で送信する",
+  },
+  {
+    key: "shop.simulator.lead.success",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / リード 成功文言",
+    kind: "text",
+    maxLen: 120,
+    defaultText: "送信しました。内容を確認のうえ、折り返しご連絡いたします。",
+  },
+  {
+    key: "shop.simulator.lead.error.invalid",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / リード 入力エラー",
+    kind: "text",
+    maxLen: 60,
+    defaultText: "入力内容をご確認ください。",
+  },
+  {
+    key: "shop.simulator.lead.error.rate_limited",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / リード 頻度エラー",
+    kind: "text",
+    maxLen: 80,
+    defaultText: "短時間に送信が集中しています。1時間ほど時間をおいてお試しください。",
+  },
+  {
+    key: "shop.simulator.lead.error.generic",
+    page: "shop",
+    route: "/shop",
+    label: "SHOP / リード 一般エラー",
+    kind: "text",
+    maxLen: 100,
     defaultText:
-      "相談ページへ移動します…",
+      "送信に失敗しました。時間をおいて再度お試しいただくか、お問い合わせフォームをご利用ください。",
   },
 ];

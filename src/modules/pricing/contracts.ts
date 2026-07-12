@@ -79,7 +79,7 @@ export const zEstimateInput = z
   .object({
     grade_key: z.string(),
     size_key: z.string(),
-    quantity: z.number().int().min(1).max(999),
+    quantity: z.number().int().min(1).max(1000), // v2.8: UI clamp (1..1000) と統一 (legacy 互換。旧 999 は不整合)
     option_keys: z.array(z.string()).max(10), // 'express' 等。数量値引きは含めない (自動適用)
   })
   .strict();

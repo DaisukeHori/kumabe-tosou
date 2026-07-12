@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PriceTable } from "@/modules/pricing/contracts";
+import { zEstimateInput } from "@/modules/pricing/contracts";
 import { computeEstimate } from "@/modules/pricing/estimate";
 
 import {
@@ -206,5 +207,72 @@ describe(`pricing/estimate computeEstimate() ↔ legacy 完全一致 (${CASES.le
     expect(r.quote_only).toBe(true);
     expect(r.total_min).toBe(0);
     expect(r.total_max).toBe(0);
+  });
+});
+
+/**
+ * Issue #60 (S4 受入基準): qty=1000 が UI・PricingFacade.estimate・/api/shop/lead の
+ * 3 経路で受理されることの単体検証。zEstimateInput.quantity の上限を 999→1000 に
+ * 是正した (contracts.ts 実測 L82) ことに伴う追加ケースであり、上記の既存 24 件の
+ * ゴールデンケース (CASES 19 件 + 個別 it() 5 件) は一切変更していない。
+ *
+ * quantity は supabase/migrations の DDL に制約を持たないカラムであり
+ * (price_matrix 等 pricing 系テーブルに quantity 列自体が存在しない —
+ * quantity は API 入力のみで、DDL 上の制約対象ではない)、
+ * design-conventions.md §6.4 の原則どおり値域制約は Zod (zEstimateInput) のみが正である。
+ * そのため tests/contracts-ddl-parity.test.ts への追加ケースは発生しない
+ * (計画書 issue-60.md「contracts」節の明記どおり)。
+ */
+describe("zEstimateInput.quantity 境界値 (999/1000/1001 — v2.8 是正: 旧上限999→1000)", () => {
+  const baseInput = { grade_key: "standard", size_key: "m", option_keys: [] as string[] };
+
+  it("qty=999 は許可 (是正前からの既存上限)", () => {
+    const parsed = zEstimateInput.safeParse({ ...baseInput, quantity: 999 });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("qty=1000 は許可 (v2.8 是正で新たに解禁された上限)", () => {
+    const parsed = zEstimateInput.safeParse({ ...baseInput, quantity: 1000 });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("qty=1001 は拒否 (上限超過)", () => {
+    const parsed = zEstimateInput.safeParse({ ...baseInput, quantity: 1001 });
+    expect(parsed.success).toBe(false);
+  });
+});
+
+describe("computeEstimate() qty=1000 ゴールデン (legacy オラクルとの一致確認、上限境界)", () => {
+  it("standard/m qty=1000 (30個以上 -25% tier が適用される)", () => {
+    const oracle = legacyOracle("standard", "m", 1000, false);
+    const actual = computeEstimate(TABLE, {
+      grade_key: "standard",
+      size_key: "m",
+      quantity: 1000,
+      option_keys: [],
+    });
+    expect(oracle.quoteOnly).toBe(false);
+    if (!oracle.quoteOnly) {
+      expect(actual.quote_only).toBe(false);
+      expect(actual.total_min).toBe(oracle.totalMin);
+      expect(actual.total_max).toBe(oracle.totalMax);
+    }
+    expect(actual.applied_tier).toBe("30個以上 -25%");
+  });
+
+  it("premium/l qty=1000 + express (数量値引きと特急オプションの併用、上限境界)", () => {
+    const oracle = legacyOracle("premium", "l", 1000, true);
+    const actual = computeEstimate(TABLE, {
+      grade_key: "premium",
+      size_key: "l",
+      quantity: 1000,
+      option_keys: ["express"],
+    });
+    expect(oracle.quoteOnly).toBe(false);
+    if (!oracle.quoteOnly) {
+      expect(actual.quote_only).toBe(false);
+      expect(actual.total_min).toBe(oracle.totalMin);
+      expect(actual.total_max).toBe(oracle.totalMax);
+    }
   });
 });

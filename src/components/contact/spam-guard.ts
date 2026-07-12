@@ -12,6 +12,12 @@ import { createHash } from "node:crypto";
 export const RATE_LIMIT_MAX_PER_HOUR = 5;
 export const MIN_SUBMIT_MS = 3000;
 export const CONTACT_FORM_RATE_LIMIT_ROUTE = "contact_form";
+/**
+ * POST /api/shop/lead (シミュレーター発リード) の rate_limits.route 値
+ * (canonical: docs/design/crm-suite/06-simulator.md §6.1)。contact フォームとは
+ * 独立した集計単位にするための route 別キー。checkAndRecordRateLimit(ipHash, now, route) に渡す。
+ */
+export const SHOP_LEAD_RATE_LIMIT_ROUTE = "shop_lead";
 
 /** honeypot (隠しフィールド) に値が入っていれば bot とみなす */
 export function isHoneypotFilled(value: string): boolean {

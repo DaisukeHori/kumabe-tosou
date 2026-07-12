@@ -15,6 +15,7 @@ import { SlotRichText } from "@/components/site/slot-rich-text";
 import { SlotText } from "@/components/site/slot-text";
 import type { ResolvedSlots, ResolvedTexts } from "@/modules/page-media/contracts";
 import type { PriceTable } from "@/modules/pricing/contracts";
+import { formatGradeCardPrice } from "@/modules/pricing/price-display";
 
 const DD = {
   "090": { a: "var(--dd-090-a)", b: "var(--dd-090-b)" },
@@ -147,6 +148,13 @@ export function ShopPageBody({
   editMode: boolean;
   priceTable: PriceTable | null;
 }) {
+  // SEC.01 カード価格の DB 駆動化 (裁定 J6-(b) / 06-simulator §4.5・§7.2)。
+  // カード → グレードの対応は ServiceSimLink の grade prop と同一のハードコード
+  // (1=base / 2=standard / 3=premium、下記 ServiceSimLink 実測と1:1)。
+  // derived (null でない) が優先、null ならフォールバックの shop.grade.N.price スロットを表示する。
+  const gradeCardPrice1 = formatGradeCardPrice(priceTable, "base");
+  const gradeCardPrice2 = formatGradeCardPrice(priceTable, "standard");
+  const gradeCardPrice3 = formatGradeCardPrice(priceTable, "premium");
   return (
     <>
       <PageHead
@@ -335,11 +343,15 @@ export function ShopPageBody({
                 </p>
               </div>
               <p className="mt-5 text-2xl font-bold tracking-wider">
-                <SlotText
-                  slotKey="shop.grade.1.price"
-                  resolved={texts["shop.grade.1.price"]}
-                  editMode={editMode}
-                />{" "}
+                {gradeCardPrice1 !== null ? (
+                  gradeCardPrice1
+                ) : (
+                  <SlotText
+                    slotKey="shop.grade.1.price"
+                    resolved={texts["shop.grade.1.price"]}
+                    editMode={editMode}
+                  />
+                )}{" "}
                 <small className="text-[11px] font-normal text-carbon-soft">
                   <SlotText
                     slotKey="shop.grade.1.price.note"
@@ -463,11 +475,15 @@ export function ShopPageBody({
                 </p>
               </div>
               <p className="mt-5 text-2xl font-bold tracking-wider">
-                <SlotText
-                  slotKey="shop.grade.2.price"
-                  resolved={texts["shop.grade.2.price"]}
-                  editMode={editMode}
-                />{" "}
+                {gradeCardPrice2 !== null ? (
+                  gradeCardPrice2
+                ) : (
+                  <SlotText
+                    slotKey="shop.grade.2.price"
+                    resolved={texts["shop.grade.2.price"]}
+                    editMode={editMode}
+                  />
+                )}{" "}
                 <small className="text-[11px] font-normal text-carbon-soft">
                   <SlotText
                     slotKey="shop.grade.2.price.note"
@@ -586,11 +602,15 @@ export function ShopPageBody({
                 </p>
               </div>
               <p className="mt-5 text-2xl font-bold tracking-wider">
-                <SlotText
-                  slotKey="shop.grade.3.price"
-                  resolved={texts["shop.grade.3.price"]}
-                  editMode={editMode}
-                />{" "}
+                {gradeCardPrice3 !== null ? (
+                  gradeCardPrice3
+                ) : (
+                  <SlotText
+                    slotKey="shop.grade.3.price"
+                    resolved={texts["shop.grade.3.price"]}
+                    editMode={editMode}
+                  />
+                )}{" "}
                 <small className="text-[11px] font-normal text-carbon-soft">
                   <SlotText
                     slotKey="shop.grade.3.price.note"

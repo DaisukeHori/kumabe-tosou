@@ -22,8 +22,18 @@ import { CONTACT_FORM_RATE_LIMIT_ROUTE, computeWindowStart, isRateLimited } from
  * SUPABASE_SERVICE_ROLE_KEY 未設定時はチェックをスキップして送信を許可する
  * (fail-open。rate limit は spam 抑止目的であり認可境界ではないため、インフラ未整備を
  * 理由にフォーム自体を止めない。§1.2 graceful degradation の方針に整合)。
+ *
+ * 第 3 引数 route (後方互換拡張 — 06-simulator.md §6.1): POST /api/shop/lead が
+ * "shop_lead" を渡すことで contact フォームとは独立した集計単位にする。省略時は
+ * 既定値 CONTACT_FORM_RATE_LIMIT_ROUTE のままなので既存呼び出し (contact/actions.ts) は無変更で動く。
+ * 超過時の返却コードは "KMB-E105" (レート制限。errors.ts 登録済み — M0 #1-1)。
+ * contact 側 (actions.ts) は rateLimitResult.ok の真偽のみで分岐しており、code 変更の副作用はない。
  */
-export async function checkAndRecordRateLimit(ipHash: string, now: Date): Promise<Result<void>> {
+export async function checkAndRecordRateLimit(
+  ipHash: string,
+  now: Date,
+  route: string = CONTACT_FORM_RATE_LIMIT_ROUTE,
+): Promise<Result<void>> {
   if (!isServiceRoleConfigured()) {
     console.warn(
       "[contact] SUPABASE_SERVICE_ROLE_KEY 未設定のため rate limit チェックをスキップします",
@@ -38,7 +48,7 @@ export async function checkAndRecordRateLimit(ipHash: string, now: Date): Promis
     .from("rate_limits")
     .select("count")
     .eq("ip_hash", ipHash)
-    .eq("route", CONTACT_FORM_RATE_LIMIT_ROUTE)
+    .eq("route", route)
     .eq("window_start", windowStart)
     .maybeSingle<{ count: number }>();
 
@@ -50,13 +60,13 @@ export async function checkAndRecordRateLimit(ipHash: string, now: Date): Promis
 
   if (existing) {
     if (isRateLimited(existing.count)) {
-      return { ok: false, code: "KMB-E101", detail: "rate_limit_exceeded" };
+      return { ok: false, code: "KMB-E105", detail: "rate_limit_exceeded" };
     }
     const { error: updateError } = await client
       .from("rate_limits")
       .update({ count: existing.count + 1 })
       .eq("ip_hash", ipHash)
-      .eq("route", CONTACT_FORM_RATE_LIMIT_ROUTE)
+      .eq("route", route)
       .eq("window_start", windowStart);
     if (updateError) {
       console.error("[contact] rate_limits 更新に失敗しました:", updateError);
@@ -66,7 +76,7 @@ export async function checkAndRecordRateLimit(ipHash: string, now: Date): Promis
 
   const { error: insertError } = await client.from("rate_limits").insert({
     ip_hash: ipHash,
-    route: CONTACT_FORM_RATE_LIMIT_ROUTE,
+    route,
     window_start: windowStart,
     count: 1,
   });

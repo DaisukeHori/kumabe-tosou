@@ -46,7 +46,11 @@ import {
 // 転換し、他ページと同じ粒度 (SpecTable の th/td・小活字注記単位まで) で全文を編集可能スロット
 // 化した (rest-chrome.md 側にも本方針転換の経緯を追記済み。旧 tier C 判定の記述は残しつつ
 // 上書きされたことを明記)。
-const EXPECTED_COUNT = 1061;
+//
+// Issue #60 (docs/design/crm-suite/06-simulator.md §7.1、裁定 J6-(a)): shop 143→151 (+10-2)。
+// クリップボードコピー UX の shop.simulator.toast.copied / .redirect を削除し、インライン展開型
+// リードフォーム用の shop.simulator.lead.* を10件新設。合計 1061 → 1069。
+const EXPECTED_COUNT = 1069;
 
 const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "shared.cta.consult": "相談する",
@@ -821,7 +825,7 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "shop.hero.lead": "受託の表面仕上げを、商品のように選べるようにしました。グレードを選び、サイズと個数で概算を出し、そのまま注文のご相談へ。オンライン決済は現在準備中のため、いまは「注文の意思表示 → 相談 → 正式見積もり → お支払い」の流れでお受けしています。手のひらの造形物を送るだけで、量産品の顔になって還ってきます。",
   "shop.grades.heading": "3つのグレードから、\n選ぶ。",
   "shop.simulator.heading": "サイズ × 個数 × グレード。\n3つ選べば、概算が出る。",
-  "shop.simulator.cta": "この内容で注文・相談する",
+  "shop.simulator.cta": "この内容で問い合わせる",
   "shop.products.heading": "手に取れる製品も、\nここに並びます。",
   "shop.flow.heading": "注文から、お届けまで。",
   "shop.cta.heading": "概算が出たら、\nあとは送るだけ。",
@@ -949,8 +953,16 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "shop.simulator.row.slide": "数量スライド",
   "shop.simulator.opt.none": "なし",
   "shop.simulator.footnote": "※ 立ち上げ期の概算目安です。形状の複雑さ・素材・色により変動します。初回のみ治具・段取り費を別途（リピート時免除）。送料は実費です。正式なお見積もりでご確定ください。",
-  "shop.simulator.toast.copied": "内容をコピーしました。相談ページへ移動します…",
-  "shop.simulator.toast.redirect": "相談ページへ移動します…",
+  "shop.simulator.lead.name.label": "お名前",
+  "shop.simulator.lead.email.label": "メールアドレス",
+  "shop.simulator.lead.tel.label": "お電話番号（任意）",
+  "shop.simulator.lead.message.label": "補足メッセージ（任意）",
+  "shop.simulator.lead.privacy.label": "プライバシーポリシーに同意する",
+  "shop.simulator.lead.submit": "この内容で送信する",
+  "shop.simulator.lead.success": "送信しました。内容を確認のうえ、折り返しご連絡いたします。",
+  "shop.simulator.lead.error.invalid": "入力内容をご確認ください。",
+  "shop.simulator.lead.error.rate_limited": "短時間に送信が集中しています。1時間ほど時間をおいてお試しください。",
+  "shop.simulator.lead.error.generic": "送信に失敗しました。時間をおいて再度お試しいただくか、お問い合わせフォームをご利用ください。",
 
   "notes.hero.heading": "なぜ綺麗なのかは、\n写真だけでは伝わらない。",
   "notes.hero.lead": "工程と色の裏側を、言葉で残しています。専門性は、言語化してはじめて伝わる——それがこの工房の考え方です。",
