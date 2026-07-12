@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   computeWindowStart,
+  CONTACT_FORM_RATE_LIMIT_ROUTE,
   extractClientIp,
   hashIp,
   isHoneypotFilled,
   isRateLimited,
   isSubmittedTooFast,
   RATE_LIMIT_MAX_PER_HOUR,
+  SHOP_LEAD_RATE_LIMIT_ROUTE,
 } from "@/components/contact/spam-guard";
 
 /**
@@ -120,5 +122,23 @@ describe("extractClientIp", () => {
   it("どちらも無ければ unknown を返す", () => {
     expect(extractClientIp(null, null)).toBe("unknown");
     expect(extractClientIp("", "")).toBe("unknown");
+  });
+});
+
+/**
+ * Issue #60 (06-simulator.md §6.1): POST /api/shop/lead 用の rate_limits.route 値。
+ * checkAndRecordRateLimit(ipHash, now, route) の第3引数に渡す集計単位キーで、
+ * contact フォーム (CONTACT_FORM_RATE_LIMIT_ROUTE) とは独立集計にするための定数。
+ * checkAndRecordRateLimit 自体は server-only + service client 依存のためここでは対象外
+ * (route 引数化と KMB-E105 返却の挙動検証は tests/shop-lead-route.test.ts が担う —
+ * 計画書 issue-60.md テスト戦略節の明記どおり)。ここでは定数の値と重複がないことのみ確認する。
+ */
+describe("SHOP_LEAD_RATE_LIMIT_ROUTE (shop-lead 用 rate limit 集計単位キー)", () => {
+  it("'shop_lead' である", () => {
+    expect(SHOP_LEAD_RATE_LIMIT_ROUTE).toBe("shop_lead");
+  });
+
+  it("contact フォームの集計単位キーとは異なる (独立集計であること)", () => {
+    expect(SHOP_LEAD_RATE_LIMIT_ROUTE).not.toBe(CONTACT_FORM_RATE_LIMIT_ROUTE);
   });
 });

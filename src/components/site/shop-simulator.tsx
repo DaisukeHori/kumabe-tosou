@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { textEditableAttrs } from "@/components/site/editable-attrs";
+import { ShopLeadForm, type ShopLeadFormHandle } from "@/components/site/shop-lead-form";
 import type { ResolvedTexts } from "@/modules/page-media/contracts";
 import type { PriceOption, PriceTable } from "@/modules/pricing/contracts";
 import { computeEstimate } from "@/modules/pricing/estimate";
@@ -16,7 +16,7 @@ import { computeEstimate } from "@/modules/pricing/estimate";
   計算そのものは @/modules/pricing/estimate の computeEstimate() (副作用なしの純関数) に委譲し、
   UI/UX・操作感は旧実装 (ハードコード PRICE_TABLE 版) と同一に保つ。
 
-  注文ボタンの文言 (shop.simulator.cta) 等、この画面の静的文言は visual-text-editor 対象
+  問い合わせボタンの文言 (shop.simulator.cta) 等、この画面の静的文言は visual-text-editor 対象
   スロットだが、このコンポーネントは "use client" であり、facade.ts ("server-only") を
   import する <SlotText>/<SlotRichText> を直接使うとクライアントバンドルがビルド時に
   壊れる (docs/design/visual-text-editor.md §4.1 の SlotText は page-media/facade 経由で
@@ -25,8 +25,14 @@ import { computeEstimate } from "@/modules/pricing/estimate";
   持たない純関数 textEditableAttrs (editable-attrs.ts) だけを使って data-editable-text を
   手動で付与する (SlotText と同じ見た目・同じ data 属性契約を、import せずに再現する)。
   v2 Wave 1: GRADE/SIZE/QUANTITY 見出し・サイズ帯補足・内訳ラベル・フォールバック文言・
-  注記・トースト等の残り全静的文言も同じ手動パターンで編集可能にする (DB駆動の
+  注記等の残り全静的文言も同じ手動パターンで編集可能にする (DB駆動の
   grade.label/description・size.label は対象外)。
+
+  Issue #60 (裁定 J6-(a)): 旧クリップボードコピー UX (handleOrder — クリップボード書き込み・
+  1200ms 後の /contact 遷移・shop.simulator.toast.copied / .redirect) は廃止し、CTA は
+  インライン展開型のリードフォーム (shop-lead-form.tsx、"use client") を開くだけにした。
+  送信は shop-lead-form.tsx から /api/shop/lead への HTTP 境界越えで行う (書き込み facade は
+  このコンポーネントからは import しない — 06-simulator.md §5.3)。
 */
 
 export type Grade = string;
@@ -120,7 +126,8 @@ export function ShopSimulator({
   texts: ResolvedTexts;
   editMode: boolean;
 }) {
-  const router = useRouter();
+  const leadFormRef = useRef<ShopLeadFormHandle>(null);
+  const ctaButtonRef = useRef<HTMLButtonElement>(null);
 
   const grades = useMemo(
     () =>
@@ -153,7 +160,6 @@ export function ShopSimulator({
   );
   const [qty, setQty] = useState(1);
   const [selectedOptionKeys, setSelectedOptionKeys] = useState<string[]>([]);
-  const [copied, setCopied] = useState("");
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -208,48 +214,10 @@ export function ShopSimulator({
       ? `適用なし（${firstTier.label}）`
       : "適用なし";
 
-  const optionLabelByKey = new Map(options.map((o) => [o.key, o] as const));
-  const selectedOptionLabels = selectedOptionKeys
-    .map((k) => optionLabelByKey.get(k)?.label)
-    .filter((v): v is string => Boolean(v));
-
   const toggleOption = (option: PriceOption, checked: boolean) => {
     setSelectedOptionKeys((prev) =>
       checked ? [...prev, option.key] : prev.filter((k) => k !== option.key),
     );
-  };
-
-  const handleOrder = () => {
-    const lines = [
-      "【隈部塗装 SHOP — 注文・相談内容】",
-      `グレード: ${grade.label}`,
-      `サイズ帯: ${size.label}`,
-      `個数: ${qty} 個`,
-      `オプション: ${selectedOptionLabels.length > 0 ? selectedOptionLabels.join(" / ") : "なし"}`,
-      `概算: ${totalText}${!result.quote_only ? `（1点あたり ${yen(result.total_min / qty)}〜${yen(result.total_max / qty)}）` : ""}`,
-      "※ 上記はシミュレータの目安です。素材・色・形状を添えてご相談ください。",
-    ];
-    const text = lines.join("\n");
-    const goContact = () => {
-      window.setTimeout(() => {
-        router.push("/contact");
-      }, 1200);
-    };
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).then(
-        () => {
-          setCopied(texts["shop.simulator.toast.copied"].text);
-          goContact();
-        },
-        () => {
-          setCopied(texts["shop.simulator.toast.redirect"].text);
-          goContact();
-        },
-      );
-    } else {
-      setCopied(texts["shop.simulator.toast.redirect"].text);
-      goContact();
-    }
   };
 
   return (
@@ -411,17 +379,26 @@ export function ShopSimulator({
           {texts["shop.simulator.footnote"].text}
         </p>
         <button
+          ref={ctaButtonRef}
           type="button"
-          onClick={handleOrder}
+          onClick={() => leadFormRef.current?.open()}
           className="mt-6 flex items-center justify-center gap-1 bg-paper py-3.5 text-sm font-medium tracking-[0.12em] text-carbon transition-colors hover:bg-paper/85"
           {...textEditableAttrs("shop.simulator.cta", editMode)}
         >
           {texts["shop.simulator.cta"].text}
           <span aria-hidden="true">→</span>
         </button>
-        {copied ? (
-          <p className="mt-3 text-center text-[12px] text-paper/70">{copied}</p>
-        ) : null}
+        <ShopLeadForm
+          ref={leadFormRef}
+          grade={grade}
+          size={size}
+          quantity={qty}
+          optionKeys={selectedOptionKeys}
+          result={result}
+          texts={texts}
+          editMode={editMode}
+          onRequestFocusCta={() => ctaButtonRef.current?.focus()}
+        />
       </div>
     </div>
   );
