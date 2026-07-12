@@ -26,6 +26,7 @@ import {
   zTaskStatus,
 } from "@/modules/crm/contracts";
 import { DOC_NO_PREFIX, zDocType, zDocumentStatus, zPaymentInput } from "@/modules/sales/contracts";
+import { zWorkBlockStatus } from "@/modules/scheduling/contracts";
 import {
   zCallDirection,
   zCallHandling,
@@ -334,6 +335,13 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
       ((body as string).match(/\btax\w*/gi) ?? []).map((s) => s.toLowerCase()),
     );
     expect([...taxIdentifiers]).toEqual(["tax_category"]);
+  });
+
+  // ---- scheduling (#52: migration 20260711000029_scheduling_core.sql) ----
+  it("work_blocks.status ↔ scheduling の zWorkBlockStatus", () => {
+    const expected = [...zWorkBlockStatus.options].sort();
+    const actual = findCheck(checks, "work_blocks", "status").sort();
+    expect(actual).toEqual(expected);
   });
 
   /**
