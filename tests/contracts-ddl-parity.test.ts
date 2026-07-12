@@ -30,6 +30,7 @@ import { zWorkBlockStatus } from "@/modules/scheduling/contracts";
 import {
   zCallDirection,
   zCallHandling,
+  zCallJobStatus,
   zCallMatchStatus,
   zCallRecordingChannels,
   zCallRecordingSource,
@@ -448,6 +449,18 @@ describe("telephony ddl parity (#56: migration 20260711000032_telephony_core.sql
   it("call_recordings.channels ↔ telephony の zCallRecordingChannels (数値 literal union — z.enum ではないため .options は各メンバー ZodLiteral スキーマの配列を返す。各要素の .value で実値 [1,2] を取り出し、文字列化してから比較する)", () => {
     const expected = zCallRecordingChannels.options.map((option) => String(option.value)).sort();
     const actual = findCheck(checks, "call_recordings", "channels").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  /**
+   * call_jobs.status ↔ telephony の zCallJobStatus (#57/#58: migration 20260711000033 の
+   * lease/commit/retry RPC が操作する状態機械。check 制約自体は DDL 本体 (migration 0032) に
+   * 定義済みで #58 では変更していないが、parity テストが未追加だったため issue-58 計画書
+   * 「テスト戦略」節の指示どおり追加する。既存の enum-check パーサ (findCheck) をそのまま使う)。
+   */
+  it("call_jobs.status ↔ telephony の zCallJobStatus", () => {
+    const expected = [...zCallJobStatus.options].sort();
+    const actual = findCheck(checks, "call_jobs", "status").sort();
     expect(actual).toEqual(expected);
   });
 

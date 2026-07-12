@@ -457,3 +457,190 @@ export async function listDueCallJobs(client: SupabaseClient, limit: number): Pr
   if (error) return pgErrorToResult(error);
   return { ok: true, value: (data ?? []) as DueCallJobRow[] };
 }
+
+/**
+ * call_jobs の全カラム取得 (04-telephony.md §6.5.3-1/§6.5.4-1 の再入ガード用)。
+ *
+ * 【地雷回避】`AcquireLeaseRawResult` (migration 0033 `call_job_acquire_lease` の RETURNS TABLE)
+ * には `transcript`/`analysis` は含まれるが `link_result`/`transcript_partial` は含まれない
+ * (RPC の返却列そのものが DDL レベルでこの 2 列を返さない設計 — 計画書「未解決点#1」参照)。
+ * analyzing ステージの再入ガード (`analysis` 参照) と linking ステージの再入ガード
+ * (`link_result` 参照) は、acquire の生返り値 `row` だけでは判定できないため、本関数で
+ * 追加 SELECT する必要がある (RPC シグネチャ自体は変更しない方針)。
+ */
+export async function getCallJobById(client: SupabaseClient, jobId: string): Promise<Result<CallJobRow | null>> {
+  const { data, error } = await client.from("call_jobs").select("*").eq("id", jobId).maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data as CallJobRow | null) ?? null };
+}
+
+// ============================================================
+// call_recordings / call_jobs — #58 追加分 (downloading/transcribing/linking ステージ実装用)
+// ============================================================
+
+/**
+ * call_recordings の単一行取得 (§6.5.1-1 downloading 再入ガード・DL 元 URL 取得用)。
+ */
+export async function getCallRecordingById(
+  client: SupabaseClient,
+  id: string,
+): Promise<Result<CallRecordingRow | null>> {
+  const { data, error } = await client.from("call_recordings").select("*").eq("id", id).maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data as CallRecordingRow | null) ?? null };
+}
+
+export type UpdateCallRecordingStoragePatch = {
+  storage_path: string;
+  byte_size: number;
+  /** 省略時は既存値を保持。明示的に渡した場合のみ更新する (§6.5.1-5: 削除完了時刻の反映)。 */
+  twilio_deleted_at?: string | null;
+};
+
+/**
+ * downloading commit 直前の反映 (§6.5.1 手順4/5): Storage 保存後の storage_path/byte_size
+ * (+ 設定 ON 時は twilio_deleted_at) を書き込む。対象行が無ければ KMB-E804 (握り潰さない)。
+ */
+export async function updateCallRecordingStorage(
+  client: SupabaseClient,
+  recordingId: string,
+  patch: UpdateCallRecordingStoragePatch,
+): Promise<Result<CallRecordingRow>> {
+  const updatePayload: Partial<Pick<CallRecordingRow, "storage_path" | "byte_size" | "twilio_deleted_at">> = {
+    storage_path: patch.storage_path,
+    byte_size: patch.byte_size,
+  };
+  if (patch.twilio_deleted_at !== undefined) {
+    updatePayload.twilio_deleted_at = patch.twilio_deleted_at;
+  }
+
+  const { data, error } = await client
+    .from("call_recordings")
+    .update(updatePayload)
+    .eq("id", recordingId)
+    .select("*")
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  if (!data) return { ok: false, code: "KMB-E804", detail: `録音が見つかりません: ${recordingId}` };
+  return { ok: true, value: data as CallRecordingRow };
+}
+
+/**
+ * transcribing のセグメント別チェックポイント追記 (§6.5.2-4(b))。heartbeat 同型の
+ * lease 保持中の service 直接 UPDATE — commit RPC は使わない。`lease_expires_at is not null`
+ * の行にのみ効く単純 CAS (heartbeatCallJobLease と同型の防御。他プロセスへの横取り防止は
+ * acquire/commit の CAS が担うため、本関数自体は排他の主体ではない)。
+ */
+export async function updateCallJobTranscriptPartial(
+  client: SupabaseClient,
+  jobId: string,
+  checkpoint: CallTranscriptCheckpoint,
+): Promise<Result<void>> {
+  const { error } = await client
+    .from("call_jobs")
+    .update({ transcript_partial: checkpoint })
+    .eq("id", jobId)
+    .not("lease_expires_at", "is", null);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+/**
+ * call_id 単位で call_recordings を全件取得する (§6.5.4-3 の duration_seconds フォールバック用)。
+ * 通話 1 本に録音が複数あり得る (転送録音 + フォールバック留守電 — §10-15) ため、当該 job の
+ * recording_id だけでなく call_id で全件集計する必要がある (計画書「未解決点#3」の解釈どおり)。
+ */
+export async function listCallRecordingsByCallId(
+  client: SupabaseClient,
+  callId: string,
+): Promise<Result<CallRecordingRow[]>> {
+  const { data, error } = await client.from("call_recordings").select("*").eq("call_id", callId);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as CallRecordingRow[] };
+}
+
+export type ReflectLinkResultPatch = {
+  customerId: string | null;
+  matchStatus: CallMatchStatus;
+  aiCostDeltaMicroUsd: number;
+};
+
+/**
+ * call_id 単位で call_jobs.ai_cost_micro_usd を SUM 集計する (§6.5.4-5「call_jobs の累計を
+ * 合算転記」/ migration 0032 §1 の calls.ai_cost_micro_usd 列コメント「通話に紐づく全 call_jobs
+ * の AI 実測コスト合算」どおりの再集計)。各 call_jobs 行自身の ai_cost_micro_usd は
+ * commitCallJobStage RPC の CAS 経由でのみ更新される (二重計上されない) ため、この SUM は
+ * 何度呼び出しても同じ結果になる (冪等)。
+ */
+async function sumCallJobsAiCostMicroUsd(client: SupabaseClient, callId: string): Promise<Result<number>> {
+  const { data, error } = await client.from("call_jobs").select("ai_cost_micro_usd").eq("call_id", callId);
+  if (error) return pgErrorToResult(error);
+  const rows = (data ?? []) as { ai_cost_micro_usd: number }[];
+  return { ok: true, value: rows.reduce((sum, row) => sum + row.ai_cost_micro_usd, 0) };
+}
+
+/**
+ * linking 手順5 (§6.5.4-5): calls への customer_id/match_status/ai_cost_micro_usd 反映。
+ *
+ * 【手動確定保護ガード (§5.2.2 v1.1 不変条件 — 敵対レビュー BLOCKER 対応)】反映前に現在値を読み、
+ * canonical §6.5.4-5 が明示する OR 条件のとおり `match_status='manual'` **または**
+ * `customer_id が非 null かつ match_status != 'pending'` (= 既に matched/created で確定済み) の
+ * いずれかに該当する場合は customer_id/match_status を上書きせず ai_cost_micro_usd の反映のみ
+ * 行い `{skipped:true}` を返す。後者の条件は 1 通話に複数 call_jobs (転送録音 + 留守電フォール
+ * バック等 — §10-15) が存在し得ることへの保護であり、先に完了した job の matched/created 結果を
+ * 後発 job が ambiguous/別顧客で上書きする事故を防ぐ (`match_status==='manual'` だけを見ると
+ * この二重ジョブレースを素通ししてしまう — BLOCKER 指摘の核心)。manual 以外かつ未確定
+ * (customer_id null または match_status='pending'。ambiguous/no_number も customer_id は常に
+ * null — §5.2.2 不変条件 — のためこの分岐に該当し、自動再解決の余地を残す) の場合は 3 列を
+ * 一括更新し `{skipped:false}` を返す。この読取→分岐→更新はレース的に完全排他ではない
+ * (read-then-write) が、admin 手動操作との衝突は実運用上まれなため許容する
+ * (計画書 §5.2.2 の設計判断どおり)。
+ *
+ * 【ai_cost_micro_usd の冪等反映 (敵対レビュー MAJOR 対応)】旧実装は `current.ai_cost_micro_usd +
+ * patch.aiCostDeltaMicroUsd` の加算方式だったため、reflectLinkResultToCalls 成功直後・
+ * commitCallJobStage (linking→done) 成功前にプロセスがクラッシュすると call_jobs.link_result は
+ * 未確定のまま lease が失効し、次起床で handleLinking がゼロから再実行されて同じ delta が
+ * 二重加算されてしまっていた (call_jobs 側の commit は CAS 保護されるが calls 側の加算は保護
+ * されていなかったため)。本関数は patch.aiCostDeltaMicroUsd を現在値へ加算するのではなく、
+ * `sumCallJobsAiCostMicroUsd` で call_id に紐づく全 call_jobs.ai_cost_micro_usd を都度 SUM
+ * 再集計して書き込む方式に変更した — 再集計は何度呼び出しても同じ結果になる (冪等) ため、
+ * 上記クラッシュ再入シナリオでも二重加算が起きない。`patch.aiCostDeltaMicroUsd` は worker.ts
+ * 側の呼び出しインターフェース互換のため型に残すが、本関数はこの値を使わない
+ * (呼び出し側の改修を避けつつ挙動は SUM 集計を正とする意図的な設計)。
+ */
+export async function reflectLinkResultToCalls(
+  client: SupabaseClient,
+  callId: string,
+  patch: ReflectLinkResultPatch,
+): Promise<Result<{ skipped: boolean }>> {
+  const currentResult = await getCallById(client, callId);
+  if (!currentResult.ok) return currentResult;
+  const current = currentResult.value;
+  if (!current) return { ok: false, code: "KMB-E804", detail: `通話が見つかりません: ${callId}` };
+
+  const totalCostResult = await sumCallJobsAiCostMicroUsd(client, callId);
+  if (!totalCostResult.ok) return totalCostResult;
+  const nextAiCostMicroUsd = totalCostResult.value;
+
+  const isProtected = current.match_status === "manual" || (current.customer_id !== null && current.match_status !== "pending");
+
+  if (isProtected) {
+    const { error } = await client
+      .from("calls")
+      .update({ ai_cost_micro_usd: nextAiCostMicroUsd })
+      .eq("id", callId);
+    if (error) return pgErrorToResult(error);
+    return { ok: true, value: { skipped: true } };
+  }
+
+  const { error } = await client
+    .from("calls")
+    .update({
+      customer_id: patch.customerId,
+      match_status: patch.matchStatus,
+      ai_cost_micro_usd: nextAiCostMicroUsd,
+    })
+    .eq("id", callId);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: { skipped: false } };
+}
