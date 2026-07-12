@@ -57,6 +57,14 @@ const envSchema = z.object({
   X_CLIENT_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   META_APP_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   META_APP_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+
+  // ---- 電話連携 (Wave3 telephony。docs/design/crm-suite/04-telephony.md §1.3/§1.4/§4.6) ----
+  // 15 秒制約下で Vault RPC 往復を避けるため env 直読み (Vault は使わない — 発注指示)。
+  // 番号自体 (phone_number_e164/forward_to_e164) は settings.telephony キーが保持し、
+  // env はこの 2 つの認証情報のみ (§1.4 番号非依存設計)。twilio npm パッケージは使わない
+  // (署名検証は node:crypto 自前実装 — src/lib/telephony-signature.ts)。
+  TWILIO_ACCOUNT_SID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  TWILIO_AUTH_TOKEN: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -132,4 +140,13 @@ export function isXOAuthConfigured(): boolean {
 /** Meta (Instagram) OAuth 接続に必要な env が揃っているか */
 export function isMetaOAuthConfigured(): boolean {
   return isOAuthEnabled() && Boolean(process.env.META_APP_ID) && Boolean(process.env.META_APP_SECRET);
+}
+
+/**
+ * 電話連携 (Twilio) の env が両方設定済みかどうか。未設定時は telephony の 3 webhook
+ * (voice/status/recording-status) が 503 (KMB-E802) で degrade する
+ * (docs/design/crm-suite/04-telephony.md §6.1 手順 1 / §4.6)。
+ */
+export function isTelephonyConfigured(): boolean {
+  return Boolean(process.env.TWILIO_ACCOUNT_SID) && Boolean(process.env.TWILIO_AUTH_TOKEN);
 }
