@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Result } from "@/modules/platform/contracts";
-import type { KmbErrorCode } from "@/modules/platform/errors";
+import { KMB_ERRORS, type KmbErrorCode } from "@/modules/platform/errors";
 
 import type {
   CallAnalysis,
@@ -17,14 +17,17 @@ import type {
   CallTranscript,
   CallTranscriptCheckpoint,
 } from "./contracts";
+import { CALL_JOB_LEASE_TTL_MS, type AcquireLeaseRawResult } from "./internal/lease";
+import { CALL_JOB_RUNNABLE_STATUSES } from "./internal/stage-machine";
 
 /**
  * telephony モジュールの repository。calls / call_recordings / call_jobs への**唯一の**
  * 直接クエリ経路 (04-telephony.md §1.2 — facade.ts のみがここを import する)。
  *
- * 本 Issue (#56 DDL+契約+repository) のスコープは 3 webhook (voice/status/recording-status) の
- * INSERT/UPDATE/SELECT のみ。lease/commit/retry RPC 呼び出し (call_job_acquire_lease 等) は
- * migration 0033 (#57) の担当で、本ファイルには含めない。
+ * #56 (DDL+契約+repository) のスコープは 3 webhook (voice/status/recording-status) の
+ * INSERT/UPDATE/SELECT のみだった。#57 (本 Issue) で migration 0033 の lease/commit/retry RPC
+ * (call_job_acquire_lease / call_job_commit_stage / call_job_retry) ラッパーと heartbeat 直
+ * UPDATE・due job 一覧取得を追加した (下記「call_jobs — lease / commit / retry RPC」節)。
  *
  * client は facade が用途に応じて (session 付き server client / service_role client) 選んで渡す。
  * webhook はすべて service ctx で呼ばれるため、実質は service_role client のみが渡ってくる想定だが、
@@ -42,16 +45,26 @@ import type {
 
 type PgError = { code?: string; message: string };
 
+const KMB_ERROR_CODE_RE = /KMB-E\d+/;
+
 /**
- * PostgREST のエラーを Result.code に写像する。
- * 1. 23503 (FK 違反) → KMB-E101 (参照先が存在しない = 入力不正)
- * 2. 42501 (RLS 拒否) → KMB-E202
- * 3. 上記いずれにも該当しなければ KMB-E901 (DB 断・想定外エラー)
- * telephony の 3 テーブルには security definer RPC 由来の埋め込みエラーコード (KMB-Exxx 文字列) は
- * 存在しない (0032 に RPC を含まない — #57 の 0033 で導入予定) ため、crm/repository.ts のような
- * メッセージ埋め込み解析は不要。
+ * PostgREST/RPC のエラーを Result.code に写像する。
+ * 1. メッセージに埋め込まれた `KMB-Exxx` を最優先で拾う (migration 0033 §2.3 の
+ *    `call_job_retry` RPC が `raise exception 'KMB-E807: ...'` するため必須 —
+ *    crm/repository.ts の埋め込みコード解析パターンと同型。0032 単体の 3 テーブル操作には
+ *    埋め込みコードは出現しないが、0033 の RPC 経路は必ずこの分岐を通る)
+ * 2. is_admin_or_service() ガード系 RPC の定型メッセージ ("permission denied: ...") は KMB-E202
+ * 3. Postgres エラーコードによる既定写像 (23503 FK違反 / 42501 RLS拒否)
+ * 4. 上記いずれにも該当しなければ KMB-E901 (DB 断・想定外エラー)
  */
 function pgErrorToResult(error: PgError): { ok: false; code: KmbErrorCode; detail: string } {
+  const embedded = KMB_ERROR_CODE_RE.exec(error.message)?.[0];
+  if (embedded && Object.prototype.hasOwnProperty.call(KMB_ERRORS, embedded)) {
+    return { ok: false, code: embedded as KmbErrorCode, detail: error.message };
+  }
+  if (error.message.startsWith("permission denied")) {
+    return { ok: false, code: "KMB-E202", detail: error.message };
+  }
   if (error.code === "23503") {
     return { ok: false, code: "KMB-E101", detail: `参照先が存在しません: ${error.message}` };
   }
@@ -305,4 +318,142 @@ export async function insertCallJobIdempotent(
     if (existing) return { ok: true, value: { row: existing as CallJobRow, created: false } };
   }
   return pgErrorToResult(error);
+}
+
+// ============================================================
+// call_jobs — lease / commit / retry RPC (migration 20260711000033、#57)
+// ============================================================
+
+/**
+ * migration 0033 `call_job_acquire_lease` RPC (§2.3 lease 取得 CAS)。
+ * 返り値は判別共用体変換前の生の行 (RPC は not_found でも `result_kind='not_found'` の
+ * プレースホルダ行を必ず 1 行返す)。分岐は internal/lease.ts の `interpretAcquireLeaseResult()`
+ * に委ねる (本関数は RPC 呼び出しと Result 化のみを担う)。
+ */
+export async function acquireCallJobLease(
+  client: SupabaseClient,
+  jobId: string,
+): Promise<Result<AcquireLeaseRawResult>> {
+  const { data, error } = await client.rpc("call_job_acquire_lease", { p_job_id: jobId });
+  if (error) return pgErrorToResult(error);
+  const row = Array.isArray(data) ? data[0] : data;
+  return { ok: true, value: (row ?? null) as AcquireLeaseRawResult };
+}
+
+/**
+ * heartbeat (§2.3 末尾: lease 延長は RPC 化せず worker が直接 UPDATE する設計)。
+ * `lease_expires_at is not null` の行にのみ効く単純 CAS — lease が既に解放/失効している行を
+ * 誤って再取得済みにしてしまうことはない。worker が 20 秒毎に呼ぶ (ベストエフォート)。
+ */
+export async function heartbeatCallJobLease(client: SupabaseClient, jobId: string): Promise<Result<void>> {
+  const leaseExpiresAt = new Date(Date.now() + CALL_JOB_LEASE_TTL_MS).toISOString();
+  const { error } = await client
+    .from("call_jobs")
+    .update({ lease_expires_at: leaseExpiresAt })
+    .eq("id", jobId)
+    .not("lease_expires_at", "is", null);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+export type CommitCallJobStageInput = {
+  jobId: string;
+  expectedStatus: CallJobStatus;
+  nextStatus: CallJobStatus;
+  transcript?: CallTranscript | null;
+  analysis?: CallAnalysis | null;
+  linkResult?: CallJobLinkResult | null;
+  aiCostDeltaMicroUsd?: number | null;
+  errorCode?: string | null;
+};
+
+/**
+ * migration 0033 `call_job_commit_stage` RPC (§2.3 commit — CAS + 成果物 UPSERT + status 前進 +
+ * lease 解放 + stage_attempts=0 リセットを単一 UPDATE で原子的に行う)。CAS 不一致 (他の試行が
+ * 既に commit 済み) の場合は RPC 側が現在値を冪等に返すだけなのでエラー扱いにしない
+ * (呼び出し側は返り値の status をそのまま信用してよい)。
+ */
+export async function commitCallJobStage(
+  client: SupabaseClient,
+  input: CommitCallJobStageInput,
+): Promise<Result<CallJobStatus>> {
+  const { data, error } = await client.rpc("call_job_commit_stage", {
+    p_job_id: input.jobId,
+    p_expected_status: input.expectedStatus,
+    p_next_status: input.nextStatus,
+    p_transcript: input.transcript ?? null,
+    p_analysis: input.analysis ?? null,
+    p_link_result: input.linkResult ?? null,
+    p_ai_cost_delta_micro_usd: input.aiCostDeltaMicroUsd ?? null,
+    p_error_code: input.errorCode ?? null,
+  });
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: data as CallJobStatus };
+}
+
+/**
+ * `call_job_retry` RPC が KMB-E807 を raise した場合にのみ呼ぶ軽量な存在確認
+ * (retryCallJobRpc 専用の内部ヘルパー)。RPC 自体は「対象が存在しない」場合と
+ * 「status!=failed」場合をどちらも `raise exception 'KMB-E807: ...'` の同一経路で扱う
+ * (migration 0033 §2.3 SQL コメント参照 — CAS/lease の実処理には無関係な単純 UPDATE のため、
+ * この分岐そのものは RPC 側の意図的な設計。0019 教訓の対象である CAS/attempts リセットには
+ * 触れない)。しかし 04-telephony.md §7.1 D8 契約表は retryCallJob について「E807(failed以外) /
+ * E804(不存在 — RPC 例外を E807 と区別して変換)」を明示的に要求しているため、KMB-E807 の
+ * ケースに限って対象行の存在を追加で SELECT 確認し、存在しなければ E804 へ変換する。
+ *
+ * 【地雷回避】この確認は KMB-E807 のときだけ行う。call_jobs の SELECT RLS
+ * (`call_jobs_admin_select`) は admin 限定 — 非 admin authenticated からの呼び出しは
+ * permission denied (→ KMB-E202) で RPC 自体が失敗するが、もしここで無条件に存在確認を
+ * 行うと「RLS で行が見えない」を「行が存在しない」と誤認し、正しい E202 を E804 に
+ * すり替えてしまう。KMB-E807 のみに絞ることでこの誤変換を避ける
+ * (admin/service は SELECT RLS を通過 or バイパスするため正しく判定できる)。
+ */
+async function callJobRowExists(client: SupabaseClient, jobId: string): Promise<Result<boolean>> {
+  const { data, error } = await client.from("call_jobs").select("id").eq("id", jobId).maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: data !== null };
+}
+
+/**
+ * migration 0033 `call_job_retry` RPC (§2.3 再実行 — `failed` → `pending` のみ許可)。
+ * RPC が成功すればそのまま返す。RPC が KMB-E807 で失敗した場合は `callJobRowExists` で
+ * 対象行の存在を確認し、存在しなければ E804 (04-telephony.md §7.1 D8 契約表) へ変換する。
+ * 存在すれば (= 本当に failed 以外) そのまま E807 を返す。存在確認クエリ自体が失敗した場合、
+ * および KMB-E807 以外のエラー (E202 の permission denied 等) は (握り潰さず) 元のエラーを
+ * そのまま `pgErrorToResult` で変換する — 存在有無を確定できないまま KMB-E804 を騙ることはしない。
+ */
+export async function retryCallJobRpc(client: SupabaseClient, jobId: string): Promise<Result<CallJobStatus>> {
+  const { data, error } = await client.rpc("call_job_retry", { p_job_id: jobId });
+  if (!error) return { ok: true, value: data as CallJobStatus };
+
+  const mapped = pgErrorToResult(error);
+  if (mapped.code !== "KMB-E807") return mapped;
+
+  const existsResult = await callJobRowExists(client, jobId);
+  if (existsResult.ok && existsResult.value === false) {
+    return { ok: false, code: "KMB-E804", detail: `通話ジョブが見つかりません: ${jobId}` };
+  }
+  return mapped;
+}
+
+export type DueCallJobRow = { id: string };
+
+/**
+ * POST /api/jobs/telephony (§7.3) の due job 選定: 非終端 status かつ lease 未保持/失効の
+ * ジョブを created_at 昇順で最大 limit 件返す。ここで返る id は「候補」に過ぎず、実際の
+ * 排他取得 (CAS) は advanceCallJob → acquireCallJobLease の FOR UPDATE 行ロックが担う
+ * (同時起床した複数プロセスが同じ候補を拾っても、後着はここで held/exhausted に落ちるだけで
+ * 二重処理にはならない)。
+ */
+export async function listDueCallJobs(client: SupabaseClient, limit: number): Promise<Result<DueCallJobRow[]>> {
+  const nowIso = new Date().toISOString();
+  const { data, error } = await client
+    .from("call_jobs")
+    .select("id")
+    .in("status", [...CALL_JOB_RUNNABLE_STATUSES])
+    .or(`lease_expires_at.is.null,lease_expires_at.lt.${nowIso}`)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as DueCallJobRow[] };
 }

@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { getSessionAndClient } from "@/lib/supabase/session";
 import type { ExecutionContext, Result } from "@/modules/platform/contracts";
 import { normalizeJpPhoneToE164 } from "@/modules/platform/text";
 import type { SettingsValue } from "@/modules/settings/contracts";
@@ -26,27 +27,39 @@ import {
   buildRecordedAckTwiml,
   buildVoicemailTwiml,
 } from "./internal/twiml";
+import { advanceCallJob as advanceCallJobStage, runTelephonyJobBatch } from "./internal/worker";
 import {
   type CallStatusCallbackPatch,
   findCallByCallSid,
   insertCallJobIdempotent,
   insertRecordingOnConflictDoNothing,
+  retryCallJobRpc,
   updateCallHandling,
   updateCallOnStatusCallback,
   upsertCallOnConflictDoNothing,
 } from "./repository";
 
 /**
+ * POST /api/jobs/telephony (§7.3) の after() から呼ばれる batch runner。distribution
+ * (`runPublishWorkerBatch`) と同じ理由で facade から re-export する — route.ts は
+ * module-contracts.md §2 の ESLint 境界により telephony/internal・telephony/repository を
+ * 直 import できないため、facade 経由でのみ到達できる。
+ */
+export { runTelephonyJobBatch };
+
+/**
  * telephony モジュールの公開 facade (契約書 §D8 / docs/design/crm-suite/04-telephony.md §7.1〜§7.2)。
  *
- * 本 Issue (#56 surface — 着信 webhook route + facade) の実装範囲: handleInboundCall /
+ * #56 (surface — 着信 webhook route + facade) の実装範囲: handleInboundCall /
  * handleCallStatus / registerRecording (D8 契約メソッド) + handleDialResult /
  * handleRecorded (契約外拡張 — §7.2、?step=dial_result / ?step=recorded から呼ばれる)。
- * advanceCallJob / retryCallJob / createRecordingPlaybackUrl は D8 のシグネチャのみ満たす
- * 明示スタブ (実体は #57/#58/#59)。
+ * #57 (本 Issue) で advanceCallJob / retryCallJob を実装した (lease/commit/retry の
+ * 制御フローのみ — 4 ステージの実処理は internal/worker.ts の STAGE_HANDLERS 経由で #58 が担う)。
+ * createRecordingPlaybackUrl は引き続き D8 のシグネチャのみ満たす明示スタブ (実体は #58/#59)。
  *
- * 全メソッドは ctx: ExecutionContext を必須で受け取る (D8 のシグネチャ通り ctx? ではない —
- * webhook route は anon 起点のため常に { mode: 'service' } で呼ぶ)。
+ * handleInboundCall/handleCallStatus/registerRecording/advanceCallJob は ctx: ExecutionContext
+ * を必須で受け取る (D8 のシグネチャ通り ctx? ではない — webhook route は anon 起点のため常に
+ * { mode: 'service' } で呼ぶ)。retryCallJob は D8 どおり ctx を取らない (admin セッション専用)。
  */
 export interface TelephonyFacade {
   handleInboundCall(input: InboundCallWebhook, ctx: ExecutionContext): Promise<Result<{ twiml: string }>>;
@@ -55,10 +68,10 @@ export interface TelephonyFacade {
     ctx: ExecutionContext,
   ): Promise<Result<void>>;
   registerRecording(input: RecordingWebhook, ctx: ExecutionContext): Promise<Result<{ call_job_id: string }>>;
-
-  // ---- D8 契約メソッドのうち本 Issue のスコープ外 (#57/#58/#59) — 型のみ宣言 ----
   advanceCallJob(callJobId: string, ctx: ExecutionContext): Promise<Result<{ status: CallJobStatus }>>;
   retryCallJob(callJobId: string): Promise<Result<void>>;
+
+  // ---- D8 契約メソッドのうち本 Issue のスコープ外 (#58/#59) — 型のみ宣言 ----
   createRecordingPlaybackUrl(recordingId: string): Promise<Result<{ url: string; expires_at: string }>>;
 
   // ---- 契約外拡張 (facade.ts 内専用。04-telephony.md §7.2。他モジュールからの呼び出し禁止) ----
@@ -302,12 +315,30 @@ export const telephonyFacade: TelephonyFacade = {
     return { ok: true, value: { call_job_id: jobResult.value.row.id } };
   },
 
-  async advanceCallJob() {
-    return { ok: false, code: "KMB-E901", detail: "not implemented (#57 で実装)" };
+  async advanceCallJob(callJobId, ctx) {
+    // 薄いラッパー: ctx → client 解決のみ担当し、lease/commit 制御フローの実体は
+    // internal/worker.ts の advanceCallJob (STAGE_HANDLERS 経由の 1 呼び出し=1 ステージ) に委ねる
+    // (04-telephony.md §6.5 共通則 / §7.1 D8)。
+    const clientResult = await resolveDbClient(ctx);
+    if (!clientResult.ok) return clientResult;
+    return advanceCallJobStage(clientResult.value, callJobId);
   },
-  async retryCallJob() {
-    return { ok: false, code: "KMB-E901", detail: "not implemented (#57 で実装)" };
+
+  async retryCallJob(callJobId) {
+    // D8 どおり ctx を取らない (admin セッション専用)。RPC 自体が is_admin_or_service() で
+    // ガードされるため、ここでのロール判定は user 有無 (KMB-E201) のみでよい (§7.1)。
+    try {
+      const { supabase, user } = await getSessionAndClient();
+      if (!user) return { ok: false, code: "KMB-E201" };
+
+      const result = await retryCallJobRpc(supabase, callJobId);
+      if (!result.ok) return result;
+      return { ok: true, value: undefined };
+    } catch (err) {
+      return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+    }
   },
+
   async createRecordingPlaybackUrl() {
     return { ok: false, code: "KMB-E901", detail: "not implemented (#58/#59 で実装)" };
   },
