@@ -1,15 +1,16 @@
 import { after, NextResponse } from "next/server";
 
 import { isJobsSecretConfigured } from "@/lib/env";
+import { runTelephonyJobBatch } from "@/modules/telephony/facade";
 
 /**
  * 契約書 §7.2 / 00-overview.md §3.6: pg_cron → net.http_post → 本エンドポイント
  * (shared secret ヘッダ x-jobs-secret)。即 202 応答し、next/server の after() で本体を
  * 実行する (pg_net の数秒 timeout に依存しない)。
  * ドメインイベント: telephony.job.due (通話ジョブの lease 型ステージ機械 —
- * ダウンロード→転写→AI 解析→CRM 連携。04-telephony が canonical)。
- * TODO(telephony フェーズ): TelephonyFacade 実装後に after() 内から呼び出す
- * (現時点では telephony facade 未実装のため import せず no-op — 依存方向を汚さない)。
+ * ダウンロード→転写→AI 解析→CRM 連携。04-telephony §6.5/§7.3 が canonical)。
+ * #57 で runTelephonyJobBatch (internal/worker.ts、facade 経由で re-export) を配線した:
+ * due job 最大 2 件を created_at 昇順で直列に advanceCallJob へ渡す (§7.3)。
  */
 export const maxDuration = 300;
 
@@ -25,7 +26,8 @@ export async function POST(request: Request) {
 
   after(async () => {
     try {
-      // TODO(telephony フェーズ): runTelephonyJobBatch() 相当を呼び出す。
+      const result = await runTelephonyJobBatch();
+      console.log(`/api/jobs/telephony: ${result.processed} 件処理しました`);
     } catch (err) {
       console.error(
         "KMB-E901: /api/jobs/telephony の after() 実行で例外が発生しました",
