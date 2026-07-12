@@ -13,6 +13,10 @@ export default defineConfig({
       // 条件下でのみ no-op になる。プレーン Node で動く Vitest ではそのままだと
       // 例外を投げるため、テスト実行時のみ no-op スタブに差し替える (本番ビルドには無影響)。
       "server-only": path.resolve(dirname, "./tests/mocks/server-only.ts"),
+      // root layout (src/app/layout.tsx) がモジュールスコープで next/font/google を呼ぶため、
+      // Next.js ビルドを経由しない素の Vitest では import 時に TypeError になる
+      // (05-site-settings.md §12.1)。server-only と同じ手法でテスト実行時のみスタブに差し替える。
+      "next/font/google": path.resolve(dirname, "./tests/mocks/next-font-google.ts"),
     },
   },
   // tsconfig.json の compilerOptions.jsx は Next.js の SWC が処理する前提で "preserve"

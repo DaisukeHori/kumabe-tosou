@@ -1,3 +1,6 @@
+import { unstable_cache } from "next/cache";
+
+import { createSupabasePublicClient } from "@/lib/supabase/public";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
@@ -5,6 +8,13 @@ import type { ExecutionContext, Result } from "@/modules/platform/contracts";
 
 import { SETTINGS_SCHEMAS, type SettingsKey, type SettingsValue } from "./contracts";
 import { getSettingRow, upsertSetting } from "./repository";
+
+/**
+ * unstable_cache のタグ (契約外拡張、05-site-settings.md §4.1)。失効は書き込み側 Server
+ * Action (submitSettingsForm) の責務 — facade 自身は revalidate しない規約 (page-media/pricing
+ * と同じ役割分担)。
+ */
+export const SITE_SETTINGS_CACHE_TAG = "site_settings";
 
 /**
  * settings モジュールの公開 facade (契約書 §5)。
@@ -44,6 +54,39 @@ export interface SettingsMeta<K extends SettingsKey> {
 
 export interface SettingsFacadeExtended extends SettingsFacade {
   getWithMeta<K extends SettingsKey>(key: K): Promise<Result<SettingsMeta<K>>>;
+  /**
+   * 公開文脈 (generateMetadata / (site) layout 本体 / GET /icon) 用の読み取り専用メソッド
+   * (契約外拡張、05-site-settings.md §4.1)。§5 昇格は 07-contracts-delta v1.1「裁定記録」#14 で
+   * 却下済み — 呼び出し元は app 層のみで getWithMeta と同格の拡張規約に従う。
+   *
+   * - createSupabasePublicClient (anon・cookie 非依存) のみを使う。**createSupabaseServerClient
+   *   (cookies() 依存) は絶対に使わない** — unstable_cache 内で cookies() 依存 client を使うと
+   *   Next.js が実行時エラーにし、本番 /shop の fallback 事故 (git log: 「fix: /shopのfallback
+   *   の真因を修正 unstable_cache内でcookie依存clientを使っていた」、d3c1b47 以前の一連コミット)
+   *   と同型の障害を再現することになる。
+   * - 行なし = { ok: true, value: null } (未設定は正常系。§2.4 の「差分のみ DB」意味論 — E901 にしない)
+   * - parse 失敗 / DB 接続障害 = { ok: false, code: "KMB-E901" } (呼び出し側 = resolveSiteMeta /
+   *   GET /icon が fallback 値で degrade する)
+   */
+  getPublicValue<K extends SettingsKey>(key: K): Promise<Result<SettingsValue<K> | null>>;
+}
+
+/**
+ * キャッシュ非経由の生フェッチ (getPublicValue の unstable_cache 内部実装専用)。
+ * 行なしは null を返す (JSON-safe な正常値として unstable_cache を素通りさせる)。
+ * parse 失敗は throw し、呼び出し側 (getPublicValue) が KMB-E901 に変換する
+ * (page-media/facade.ts の fetchResolvedSlotsRaw と同じ「素の fetch 関数は throw、
+ * facade メソッドが Result に変換する」役割分担)。
+ */
+async function fetchPublicSettingRaw<K extends SettingsKey>(key: K): Promise<SettingsValue<K> | null> {
+  const supabase = createSupabasePublicClient();
+  const row = await getSettingRow(supabase, key);
+  if (!row) return null;
+  const parsed = SETTINGS_SCHEMAS[key].safeParse(row.value);
+  if (!parsed.success) {
+    throw new Error(`site_settings.${key} の値が契約 (SETTINGS_SCHEMAS) と一致しません`);
+  }
+  return parsed.data as SettingsValue<K>;
 }
 
 export const settingsFacade: SettingsFacadeExtended = {
@@ -96,6 +139,21 @@ export const settingsFacade: SettingsFacadeExtended = {
           isUnset: false,
         },
       };
+    } catch (err) {
+      return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
+  async getPublicValue(key) {
+    try {
+      // page-media/pricing の前例 (§4.1 コメント) にならい、呼び出しごとに新しい unstable_cache
+      // ラッパを生成する。Next.js の unstable_cache は keyParts が同一なら同一キャッシュエントリを
+      // 引くため、関数オブジェクト自体が呼び出しのたびに新規でも実クエリは 1 エントリに収束する。
+      const cached = unstable_cache(() => fetchPublicSettingRaw(key), ["site_settings", key], {
+        tags: [SITE_SETTINGS_CACHE_TAG],
+      });
+      const value = await cached();
+      return { ok: true, value };
     } catch (err) {
       return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
     }

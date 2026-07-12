@@ -34,6 +34,13 @@ import {
  */
 export interface MediaFacade {
   getPublicUrl(mediaId: string): Result<string>;
+  /**
+   * 公開 "media" バケットの JPEG レンディション決定論 URL ({mediaId}.jpg、契約外拡張。
+   * 05-site-settings.md §4.2)。getPublicUrl (webp) と完全に同型の同期・DB 非依存メソッド。
+   * 実体の存在保証はこの関数の責務ではない (呼び出し側 = updateSeoDefaultsAction が保存時に
+   * getJpegRenditionUrl で ensure する。§4.2 注記どおり、既存の非同期 ensure 版とは別メソッドとして共存)。
+   */
+  getPublicJpegUrl(mediaId: string): Result<string>;
   /** IG 用。未生成なら生成 */
   getJpegRenditionUrl(mediaId: string): Promise<Result<string>>;
   /** ai-studio の画像候補提案用 */
@@ -151,6 +158,13 @@ function buildDeterministicPublicUrl(mediaId: string): string {
   return `${base}/storage/v1/object/public/media/${renditionPathFor(mediaId, "webp")}`;
 }
 
+/** getPublicUrl (webp) の JPEG 版。挙動を 1 文字も変えずに拡張子だけ差し替える (§4.2) */
+function buildDeterministicPublicJpegUrl(mediaId: string): string {
+  const env = getEnv();
+  const base = env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "");
+  return `${base}/storage/v1/object/public/media/${renditionPathFor(mediaId, "jpg")}`;
+}
+
 function sanitizeFilenamePrefix(filename: string): string {
   const base = filename.split(/[\\/]/).pop() ?? "upload";
   return base.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
@@ -160,6 +174,14 @@ export const mediaFacade: MediaFacadeExtended = {
   getPublicUrl(mediaId) {
     try {
       return { ok: true, value: buildDeterministicPublicUrl(mediaId) };
+    } catch (err) {
+      return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
+  getPublicJpegUrl(mediaId) {
+    try {
+      return { ok: true, value: buildDeterministicPublicJpegUrl(mediaId) };
     } catch (err) {
       return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
     }

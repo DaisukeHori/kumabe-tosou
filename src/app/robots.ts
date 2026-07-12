@@ -10,7 +10,8 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       // /admin (CMS) と /edit (ビジュアルエディタの編集プレビュー専用ルート) は
       // 検索エンジンに出さない (docs/design/visual-media-editor.md §5.3/§10)。
-      disallow: ["/admin", "/edit"],
+      // /print (sales の印刷専用ルート。署名トークン認証) も同様 (05-site-settings.md §5.5)。
+      disallow: ["/admin", "/edit", "/print"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };
