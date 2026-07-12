@@ -28,6 +28,7 @@ import type { InquiryStatus } from "@/modules/inquiry/contracts";
 import type { InquiryRow } from "@/modules/inquiry/facade";
 
 import { updateInquiryStatusAction } from "./actions";
+import { InquiryLeadButton } from "./InquiryLeadButton";
 
 const STATUS_LABELS: Record<InquiryStatus, string> = {
   new: "未対応",
@@ -113,12 +114,13 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
               <TableHead>種別</TableHead>
               <TableHead>メール</TableHead>
               <TableHead>ステータス</TableHead>
+              <TableHead>リード化</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   該当する問い合わせはありません。
                 </TableCell>
               </TableRow>
@@ -148,6 +150,16 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
                 <TableCell>{item.email}</TableCell>
                 <TableCell>
                   <Badge variant={statusBadgeVariant(item.status)}>{STATUS_LABELS[item.status]}</Badge>
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <InquiryLeadButton
+                    inquiryId={item.id}
+                    name={item.name}
+                    email={item.email}
+                    tel={item.tel}
+                    inquiryType={item.inquiry_type}
+                    body={item.body}
+                  />
                 </TableCell>
               </TableRow>
             ))}
@@ -197,6 +209,17 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
                   </p>
                 )}
                 <p className="whitespace-pre-wrap rounded-lg bg-muted p-3">{openItem.body}</p>
+
+                <div>
+                  <InquiryLeadButton
+                    inquiryId={openItem.id}
+                    name={openItem.name}
+                    email={openItem.email}
+                    tel={openItem.tel}
+                    inquiryType={openItem.inquiry_type}
+                    body={openItem.body}
+                  />
+                </div>
 
                 <div className="mt-2">
                   <label className="mb-1 block text-xs text-muted-foreground">ステータス</label>
