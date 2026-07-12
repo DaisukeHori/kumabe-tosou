@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { zChannel } from "@/modules/platform/contracts";
+import { zChannel, zTaxCategory, zTaxRounding } from "@/modules/platform/contracts";
 import { zContentStatus, zPostKind } from "@/modules/content/contracts";
 import { zPriceOptionKind } from "@/modules/pricing/contracts";
 import { zSourceInputType, zRunStatus } from "@/modules/ai-studio/contracts";
@@ -25,6 +25,7 @@ import {
   zTaskOrigin,
   zTaskStatus,
 } from "@/modules/crm/contracts";
+import { DOC_NO_PREFIX, zDocType, zDocumentStatus, zPaymentInput } from "@/modules/sales/contracts";
 
 /**
  * DB 接続不要の静的検証 (設計書 §11.1 1a: contracts-ddl-parity.test.ts)。
@@ -269,6 +270,63 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
     const expected = [...zTaskOrigin.options].sort();
     const actual = findCheck(checks, "tasks", "origin").sort();
     expect(actual).toEqual(expected);
+  });
+
+  // ---- sales (#48: migration 20260711000026_sales_core.sql) ----
+  it("documents.doc_type ↔ sales の zDocType", () => {
+    const expected = [...zDocType.options].sort();
+    const actual = findCheck(checks, "documents", "doc_type").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("documents.status ↔ sales の zDocumentStatus", () => {
+    const expected = [...zDocumentStatus.options].sort();
+    const actual = findCheck(checks, "documents", "status").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("documents.tax_rounding ↔ platform の zTaxRounding", () => {
+    const expected = [...zTaxRounding.options].sort();
+    const actual = findCheck(checks, "documents", "tax_rounding").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("documents.billing_suffix ↔ 固定 2 値 ('様','御中') (§5.2 zUpdateDraftDocumentInput/zReviseDocumentInput の billing_suffix と同一集合。専用 named export が無いため固定値比較)", () => {
+    const actual = findCheck(checks, "documents", "billing_suffix").sort();
+    expect(actual).toEqual(["御中", "様"].sort());
+  });
+
+  it("document_lines.tax_category ↔ platform の zTaxCategory", () => {
+    const expected = [...zTaxCategory.options].sort();
+    const actual = findCheck(checks, "document_lines", "tax_category").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("payments.method ↔ sales の zPaymentInput.shape.method", () => {
+    const expected = [...zPaymentInput.shape.method.options].sort();
+    const actual = findCheck(checks, "payments", "method").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("DOC_NO_PREFIX ↔ migration 20260711000022 の document_number_next RPC の case 式 (quote→Q / order→J / delivery→D / invoice→I。二重定義の乖離検知 — 00-overview §3.4)", () => {
+    const caseBody = /v_prefix\s*:=\s*case p_doc_type([\s\S]*?)end;/.exec(sql)?.[1];
+    expect(caseBody, "document_number_next の v_prefix case 式が見つかりません").toBeDefined();
+    const extracted: Record<string, string> = {};
+    const whenRegex = /when '(\w+)' then '([A-Z])'/g;
+    let whenMatch: RegExpExecArray | null;
+    while ((whenMatch = whenRegex.exec(caseBody as string))) {
+      extracted[whenMatch[1]] = whenMatch[2];
+    }
+    expect(extracted).toEqual(DOC_NO_PREFIX);
+  });
+
+  it("document_lines に税額カラムが存在しない (裁定 J5: 明細行に税額を持たせない構造的強制。tax_category 以外に 'tax' を含む識別子があれば税額カラム混入の回帰)", () => {
+    const body = /create table document_lines \(([\s\S]*?)\n\);/.exec(sql)?.[1];
+    expect(body, "document_lines の create table ブロックが見つかりません").toBeDefined();
+    const taxIdentifiers = new Set(
+      ((body as string).match(/\btax\w*/gi) ?? []).map((s) => s.toLowerCase()),
+    );
+    expect([...taxIdentifiers]).toEqual(["tax_category"]);
   });
 
   /**
