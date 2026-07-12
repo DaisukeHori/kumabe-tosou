@@ -211,6 +211,9 @@ export async function issueDocumentNumber(
 export type CreateDraftDocumentInput = {
   doc_type: DocType;
   deal_id: string;
+  /** 派生元 (deriveDocument — #49)。通常作成 (createDraftDocument/createDraftQuoteFromEstimate)
+   *  は null (documents.source_document_id は起点 = null — migration 0026 コメント参照) */
+  source_document_id: string | null;
   billing_name: string;
   billing_suffix: "様" | "御中";
   billing_address: string | null;
@@ -218,6 +221,11 @@ export type CreateDraftDocumentInput = {
   site_address: string | null;
   notes: string | null;
   issue_date: string | null;
+  /** 取引年月日 (deriveDocument — #49、02-sales §4.4「transaction_date の引継ぎ」)。
+   *  通常作成 (createDraftDocument/createDraftQuoteFromEstimate) は null (draft で編集可)。
+   *  documents への column grant は insert 側は列制限なし (migration 0026 L146) のため
+   *  facade からそのまま INSERT できる。 */
+  transaction_date: string | null;
   valid_until: string | null;
   tax_rounding: "floor" | "round" | "ceil";
   lines: readonly DocumentLineInput[];
@@ -241,6 +249,7 @@ export async function createDraftDocument(
     .insert({
       doc_type: input.doc_type,
       deal_id: input.deal_id,
+      source_document_id: input.source_document_id,
       billing_name: input.billing_name,
       billing_suffix: input.billing_suffix,
       billing_address: input.billing_address,
@@ -248,6 +257,7 @@ export async function createDraftDocument(
       site_address: input.site_address,
       notes: input.notes,
       issue_date: input.issue_date,
+      transaction_date: input.transaction_date,
       valid_until: input.valid_until,
       tax_rounding: input.tax_rounding,
       subtotal_jpy: input.totals.subtotal_jpy,

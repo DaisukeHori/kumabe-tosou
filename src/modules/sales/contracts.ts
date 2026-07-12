@@ -236,6 +236,7 @@ export const zDocumentListFilter = z.object({
   deal_id: z.string().uuid().nullable(),
   q: z.string().max(80).nullable(),          // doc_no / billing_name 部分一致
 }).strict();
+export type DocumentListFilter = z.infer<typeof zDocumentListFilter>;
 
 /** 入金記録入力は zPaymentInput (07 §4.11 canonical) をそのまま使用 */
 

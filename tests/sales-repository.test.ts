@@ -274,6 +274,7 @@ describe("createDraftDocument (draft 新規作成の DB アクセス層)", () =>
   const input: CreateDraftDocumentInput = {
     doc_type: "quote",
     deal_id: DEAL_ID,
+    source_document_id: null,
     billing_name: "サンプル建設",
     billing_suffix: "様",
     billing_address: null,
@@ -281,6 +282,7 @@ describe("createDraftDocument (draft 新規作成の DB アクセス層)", () =>
     site_address: null,
     notes: null,
     issue_date: null,
+    transaction_date: null,
     valid_until: null,
     tax_rounding: "floor",
     lines: [lineInput],
