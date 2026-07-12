@@ -1,3 +1,6 @@
+import type { Metadata } from "next";
+import { GoogleAnalytics } from "@next/third-parties/google";
+
 import { PageTransition } from "@/components/motion/page-transition";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
@@ -5,27 +8,44 @@ import { CustomCursor } from "@/components/motion/custom-cursor";
 import { SectionIndicator } from "@/components/motion/section-indicator";
 import { PaperNoise } from "@/components/motion/paper-noise";
 import { pageMediaFacade } from "@/modules/page-media/facade";
+import { buildSiteMetadata, resolveSiteMeta } from "@/app/_lib/site-metadata";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
-const SITE_DESCRIPTION =
-  "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。隈部塗装(大分県豊後高田市)。";
 
-const LOCAL_BUSINESS_JSON_LD = {
-  "@context": "https://schema.org",
-  "@type": "LocalBusiness",
-  name: "隈部塗装",
-  description: SITE_DESCRIPTION,
-  url: SITE_URL,
-  address: {
-    "@type": "PostalAddress",
-    addressRegion: "大分県",
-    addressLocality: "豊後高田市",
-    addressCountry: "JP",
-  },
-  areaServed: "全国",
-  priceRange: "¥¥",
-};
+/**
+ * LocalBusiness JSON-LD の生成 (canonical: 05-site-settings.md §5.2 末尾)。
+ * description のみ resolveSiteMeta() の解決結果 (DB seo_defaults.description ?? fallback) を
+ * 受け取り、社名・住所等は §0.5 のとおりハードコード維持 (DB 化しない)。
+ */
+function buildLocalBusinessJsonLd(description: string) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: "隈部塗装",
+    description,
+    url: SITE_URL,
+    address: {
+      "@type": "PostalAddress",
+      addressRegion: "大分県",
+      addressLocality: "豊後高田市",
+      addressCountry: "JP",
+    },
+    areaServed: "全国",
+    priceRange: "¥¥",
+  };
+}
+
+/**
+ * 公開ページのみ DB (seo_defaults/analytics/branding) 駆動でメタを解決する
+ * (root layout `src/app/layout.tsx` は変更不可 — 裁定 J12、§5.2)。
+ * title/description/openGraph/twitter/icons を毎回全量返却する (buildSiteMetadata 参照 —
+ * Next.js のセグメント間マージがトップレベルフィールド単位の浅い置換のため、部分返却は
+ * フィールド欠落回帰になる)。
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  return buildSiteMetadata(await resolveSiteMeta());
+}
 
 /*
   公開サイト (/admin/** を除く全ページ) 専用のレイアウト。
@@ -47,7 +67,13 @@ export default async function SiteLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const textsResult = await pageMediaFacade.resolveAllTexts();
+  // resolveAllTexts と resolveSiteMeta は互いに依存しない独立読み取りのため並列化する
+  // (§5.1 コード例どおり generateMetadata と本体の 2 箇所呼び出しは許容 — unstable_cache が
+  // 実クエリを 1 エントリに収束させる)。
+  const [textsResult, meta] = await Promise.all([
+    pageMediaFacade.resolveAllTexts(),
+    resolveSiteMeta(),
+  ]);
   const texts = textsResult.ok ? textsResult.value : {};
 
   return (
@@ -55,7 +81,7 @@ export default async function SiteLayout({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(LOCAL_BUSINESS_JSON_LD),
+          __html: JSON.stringify(buildLocalBusinessJsonLd(meta.description)),
         }}
       />
       <PaperNoise />
@@ -67,6 +93,10 @@ export default async function SiteLayout({
       {/* 署名演出オーバーレイ (M1)。/edit iframe に載せないため (site) 限定 */}
       <CustomCursor />
       <SectionIndicator />
+      {/* GA4 タグ注入。(site) route group のみに存在するため /admin・/edit・/print には
+          構造的に載らない (§5.1)。meta.gaId は resolveGaId により VERCEL_ENV==="production"
+          のときのみ非 null (§5.1 v1.1 是正)。 */}
+      {meta.gaId ? <GoogleAnalytics gaId={meta.gaId} /> : null}
     </>
   );
 }
