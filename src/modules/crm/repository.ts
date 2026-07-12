@@ -373,6 +373,11 @@ export type CustomerListQuery = {
   q: string | null;
   lifecycle: CustomerLifecycle | "all" | "active";
   includeMerged: boolean;
+  // #44 (crm 画面) 実装時に追加。zCustomerListFilter (01-crm.md §5.2 の canonical 完全定義) には
+  // company_id が存在しない — canonical スキーマを崩さず「会社 Sheet の所属顧客一覧」を実現するため
+  // repository 内部専用のフィルタとして追加した (型のみの内部拡張。契約書改訂は不要という plan の
+  // 判断基準どおり)。省略時は undefined 扱いでフィルタなし (既存呼び出し元は無変更で動作)。
+  companyId?: string | null;
 };
 
 export async function listCustomersPage(
@@ -394,6 +399,9 @@ export async function listCustomersPage(
   }
   if (!filter.includeMerged) {
     query = query.is("merged_into_customer_id", null);
+  }
+  if (filter.companyId) {
+    query = query.eq("company_id", filter.companyId);
   }
   if (filter.q) {
     const escaped = escapeLikePattern(filter.q);
@@ -763,7 +771,16 @@ export async function getDealsByIds(client: SupabaseClient, ids: string[]): Prom
   return { ok: true, value: (data ?? []) as DealRow[] };
 }
 
-export type DealListQuery = { q: string | null; stage: DealStage | "all" | "open" };
+export type DealListQuery = {
+  q: string | null;
+  stage: DealStage | "all" | "open";
+  // #44 (crm 画面) 実装時に追加。zDealListFilter (01-crm.md §5.2 canonical 完全定義) には
+  // customer_id が存在しない — canonical スキーマを崩さず「顧客詳細ページの進行中案件リスト」
+  // (§8.2) を実現するため repository 内部専用のフィルタとして追加 (型のみの内部拡張。
+  // listCustomersPage.companyId と同型の判断基準)。省略時は undefined 扱いでフィルタなし
+  // (既存呼び出し元は無変更で動作)。
+  customerId?: string | null;
+};
 
 /** 非終端 7 ステージ (§4.2)。facade #43 の集計 (open_deal_count / KPI / カンバン列) も共用する。 */
 export const NON_TERMINAL_STAGES: DealStage[] = [
@@ -794,6 +811,9 @@ export async function listDealsPage(
     // 絞り込みなし
   } else {
     query = query.eq("stage", filter.stage);
+  }
+  if (filter.customerId) {
+    query = query.eq("customer_id", filter.customerId);
   }
   if (filter.q) {
     const escaped = escapeLikePattern(filter.q);
@@ -1220,6 +1240,12 @@ export type TaskListQuery = {
   dueOnFrom: string | null;
   dueOnTo: string | null;
   dueOnIsNull: boolean | null;
+  // #44 (crm 画面) 実装時に追加。zTaskListFilter (01-crm.md §5.2 canonical 完全定義) には
+  // customer_id/deal_id が存在しない — canonical スキーマを崩さず「顧客/案件詳細ページの open
+  // タスクリスト」(§8.2/§8.3) を実現するため repository 内部専用のフィルタとして追加
+  // (型のみの内部拡張。listCustomersPage.companyId と同型の判断基準)。
+  customerId?: string | null;
+  dealId?: string | null;
 };
 
 export async function listTasksPage(
@@ -1239,6 +1265,8 @@ export async function listTasksPage(
   if (filter.dueOnTo !== null) query = query.lte("due_on", filter.dueOnTo);
   if (filter.dueOnIsNull === true) query = query.is("due_on", null);
   else if (filter.dueOnIsNull === false) query = query.not("due_on", "is", null);
+  if (filter.customerId) query = query.eq("customer_id", filter.customerId);
+  if (filter.dealId) query = query.eq("deal_id", filter.dealId);
 
   const cursor = decodeCreatedAtCursor(pagination.cursor);
   if (cursor) {

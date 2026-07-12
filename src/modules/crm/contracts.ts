@@ -438,6 +438,7 @@ export type DealListItem = {
   title: string;
   customer_id: string;
   customer_name: string;
+  company_id: string | null;   // #44 追加 (UI の編集フォームが company_id を EntityPicker の初期値として必要とするため — company_name のみでは id が復元できず編集保存時に無言で会社リンクが外れる不整合を防ぐ)
   company_name: string | null;
   stage: DealStage;
   amount_jpy: number | null;
@@ -468,7 +469,13 @@ export type TimelineItem = {
   occurred_at: string;
   title: string;
   body: string | null;
-  payload: ActivityPayload<ActivityType>;  // repository が ACTIVITY_PAYLOAD_SCHEMAS で parse 済み (KMB-E604 検出)
+  // facade が ACTIVITY_PAYLOAD_SCHEMAS で parse 済み。parse 失敗時は payload=null かつ payload_error に
+  // メッセージが入る「行単位フォールバック」(01-crm.md §5.4 行1071/§8.5 行1390「表示できない記録」
+  // フォールバック描画の要求 — 1 行の不整合でページ全体を KMB-E604 失敗にしない。実装判断根拠は
+  // facade.ts の listTimeline 実装コメント参照)。UI は payload_error !== null を「表示できない記録」の
+  // トリガーとして扱うこと。
+  payload: ActivityPayload<ActivityType> | null;
+  payload_error: string | null;
   ref_table: string | null;
   ref_id: string | null;
   editable: boolean;                 // activity_type === 'note'
