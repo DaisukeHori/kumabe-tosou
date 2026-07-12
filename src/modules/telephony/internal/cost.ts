@@ -34,3 +34,19 @@ export function estimateTwilioCostMicroUsd(durationSeconds: number, handling: Ca
   }
   return totalMicroUsd;
 }
+
+/**
+ * µUSD → ¥ 表示レート (04-telephony.md §2.6 / §6.6)。表示専用の定数であり DB には保存しない
+ * (µUSD (bigint) のみを保存する既存規約 — JPY 整数と混在しない)。
+ */
+export const USD_JPY_DISPLAY_RATE = 150;
+
+/**
+ * activity 本文 (§6.6) 用の概算コスト ¥ 換算。
+ * `(twilioCostMicroUsd + aiCostMicroUsd) × USD_JPY_DISPLAY_RATE / 1_000_000` を四捨五入した
+ * 整数円を返す (「概算コスト」注記付きで表示する — 請求確定額ではない)。
+ */
+export function formatCostEstimateJpy(twilioCostMicroUsd: number, aiCostMicroUsd: number): number {
+  const totalMicroUsd = twilioCostMicroUsd + aiCostMicroUsd;
+  return Math.round((totalMicroUsd * USD_JPY_DISPLAY_RATE) / 1_000_000);
+}

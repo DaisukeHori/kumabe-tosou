@@ -8,7 +8,6 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import type { ExecutionContext, Result } from "@/modules/platform/contracts";
 import { normalizeJpPhoneToE164 } from "@/modules/platform/text";
-import type { SettingsValue } from "@/modules/settings/contracts";
 import { settingsFacade } from "@/modules/settings/facade";
 
 import type {
@@ -20,6 +19,7 @@ import type {
 } from "./contracts";
 import { isWithinBusinessHours } from "./internal/business-hours";
 import { estimateTwilioCostMicroUsd } from "./internal/cost";
+import { DEFAULT_TELEPHONY_SETTINGS, type TelephonySettings } from "./internal/settings-defaults";
 import {
   buildAfterHoursTwiml,
   buildForwardTwiml,
@@ -78,22 +78,6 @@ export interface TelephonyFacade {
   handleDialResult(input: DialResultWebhook, ctx: ExecutionContext): Promise<Result<{ twiml: string }>>;
   handleRecorded(input: { CallSid: string }, ctx: ExecutionContext): Promise<Result<{ twiml: string }>>;
 }
-
-type TelephonySettings = SettingsValue<"telephony">;
-
-/** telephony 設定未取得時の既定値 (§6.1 手順 3: 「ゼロ設定でも壊れない」— 転送なし・同意 ON・既定文言・120 秒)。 */
-const DEFAULT_TELEPHONY_SETTINGS: TelephonySettings = {
-  phone_number_e164: null,
-  twilio_number_sid: null,
-  forward_to_e164: null,
-  consent_announcement_enabled: true,
-  consent_announcement_text: null,
-  in_hours_greeting_text: null,
-  after_hours_greeting_text: null,
-  voicemail_max_seconds: 120,
-  delete_twilio_recording_after_download: true,
-  max_processing_minutes: 30,
-};
 
 /** statusCallback の CallStatus のうち「通話終了」を意味する値 (§6.3)。 */
 const TERMINAL_CALL_STATUSES = new Set(["completed", "busy", "no-answer", "failed", "canceled"]);
