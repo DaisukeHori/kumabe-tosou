@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createSelection } from "@/app/admin/calendar/calendar-grid";
+import { createSelection, shouldCancelDragOnEscape } from "@/app/admin/calendar/calendar-grid";
 
 /**
  * canonical: GitHub Issue #95 設計 §F。
@@ -52,5 +52,36 @@ describe("createSelection", () => {
     // beginCreate は snapDownToHalfHour 済みの値を渡す想定だが、純関数自体は未丸めの入力も
     // 安全に floor する (契約の頑健性)
     expect(createSelection(555, 555)).toEqual({ startMinutes: 540, durationMinutes: 30 });
+  });
+});
+
+/**
+ * canonical: Issue #95 敵対的レビュー2件が独立に指摘した MAJOR バグの回帰防止。
+ *
+ * Esc キャンセルを全 DragKind (tray/move/resize/create) に適用すると、keydown (Esc) が
+ * pointerup と非同期に dragState を null 化するため、「ボタンを離す前に Esc → 別ブロック上で
+ * ボタンを離す」という操作順で handleBlockPointerUp の「dragState が無い = 単純クリック」分岐に
+ * 落ち、無関係なブロックの詳細ダイアログが誤って開いてしまう回帰を招く。
+ * 修正方針は Issue 自身が代替案として提示している「Esc キャンセルは create 限定」。
+ *
+ * shouldCancelDragOnEscape は calendar-grid.tsx の handleKeyDown が実際に使う判定ロジックそのもの
+ * (DOM/pointer/keydown イベントの実機シミュレーションは本リポジトリの Vitest 環境
+ * (environment: "node", jsdom 未導入) では困難なため、条件分岐を純関数として抽出し直接検証する)。
+ */
+describe("shouldCancelDragOnEscape", () => {
+  it("create ドラッグ中は true (Esc でプレビューを閉じてよい)", () => {
+    expect(shouldCancelDragOnEscape("create")).toBe(true);
+  });
+
+  it("move ドラッグ中は false (Esc は無視 — 既存挙動を維持)", () => {
+    expect(shouldCancelDragOnEscape("move")).toBe(false);
+  });
+
+  it("resize ドラッグ中は false (Esc は無視 — 既存挙動を維持)", () => {
+    expect(shouldCancelDragOnEscape("resize")).toBe(false);
+  });
+
+  it("tray (未配置トレイからの外部ドラッグ) 中は false (Esc は無視 — 既存挙動を維持)", () => {
+    expect(shouldCancelDragOnEscape("tray")).toBe(false);
   });
 });

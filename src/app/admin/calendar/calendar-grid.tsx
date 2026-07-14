@@ -163,6 +163,19 @@ export function createSelection(anchorMinutes: number, currentMinutes: number): 
   return { startMinutes, durationMinutes: endMinutes - startMinutes };
 }
 
+/**
+ * Esc キー押下時に dragState をキャンセルしてよいかを判定する純関数 (#95 敵対的レビュー指摘の修正)。
+ *
+ * 【地雷】create 以外 (tray/move/resize) では絶対に true を返してはならない。keydown は pointerup と
+ * 非同期な別イベントであり、「ボタンを離す前に Esc」→「別ブロック上でボタンを離す」という操作順が起こると、
+ * handleBlockPointerUp の `!dragState` = 単純クリック分岐に落ちて無関係なブロックの詳細ダイアログが誤って
+ * 開いてしまう回帰を招く。create は block を持たず、move の対象ブロック識別 (`dragState.drag.block.id`)
+ * にも一切関与しないため、この回帰の経路に該当しない唯一の kind である。
+ */
+export function shouldCancelDragOnEscape(kind: DragKind["kind"]): boolean {
+  return kind === "create";
+}
+
 export const CalendarGrid = forwardRef<CalendarGridHandle, {
   weekStart: DateOnly;
   blocks: WorkBlockView[];
@@ -256,8 +269,10 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
       commitDrag(e.clientX, e.clientY);
     }
     function handleKeyDown(e: KeyboardEvent) {
-      // Esc = ドラッグ中プレビューを閉じる (§10.2「Esc = プレビューを閉じる」。全 DragKind に適用)
+      // Esc = create (空白ドラッグ新規作成) のプレビューのみ閉じる。判定は shouldCancelDragOnEscape
+      // (このファイル冒頭で定義・export、tests/calendar-grid-selection.test.ts で単体検証済み) に委譲する。
       if (e.key !== "Escape") return;
+      if (!dragState || !shouldCancelDragOnEscape(dragState.drag.kind)) return;
       pointerStartRef.current = null;
       setDragState(null);
     }
