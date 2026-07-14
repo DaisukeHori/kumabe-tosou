@@ -16,11 +16,19 @@ import type { DocumentLineInput, DocumentTotals, DocType, PaymentInput } from ".
  * service_role client (service 実行) を facade が選んで渡す。どちらの client を使うかは
  * facade の責務であり、本ファイルは渡された client をそのまま使う (crm/repository.ts §1.1 と同旨)。
  *
- * 本 Issue (#48) のスコープは migration 0026 (documents/document_lines/payments +
- * document_save_draft RPC) のみ。issued_documents / print_tokens / pdf_render_lock /
- * document_revision_stagings 系の DB アクセス (document_finalize_issue 等) は #50 のスコープであり
- * 本ファイルには含まない。deriveDocument・issueDocument 等の業務オーケストレーションは facade (#49)
- * の責務であり、本ファイルは DB アクセスの薄い層に留める (module-contracts.md 一般原則)。
+ * 本ファイルは migration 0026 (documents/document_lines/payments + document_save_draft RPC —
+ * #48) に加え、migration 0027 (issued_documents 台帳 + print_tokens / pdf_render_lock /
+ * document_revision_stagings の補助 3 テーブル — #50) の DB アクセス層を含む: 印刷トークン
+ * 発行/検証 (internal/print-token.ts) と PDF 生成 (internal/pdf.ts) が必要とする薄い層
+ * (print_tokens の INSERT/消費/掃除、pdf_render_lock の CAS 取得/解放、Storage bucket
+ * issued-documents への PDF アップロード)に加え、facade (issueDocument/reissueDocument/
+ * reviseAndReissueDocument/createSignedPdfUrl — #50 UI/オーケストレーション実装分) が使う
+ * document_finalize_issue / document_append_version / document_apply_revision の RPC 呼び出し
+ * ラッパ、document_revision_stagings への INSERT/読み取り/掃除、issued_documents の版検索を含む。
+ *
+ * deriveDocument・issueDocument 等の業務オーケストレーション (税ガード・issuer_snapshot 合成・
+ * PDF 生成の呼び出し順序等) は facade の責務であり、本ファイルは DB アクセスの薄い層に留める
+ * (module-contracts.md 一般原則)。
  */
 
 // ============================================================
@@ -550,4 +558,353 @@ export async function deletePayment(
     return { ok: false, code: "KMB-E621", detail: "入金記録が見つかりません。" };
   }
   return { ok: true, value: undefined };
+}
+
+// ============================================================
+// print_tokens (印刷トークンのワンタイム消費 — migration 0027、02-sales §7.3)
+// service 専用テーブル (RLS ポリシーなし + revoke — 呼び出し側は必ず service client を渡すこと)
+// ============================================================
+
+export type PrintTokenPurpose = "pdf" | "preview";
+
+export type InsertPrintTokenInput = {
+  tokenHash: string; // sha256(トークン全文) の hex 64 桁 (primary key)
+  documentId: string;
+  purpose: PrintTokenPurpose;
+  payload: unknown; // zPrintTokenExtras | null (呼び出し側で parse 済みの値を渡す)
+  expiresAt: string;
+};
+
+export async function insertPrintToken(
+  client: SupabaseClient,
+  input: InsertPrintTokenInput,
+): Promise<Result<void>> {
+  const { error } = await client.from("print_tokens").insert({
+    token_hash: input.tokenHash,
+    document_id: input.documentId,
+    purpose: input.purpose,
+    payload: input.payload,
+    expires_at: input.expiresAt,
+  });
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+export type ConsumedPrintToken = {
+  document_id: string;
+  purpose: PrintTokenPurpose;
+  payload: unknown;
+} | null;
+
+/**
+ * ワンタイム消費 (02-sales §7.3 v1.1): `consumed_at is null and expires_at > now()` の
+ * 1 行だけを UPDATE し、消費できた行を返す。0 行 (消費済み/期限切れ/未登録のいずれか — 詳細を
+ * 区別して返さない設計) は null。expires_at との比較はこの呼び出し時点のサーバ時刻を使う
+ * (RPC 化していないため DB の now() は使えないが、TTL 300 秒に対して往復の時刻差は無視できる)。
+ */
+export async function consumePrintToken(
+  client: SupabaseClient,
+  tokenHash: string,
+): Promise<Result<ConsumedPrintToken>> {
+  const nowIso = new Date().toISOString();
+  const { data, error } = await client
+    .from("print_tokens")
+    .update({ consumed_at: nowIso })
+    .eq("token_hash", tokenHash)
+    .is("consumed_at", null)
+    .gt("expires_at", nowIso)
+    .select("document_id, purpose, payload")
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data as ConsumedPrintToken) ?? null };
+}
+
+/**
+ * 期限切れ行のベストエフォート掃除 (発行時 — 02-sales §7.3「期限切れ行は発行時にベストエフォート
+ * 掃除」)。失敗しても呼び出し側 (internal/print-token.ts) は発行処理自体を継続してよい
+ * (地雷回避の対象外 — 掃除は最適化であり正しさに必須ではない。print_tokens は行数が
+ * 小さく保たれなくても機能上壊れない)。
+ */
+export async function cleanupExpiredPrintTokens(client: SupabaseClient): Promise<Result<void>> {
+  const { error } = await client.from("print_tokens").delete().lt("expires_at", new Date().toISOString());
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+// ============================================================
+// pdf_render_lock (PDF 生成のグローバル直列化 lease — migration 0027、02-sales §7.4-1)
+// singleton 行 (id=1)。advisory lock は pgbouncer のため使わない (canonical明記)。
+// ============================================================
+
+const PDF_RENDER_LOCK_LEASE_SECONDS = 90;
+
+/**
+ * CAS lease 取得: `locked_until < now()` の場合のみ `locked_until = now()+90s` に更新する。
+ * 0 行 (他インスタンス実行中) は value:false — 呼び出し側 (internal/pdf.ts) は KMB-E643 に変換する。
+ */
+export async function acquirePdfRenderLock(
+  client: SupabaseClient,
+  lockedBy: string,
+): Promise<Result<boolean>> {
+  const nowIso = new Date().toISOString();
+  const lockedUntil = new Date(Date.now() + PDF_RENDER_LOCK_LEASE_SECONDS * 1000).toISOString();
+  const { data, error } = await client
+    .from("pdf_render_lock")
+    .update({ locked_until: lockedUntil, locked_by: lockedBy })
+    .eq("id", 1)
+    .lt("locked_until", nowIso)
+    .select("id");
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data?.length ?? 0) > 0 };
+}
+
+/**
+ * lease 返却 (ベストエフォート — 実装計画書「§7.4-1」)。`locked_by` が一致する行のみ返却し、
+ * 他インスタンスが既に次の lease を取得済みの場合は誤って割り込まない。失敗してもクラッシュ時と
+ * 同様に 90 秒で自然失効するため、呼び出し側は結果を無視してよい。
+ */
+export async function releasePdfRenderLock(
+  client: SupabaseClient,
+  lockedBy: string,
+): Promise<Result<void>> {
+  const { error } = await client
+    .from("pdf_render_lock")
+    .update({ locked_until: new Date().toISOString() })
+    .eq("id", 1)
+    .eq("locked_by", lockedBy);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+// ============================================================
+// Storage: issued-documents バケット (migration 0027、02-sales §7.4-6)
+// ============================================================
+
+const ISSUED_DOCUMENTS_BUCKET = "issued-documents";
+
+/**
+ * 発行済み PDF の保存。**upsert:false 固定** (capture.ts の ai-context バケットは upsert:true —
+ * 流用時の地雷。電帳法の不変保存対象のため上書きを許可しない — gap-pdf §5)。
+ * Storage の失敗は pgErrorToResult (Postgres エラー形状) を使わず、KMB-E641 に直接写像する
+ * (StorageError は Postgres エラーコードを持たないため)。
+ */
+export async function uploadIssuedDocumentPdf(
+  client: SupabaseClient,
+  path: string,
+  pdf: Buffer,
+): Promise<Result<void>> {
+  const { error } = await client.storage.from(ISSUED_DOCUMENTS_BUCKET).upload(path, pdf, {
+    contentType: "application/pdf",
+    upsert: false,
+  });
+  if (error) return { ok: false, code: "KMB-E641", detail: error.message };
+  return { ok: true, value: undefined };
+}
+
+// ============================================================
+// document_revision_stagings (訂正発行の staging — migration 0027、02-sales §4.3-B)
+// /print route の payload.staging_id 描画分岐用の読み取りに加え、reviseAndReissueDocument
+// (facade — #50) が使う INSERT / 孤児掃除を含む。
+// ============================================================
+
+export type RevisionStagingRow = {
+  id: string;
+  document_id: string;
+  header: unknown;
+  lines: unknown;
+  subtotal_jpy: number;
+  tax_summary: unknown;
+  total_jpy: number;
+  created_by: string | null;
+  created_at: string;
+};
+
+export async function getRevisionStagingById(
+  client: SupabaseClient,
+  id: string,
+): Promise<Result<RevisionStagingRow | null>> {
+  const { data, error } = await client
+    .from("document_revision_stagings")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data as RevisionStagingRow | null) ?? null };
+}
+
+export type InsertRevisionStagingInput = {
+  documentId: string;
+  header: unknown; // zReviseDocumentInput.omit({lines:true}) 検証済みの値 (facade が渡す)
+  lines: unknown; // zDocumentLineInput[] 検証済みの値
+  totals: DocumentTotals;
+  createdBy: string | null;
+};
+
+export async function insertRevisionStaging(
+  client: SupabaseClient,
+  input: InsertRevisionStagingInput,
+): Promise<Result<{ id: string }>> {
+  const { data, error } = await client
+    .from("document_revision_stagings")
+    .insert({
+      document_id: input.documentId,
+      header: input.header,
+      lines: input.lines,
+      subtotal_jpy: input.totals.subtotal_jpy,
+      tax_summary: input.totals.tax_summary,
+      total_jpy: input.totals.total_jpy,
+      created_by: input.createdBy,
+    })
+    .select("id")
+    .single();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: { id: (data as { id: string }).id } };
+}
+
+/**
+ * 孤児 staging のベストエフォート掃除 (02-sales §6.2 reviseAndReissueDocument 行「冒頭で古い
+ * staging をベストエフォート掃除」)。`document_apply_revision` RPC は成功時に必ず対象 staging 行を
+ * DELETE する (migration 0027) ため、対象 document_id に残っている staging 行は前回の訂正試行の
+ * 失敗 (PDF 生成失敗・プロセス死等) による孤児のみ — 安全に全削除できる (地雷回避の判断:
+ * staging はワーキングコピーであり電帳法の正本 (issued_documents/documents) ではないため
+ * データ損失に当たらない — 実装計画書「未解決点」の安全側解釈)。失敗しても訂正処理自体は継続する
+ * (掃除は最適化であり正しさに必須ではない — cleanupExpiredPrintTokens と同型の縮退)。
+ */
+export async function cleanupOrphanRevisionStagings(
+  client: SupabaseClient,
+  documentId: string,
+): Promise<Result<void>> {
+  const { error } = await client.from("document_revision_stagings").delete().eq("document_id", documentId);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+// ============================================================
+// RPC: document_finalize_issue / document_append_version / document_apply_revision
+// (発行確定・版追加・訂正確定の原子性 — migration 0027、02-sales §6.1/§4.3-A/§4.3-B)
+// いずれも #variable_conflict use_column (0019 教訓) で定義済み。エラーは raise exception の
+// 'KMB-Exxx: …' 埋め込みメッセージを pgErrorToResult が拾う (E103/E620/E621/E622/E627 等)。
+// ============================================================
+
+export type FinalizeOrAppendResult = { issued_document_id: string; doc_version: number; new_updated_at: string };
+
+export type FinalizeDocumentIssueInput = {
+  documentId: string;
+  expectedUpdatedAt: string;
+  docNo: string;
+  issueDate: string;
+  subtotalJpy: number;
+  taxSummary: unknown; // zTaxSummary 検証済み
+  totalJpy: number;
+  issuerSnapshot: unknown; // zIssuerSnapshot 検証済み
+  sha256: string;
+  storagePath: string;
+  counterparty: string;
+  contentSnapshot: unknown; // zIssuedContentSnapshot 検証済み
+};
+
+export async function finalizeDocumentIssue(
+  client: SupabaseClient,
+  input: FinalizeDocumentIssueInput,
+): Promise<Result<FinalizeOrAppendResult>> {
+  const { data, error } = await client.rpc("document_finalize_issue", {
+    p_document_id: input.documentId,
+    p_expected_updated_at: input.expectedUpdatedAt,
+    p_doc_no: input.docNo,
+    p_issue_date: input.issueDate,
+    p_subtotal_jpy: input.subtotalJpy,
+    p_tax_summary: input.taxSummary,
+    p_total_jpy: input.totalJpy,
+    p_issuer_snapshot: input.issuerSnapshot,
+    p_sha256: input.sha256,
+    p_storage_path: input.storagePath,
+    p_counterparty: input.counterparty,
+    p_content_snapshot: input.contentSnapshot,
+  });
+  if (error) return pgErrorToResult(error);
+  const row = (Array.isArray(data) ? data[0] : data) as FinalizeOrAppendResult | undefined | null;
+  if (!row) {
+    return { ok: false, code: "KMB-E901", detail: "document_finalize_issue が結果を返しませんでした" };
+  }
+  return { ok: true, value: row };
+}
+
+export type AppendDocumentVersionInput = {
+  documentId: string;
+  expectedUpdatedAt: string;
+  sha256: string;
+  storagePath: string;
+  counterparty: string;
+  contentSnapshot: unknown;
+};
+
+export async function appendDocumentVersion(
+  client: SupabaseClient,
+  input: AppendDocumentVersionInput,
+): Promise<Result<FinalizeOrAppendResult>> {
+  const { data, error } = await client.rpc("document_append_version", {
+    p_document_id: input.documentId,
+    p_expected_updated_at: input.expectedUpdatedAt,
+    p_sha256: input.sha256,
+    p_storage_path: input.storagePath,
+    p_counterparty: input.counterparty,
+    p_content_snapshot: input.contentSnapshot,
+  });
+  if (error) return pgErrorToResult(error);
+  const row = (Array.isArray(data) ? data[0] : data) as FinalizeOrAppendResult | undefined | null;
+  if (!row) {
+    return { ok: false, code: "KMB-E901", detail: "document_append_version が結果を返しませんでした" };
+  }
+  return { ok: true, value: row };
+}
+
+export type ApplyDocumentRevisionInput = {
+  documentId: string;
+  expectedUpdatedAt: string;
+  stagingId: string;
+  sha256: string;
+  storagePath: string;
+  contentSnapshot: unknown;
+};
+
+export async function applyDocumentRevision(
+  client: SupabaseClient,
+  input: ApplyDocumentRevisionInput,
+): Promise<Result<FinalizeOrAppendResult>> {
+  const { data, error } = await client.rpc("document_apply_revision", {
+    p_document_id: input.documentId,
+    p_expected_updated_at: input.expectedUpdatedAt,
+    p_staging_id: input.stagingId,
+    p_sha256: input.sha256,
+    p_storage_path: input.storagePath,
+    p_content_snapshot: input.contentSnapshot,
+  });
+  if (error) return pgErrorToResult(error);
+  const row = (Array.isArray(data) ? data[0] : data) as FinalizeOrAppendResult | undefined | null;
+  if (!row) {
+    return { ok: false, code: "KMB-E901", detail: "document_apply_revision が結果を返しませんでした" };
+  }
+  return { ok: true, value: row };
+}
+
+// ============================================================
+// issued_documents (発行控え台帳 — 読み取りのみ。書込は上記 RPC 経由)
+// ============================================================
+
+export type IssuedDocumentVersionRow = { storage_path: string };
+
+/** createSignedPdfUrl (facade — #50) の版検索。0 行 = 版なし (呼び出し側が KMB-E627 に変換)。 */
+export async function getIssuedDocumentByVersion(
+  client: SupabaseClient,
+  documentId: string,
+  version: number,
+): Promise<Result<IssuedDocumentVersionRow | null>> {
+  const { data, error } = await client
+    .from("issued_documents")
+    .select("storage_path")
+    .eq("document_id", documentId)
+    .eq("version", version)
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data as IssuedDocumentVersionRow | null) ?? null };
 }

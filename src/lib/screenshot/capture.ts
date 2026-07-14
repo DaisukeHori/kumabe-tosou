@@ -1,7 +1,5 @@
 import "server-only";
 
-import chromium from "@sparticuz/chromium";
-import puppeteer from "puppeteer-core";
 import type { Page } from "puppeteer-core";
 import sharp from "sharp";
 
@@ -9,6 +7,7 @@ import { getEnv } from "@/lib/env";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type { Result } from "@/modules/platform/contracts";
 
+import { launchChromium } from "./chromium";
 import { buildScreenshotTargetUrl } from "./route-key";
 import { isAllowedSubresource, isSameOriginAsSite } from "./subresource-policy";
 
@@ -106,12 +105,7 @@ async function launchAndCapturePng(url: string): Promise<Buffer> {
   const siteOrigin = new URL(env.NEXT_PUBLIC_SITE_URL).origin;
   const storageOrigin = new URL(env.NEXT_PUBLIC_SUPABASE_URL).origin;
 
-  const browser = await puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: VIEWPORT,
-    executablePath: await chromium.executablePath(),
-    headless: true,
-  });
+  const browser = await launchChromium(VIEWPORT);
   try {
     const page = await browser.newPage();
     await page.setRequestInterception(true);

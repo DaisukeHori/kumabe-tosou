@@ -1,0 +1,294 @@
+/*
+ * /print/documents/[id] 専用の紙面 CSS (canonical: docs/design/crm-suite/02-sales.md
+ * §10.2〜§10.7)。globals.css のテーマ変数・モーションには依存しない (このルート専用)。
+ * フォントは next/font NotoSansJP をそのまま使う (--font-sans はルート layout.tsx が <html> に
+ * 注入済みの CSS カスタムプロパティ — 配置作業ゼロ、§7.4 の記述どおり)。
+ *
+ * 動的な margin box (継続ヘッダの書類名/doc_no) は string-set が Chromium 未対応のため
+ * document-sheet.tsx がサーバ側で @page ルールを含む <style> を追加生成する (§10.2)。
+ * このファイルは全書類共通の骨格のみを持つ。
+ */
+
+@page {
+  size: A4 portrait;
+  margin: 16mm 14mm 18mm 14mm;
+}
+
+@page {
+  @bottom-center {
+    content: counter(page) " / " counter(pages);
+    font-size: 8pt;
+    color: #666;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/*
+ * ルート layout.tsx (src/app/layout.tsx) の <body> は "flex min-h-full flex-col
+ * bg-primer text-carbon" (サイト共通テーマ) を持つが、(print) route group はそれを
+ * 上書きしない設計 (root layout 自体は変更しない — 全ルート共通の骨格のため)。代わりに
+ * ページ側がこの `.print-sheet` クラスを持つ <div> でラップし、フォント/文字色/背景を
+ * このルート専用の値で確実に上書きする (body 要素自体を再定義することはできない —
+ * page.tsx から <body> を返すと二重 <body> になり不正な HTML になるため)。
+ */
+html {
+  margin: 0;
+  padding: 0;
+}
+
+.print-sheet {
+  font-family: var(--font-sans), "Noto Sans JP", sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.6;
+  color: #1a1a1a;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet {
+  width: 182mm;
+  margin: 0 auto;
+  position: relative;
+}
+
+.sheet-title {
+  text-align: center;
+  font-size: 16pt;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  margin: 0 0 6mm;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 9.5pt;
+  margin-bottom: 6mm;
+}
+
+.meta-row .doc-no {
+  font-weight: 600;
+}
+
+.parties {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8mm;
+  margin-bottom: 4mm;
+}
+
+.billing-block {
+  width: 95mm;
+}
+
+.billing-block .name {
+  font-size: 11pt;
+  border-bottom: 1px solid #333;
+  padding-bottom: 1mm;
+  margin-bottom: 2mm;
+}
+
+.billing-block .address {
+  color: #333;
+  white-space: pre-wrap;
+}
+
+.issuer-block {
+  width: 70mm;
+  position: relative;
+  text-align: left;
+}
+
+.issuer-block .seal {
+  position: absolute;
+  top: -3mm;
+  right: 2mm;
+  width: 18mm;
+  height: 18mm;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+.issuer-block .issuer-name {
+  font-weight: 700;
+  margin-bottom: 1mm;
+}
+
+.issuer-block .line {
+  color: #333;
+  font-size: 8.5pt;
+}
+
+.site-block {
+  font-size: 9pt;
+  color: #333;
+  margin-bottom: 3mm;
+}
+
+.greeting {
+  margin-bottom: 4mm;
+}
+
+.amount-box {
+  display: inline-block;
+  border: 2px solid #333;
+  padding: 2mm 6mm;
+  font-size: 13pt;
+  font-weight: 700;
+  margin-bottom: 3mm;
+}
+
+.amount-box .label {
+  font-size: 10pt;
+  font-weight: 400;
+  margin-right: 4mm;
+}
+
+.sub-meta-row {
+  font-size: 9pt;
+  color: #333;
+  margin-bottom: 2mm;
+}
+
+table.lines {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 5mm 0 3mm;
+  font-size: 9.5pt;
+}
+
+table.lines thead {
+  display: table-header-group;
+}
+
+table.lines th,
+table.lines td {
+  border-bottom: 1px solid #ccc;
+  padding: 1.5mm 1.5mm;
+  vertical-align: top;
+}
+
+table.lines thead th {
+  border-bottom: 1px solid #333;
+  border-top: 1px solid #333;
+  background: #f5f5f5;
+  font-weight: 600;
+  text-align: center;
+}
+
+table.lines tr {
+  break-inside: avoid;
+}
+
+table.lines td.col-no,
+table.lines th.col-no {
+  width: 10mm;
+  text-align: right;
+}
+table.lines td.col-desc,
+table.lines th.col-desc {
+  width: auto;
+  text-align: left;
+}
+table.lines td.col-qty,
+table.lines th.col-qty {
+  width: 16mm;
+  text-align: right;
+}
+table.lines td.col-unit,
+table.lines th.col-unit {
+  width: 12mm;
+  text-align: center;
+}
+table.lines td.col-price,
+table.lines th.col-price {
+  width: 24mm;
+  text-align: right;
+}
+table.lines td.col-amount,
+table.lines th.col-amount {
+  width: 26mm;
+  text-align: right;
+}
+
+.below-margin {
+  text-align: center;
+  color: #666;
+  font-size: 9pt;
+  margin-bottom: 4mm;
+}
+
+.no-lines {
+  text-align: center;
+  color: #666;
+  padding: 8mm 0;
+  border: 1px dashed #ccc;
+  margin: 5mm 0;
+}
+
+.totals-block {
+  break-inside: avoid;
+  margin-left: auto;
+  width: 80mm;
+  font-size: 9.5pt;
+  margin-bottom: 4mm;
+}
+
+.totals-block .row {
+  display: flex;
+  justify-content: space-between;
+  padding: 1mm 0;
+}
+
+.totals-block .row.tax-line {
+  color: #333;
+}
+
+.totals-block .row.grand-total {
+  border-top: 1px solid #333;
+  font-weight: 700;
+  font-size: 11pt;
+  padding-top: 1.5mm;
+}
+
+.reduced-note {
+  font-size: 8pt;
+  color: #666;
+  text-align: right;
+  margin: -2mm 0 4mm;
+}
+
+.notes-block,
+.bank-block {
+  break-inside: avoid;
+  font-size: 9pt;
+  margin-bottom: 3mm;
+}
+
+.notes-block .box {
+  border: 1px solid #ccc;
+  padding: 2mm 3mm;
+  white-space: pre-wrap;
+}
+
+.bank-block .label {
+  font-weight: 600;
+}
+
+.watermark {
+  position: fixed;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  font-size: 26mm;
+  color: #000;
+  opacity: 0.08;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 999;
+}

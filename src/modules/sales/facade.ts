@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { getEnv, isPrintTokenSecretConfigured, isServiceRoleConfigured } from "@/lib/env";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type { ExecutionContext, Paged, Pagination, Result, TaxCategory } from "@/modules/platform/contracts";
@@ -12,9 +13,9 @@ import { crmFacade } from "@/modules/crm/facade";
 // sales→crm は crmFacade 経由の 3 メソッド (getDealRef/getDealRefs/appendActivity) + 型 import のみ許可
 // (実装計画書「モジュール境界」注記)。DealRef/SimEstimateSnapshot/DocumentEventActivityPayload は
 // いずれも型のみ (crm 側の zod スキーマを sales 側で再 import・再 parse しない — 契約の canonical
-// 分担を crm 側に残す)。DocumentEventActivityPayload は SalesFacade (D8 契約) の
-// issueDocument/reissueDocument/recordPayment 戻り値型の宣言に必要 (#50/#51 実装分。本 Issue (#49)
-// では未実装だが、型宣言のフルセットを保つため import する)。
+// 分担を crm 側に残す)。DocumentEventActivityPayload は issueDocument/reissueDocument/
+// reviseAndReissueDocument (#50 実装分) が appendActivity へ渡す payload の型として使う
+// (recordPayment のみ #51 で未実装のまま — SalesFacade 契約の型宣言としては残す)。
 import type { DealRef, DocumentEventActivityPayload, SimEstimateSnapshot } from "@/modules/crm/contracts";
 
 import { settingsFacade } from "@/modules/settings/facade";
@@ -25,6 +26,9 @@ import {
   zDocType,
   zDocumentLineInput,
   zDocumentListFilter,
+  zIssuedContentSnapshot,
+  zIssuerSnapshot,
+  zReviseDocumentInput,
   zUpdateDraftDocumentInput,
   type CreateDocumentInput,
   type DocType,
@@ -34,18 +38,31 @@ import {
   type DocumentLineInput,
   type DocumentStatus,
   type DocumentTotals,
+  type IssuedContentSnapshot,
   type IssuerSnapshot,
   type PaymentInput,
+  type ReviseDocumentInput,
   type TaxSummary,
   type UpdateDraftDocumentInput,
 } from "./contracts";
+import { buildIssuerSnapshot } from "./internal/issuer";
+import { generateDocumentPdf } from "./internal/pdf";
+import { issuePrintToken, verifyAndConsumePrintToken } from "./internal/print-token";
 import { canTransition, computeDerivableTo } from "./internal/state";
 import { buildDerivedDocumentLines, buildSimulatorQuoteDraft, resolveDerivedTransactionDate } from "./internal/derive";
 import { computeDocumentTotals } from "./tax";
 import {
+  appendDocumentVersion,
+  applyDocumentRevision,
+  cleanupOrphanRevisionStagings,
   createDraftDocument as repoCreateDraftDocument,
   deleteDraftDocument as repoDeleteDraftDocument,
+  finalizeDocumentIssue,
   getDocumentById,
+  getIssuedDocumentByVersion,
+  getRevisionStagingById,
+  insertRevisionStaging,
+  issueDocumentNumber,
   listDocumentLines,
   listDocumentsPage,
   listPayments,
@@ -58,20 +75,21 @@ import {
  * sales モジュールの公開 facade (02-sales.md §6)。
  *
  * `SalesFacade` (07-contracts-delta §D8 契約 8 メソッド。シグネチャ変更禁止) と
- * `SalesFacadeExtended` (02-sales §6.2 契約外拡張。本 Issue (#49) の実装範囲である 8 つのみを
- * 型宣言 — reviseAndReissueDocument/deletePayment/getSalesDigest/markExpiredQuotes は #50/#51 の
- * 担当のため型宣言にも含めない) を型としてフルセット/部分セットで宣言する
+ * `SalesFacadeExtended` (02-sales §6.2 契約外拡張。`reviseAndReissueDocument` を含む — 本 Issue
+ * (#50) の実装範囲。`deletePayment`/`getSalesDigest`/`markExpiredQuotes` は #51 の担当のため
+ * 型宣言にも含めない) を型としてフルセット/部分セットで宣言する
  * (scheduling/facade.ts の SchedulingFacade/SchedulingFacadeExtended 分割と同型)。
  *
- * ---- この Issue (#49) での実装範囲 ----
- * `createSalesFacade()` が実際に export するのは、契約メソッドのうち
- * `createDraftDocument`/`createDraftQuoteFromEstimate`/`deriveDocument` の 3 つと、
- * 契約外拡張のうち `listDocuments`/`getDocumentDetail`/`updateDraftDocument`/
- * `deleteDraftDocument`/`acceptQuote`/`declineQuote`/`voidDocument`/`computeTotalsPreview` の
- * 8 つ、計 11 メソッドのみ。残り 5 契約メソッド (issueDocument/reissueDocument/recordPayment/
- * getDocumentLinesForBlocks/createSignedPdfUrl) は #50/#51 が実装するため、本ファイルでは型宣言
- * のみに留め、戻り値型を `Pick<SalesFacadeExtended, ...>` に絞ることで「未実装メソッドをスタブで
- * 誤魔化す」ことを構造的に防ぐ (呼び出せば型検査の時点でエラーになる)。
+ * ---- 実装範囲の変遷 ----
+ * #49 は `createDraftDocument`/`createDraftQuoteFromEstimate`/`deriveDocument` (契約) +
+ * `listDocuments`/`getDocumentDetail`/`updateDraftDocument`/`deleteDraftDocument`/
+ * `acceptQuote`/`declineQuote`/`voidDocument`/`computeTotalsPreview` (契約外拡張) の 11 メソッド
+ * (`SalesFacadeCore`) を実装した。#50 は残り契約メソッドのうち `recordPayment` を除く 4 つ
+ * (`issueDocument`/`reissueDocument`/`getDocumentLinesForBlocks`/`createSignedPdfUrl`) と、
+ * 契約外拡張 `reviseAndReissueDocument` の計 5 メソッド (`SalesFacadeIssuance`) を追加する。
+ * `recordPayment`/`deletePayment`/`getSalesDigest`/`markExpiredQuotes` は #51 が実装するため、
+ * 本ファイルでは型宣言のみに留め、戻り値型を `Pick<SalesFacadeExtended, ...>` の交差型に絞ることで
+ * 「未実装メソッドをスタブで誤魔化す」ことを構造的に防ぐ (呼び出せば型検査の時点でエラーになる)。
  *
  * 実行文脈: `createSalesFacade(client?: SupabaseClient)` はファクトリ関数。省略時は session
  * (admin セッション — `getSessionAndClient()`)、指定時は facade インスタンス単位でその client を
@@ -79,6 +97,13 @@ import {
  * ctx 引数は取らない設計 — 02-sales §6.1 createDraftQuoteFromEstimate 注記)。
  * `createDraftQuoteFromEstimate` のみ、facade の生成方法に関わらず常に service 実行
  * (anon route `/api/shop/lead` からセッション無しで呼ばれるため)。
+ * `issueDocument`/`reissueDocument`/`reviseAndReissueDocument` は、渡された `client`
+ * (session または injectedClient) を documents/document_lines/issued_documents RPC 呼び出しに
+ * 使う一方、PDF 生成・印刷トークン・pdf_render_lock (いずれも service 専用テーブル/Storage —
+ * internal/pdf.ts・internal/print-token.ts の JSDoc 参照) には**常に独立した service client**
+ * (`injectedClient ?? createSupabaseServiceClient()`) を使う — admin セッションの `authenticated`
+ * ロールは `revoke all ... from anon, authenticated` により print_tokens/pdf_render_lock を
+ * 一切読み書きできないため (createDraftQuoteFromEstimate の service client 生成パターンを流用)。
  */
 export interface SalesFacade {
   createDraftDocument(input: CreateDocumentInput): Promise<Result<{ document_id: string }>>;
@@ -124,6 +149,18 @@ export interface SalesFacadeExtended extends SalesFacade {
   declineQuote(documentId: string, reason: string | null, expectedUpdatedAt: string): Promise<Result<void>>;
   voidDocument(documentId: string, reason: string, expectedUpdatedAt: string): Promise<Result<void>>;
   computeTotalsPreview(lines: DocumentLineInput[], rounding: TaxRounding): Result<DocumentTotals>;
+  // ---- 契約外拡張 (02-sales.md §6.2 のうち #50 実装分) ----
+  /** §4.3-B (訂正発行): Zod + 税ガード → staging INSERT → staging 内容で PDF 生成・Storage 保存 →
+   *  document_apply_revision RPC (documents 更新 + 明細置換 + 台帳 append + version 前進を単一
+   *  トランザクションで確定) → appendActivity('reissued')。戻り値型は canonical (§6.2 表) に
+   *  明記が無いため reissueDocument と同型 ({version; pdf_storage_path}) とした
+   *  (実装計画書「未解決点1」— 契約外拡張は実装者が型を確定してよい規約に基づく判断。
+   *  openIssues に記録)。 */
+  reviseAndReissueDocument(
+    documentId: string,
+    input: ReviseDocumentInput,
+    expectedUpdatedAt: string,
+  ): Promise<Result<{ version: number; pdf_storage_path: string }>>;
 }
 
 /** この Issue (#49) で実装済みのメソッドのみに絞った戻り値型 (上記コメント参照)。
@@ -143,8 +180,93 @@ export type SalesFacadeCore = Pick<
   | "computeTotalsPreview"
 >;
 
+/** この Issue (#50) で追加実装するメソッドのみに絞った戻り値型 (SalesFacadeCore と同型の設計 —
+ *  上記コメント参照)。`recordPayment`/`deletePayment`/`getSalesDigest`/`markExpiredQuotes`
+ *  (#51 スコープ) は呼び出せば型エラーになる。 */
+export type SalesFacadeIssuance = Pick<
+  SalesFacadeExtended,
+  | "issueDocument"
+  | "reissueDocument"
+  | "reviseAndReissueDocument"
+  | "getDocumentLinesForBlocks"
+  | "createSignedPdfUrl"
+>;
+
 /** documents.tax_rounding (zTaxRounding と同じリテラル和 — repository.ts の inline 型と 1:1) */
 type TaxRounding = "floor" | "round" | "ceil";
+
+// ============================================================
+// resolvePrintView (Issue #50 追加 — /print route 専用の橋渡しメソッド)
+// ============================================================
+
+/**
+ * `/print/documents/[id]` (route group `(print)`、src/app 配下) は ESLint モジュール境界
+ * (module-contracts.md §2) により sales/internal/** や sales/repository を直接 import できない
+ * (他モジュール — というより「モジュール所属を持たない app 層」— からは facade 経由のみ許可)。
+ * そのため、印刷トークンの検証・消費 → document/lines(+staging)/issuer の読み取り →
+ * 角印署名 URL 解決までを 1 メソッドに薄くラップして公開する。
+ *
+ * 07-contracts-delta §D8 の契約メソッドにも 02-sales §6.2 の契約外拡張表にも載っていない
+ * (canonical は route 実装がここまでの処理を repository 直読みで行う想定だったと読めるが、
+ * 本リポジトリの ESLint 境界は app 層からの repository/internal 直 import を一律禁止しており、
+ * telephony webhook (src/lib/telephony-signature.ts 前例) のような「モジュール非所属の共有
+ * インフラ」に切り出す代替も、本メソッドは sales 固有の DB アクセス・業務ロジックを多く含むため
+ * 適さないと判断した — facade への薄い追加が最も構造に合う。判断根拠を openIssues に記録する)。
+ * 他モジュールからの呼び出しは禁止 (契約外拡張と同じ規約)。
+ */
+export type ResolvedPrintViewLine = {
+  position: number;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price_jpy: number;
+  amount_jpy: number;
+  tax_category: TaxCategory;
+};
+
+export type ResolvedPrintView = {
+  docType: DocType;
+  /** null = 未採番 (draft プレビュー、または発行フロー中で payload.doc_no も無いケース)。 */
+  docNo: string | null;
+  issueDate: string | null;
+  transactionDate: string | null;
+  validUntil: string | null;
+  billingName: string;
+  billingSuffix: "様" | "御中";
+  billingAddress: string | null;
+  siteName: string | null;
+  siteAddress: string | null;
+  notes: string | null;
+  subtotalJpy: number;
+  taxSummary: TaxSummary;
+  totalJpy: number;
+  issuer: IssuerSnapshot;
+  /** server 側で解決済みの署名 URL (TTL 5 分)。null = 非印字 (未設定 or 解決失敗 — §10.6)。 */
+  sealSignedUrl: string | null;
+  lines: ResolvedPrintViewLine[];
+  /** true = 「下書き(未発行)」透かし表示 (draft かつ purpose='preview' のときのみ — §10.2)。 */
+  watermark: boolean;
+};
+
+export interface SalesPrintFacade {
+  resolvePrintView(documentId: string, token: string): Promise<Result<ResolvedPrintView>>;
+  /**
+   * admin 印刷プレビュー用トークン発行 (Issue #50 追加。§7.3「発行者」の 2 者のうち admin プレビュー側 —
+   * PDF 撮影直前の発行は internal/pdf.ts が担う)。呼び出し元は `src/app/admin/documents/actions.ts`
+   * の `createPrintPreviewUrlAction` (#50 追加 — 実際にプレビューを開く UI ボタンは #51 が作る
+   * `/admin/documents/[id]` 画面側)。resolvePrintView と同じ理由 (ESLint モジュール境界により
+   * app 層は sales/internal/print-token を直接呼べない) でこの薄いブリッジを facade に置く。
+   * purpose='preview' で TTL 5 分のトークンを発行し、`/print/documents/{id}?token=…` の絶対 URL を
+   * 返す (internal/pdf.ts の自オリジン URL 構築ロジックと同型)。対象帳票の存在確認はしない
+   * (存在しない document_id へのトークン発行は実害がなく、/print route 側で E621 拒否される)。
+   */
+  issuePrintPreviewToken(documentId: string): Promise<Result<{ url: string; expires_at: string }>>;
+}
+
+const BRANDING_ASSETS_BUCKET = "branding-assets";
+const SEAL_SIGNED_URL_TTL_SECONDS = 300; // 5 分 (§10.6「描画時間内で十分」)
+const zRevisionStagingHeader = zReviseDocumentInput.omit({ lines: true });
+const zRevisionStagingLines = zDocumentLineInput.array();
 
 // ============================================================
 // 共通ヘルパ
@@ -295,10 +417,171 @@ const zDeriveDocumentInput = z
   .strict();
 
 // ============================================================
+// issueDocument / reissueDocument / reviseAndReissueDocument 共通ヘルパ (Issue #50)
+// ============================================================
+
+/**
+ * JST の「今日」を YYYY-MM-DD (zDateOnly 形式) で返す (§6.1 手順3: issue_date null → JST 今日)。
+ * crm/internal/jst.ts は crm モジュール内部専用のため ESLint モジュール境界上 import できない
+ * (許容された重複実装 — 契約書 §2 の定石と同型)。repository.ts の resolveJstYear と同じ
+ * Intl.DateTimeFormat + Asia/Tokyo 手法 (en-CA ロケールは YYYY-MM-DD 形式を返す)。
+ */
+function jstTodayDateOnly(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(now);
+}
+
+/** JST 暦日 (YYYY-MM-DD) に days 日を加算する (quote_valid_days の適用 — §5.4)。date-only 文字列を
+ *  UTC 起点の暦日算術として扱う (zDateOnly はタイムゾーン非依存の暦日表現のため、TZ 変換を経由しない)。 */
+function addDaysToDateOnly(dateOnly: string, days: number): string {
+  const d = new Date(`${dateOnly}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** DocumentLineRow → DocumentLineInput (document_save_draft RPC の p_lines / totals 計算の入力形式)。
+ *  position/id/document_id/created_at を落とす (getDocumentDetail の既存 map と同型)。 */
+function toDocumentLineInput(l: {
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price_jpy: number;
+  amount_jpy: number;
+  tax_category: string;
+  work_type_key: string | null;
+  source: unknown;
+}): DocumentLineInput {
+  return {
+    description: l.description,
+    quantity: l.quantity,
+    unit: l.unit,
+    unit_price_jpy: l.unit_price_jpy,
+    amount_jpy: l.amount_jpy,
+    tax_category: l.tax_category as TaxCategory,
+    work_type_key: l.work_type_key,
+    source: l.source as { grade_key: string; size_key: string; option_keys: string[] } | null,
+  };
+}
+
+/**
+ * 発行時ガード (02-sales §5.3「発行時ガード」— issueDocument / reviseAndReissueDocument 共通)。
+ * 1. 各税率区分の taxable_jpy < 0 → E101 (値引きが課税標準を超過)
+ * 2. total_jpy < 0 → E101
+ * 3. doc_type='invoice' かつ total_jpy = 0 → E101 (0 円請求書は payments で完済に到達できず
+ *    未消込のまま恒久残留するため — §2.4 パターン 23。quote/order/delivery の 0 円は許容)
+ */
+function validateIssueTaxGuard(docType: DocType, totals: DocumentTotals): Result<void> {
+  for (const entry of totals.tax_summary) {
+    if (entry.taxable_jpy < 0) {
+      return {
+        ok: false,
+        code: "KMB-E101",
+        detail: `値引きが課税対象額を超えています (区分: ${entry.tax_category})`,
+      };
+    }
+  }
+  if (totals.total_jpy < 0) {
+    return { ok: false, code: "KMB-E101", detail: "合計金額がマイナスです。" };
+  }
+  if (docType === "invoice" && totals.total_jpy === 0) {
+    return { ok: false, code: "KMB-E101", detail: "請求金額が 0 円の請求書は発行できません。" };
+  }
+  return { ok: true, value: undefined };
+}
+
+/** issued_documents.content_snapshot (zIssuedContentSnapshot) の構築 + 検証。zod parse を通す
+ *  ことで、settings/documents 側の型と canonical 契約の乖離を握り潰さず E901 で顕在化させる
+ *  (issuer.ts の buildIssuerSnapshot 末尾と同型の防御)。 */
+function buildIssuedContentSnapshot(params: {
+  docType: DocType;
+  docNo: string;
+  version: number;
+  issueDate: string;
+  transactionDate: string;
+  validUntil: string | null;
+  billingName: string;
+  billingSuffix: "様" | "御中";
+  billingAddress: string | null;
+  siteName: string | null;
+  siteAddress: string | null;
+  notes: string | null;
+  taxRounding: TaxRounding;
+  issuer: IssuerSnapshot;
+  lines: Array<{
+    position: number;
+    description: string;
+    quantity: number;
+    unit: string;
+    unit_price_jpy: number;
+    amount_jpy: number;
+    tax_category: TaxCategory;
+  }>;
+  totals: DocumentTotals;
+}): Result<IssuedContentSnapshot> {
+  const candidate: IssuedContentSnapshot = {
+    doc_type: params.docType,
+    doc_no: params.docNo,
+    version: params.version,
+    issue_date: params.issueDate,
+    transaction_date: params.transactionDate,
+    valid_until: params.validUntil,
+    billing_name: params.billingName,
+    billing_suffix: params.billingSuffix,
+    billing_address: params.billingAddress,
+    site_name: params.siteName,
+    site_address: params.siteAddress,
+    notes: params.notes,
+    tax_rounding: params.taxRounding,
+    issuer: params.issuer,
+    lines: params.lines,
+    subtotal_jpy: params.totals.subtotal_jpy,
+    tax_summary: params.totals.tax_summary,
+    total_jpy: params.totals.total_jpy,
+  };
+  const parsed = zIssuedContentSnapshot.safeParse(candidate);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      code: "KMB-E901",
+      detail: `content_snapshot の構築に失敗しました (zIssuedContentSnapshot と不一致): ${parsed.error.message}`,
+    };
+  }
+  return { ok: true, value: parsed.data };
+}
+
+/**
+ * issueDocument/reissueDocument/reviseAndReissueDocument 共通: PDF 生成・印刷トークン・
+ * pdf_render_lock はいずれも service 専用テーブル/Storage のため、admin セッション client
+ * (authenticated ロール) とは別に service client を用意する (createDraftQuoteFromEstimate と
+ * 同じパターン)。injectedClient 指定時 (テスト注入) はそれをそのまま service 用途にも使う。
+ */
+function resolvePdfServiceClient(injectedClient: SupabaseClient | undefined): Result<SupabaseClient> {
+  try {
+    return { ok: true, value: injectedClient ?? createSupabaseServiceClient() };
+  } catch (err) {
+    return { ok: false, code: "KMB-E640", detail: errMessage(err) };
+  }
+}
+
+/** PRINT_TOKEN_SECRET / SUPABASE_SERVICE_ROLE_KEY の degrade 判定 (§6.1 手順1)。
+ *  未設定時は PDF 生成に必ず失敗するため、Chromium 起動前に早期リターンする。 */
+function checkIssuancePrerequisites(): Result<void> {
+  if (!isServiceRoleConfigured() || !isPrintTokenSecretConfigured()) {
+    return {
+      ok: false,
+      code: "KMB-E640",
+      detail: "PRINT_TOKEN_SECRET または SUPABASE_SERVICE_ROLE_KEY が未設定です。PDF を生成できません。",
+    };
+  }
+  return { ok: true, value: undefined };
+}
+
+// ============================================================
 // facade 実装
 // ============================================================
 
-export function createSalesFacade(injectedClient?: SupabaseClient): SalesFacadeCore {
+export function createSalesFacade(
+  injectedClient?: SupabaseClient,
+): SalesFacadeCore & SalesFacadeIssuance & SalesPrintFacade {
   const ctx = resolveCtx(injectedClient);
 
   return {
@@ -451,6 +734,407 @@ export function createSalesFacade(injectedClient?: SupabaseClient): SalesFacadeC
         });
         if (!created.ok) return created;
         return { ok: true, value: { document_id: created.value.id } };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    /**
+     * canonical: 02-sales.md §6.1 issueDocument (9 段階シーケンス、実装計画書「issueDocument
+     * 実装順序」節と 1:1)。エラー全列挙: E101/E103/E620/E621/E622/E626/E640/E641/E643/E901。
+     */
+    async issueDocument(documentId, expectedUpdatedAt) {
+      try {
+        const resolved = await resolveClientAndUser(injectedClient);
+        if (!resolved.ok) return resolved;
+        const { client } = resolved.value;
+
+        // 手順1 前提検証 (draft/明細/env)
+        const docResult = await getDocumentById(client, documentId);
+        if (!docResult.ok) return docResult;
+        const doc = docResult.value;
+        if (!doc) return { ok: false, code: "KMB-E621", detail: "帳票が見つかりません。" };
+        if (doc.status !== "draft") {
+          return { ok: false, code: "KMB-E621", detail: `draft 以外は発行できません (現在: ${doc.status})。` };
+        }
+
+        const linesResult = await listDocumentLines(client, documentId);
+        if (!linesResult.ok) return linesResult;
+        if (linesResult.value.length === 0) {
+          return { ok: false, code: "KMB-E620", detail: "明細が 0 行のため発行できません。" };
+        }
+        const lineInputs = linesResult.value.map(toDocumentLineInput);
+
+        const taxRounding = doc.tax_rounding as TaxRounding;
+        const totals = computeDocumentTotals(lineInputs, taxRounding);
+        const taxGuard = validateIssueTaxGuard(doc.doc_type as DocType, totals);
+        if (!taxGuard.ok) return taxGuard;
+
+        const prereq = checkIssuancePrerequisites();
+        if (!prereq.ok) return prereq;
+        const serviceClientResult = resolvePdfServiceClient(injectedClient);
+        if (!serviceClientResult.ok) return serviceClientResult;
+        const serviceClient = serviceClientResult.value;
+
+        // 手順2 issuer_snapshot 合成 (settingsFacade.get('invoice_issuer') 不在/issuer_name 空 → E626)
+        const issuerResult = await buildIssuerSnapshot(ctx);
+        if (!issuerResult.ok) return issuerResult;
+        const issuer = issuerResult.value;
+
+        // 手順3 issue_date 確定 + quote の valid_until 補完 + 事前保存 (CAS チェーン)
+        const issueDate = doc.issue_date ?? jstTodayDateOnly();
+        let validUntil = doc.valid_until;
+        if (doc.doc_type === "quote" && validUntil === null) {
+          const issuerSettings = await settingsFacade.get("invoice_issuer", ctx);
+          if (!issuerSettings.ok) {
+            return {
+              ok: false,
+              code: "KMB-E626",
+              detail: "請求書発行者の設定 (invoice_issuer) が見つかりません。",
+            };
+          }
+          validUntil = addDaysToDateOnly(issueDate, issuerSettings.value.quote_valid_days);
+        }
+
+        const saved = await saveDraftDocument(
+          client,
+          documentId,
+          expectedUpdatedAt,
+          {
+            issue_date: issueDate,
+            transaction_date: doc.transaction_date,
+            valid_until: validUntil,
+            billing_name: doc.billing_name,
+            billing_suffix: doc.billing_suffix as "様" | "御中",
+            billing_address: doc.billing_address,
+            site_name: doc.site_name,
+            site_address: doc.site_address,
+            notes: doc.notes,
+            tax_rounding: taxRounding,
+          },
+          lineInputs,
+          totals,
+        );
+        if (!saved.ok) return saved;
+
+        // 手順4 採番 (この時点で番号は消費される — 以後の失敗は欠番として許容)
+        const numbered = await issueDocumentNumber(client, doc.doc_type as DocType, issueDate);
+        if (!numbered.ok) return numbered;
+
+        // 手順5〜6 PDF 生成 + Storage 保存 (service client。doc_no は payload 経由 — DB 未保存のため)
+        const pdfResult = await generateDocumentPdf(serviceClient, {
+          documentId,
+          version: 1,
+          purpose: "pdf",
+          payload: { doc_no: numbered.value.doc_no },
+        });
+        if (!pdfResult.ok) return pdfResult;
+
+        const transactionDate = doc.transaction_date ?? issueDate;
+        const snapshotResult = buildIssuedContentSnapshot({
+          docType: doc.doc_type as DocType,
+          docNo: numbered.value.doc_no,
+          version: 1,
+          issueDate,
+          transactionDate,
+          validUntil,
+          billingName: doc.billing_name,
+          billingSuffix: doc.billing_suffix as "様" | "御中",
+          billingAddress: doc.billing_address,
+          siteName: doc.site_name,
+          siteAddress: doc.site_address,
+          notes: doc.notes,
+          taxRounding,
+          issuer,
+          lines: linesResult.value.map((l) => ({
+            position: l.position,
+            description: l.description,
+            quantity: l.quantity,
+            unit: l.unit,
+            unit_price_jpy: l.unit_price_jpy,
+            amount_jpy: l.amount_jpy,
+            tax_category: l.tax_category as TaxCategory,
+          })),
+          totals,
+        });
+        if (!snapshotResult.ok) return snapshotResult;
+
+        // 手順7 RPC document_finalize_issue (手順3 で更新された updated_at を CAS に使用)
+        const finalized = await finalizeDocumentIssue(client, {
+          documentId,
+          expectedUpdatedAt: saved.value.updated_at,
+          docNo: numbered.value.doc_no,
+          issueDate,
+          subtotalJpy: totals.subtotal_jpy,
+          taxSummary: totals.tax_summary,
+          totalJpy: totals.total_jpy,
+          issuerSnapshot: issuer,
+          sha256: pdfResult.value.sha256,
+          storagePath: pdfResult.value.storagePath,
+          counterparty: doc.billing_name,
+          contentSnapshot: snapshotResult.value,
+        });
+        if (!finalized.ok) return finalized;
+
+        // 手順8 appendActivity (失敗しても発行は成立 — console.warn + 乖離バッジ)
+        const event: DocumentEventActivityPayload = {
+          document_id: documentId,
+          doc_type: doc.doc_type as DocType,
+          doc_no: numbered.value.doc_no,
+          event: "issued",
+          total_jpy: totals.total_jpy,
+          version: 1,
+        };
+        const appended = await crmFacade.appendActivity(
+          {
+            activity_type: "document_event",
+            occurred_at: new Date().toISOString(),
+            title: `発行: ${numbered.value.doc_no}`,
+            body: null,
+            payload: event,
+            ref_table: "issued_documents",
+            ref_id: finalized.value.issued_document_id,
+            links: [{ customer_id: null, company_id: null, deal_id: doc.deal_id }],
+          },
+          ctx,
+        );
+        if (!appended.ok) {
+          console.warn(
+            `[KMB-E901] issued の appendActivity 記録に失敗しました (document=${documentId}):`,
+            appended.code,
+            appended.detail,
+          );
+        }
+
+        // 手順9: 戻り値 event を返す (app 層が CrmFacade.updateDealStage を呼ぶ — sales は
+        // deal.stage を書かない — §4.6)
+        return {
+          ok: true,
+          value: {
+            doc_no: numbered.value.doc_no,
+            version: 1,
+            pdf_storage_path: pdfResult.value.storagePath,
+            event,
+          },
+        };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    /**
+     * canonical: 02-sales.md §4.3-A / §6.1 reissueDocument。内容同一の再出力 (PDF 撮り直し →
+     * Storage 保存 → RPC document_append_version → appendActivity('reissued'))。
+     * エラー: E103/E621/E627/E640/E641/E643/E901。
+     */
+    async reissueDocument(documentId, expectedUpdatedAt) {
+      try {
+        const resolved = await resolveClientAndUser(injectedClient);
+        if (!resolved.ok) return resolved;
+        const { client } = resolved.value;
+
+        const docResult = await getDocumentById(client, documentId);
+        if (!docResult.ok) return docResult;
+        const doc = docResult.value;
+        if (!doc) return { ok: false, code: "KMB-E621", detail: "帳票が見つかりません。" };
+        if (doc.status !== "issued" && doc.status !== "accepted" && doc.status !== "paid") {
+          return {
+            ok: false,
+            code: "KMB-E621",
+            detail: `この状態の帳票は再出力できません (現在: ${doc.status})。`,
+          };
+        }
+        if (doc.doc_no === null || doc.issue_date === null) {
+          // 発行済み系状態であれば doc_no/issue_date は必ず確定済み (document_finalize_issue が
+          // 同一トランザクションで設定する) — 到達すれば台帳との不整合 (地雷回避: 握り潰さず E627)。
+          return { ok: false, code: "KMB-E627", detail: "書類番号または発行日が未確定です。" };
+        }
+
+        const prereq = checkIssuancePrerequisites();
+        if (!prereq.ok) return prereq;
+        const serviceClientResult = resolvePdfServiceClient(injectedClient);
+        if (!serviceClientResult.ok) return serviceClientResult;
+        const serviceClient = serviceClientResult.value;
+
+        const version = doc.current_version + 1;
+        const pdfResult = await generateDocumentPdf(serviceClient, {
+          documentId,
+          version,
+          purpose: "pdf",
+          payload: null, // 内容同一 — DB 現在値のみで描画 (§4.3-A)
+        });
+        if (!pdfResult.ok) return pdfResult;
+
+        const linesResult = await listDocumentLines(client, documentId);
+        if (!linesResult.ok) return linesResult;
+
+        const issuerParsed = zIssuerSnapshot.safeParse(doc.issuer_snapshot);
+        if (!issuerParsed.success) {
+          return {
+            ok: false,
+            code: "KMB-E901",
+            detail: "発行済み帳票の issuer_snapshot が契約 (zIssuerSnapshot) と一致しません。",
+          };
+        }
+
+        const transactionDate = doc.transaction_date ?? doc.issue_date;
+        const snapshotResult = buildIssuedContentSnapshot({
+          docType: doc.doc_type as DocType,
+          docNo: doc.doc_no,
+          version,
+          issueDate: doc.issue_date,
+          transactionDate,
+          validUntil: doc.valid_until,
+          billingName: doc.billing_name,
+          billingSuffix: doc.billing_suffix as "様" | "御中",
+          billingAddress: doc.billing_address,
+          siteName: doc.site_name,
+          siteAddress: doc.site_address,
+          notes: doc.notes,
+          taxRounding: doc.tax_rounding as TaxRounding,
+          issuer: issuerParsed.data,
+          lines: linesResult.value.map((l) => ({
+            position: l.position,
+            description: l.description,
+            quantity: l.quantity,
+            unit: l.unit,
+            unit_price_jpy: l.unit_price_jpy,
+            amount_jpy: l.amount_jpy,
+            tax_category: l.tax_category as TaxCategory,
+          })),
+          totals: { subtotal_jpy: doc.subtotal_jpy, tax_summary: doc.tax_summary as TaxSummary, total_jpy: doc.total_jpy },
+        });
+        if (!snapshotResult.ok) return snapshotResult;
+
+        const appendedVersion = await appendDocumentVersion(client, {
+          documentId,
+          expectedUpdatedAt,
+          sha256: pdfResult.value.sha256,
+          storagePath: pdfResult.value.storagePath,
+          counterparty: doc.billing_name,
+          contentSnapshot: snapshotResult.value,
+        });
+        if (!appendedVersion.ok) return appendedVersion;
+
+        const event: DocumentEventActivityPayload = {
+          document_id: documentId,
+          doc_type: doc.doc_type as DocType,
+          doc_no: doc.doc_no,
+          event: "reissued",
+          total_jpy: doc.total_jpy,
+          version: appendedVersion.value.doc_version,
+        };
+        const appended = await crmFacade.appendActivity(
+          {
+            activity_type: "document_event",
+            occurred_at: new Date().toISOString(),
+            title: `再出力: ${doc.doc_no} (v${appendedVersion.value.doc_version})`,
+            body: null,
+            payload: event,
+            ref_table: "issued_documents",
+            ref_id: appendedVersion.value.issued_document_id,
+            links: [{ customer_id: null, company_id: null, deal_id: doc.deal_id }],
+          },
+          ctx,
+        );
+        if (!appended.ok) {
+          console.warn(
+            `[KMB-E901] reissued の appendActivity 記録に失敗しました (document=${documentId}):`,
+            appended.code,
+            appended.detail,
+          );
+        }
+
+        return {
+          ok: true,
+          value: { version: appendedVersion.value.doc_version, pdf_storage_path: pdfResult.value.storagePath },
+        };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    /**
+     * canonical: 02-sales.md §6.1 getDocumentLinesForBlocks。scheduling へ渡す用 (app 層合成)。
+     * 対象: doc_type='order' の issued/accepted のみ (draft は E621、それ以外は E623)。
+     * grade_key/size_key は空文字を null に正規化する (§6.1 注記)。
+     */
+    async getDocumentLinesForBlocks(documentId) {
+      try {
+        const resolved = await resolveClientAndUser(injectedClient);
+        if (!resolved.ok) return resolved;
+        const { client } = resolved.value;
+
+        const docResult = await getDocumentById(client, documentId);
+        if (!docResult.ok) return docResult;
+        const doc = docResult.value;
+        if (!doc) return { ok: false, code: "KMB-E621", detail: "帳票が見つかりません。" };
+        if (doc.status === "draft") {
+          return { ok: false, code: "KMB-E621", detail: "draft の帳票は対象外です。" };
+        }
+        if (doc.doc_type !== "order" || (doc.status !== "issued" && doc.status !== "accepted")) {
+          return {
+            ok: false,
+            code: "KMB-E623",
+            detail: "受注 (issued または accepted) の帳票のみ対象です。",
+          };
+        }
+
+        const linesResult = await listDocumentLines(client, documentId);
+        if (!linesResult.ok) return linesResult;
+
+        const normalize = (v: string | undefined | null): string | null => {
+          const trimmed = v?.trim() ?? "";
+          return trimmed.length > 0 ? trimmed : null;
+        };
+
+        const value = linesResult.value.map((l) => {
+          const source = l.source as { grade_key: string; size_key: string; option_keys: string[] } | null;
+          return {
+            description: l.description,
+            work_type_key: l.work_type_key,
+            quantity: l.quantity,
+            grade_key: normalize(source?.grade_key),
+            size_key: normalize(source?.size_key),
+          };
+        });
+        return { ok: true, value };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    /**
+     * canonical: 02-sales.md §6.1 createSignedPdfUrl。台帳行 (document_id, version) から
+     * storage_path を引き、署名 URL (TTL 10 分) を service client で発行する。
+     * エラー: E627 (版なし) / E641 (署名 URL 発行失敗) / E901。
+     */
+    async createSignedPdfUrl(documentId, version) {
+      try {
+        const serviceClientResult = resolvePdfServiceClient(injectedClient);
+        if (!serviceClientResult.ok) {
+          return { ok: false, code: "KMB-E901", detail: serviceClientResult.detail };
+        }
+        const serviceClient = serviceClientResult.value;
+
+        const versionResult = await getIssuedDocumentByVersion(serviceClient, documentId, version);
+        if (!versionResult.ok) return versionResult;
+        if (!versionResult.value) {
+          return { ok: false, code: "KMB-E627", detail: "指定の版が台帳に見つかりません。" };
+        }
+
+        const ttlSeconds = 600; // TTL 10 分 (§6.1)
+        const { data, error } = await serviceClient.storage
+          .from("issued-documents")
+          .createSignedUrl(versionResult.value.storage_path, ttlSeconds);
+        if (error || !data) {
+          return { ok: false, code: "KMB-E641", detail: error?.message ?? "署名 URL の発行に失敗しました。" };
+        }
+
+        return {
+          ok: true,
+          value: { url: data.signedUrl, expires_at: new Date(Date.now() + ttlSeconds * 1000).toISOString() },
+        };
       } catch (err) {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };
       }
@@ -755,6 +1439,370 @@ export function createSalesFacade(injectedClient?: SupabaseClient): SalesFacadeC
       const parsed = zDocumentLineInput.array().safeParse(rawLines);
       if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
       return { ok: true, value: computeDocumentTotals(parsed.data, rounding) };
+    },
+
+    /**
+     * canonical: 02-sales.md §4.3-B / §6.2 reviseAndReissueDocument (v1.1 原子化)。
+     * Zod + 税ガード → staging INSERT (孤児掃除ベストエフォート) → staging 内容で PDF 生成・
+     * Storage 保存 → RPC document_apply_revision (documents 更新 + 明細置換 + 台帳 append +
+     * version 前進を単一トランザクションで確定) → appendActivity('reissued')。
+     * エラー: E101/E103/E620(zod min(1)で構造的に到達しない)/E621/E627/E640/E641/E643/E901。
+     * tax_rounding は凍結 (丸め方式の変更は void + 再発行 — §5.2 zReviseDocumentInput 注記) のため
+     * doc.tax_rounding をそのまま使い、入力からは受け取らない。
+     */
+    async reviseAndReissueDocument(documentId, rawInput, expectedUpdatedAt) {
+      try {
+        const parsed = zReviseDocumentInput.safeParse(rawInput);
+        if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+
+        const resolved = await resolveClientAndUser(injectedClient);
+        if (!resolved.ok) return resolved;
+        const { client, userId } = resolved.value;
+
+        const docResult = await getDocumentById(client, documentId);
+        if (!docResult.ok) return docResult;
+        const doc = docResult.value;
+        if (!doc) return { ok: false, code: "KMB-E621", detail: "帳票が見つかりません。" };
+        if (doc.status !== "issued" && doc.status !== "accepted") {
+          return {
+            ok: false,
+            code: "KMB-E621",
+            detail: `この状態の帳票は訂正できません (現在: ${doc.status})。`,
+          };
+        }
+        if (doc.doc_no === null) {
+          return { ok: false, code: "KMB-E627", detail: "書類番号が未確定です。" };
+        }
+        // quote 以外での valid_until 非 null は facade 側で E101 拒否する (updateDraftDocument /
+        // createDraftDocument と同じガード — DB check の生 E901 化を防ぐ)。
+        if (doc.doc_type !== "quote" && parsed.data.valid_until !== null) {
+          return {
+            ok: false,
+            code: "KMB-E101",
+            detail: "見積以外の帳票には有効期限 (valid_until) を設定できません。",
+          };
+        }
+
+        const taxRounding = doc.tax_rounding as TaxRounding;
+        const totals = computeDocumentTotals(parsed.data.lines, taxRounding);
+        const taxGuard = validateIssueTaxGuard(doc.doc_type as DocType, totals);
+        if (!taxGuard.ok) return taxGuard;
+
+        const prereq = checkIssuancePrerequisites();
+        if (!prereq.ok) return prereq;
+        const serviceClientResult = resolvePdfServiceClient(injectedClient);
+        if (!serviceClientResult.ok) return serviceClientResult;
+        const serviceClient = serviceClientResult.value;
+
+        // 冒頭で古い staging をベストエフォート掃除 (repository.cleanupOrphanRevisionStagings の
+        // JSDoc 参照 — 失敗しても訂正処理自体は継続する。cleanupExpiredPrintTokens と同型の縮退)。
+        await cleanupOrphanRevisionStagings(serviceClient, documentId);
+
+        const header = {
+          issue_date: parsed.data.issue_date,
+          transaction_date: parsed.data.transaction_date,
+          valid_until: parsed.data.valid_until,
+          billing_name: parsed.data.billing_name,
+          billing_suffix: parsed.data.billing_suffix,
+          billing_address: parsed.data.billing_address,
+          site_name: parsed.data.site_name,
+          site_address: parsed.data.site_address,
+          notes: parsed.data.notes,
+        };
+        const stagingInserted = await insertRevisionStaging(serviceClient, {
+          documentId,
+          header,
+          lines: parsed.data.lines,
+          totals,
+          createdBy: userId,
+        });
+        if (!stagingInserted.ok) return stagingInserted;
+
+        const version = doc.current_version + 1;
+        const pdfResult = await generateDocumentPdf(serviceClient, {
+          documentId,
+          version,
+          purpose: "pdf",
+          payload: { staging_id: stagingInserted.value.id },
+        });
+        if (!pdfResult.ok) return pdfResult;
+
+        // 発行者情報は訂正で変えない (凍結済み issuer_snapshot をそのまま使う — §4.3-B)。
+        const issuerParsed = zIssuerSnapshot.safeParse(doc.issuer_snapshot);
+        if (!issuerParsed.success) {
+          return {
+            ok: false,
+            code: "KMB-E901",
+            detail: "発行済み帳票の issuer_snapshot が契約 (zIssuerSnapshot) と一致しません。",
+          };
+        }
+
+        const transactionDate = parsed.data.transaction_date ?? parsed.data.issue_date;
+        const snapshotResult = buildIssuedContentSnapshot({
+          docType: doc.doc_type as DocType,
+          docNo: doc.doc_no,
+          version,
+          issueDate: parsed.data.issue_date,
+          transactionDate,
+          validUntil: parsed.data.valid_until,
+          billingName: parsed.data.billing_name,
+          billingSuffix: parsed.data.billing_suffix,
+          billingAddress: parsed.data.billing_address,
+          siteName: parsed.data.site_name,
+          siteAddress: parsed.data.site_address,
+          notes: parsed.data.notes,
+          taxRounding,
+          issuer: issuerParsed.data,
+          lines: parsed.data.lines.map((l, index) => ({
+            position: index,
+            description: l.description,
+            quantity: l.quantity,
+            unit: l.unit,
+            unit_price_jpy: l.unit_price_jpy,
+            amount_jpy: l.amount_jpy,
+            tax_category: l.tax_category,
+          })),
+          totals,
+        });
+        if (!snapshotResult.ok) return snapshotResult;
+
+        const applied = await applyDocumentRevision(client, {
+          documentId,
+          expectedUpdatedAt,
+          stagingId: stagingInserted.value.id,
+          sha256: pdfResult.value.sha256,
+          storagePath: pdfResult.value.storagePath,
+          contentSnapshot: snapshotResult.value,
+        });
+        if (!applied.ok) return applied;
+
+        const event: DocumentEventActivityPayload = {
+          document_id: documentId,
+          doc_type: doc.doc_type as DocType,
+          doc_no: doc.doc_no,
+          event: "reissued",
+          total_jpy: totals.total_jpy,
+          version: applied.value.doc_version,
+        };
+        const appended = await crmFacade.appendActivity(
+          {
+            activity_type: "document_event",
+            occurred_at: new Date().toISOString(),
+            title: `訂正発行: ${doc.doc_no} (v${applied.value.doc_version})`,
+            body: null,
+            payload: event,
+            ref_table: "issued_documents",
+            ref_id: applied.value.issued_document_id,
+            links: [{ customer_id: null, company_id: null, deal_id: doc.deal_id }],
+          },
+          ctx,
+        );
+        if (!appended.ok) {
+          console.warn(
+            `[KMB-E901] reissued (訂正発行) の appendActivity 記録に失敗しました (document=${documentId}):`,
+            appended.code,
+            appended.detail,
+          );
+        }
+
+        return {
+          ok: true,
+          value: { version: applied.value.doc_version, pdf_storage_path: pdfResult.value.storagePath },
+        };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    // ---- /print route 専用の橋渡しメソッド (Issue #50 追加。上記コメント参照) ----
+    async resolvePrintView(documentId, token) {
+      try {
+        // print route は Chromium からの無セッションアクセス (token のみが認可) のため、
+        // 常に service client を使う (injectedClient 指定時はそれを優先 — テスト注入用)。
+        const client = injectedClient ?? createSupabaseServiceClient();
+
+        const verified = await verifyAndConsumePrintToken(client, token);
+        if (!verified.ok) return verified;
+        if (verified.value.documentId !== documentId) {
+          return { ok: false, code: "KMB-E642" };
+        }
+
+        const docResult = await getDocumentById(client, documentId);
+        if (!docResult.ok) return docResult;
+        const doc = docResult.value;
+        if (!doc) return { ok: false, code: "KMB-E621", detail: "帳票が見つかりません。" };
+
+        const stagingId = verified.value.payload?.staging_id ?? null;
+        const payloadDocNo = verified.value.payload?.doc_no ?? null;
+
+        let lines: ResolvedPrintViewLine[];
+        let subtotalJpy: number;
+        let taxSummary: TaxSummary;
+        let totalJpy: number;
+        let issueDate: string | null;
+        let transactionDate: string | null;
+        let validUntil: string | null;
+        let billingName: string;
+        let billingSuffix: "様" | "御中";
+        let billingAddress: string | null;
+        let siteName: string | null;
+        let siteAddress: string | null;
+        let notes: string | null;
+
+        if (stagingId) {
+          // 訂正発行フロー (§4.3-B): DB 反映前の staging 内容を描画する。
+          const stagingResult = await getRevisionStagingById(client, stagingId);
+          if (!stagingResult.ok) return stagingResult;
+          const staging = stagingResult.value;
+          if (!staging || staging.document_id !== documentId) {
+            return { ok: false, code: "KMB-E621", detail: "訂正内容 (staging) が見つかりません。" };
+          }
+          const headerParsed = zRevisionStagingHeader.safeParse(staging.header);
+          const linesParsed = zRevisionStagingLines.safeParse(staging.lines);
+          if (!headerParsed.success || !linesParsed.success) {
+            return {
+              ok: false,
+              code: "KMB-E901",
+              detail: "訂正内容 (document_revision_stagings) の内容が契約 (zReviseDocumentInput) と一致しません。",
+            };
+          }
+          lines = linesParsed.data.map((line, index) => ({
+            position: index,
+            description: line.description,
+            quantity: line.quantity,
+            unit: line.unit,
+            unit_price_jpy: line.unit_price_jpy,
+            amount_jpy: line.amount_jpy,
+            tax_category: line.tax_category,
+          }));
+          subtotalJpy = staging.subtotal_jpy;
+          taxSummary = staging.tax_summary as TaxSummary;
+          totalJpy = staging.total_jpy;
+          issueDate = headerParsed.data.issue_date;
+          transactionDate = headerParsed.data.transaction_date;
+          validUntil = headerParsed.data.valid_until;
+          billingName = headerParsed.data.billing_name;
+          billingSuffix = headerParsed.data.billing_suffix;
+          billingAddress = headerParsed.data.billing_address;
+          siteName = headerParsed.data.site_name;
+          siteAddress = headerParsed.data.site_address;
+          notes = headerParsed.data.notes;
+        } else {
+          const linesResult = await listDocumentLines(client, documentId);
+          if (!linesResult.ok) return linesResult;
+          lines = linesResult.value.map((line) => ({
+            position: line.position,
+            description: line.description,
+            quantity: line.quantity,
+            unit: line.unit,
+            unit_price_jpy: line.unit_price_jpy,
+            amount_jpy: line.amount_jpy,
+            tax_category: line.tax_category as TaxCategory,
+          }));
+          subtotalJpy = doc.subtotal_jpy;
+          taxSummary = doc.tax_summary as TaxSummary;
+          totalJpy = doc.total_jpy;
+          issueDate = doc.issue_date;
+          transactionDate = doc.transaction_date;
+          validUntil = doc.valid_until;
+          billingName = doc.billing_name;
+          billingSuffix = doc.billing_suffix as "様" | "御中";
+          billingAddress = doc.billing_address;
+          siteName = doc.site_name;
+          siteAddress = doc.site_address;
+          notes = doc.notes;
+        }
+
+        // issuer_snapshot: 発行済み (status != 'draft') は documents.issuer_snapshot の凍結値、
+        // draft (プレビュー/発行フロー中) は settings から合成した現在値を使う (§10.3 注記)。
+        let issuer: IssuerSnapshot;
+        if (doc.status !== "draft") {
+          const parsed = zIssuerSnapshot.safeParse(doc.issuer_snapshot);
+          if (!parsed.success) {
+            return {
+              ok: false,
+              code: "KMB-E901",
+              detail: "発行済み帳票の issuer_snapshot が契約 (zIssuerSnapshot) と一致しません。",
+            };
+          }
+          issuer = parsed.data;
+        } else {
+          const built = await buildIssuerSnapshot({ mode: "service", client });
+          if (!built.ok) return built;
+          issuer = built.value;
+        }
+
+        let sealSignedUrl: string | null = null;
+        if (issuer.seal_storage_path) {
+          const { data, error } = await client.storage
+            .from(BRANDING_ASSETS_BUCKET)
+            .createSignedUrl(issuer.seal_storage_path, SEAL_SIGNED_URL_TTL_SECONDS);
+          // 解決失敗は角印の印字省略のみに degrade する (角印は法的要件ではない — §10.6)。
+          sealSignedUrl = error ? null : (data?.signedUrl ?? null);
+        }
+
+        const docNo = doc.status === "draft" ? payloadDocNo : doc.doc_no;
+        const watermark = doc.status === "draft" && verified.value.purpose === "preview";
+
+        return {
+          ok: true,
+          value: {
+            docType: doc.doc_type as DocType,
+            docNo,
+            issueDate,
+            transactionDate,
+            validUntil,
+            billingName,
+            billingSuffix,
+            billingAddress,
+            siteName,
+            siteAddress,
+            notes,
+            subtotalJpy,
+            taxSummary,
+            totalJpy,
+            issuer,
+            sealSignedUrl,
+            lines,
+            watermark,
+          },
+        };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    // ---- admin 印刷プレビュー用トークン発行 (Issue #50 追加。上記 SalesPrintFacade コメント参照) ----
+    async issuePrintPreviewToken(documentId) {
+      try {
+        const idCheck = z.string().uuid().safeParse(documentId);
+        if (!idCheck.success) return { ok: false, code: "KMB-E101", detail: idCheck.error.message };
+
+        const prereq = checkIssuancePrerequisites();
+        if (!prereq.ok) return prereq;
+        const serviceClientResult = resolvePdfServiceClient(injectedClient);
+        if (!serviceClientResult.ok) return serviceClientResult;
+
+        const tokenResult = await issuePrintToken(serviceClientResult.value, {
+          documentId: idCheck.data,
+          purpose: "preview",
+          payload: null,
+        });
+        if (!tokenResult.ok) return tokenResult;
+
+        let env: ReturnType<typeof getEnv>;
+        try {
+          env = getEnv();
+        } catch (err) {
+          return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+        }
+        const url = new URL(`/print/documents/${idCheck.data}`, env.NEXT_PUBLIC_SITE_URL);
+        url.searchParams.set("token", tokenResult.value.token);
+
+        return { ok: true, value: { url: url.toString(), expires_at: tokenResult.value.expiresAt } };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
     },
   };
 }

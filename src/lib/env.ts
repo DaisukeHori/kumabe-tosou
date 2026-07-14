@@ -65,6 +65,12 @@ const envSchema = z.object({
   // (署名検証は node:crypto 自前実装 — src/lib/telephony-signature.ts)。
   TWILIO_ACCOUNT_SID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   TWILIO_AUTH_TOKEN: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+
+  // ---- 帳票 PDF 印刷トークン (Wave3 sales。docs/design/crm-suite/02-sales.md §7.3) ----
+  // /print/documents/[id] への一時アクセスを許可する HMAC 署名の鍵素材。他の秘匿情報と同様
+  // env 管理 (Vault 対象ではない — Issue #50 実装規約リマインダ)。未設定時は発行系 UI を
+  // disabled + degrade バナーに倒す (isPrintTokenSecretConfigured() で判定)。
+  PRINT_TOKEN_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -149,4 +155,14 @@ export function isMetaOAuthConfigured(): boolean {
  */
 export function isTelephonyConfigured(): boolean {
   return Boolean(process.env.TWILIO_ACCOUNT_SID) && Boolean(process.env.TWILIO_AUTH_TOKEN);
+}
+
+/**
+ * 印刷トークン (/print/documents/[id]) の HMAC 鍵が設定済みかどうか。
+ * 未設定時は sales の発行系 (issueDocument/reissueDocument/reviseAndReissueDocument や
+ * admin の印刷プレビュー) を disabled + degrade バナーに倒す
+ * (docs/design/crm-suite/02-sales.md §7.3 末尾)。
+ */
+export function isPrintTokenSecretConfigured(): boolean {
+  return Boolean(process.env.PRINT_TOKEN_SECRET);
 }
