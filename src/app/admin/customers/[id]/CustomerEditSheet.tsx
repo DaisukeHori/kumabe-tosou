@@ -17,12 +17,16 @@ import type { CustomerCustomField, CustomerDetail, CustomerLifecycle } from "@/m
 
 import { updateCustomerAction, type CustomerUpdateFormInput } from "../actions";
 
+/** zCustomerCustomFields (crm/contracts.ts) の max(50) と同期する上限値。 */
+export const CUSTOM_FIELDS_MAX = 50;
+
 /**
  * 追加情報 (custom_fields) のクライアント側検証 (01-crm.md §5.2 zCustomerCustomFields のミラー)。
- * 両方空の行は自動 drop、片方のみ空の行とラベル重複は保存を中断してエラー表示する
- * (サーバー側 KMB-E101 と二重防御 — issue #98)。
+ * 両方空の行は自動 drop、片方のみ空の行・ラベル重複・51件以上は保存を中断してエラー表示する
+ * (サーバー側 KMB-E101 と二重防御 — issue #98)。51件超過時はサーバーの生 Zod エラー
+ * (英語 JSON) をユーザーに見せないための一次防御 (敵対的レビュー指摘の是正)。
  */
-function collectCustomFields(
+export function collectCustomFields(
   rows: { label: string; value: string }[],
 ): { ok: true; value: CustomerCustomField[] } | { ok: false; error: string } {
   const collected: CustomerCustomField[] = [];
@@ -39,6 +43,9 @@ function collectCustomFields(
     }
     seen.add(label);
     collected.push({ label, value });
+  }
+  if (collected.length > CUSTOM_FIELDS_MAX) {
+    return { ok: false, error: "項目が多すぎます。不要な行を削除してください。" };
   }
   return { ok: true, value: collected };
 }
@@ -216,13 +223,24 @@ export function CustomerEditSheet({
             <Field>
               <div className="flex items-center justify-between">
                 <FieldLabel>追加情報</FieldLabel>
-                <Button type="button" variant="ghost" size="sm" onClick={addCustomField}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={addCustomField}
+                  disabled={form.custom_fields.length >= CUSTOM_FIELDS_MAX}
+                >
                   + 項目を追加
                 </Button>
               </div>
               <div className="flex flex-col gap-2">
                 {form.custom_fields.length === 0 && (
                   <p className="text-xs text-muted-foreground">追加情報はまだありません。</p>
+                )}
+                {form.custom_fields.length >= CUSTOM_FIELDS_MAX && (
+                  <p className="text-xs text-muted-foreground">
+                    項目数が上限 ({CUSTOM_FIELDS_MAX} 件) に達しています。追加するには不要な行を削除してください。
+                  </p>
                 )}
                 {form.custom_fields.map((f, index) => (
                   <div key={index} className="flex items-center gap-2">

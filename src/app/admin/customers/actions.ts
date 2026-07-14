@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { z } from "zod";
 
 import { platformFacade } from "@/modules/platform/facade";
 import type { Result } from "@/modules/platform/contracts";
@@ -38,6 +39,22 @@ function normalizeTelOrNull(raw: string | null): { ok: true; value: string | nul
   const normalized = normalizeJpPhoneToE164(raw);
   if (normalized === null) return { ok: false };
   return { ok: true, value: normalized };
+}
+
+/**
+ * zCustomerUpdateInput の検証失敗を Result.detail 文字列へ変換する。
+ * custom_fields が 50 件を超えた場合 (too_big) は Zod の既定メッセージ
+ * (zod v4 の ZodError#message は issues の JSON.stringify — 生の英語 JSON がそのまま UI に
+ * 出てしまう) ではなく、issue #98 で約束していた日本語ガイダンスへ変換する。
+ * CustomerEditSheet の collectCustomFields (クライアント側 50 件上限チェック) をすり抜けた
+ * 場合 (API 直叩き等) の保険。
+ */
+function customerUpdateErrorDetail(error: z.ZodError): string {
+  const hasTooManyCustomFields = error.issues.some(
+    (issue) => issue.code === "too_big" && issue.path[0] === "custom_fields",
+  );
+  if (hasTooManyCustomFields) return "項目が多すぎます。不要な行を削除してください。";
+  return error.message;
 }
 
 export type CustomerFormInput = Omit<CustomerInput, "tel_e164"> & { tel_raw: string | null };
@@ -80,7 +97,7 @@ export async function updateCustomerAction(
   if (!tel.ok) return { ok: false, code: "KMB-E101", detail: "電話番号の形式が正しくありません。" };
 
   const parsed = zCustomerUpdateInput.safeParse({ ...rest, tel_e164: tel.value });
-  if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+  if (!parsed.success) return { ok: false, code: "KMB-E101", detail: customerUpdateErrorDetail(parsed.error) };
 
   const result = await crmFacade.updateCustomer(id, parsed.data, expectedUpdatedAt);
   if (!result.ok) return result;
