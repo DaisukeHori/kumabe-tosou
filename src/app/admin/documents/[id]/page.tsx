@@ -4,9 +4,11 @@ import type { Metadata } from "next";
 import { crmFacade } from "@/modules/crm/facade";
 import { createSalesFacade } from "@/modules/sales/facade";
 import type { DocumentListItem } from "@/modules/sales/contracts";
+import { createSchedulingFacade } from "@/modules/scheduling/facade";
 
 import { DocumentDetailView, type Lineage } from "./document-detail";
 import { DocumentEditor } from "./document-editor";
+import type { WorkTypeHintOption } from "./line-editor-shared";
 import type { SimulatorReferenceData } from "./simulator-reference-panel";
 
 export const dynamic = "force-dynamic";
@@ -82,10 +84,24 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
   }
 
   if (detail.document.status === "draft") {
-    const simulatorReference =
-      detail.document.doc_type === "quote" ? await resolveSimulatorReference(detail.document.deal_id) : null;
+    // 明細「作業種別ヒント」Select の候補は app 層 (本 page.tsx) が SchedulingFacade.listWorkTypes()
+    // から取得して props で渡す (scheduling の import は page.tsx のみ許可 — templates/page.tsx が
+    // PricingFacade.getActivePriceTable() を合成する前例と同型、§1.3)。失敗時は null を渡し、
+    // DocumentEditor 側が生 Input へ fallback する (Issue #97 — エラーを握り潰さない)。
+    const [simulatorReference, workTypesResult] = await Promise.all([
+      detail.document.doc_type === "quote" ? resolveSimulatorReference(detail.document.deal_id) : Promise.resolve(null),
+      createSchedulingFacade().listWorkTypes(false),
+    ]);
+    const workTypeOptions: WorkTypeHintOption[] | null = workTypesResult.ok
+      ? workTypesResult.value.map((wt) => ({ key: wt.key, label: wt.label }))
+      : null;
     return (
-      <DocumentEditor detail={detail} dealId={detail.document.deal_id} simulatorReference={simulatorReference} />
+      <DocumentEditor
+        detail={detail}
+        dealId={detail.document.deal_id}
+        simulatorReference={simulatorReference}
+        workTypeOptions={workTypeOptions}
+      />
     );
   }
 

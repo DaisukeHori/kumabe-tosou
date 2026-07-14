@@ -1647,7 +1647,7 @@ route 実装: token 検証・消費後、repository (service client) で documen
 ### 8.3 帳票編集 (draft) — /admin/documents/[id]
 
 - 上段: ヘッダフォーム (宛名 billing_name + suffix Select / 宛先住所 / 現場名・現場住所 / 発行日 (date-picker、空=発行時の今日) / 有効期限 (quote のみ表示) / 端数処理 Select (floor/round/ceil) / 備考 textarea)
-- 中段: **明細エディタ** (インライン編集テーブル): 品名 / 数量 (小数 2 位) / 単位 / 単価 (負値可) / 金額 (既定 = 数量×単価の自動計算、手動上書き可 — 上書き中は「手動」バッジ) / 税区分 Select / 作業種別ヒント (work_type_key — scheduling の work_types から datalist 候補。自由入力可)
+- 中段: **明細エディタ** (インライン編集テーブル): 品名 / 数量 (小数 2 位) / 単位 / 単価 (負値可) / 金額 (既定 = 数量×単価の自動計算、手動上書き可 — 上書き中は「手動」バッジ) / 税区分 Select / 作業種別ヒント (work_type_key — アクティブな work_types を label 表示する Select。候補は app 層 page.tsx が SchedulingFacade.listWorkTypes() から取得して props 渡し — §1.3。候補外の既存 key は「(不明: {key})」で値を保持。listWorkTypes 失敗時は生 Input へ fallback — Issue #97)
   - 行操作: 「行を追加」(Cmd+Enter) / 行削除 (行内ゴミ箱 or Cmd+Backspace) / 並べ替え (Alt+↑↓)
   - **定型行の挿入** (dropdown): 「初回治具・段取り費」/「リピートにつき段取り費免除 (値引き)」/「送料 (実費)」— J5 の標準項目。ラベルと既定単価はコード定数 (STANDARD_LINE_PRESETS、sales/contracts.ts)
   - シミュレーター由来 draft は上部に**参考パネル**: activity 'simulator_estimate' の入力スナップショット併記 (§11.2)
