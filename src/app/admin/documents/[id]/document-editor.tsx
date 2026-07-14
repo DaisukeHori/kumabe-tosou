@@ -39,7 +39,16 @@ import { DOC_TYPE_LABEL, TAX_CATEGORY_LABEL, formatJpy } from "../_shared";
 // (「同じ明細エディタを revision モードで再利用する」— canonical §8.4 注記の実装。
 // トップレベルは [id]/page.tsx の mode 分岐 (draft=DocumentEditor / issued 以降=DocumentDetailView)
 // のまま変えず、行編集ロジックのみを共通化する)。
-import { blankLine, nextKey, toDocumentLineInput, toLineState, useLineRowKeyboard, type LineState } from "./line-editor-shared";
+import {
+  blankLine,
+  nextKey,
+  toDocumentLineInput,
+  toLineState,
+  useLineRowKeyboard,
+  workTypeSelectOptions,
+  type LineState,
+  type WorkTypeHintOption,
+} from "./line-editor-shared";
 import { SimulatorReferencePanel, type SimulatorReferenceData } from "./simulator-reference-panel";
 
 const NATIVE_SELECT_CLASS = "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm";
@@ -54,10 +63,19 @@ export function DocumentEditor({
   detail,
   dealId,
   simulatorReference,
+  workTypeOptions,
 }: {
   detail: DocumentDetail;
   dealId: string;
   simulatorReference: SimulatorReferenceData | null;
+  /**
+   * 明細「作業種別ヒント」Select の候補 (アクティブな作業種別)。取得元は page.tsx が
+   * schedulingFacade.listWorkTypes() から合成する (app 層合成 — §1.3、templates/page.tsx が
+   * PricingFacade.getActivePriceTable() を合成する前例と同型)。
+   * null = 取得失敗 (Result.ok===false) — エラーを握り潰さず、生 Input へ fallback する
+   * (空 select への degrade は既存 work_type_key を「不明」枠へ落とすため禁止 — Issue #97)。
+   */
+  workTypeOptions: WorkTypeHintOption[] | null;
 }) {
   const router = useRouter();
   const doc = detail.document;
@@ -338,6 +356,12 @@ export function DocumentEditor({
           </div>
         </div>
 
+        {workTypeOptions === null && (
+          <p className="mb-2 text-xs text-destructive">
+            作業種別一覧の取得に失敗したため、作業種別ヒントは直接入力してください。
+          </p>
+        )}
+
         <div className="overflow-x-auto">
           <div className="grid min-w-[860px] grid-cols-[2fr_0.7fr_0.6fr_1fr_1fr_1.1fr_1fr_auto] gap-2 border-b border-border pb-2 text-xs font-medium text-muted-foreground">
             <span>品名</span>
@@ -405,13 +429,28 @@ export function DocumentEditor({
                   </option>
                 ))}
               </select>
-              <Input
-                aria-label="作業種別ヒント"
-                value={line.work_type_key}
-                onChange={(e) => updateLine(index, { work_type_key: e.target.value })}
-                maxLength={30}
-                placeholder="任意"
-              />
+              {workTypeOptions !== null ? (
+                <select
+                  aria-label="作業種別ヒント"
+                  className={NATIVE_SELECT_CLASS}
+                  value={line.work_type_key}
+                  onChange={(e) => updateLine(index, { work_type_key: e.target.value })}
+                >
+                  {workTypeSelectOptions(workTypeOptions, line.work_type_key).map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <Input
+                  aria-label="作業種別ヒント"
+                  value={line.work_type_key}
+                  onChange={(e) => updateLine(index, { work_type_key: e.target.value })}
+                  maxLength={30}
+                  placeholder="任意"
+                />
+              )}
               <Button type="button" variant="ghost" size="icon-sm" aria-label="行を削除" onClick={() => removeLine(index)}>
                 <span aria-hidden>🗑</span>
               </Button>

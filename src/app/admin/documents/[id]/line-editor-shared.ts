@@ -83,6 +83,26 @@ export function blankLine(): LineState {
   };
 }
 
+/** 作業種別ヒント Select の候補 1 件 (Issue #97)。schedulingFacade.listWorkTypes() の label 表示用。 */
+export type WorkTypeHintOption = { key: string; label: string };
+
+/**
+ * 明細行「作業種別ヒント」Select の option 一覧を組み立てる (Issue #97)。
+ * 先頭に「(指定なし)」(value="") を必ず含める。既存明細の work_type_key が候補 (アクティブな
+ * 作業種別) に無い場合 — 無効化/削除された場合 — は先頭に「(不明: {key})」を補って現値を保持する
+ * (silent data loss 防止: 空 select に落として既存値を失わせない)。
+ */
+export function workTypeSelectOptions(
+  options: WorkTypeHintOption[],
+  currentKey: string,
+): Array<{ value: string; label: string }> {
+  const base = [{ value: "", label: "(指定なし)" }, ...options.map((o) => ({ value: o.key, label: o.label }))];
+  if (currentKey.length > 0 && !options.some((o) => o.key === currentKey)) {
+    return [{ value: currentKey, label: `(不明: ${currentKey})` }, ...base];
+  }
+  return base;
+}
+
 export type LineKeyboardActions = {
   addLine: (atIndex?: number) => void;
   removeLine: (index: number) => void;

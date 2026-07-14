@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,70 +17,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DataTableHeaderRow, DataTableShell, dataTableRowClassName } from "@/app/admin/_ui";
+import { ColorPicker, DataTableHeaderRow, DataTableShell, dataTableRowClassName } from "@/app/admin/_ui";
 import { zWorkTypeInput, type WorkTypeInput, type WorkTypeRow } from "@/modules/scheduling/contracts";
 
 import { deleteWorkTypeAction, saveWorkTypeAction } from "../actions";
+import { generateWorkTypeKey } from "./work-type-key";
 
 const GRID_COLS = "grid-cols-[auto_1fr_auto_auto_auto_auto_auto]";
-
-/** 色入力 popover のプリセット 12 色 (§10.3)。work_types の既定 seed 色 + 汎用色を混在 */
-const COLOR_PRESETS = [
-  "#a80f22",
-  "#8d6e63",
-  "#78909c",
-  "#bdbdbd",
-  "#2e7d32",
-  "#1565c0",
-  "#f9a825",
-  "#6a1b9a",
-  "#00838f",
-  "#c62828",
-  "#4e342e",
-  "#37474f",
-];
-
-function ColorInput({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button type="button" variant="outline" size="sm" className="gap-2">
-            <span className="size-4 rounded-full border border-border" style={{ backgroundColor: value }} />
-            {value}
-          </Button>
-        }
-      />
-      <PopoverContent className="w-56">
-        <div className="grid grid-cols-6 gap-2">
-          {COLOR_PRESETS.map((hex) => (
-            <button
-              key={hex}
-              type="button"
-              aria-label={hex}
-              onClick={() => {
-                onChange(hex);
-                setOpen(false);
-              }}
-              className="size-6 rounded-full border border-border"
-              style={{ backgroundColor: hex }}
-            />
-          ))}
-        </div>
-        <Input
-          className="mt-2"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="#a80f22"
-        />
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 function WorkTypeFormDialog({
   open,
@@ -94,6 +40,11 @@ function WorkTypeFormDialog({
 }) {
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // 詳細設定 (key を含む) の折りたたみ。既定 閉 — key 重複エラー時のみ programmatic に開く (§10.3)。
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  // true = ユーザーが key 欄を直接編集済み。この間は表示名からの自動生成を止める (Issue #97)。
+  const [keyDirty, setKeyDirty] = useState(false);
 
   const {
     register,
@@ -119,6 +70,8 @@ function WorkTypeFormDialog({
   useEffect(() => {
     if (!open) return;
     setServerError(null);
+    setDetailsOpen(false);
+    setKeyDirty(false);
     reset(
       editing ?? {
         key: "",
@@ -133,6 +86,18 @@ function WorkTypeFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing]);
 
+  const label = watch("label");
+
+  // 新規作成時のみ、表示名から key を自動生成する (keyDirty=false の間だけ上書き — Issue #97)。
+  // 編集時は key が disabled のため対象外。
+  useEffect(() => {
+    if (editing !== null || keyDirty) return;
+    const trimmed = (label ?? "").trim();
+    if (trimmed.length === 0) return;
+    setValue("key", generateWorkTypeKey(trimmed), { shouldValidate: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [label, keyDirty, editing]);
+
   function onSubmit(values: WorkTypeInput) {
     setServerError(null);
     startTransition(async () => {
@@ -140,6 +105,7 @@ function WorkTypeFormDialog({
       if (!result.ok) {
         if (result.code === "KMB-E101" && result.detail?.includes("key")) {
           setError("key", { message: result.detail });
+          setDetailsOpen(true); // 折りたたみ内の隠れたエラーを見える化する (Issue #97 受入基準)
           return;
         }
         setServerError(result.detail ?? `保存に失敗しました (${result.code})`);
@@ -152,6 +118,7 @@ function WorkTypeFormDialog({
   }
 
   const color = watch("color");
+  const keyField = register("key");
 
   return (
     <Dialog
@@ -174,24 +141,18 @@ function WorkTypeFormDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
           <FieldGroup>
-            <Field data-invalid={!!errors.key}>
-              <FieldLabel htmlFor="wt-key">key</FieldLabel>
-              <Input
-                id="wt-key"
-                {...register("key")}
-                disabled={editing !== null}
-                placeholder="sanding"
-              />
-              <FieldError errors={errors.key ? [errors.key] : undefined} />
-            </Field>
             <Field data-invalid={!!errors.label}>
               <FieldLabel htmlFor="wt-label">表示名</FieldLabel>
               <Input id="wt-label" {...register("label")} />
               <FieldError errors={errors.label ? [errors.label] : undefined} />
             </Field>
-            <Field>
-              <FieldLabel>色</FieldLabel>
-              <ColorInput value={color} onChange={(hex) => setValue("color", hex, { shouldValidate: true })} />
+            <Field data-invalid={!!errors.color}>
+              <FieldLabel htmlFor="wt-color">色</FieldLabel>
+              <ColorPicker
+                id="wt-color"
+                value={color}
+                onChange={(hex) => setValue("color", hex, { shouldValidate: true })}
+              />
               <FieldError errors={errors.color ? [errors.color] : undefined} />
             </Field>
             <Field orientation="horizontal">
@@ -230,6 +191,35 @@ function WorkTypeFormDialog({
               />
               <FieldLabel htmlFor="wt-active">有効</FieldLabel>
             </Field>
+            <Accordion
+              value={detailsOpen ? ["details"] : []}
+              onValueChange={(v) => setDetailsOpen(v.includes("details"))}
+            >
+              <AccordionItem value="details">
+                <AccordionTrigger>詳細設定</AccordionTrigger>
+                <AccordionContent>
+                  <Field data-invalid={!!errors.key} className="pt-1">
+                    <FieldLabel htmlFor="wt-key">識別子 (key)</FieldLabel>
+                    <Input
+                      id="wt-key"
+                      {...keyField}
+                      onChange={(e) => {
+                        keyField.onChange(e);
+                        if (editing === null) setKeyDirty(true);
+                      }}
+                      disabled={editing !== null}
+                      placeholder="painting"
+                    />
+                    <FieldDescription>
+                      {editing !== null
+                        ? "見積明細の作業種別ヒントやテンプレートが参照する半角英数字の ID です。作成後は変更できません。"
+                        : "見積明細の作業種別ヒントやテンプレートが参照する半角英数字の ID です。表示名から自動生成されます。手動で編集した場合はその値が優先され、保存後は変更できません。"}
+                    </FieldDescription>
+                    <FieldError errors={errors.key ? [errors.key] : undefined} />
+                  </Field>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </FieldGroup>
           {serverError && <p className="text-sm text-destructive">{serverError}</p>}
           <DialogFooter>
