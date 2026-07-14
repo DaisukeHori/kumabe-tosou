@@ -33,14 +33,33 @@ function useFormFeedback(state: SettingsFormState, label: string) {
   }, [state.success, label]);
 }
 
-function UpdatedAtHint({ updatedAt, isUnset }: { updatedAt: string | null; isUnset: boolean }) {
-  if (isUnset) {
-    return <p className="text-xs text-muted-foreground">まだ設定されていません。入力して保存してください。</p>;
-  }
+function UpdatedAtHint({
+  updatedAt,
+  isUnset,
+  corrupted,
+}: {
+  updatedAt: string | null;
+  isUnset: boolean;
+  /** §6.5: 契約不一致行 (手動 SQL 事故等)。true のとき警告バナー表示 + 生 updated_at で再保存可能。
+   *  settings-forms.tsx の同名コンポーネントと同型 (レビュー指摘: telephony/business_hours タブでも
+   *  破損行の警告を表示する必要があるため、実装をここにも複製)。 */
+  corrupted?: boolean;
+}) {
   return (
-    <p className="text-xs text-muted-foreground">
-      最終更新: {updatedAt ? new Date(updatedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) : "-"}
-    </p>
+    <>
+      {corrupted && (
+        <p role="alert" className="text-sm text-destructive">
+          保存されている値が現在の形式と一致しません。保存すると入力した値で上書きされます。
+        </p>
+      )}
+      {isUnset ? (
+        <p className="text-xs text-muted-foreground">まだ設定されていません。入力して保存してください。</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          最終更新: {updatedAt ? new Date(updatedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) : "-"}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -97,7 +116,7 @@ export function TelephonyForm({
     <form ref={formRef} action={action} className="max-w-xl">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
       <SetupChecklist status={setupStatus} siteUrl={siteUrl} />
-      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
       <FieldGroup className="mt-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
@@ -244,7 +263,7 @@ export function BusinessHoursForm({
   return (
     <form ref={formRef} action={action} className="max-w-xl">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
-      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
       <FieldDescription className="mt-2">
         JST 前提です。1 日 1 窓のみ設定できます (昼休みなどの分割は非対応)。open は close より前である必要があります。
       </FieldDescription>
