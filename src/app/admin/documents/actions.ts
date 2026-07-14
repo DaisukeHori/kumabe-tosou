@@ -36,11 +36,12 @@ import { createSchedulingFacade } from "@/modules/scheduling/facade";
  * updateDealStageAction と同型 — 呼び出し側のクライアントコンポーネントが `.ok`/`.detail` を見て
  * toast (sonner) を出す)。
  *
- * `export const maxDuration = 60`: PDF 生成 (issueDocument/reissueDocument/reviseAndReissueDocument)
- * を含むため (§7.1 表)。Next.js のファイル単位設定はファイル内の全 Action に適用されるが、
- * 他の軽量 Action への実害はない (実装計画書「注意・地雷」に明記済み)。
+ * PDF 生成 (issueDocument/reissueDocument/reviseAndReissueDocument) を含むため maxDuration=60 が
+ * 必要 (§7.1 表)。ただし "use server" ファイルは async 関数以外の export を許可しない (Next.js の
+ * 制約 — `export const maxDuration` を書くとビルドが失敗する)。Vercel 上の Server Action の
+ * タイムアウトは呼び出し元ページの maxDuration に従うため、実際の設定は
+ * `src/app/admin/documents/[id]/page.tsx` 側に置いてある (このファイルからは呼び出さないこと)。
  */
-export const maxDuration = 60;
 
 const DOC_TYPE_TO_STAGE: Record<DocType, DealStage> = {
   quote: "quote_sent",

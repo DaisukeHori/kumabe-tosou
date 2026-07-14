@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCallAlertBadge, formatRemainingHoursBadge } from "@/app/admin/page";
+import { formatCallAlertBadge, formatRemainingHoursBadge } from "@/app/admin/dashboard-kpi-format";
 
 /**
  * canonical: 実装計画書 issue-61.md 成果物7/11 (00-overview §9.3)。

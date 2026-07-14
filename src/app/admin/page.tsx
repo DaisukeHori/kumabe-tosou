@@ -14,11 +14,14 @@ import type { SalesDigest } from "@/modules/sales/contracts";
 import { telephonyFacade } from "@/modules/telephony/facade";
 
 import { mondayOfWeekJst, todayJstDateOnly } from "@/app/admin/calendar/_ui/jst-time";
+import {
+  formatCallAlertBadge,
+  formatRemainingHoursBadge,
+  type CallAlertCounts,
+} from "@/app/admin/dashboard-kpi-format";
 
 export const metadata: Metadata = { title: "ダッシュボード" };
 export const dynamic = "force-dynamic";
-
-type CallAlertCounts = { failed: number; needsReview: number; stalled: number };
 
 async function loadDashboardData() {
   const weekStart = mondayOfWeekJst(todayJstDateOnly());
@@ -199,26 +202,6 @@ function CrmKpiSection({ kpi, error }: { kpi: CrmDashboardKpi | null; error: str
       )}
     </div>
   );
-}
-
-/**
- * 表示分岐ロジックの純関数抽出 (実装計画書 issue-61.md 成果物11 の設計意図に従う — Server
- * Component である本ファイルは RTL 未導入のため JSX ごとの単体テストができない。負値赤字化・
- * 0 件平常表示・null/エラー時の degrade 表示の分岐だけを純関数として切り出し、テストから直接
- * import できるようにしておく)。
- */
-export function formatRemainingHoursBadge(capacity: WeeklyCapacity | null): { label: string; negative: boolean } {
-  if (capacity === null) return { label: "—", negative: false };
-  return { label: `あと ${capacity.remaining_hours}h`, negative: capacity.remaining_hours < 0 };
-}
-
-export function formatCallAlertBadge(counts: CallAlertCounts | null): { label: string; hasAlert: boolean } {
-  if (counts === null) return { label: "—", hasAlert: false };
-  const { failed, needsReview, stalled } = counts;
-  return {
-    label: `失敗 ${failed} / 要確認 ${needsReview} / 滞留 ${stalled}`,
-    hasAlert: failed > 0 || needsReview > 0 || stalled > 0,
-  };
 }
 
 function SchedulingSalesTelephonyKpiSection({
