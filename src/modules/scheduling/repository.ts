@@ -397,6 +397,24 @@ export async function insertWorkBlocks(
   return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
 }
 
+/**
+ * countWorkBlocksBySourceDocument (#61 契約外拡張 — 03-scheduling.md §6.2 の
+ * 「各 facade は app 層 route が必要とする CRUD 拡張メソッドを追加してよい」規約に基づく新設)。
+ * `generateBlocksAction` (documents/actions.ts) の二重実行ガード用: 同一 source_document_id に
+ * 対する work_blocks が既に 1 件以上あれば「確認が必要」と判定する (cancelled 済みブロックも
+ * 「一度生成した事実」自体は変わらないため、status で絞らず単純件数を返す — facade 側の
+ * コメント参照)。
+ */
+export async function countWorkBlocksBySourceDocument(sourceDocumentId: string): Promise<number> {
+  const supabase = await createSupabaseServerClient();
+  const { count, error } = await supabase
+    .from("work_blocks")
+    .select("id", { count: "exact", head: true })
+    .eq("source_document_id", sourceDocumentId);
+  if (error) throwTypedPgError(error);
+  return count ?? 0;
+}
+
 // ============================================================
 // work_blocks — CRUD / 状態遷移 / カレンダー読み取り / キャパ集計 / 自動配置候補取得 (#53)
 // canonical: 03-scheduling.md §6.2 (facade メソッド一覧) / §5.1 (状態機械)。

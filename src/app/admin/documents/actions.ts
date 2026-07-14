@@ -22,6 +22,7 @@ import {
 } from "@/modules/sales/contracts";
 import { crmFacade } from "@/modules/crm/facade";
 import type { DealStage } from "@/modules/crm/contracts";
+import { createSchedulingFacade } from "@/modules/scheduling/facade";
 
 /**
  * `src/app/admin/documents/` の Server Actions (canonical: docs/design/crm-suite/02-sales.md §7.1)。
@@ -194,6 +195,100 @@ export async function issueDocumentAction(
   return {
     ok: true,
     value: { ...issued.value, dealStage: { from: fromStage, to: toStage, dealUpdatedAt }, dealStageSkippedReason: null },
+  };
+}
+
+// ============================================================
+// 受注確定→work_blocks 原案生成 (app 層合成 — #61、00-overview §4.1 手順5〜6 / §2.3)
+// ============================================================
+
+export type GenerateBlocksActionValue =
+  | { status: "confirm_required"; existingCount: number }
+  | { status: "done"; block_ids: string[]; skipped: Array<{ description: string; reason: string }> };
+
+/**
+ * 「作業ブロックを用意」操作 (order, issued/accepted の詳細画面)。
+ * `SalesFacade.getDocumentLinesForBlocks` (#50 実装済み) → `SchedulingFacade.generateBlocksFromLines`
+ * (#52 実装済み) を app 層で合成する。sales⇄scheduling の相互 import はモジュール境界違反のため
+ * 禁止されており、この種の合成は app 層 Server Action からのみ許可される定石
+ * (00-overview §2.3、実装計画書 issue-61.md 成果物1)。
+ *
+ * dealId は呼び出し側 (document-detail.tsx) が既に `detail.document.deal_id` として保持している
+ * ものをそのまま渡す (issueDocumentAction と同型の設計 — 上記コメント参照)。
+ *
+ * 二重実行ガード: `confirmed !== true` かつ同一 source_document_id の work_blocks が既に 1 件以上
+ * あれば実行せず `{status:"confirm_required"}` を返す (`SchedulingFacadeExtended.
+ * countBlocksBySourceDocument`、#61 でこの Issue のために新設した契約外拡張 — facade.ts 参照)。
+ * `confirmed === true` で呼び直されたときはガードを再確認せず即座に生成する (呼び出し元の確認
+ * ダイアログで一度提示済みのため — LostReasonDialog 等の既存「確認→再実行」パターンと同型)。
+ *
+ * 明細の一部が work_type_key 解決不能でも部分生成は成立させる (`generateBlocksFromLines` が
+ * skipped に理由を積んで返す)。全滅時のみ `generateBlocksFromLines` 自体が KMB-E704 を返すため、
+ * ここでは Result をそのまま透過する (呼び出し元 UI が `getErrorInfo("KMB-E704")` の既存文言
+ * 「段取りを自動生成できませんでした。テンプレートを登録するか手動で作成してください」を表示する
+ * — `src/modules/platform/errors.ts` に実装済みのため、ここで新規に文言を書かない)。
+ */
+export async function generateBlocksAction(
+  documentId: string,
+  dealId: string,
+  confirmed: boolean,
+): Promise<Result<GenerateBlocksActionValue>> {
+  const admin = await requireAdminResult();
+  if (!admin.ok) return admin;
+
+  const idParsed = z.string().uuid().safeParse(documentId);
+  if (!idParsed.success) return { ok: false, code: "KMB-E101", detail: idParsed.error.message };
+  const dealIdParsed = z.string().uuid().safeParse(dealId);
+  if (!dealIdParsed.success) return { ok: false, code: "KMB-E101", detail: dealIdParsed.error.message };
+
+  const schedulingFacade = createSchedulingFacade();
+
+  if (confirmed !== true) {
+    const existing = await schedulingFacade.countBlocksBySourceDocument(idParsed.data);
+    if (!existing.ok) return existing;
+    if (existing.value.count >= 1) {
+      return { ok: true, value: { status: "confirm_required", existingCount: existing.value.count } };
+    }
+  }
+
+  const lines = await createSalesFacade().getDocumentLinesForBlocks(idParsed.data);
+  if (!lines.ok) return lines;
+
+  // MAJOR 修正 (敵対レビュー): 上のガード (confirmed!==true 時の countBlocksBySourceDocument) と
+  // 実際の INSERT (generateBlocksFromLines 内 insertWorkBlocks) の間には check-then-act の
+  // TOCTOU ウィンドウが残る。DB 側に source_document_id の一意制約が無く (work_blocks は #53
+  // 実装済みテーブルで、本修正のスコープはマイグレーション新設不可 — DB 変更なし)、かつ
+  // generateBlocksFromLines のシグネチャに confirmed を追加すると tests/documents-generate-
+  // blocks-action.test.ts の固定アサーション (`generateBlocksFromLines には deal_id/
+  // source_document_id/lines のみを渡す`) を壊すため、facade 側では対処しない。代わりに
+  // getDocumentLinesForBlocks (往復1回分) を挟んだ直後・INSERT 直前でもう一段再検証し、この間に
+  // 別セッションが先に生成済みなら INSERT せず confirm_required を返す (二重チェックのどちらか
+  // 遅い方が勝つ実装だが、少なくとも一方は必ず検知する)。confirmed===true (ユーザーが確認ダイア
+  // ログで再生成を明示承認した経路) はこの再検証をスキップする — 既存の設計どおり「一度提示済み
+  // なら再確認しない」を維持する。なお残存する極小ウィンドウ (この再検証 〜 実 INSERT の間) は
+  // DB 側の一意インデックスが無い限り理論上ゼロにできない — 別 Issue でのマイグレーション追加を
+  // 推奨 (openIssues 参照)。
+  if (confirmed !== true) {
+    const recheck = await schedulingFacade.countBlocksBySourceDocument(idParsed.data);
+    if (!recheck.ok) return recheck;
+    if (recheck.value.count >= 1) {
+      return { ok: true, value: { status: "confirm_required", existingCount: recheck.value.count } };
+    }
+  }
+
+  const generated = await schedulingFacade.generateBlocksFromLines({
+    deal_id: dealIdParsed.data,
+    source_document_id: idParsed.data,
+    lines: lines.value,
+  });
+  if (!generated.ok) return generated;
+
+  revalidatePath("/admin/calendar");
+  revalidateDocumentPaths(idParsed.data);
+
+  return {
+    ok: true,
+    value: { status: "done", block_ids: generated.value.block_ids, skipped: generated.value.skipped },
   };
 }
 

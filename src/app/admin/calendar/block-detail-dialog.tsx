@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+
+import { updateDealStageAction } from "@/app/admin/deals/actions";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +32,7 @@ import {
 import {
   deleteBlockAction,
   placeBlockAction,
+  proposeInProductionAction,
   recordActualAction,
   resolveExternalDeletionAction,
   transitionBlockAction,
@@ -73,6 +77,7 @@ export function BlockDetailDialog({
   workTypes: WorkTypeRow[];
   onChanged: () => void;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -133,6 +138,10 @@ export function BlockDetailDialog({
 
   function handlePlace() {
     if (!block) return;
+    // 「初回配置」判定 (実装計画書 issue-61.md 成果物5): block は既にフルオブジェクトとして
+    // scope 内にあるため calendar-board.tsx のように backlog 配列を探索する必要はない。
+    const wasBacklog = block.status === "backlog";
+    const dealId = block.deal_id;
     const [h, m] = placeTime.split(":").map(Number);
     const startsAt = jstDateTimeToIso(placeDate, h, m);
     const endsAt = isoPlusHours(startsAt, block.planned_hours || 0.5);
@@ -144,6 +153,32 @@ export function BlockDetailDialog({
         return;
       }
       afterSuccess("配置しました。");
+      if (wasBacklog && dealId) void proposeInProductionAfterPlace(dealId);
+    });
+  }
+
+  /**
+   * ブロック配置成功後の「製作中に進めますか?」提案 (calendar-board.tsx の
+   * proposeInProductionIfNeeded と同一ロジック — このダイアログは calendar-board.tsx とは
+   * 別コンポーネントとしてマウントされるため、同じ提案トーストをここでも独立して発火する必要がある)。
+   */
+  async function proposeInProductionAfterPlace(dealId: string) {
+    const propose = await proposeInProductionAction(dealId);
+    if (!propose.ok || !propose.value.propose) return;
+    toast("この案件、製作中に進めますか?", {
+      action: {
+        label: "はい",
+        onClick: () => {
+          void updateDealStageAction(dealId, "in_production", propose.value.dealUpdatedAt!).then((r) => {
+            if (!r.ok) {
+              toast.error(r.detail ?? `変更できませんでした (${r.code})`);
+              return;
+            }
+            toast.success("製作中にしました。");
+            router.refresh();
+          });
+        },
+      },
     });
   }
 

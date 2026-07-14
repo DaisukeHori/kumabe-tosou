@@ -9,7 +9,10 @@ import { Surface } from "@/app/admin/_ui";
 import { DEAL_STAGE_REGISTRY, zDealStage, type DealKanbanColumn, type DealListItem, type DealStage } from "@/modules/crm/contracts";
 import { cn } from "@/lib/utils";
 
+import { getOpenBlockCountForDealAction } from "@/app/admin/calendar/actions";
+
 import { markDealLostAction, updateDealStageAction } from "./actions";
+import { CancelBlocksDialog } from "./cancel-blocks-dialog";
 import { useDealsKanbanKeyboard } from "./deals-kanban-keyboard";
 import { LostReasonDialog } from "./lost-reason-dialog";
 
@@ -62,6 +65,7 @@ export function DealsKanban({
   const [expandedPaid, setExpandedPaid] = useState(false);
   const [expandedLost, setExpandedLost] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [cancelBlocksTarget, setCancelBlocksTarget] = useState<{ dealId: string; count: number } | null>(null);
 
   useEffect(() => setColumns(initialColumns), [initialColumns]);
 
@@ -99,6 +103,12 @@ export function DealsKanban({
     } else {
       toast.success("失注にしました。");
       router.refresh();
+      // 失注確定成功後、未着手ブロックの一括キャンセル提案 (実装計画書 issue-61.md 成果物6)。
+      // カウント取得自体が失敗しても失注操作の完了体験は壊さない (Dialog を出さず黙って終了)。
+      const openCount = await getOpenBlockCountForDealAction(deal.id);
+      if (openCount.ok && openCount.value.count > 0) {
+        setCancelBlocksTarget({ dealId: deal.id, count: openCount.value.count });
+      }
     }
     setLostDialogDeal(null);
   }
@@ -252,6 +262,18 @@ export function DealsKanban({
           onOpenChange={(open) => !open && setLostDialogDeal(null)}
           dealTitle={lostDialogDeal.title}
           onConfirm={handleMarkLost}
+        />
+      )}
+      {cancelBlocksTarget && (
+        <CancelBlocksDialog
+          open={cancelBlocksTarget !== null}
+          onOpenChange={(open) => !open && setCancelBlocksTarget(null)}
+          dealId={cancelBlocksTarget.dealId}
+          count={cancelBlocksTarget.count}
+          onCancelled={() => {
+            setCancelBlocksTarget(null);
+            router.refresh();
+          }}
         />
       )}
     </div>

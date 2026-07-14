@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,12 +10,15 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Paged } from "@/modules/platform/contracts";
 import type { PlacementProposal, WeeklyCapacity, WorkBlockView, WorkTypeRow } from "@/modules/scheduling/contracts";
 
+import { updateDealStageAction } from "@/app/admin/deals/actions";
+
 import {
   applyPlacementProposalsAction,
   getBacklogBlocksAction,
   getCalendarRangeAction,
   getWeeklyCapacityAction,
   placeBlockAction,
+  proposeInProductionAction,
   proposePlacementAction,
 } from "./actions";
 import { BlockDetailDialog } from "./block-detail-dialog";
@@ -71,6 +75,7 @@ export function CalendarBoard({
   initialCapacity: WeeklyCapacity | null;
   workTypes: WorkTypeRow[];
 }) {
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [weekStart, setWeekStart] = useState<DateOnly>(initialWeekStart);
   const [monthAnchor, setMonthAnchor] = useState<DateOnly>(initialWeekStart);
@@ -145,7 +150,40 @@ export function CalendarBoard({
     void loadRange();
   }, [loadRange]);
 
+  /**
+   * ブロック配置成功後の「製作中に進めますか?」提案 (実装計画書 issue-61.md 成果物5、
+   * 00-overview §6.2 行2/03-scheduling §5.4 行2)。適用は既存 `updateDealStageAction`
+   * (`@/app/admin/deals/actions`、#44 実装済み) をそのまま呼ぶ — 新規 Action は作らない。
+   * E602/E103 は情報表示のみに留め、ブロック配置自体をロールバックしない
+   * (issueDocumentAction の dealStageSkippedReason と同じ考え方)。
+   */
+  function proposeInProductionIfNeeded(dealId: string | null) {
+    if (!dealId) return;
+    void proposeInProductionAction(dealId).then((propose) => {
+      if (!propose.ok || !propose.value.propose) return;
+      toast("この案件、製作中に進めますか?", {
+        action: {
+          label: "はい",
+          onClick: () => {
+            void updateDealStageAction(dealId, "in_production", propose.value.dealUpdatedAt!).then((r) => {
+              if (!r.ok) {
+                toast.error(r.detail ?? `変更できませんでした (${r.code})`);
+                return;
+              }
+              toast.success("製作中にしました。");
+              router.refresh();
+            });
+          },
+        },
+      });
+    });
+  }
+
   async function handlePlace(blockId: string, startsAtIso: string, endsAtIso: string, expectedUpdatedAt: string) {
+    // backlog に存在する = 初回配置 (calendar-grid の onPlaceBlock / MobileDayView の onPlace も
+    // 同じ handlePlace を通るためここ 1 箇所への追記で全経路をカバーできる。movePlacedBlock 経由の
+    // 再配置は backlog に該当ブロックが無いため自然に対象外になる — 追加ガード不要)。
+    const backlogEntry = backlog.find((b) => b.id === blockId);
     setIsBusy(true);
     const result = await placeBlockAction(blockId, startsAtIso, endsAtIso, expectedUpdatedAt);
     setIsBusy(false);
@@ -154,6 +192,7 @@ export function CalendarBoard({
       return;
     }
     await refreshAll();
+    if (backlogEntry) proposeInProductionIfNeeded(backlogEntry.deal_id);
   }
 
   async function movePlacedBlock(block: WorkBlockView, deltaMinutes: number) {
