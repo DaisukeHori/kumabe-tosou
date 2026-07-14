@@ -343,6 +343,19 @@ export const zMarkDealLostInput = z.object({
 }).strict();
 export type MarkDealLostInput = z.infer<typeof zMarkDealLostInput>;
 
+/**
+ * 終端ステージ (入金済み/失注) の案件再開 (#102)。zMarkDealLostInput と同型 (理由必須の単一入力)。
+ * to_stage は zDealInput.stage と同じ「zDealStage の部分集合 enum」の前例 (作成時 3 値制限) に倣い、
+ * 非終端 7 値のみを受け付ける (paid/lost への「再開」は無意味 — canReopenDeal が同じ集合で二重防御)。
+ */
+export const zReopenDealInput = z.object({
+  to_stage: z.enum([
+    "inquiry", "estimating", "quote_sent", "ordered", "in_production", "delivered", "invoiced",
+  ]),
+  reason: zShortText(200),
+}).strict();
+export type ReopenDealInput = z.infer<typeof zReopenDealInput>;
+
 /** 顧客マージ (§6.4)。winner = 残す側 */
 export const zMergeCustomersInput = z.object({
   winner_id: z.string().uuid(),

@@ -1132,6 +1132,8 @@ invoice のみ:      issued ◄──────► paid
 | B. 訂正発行 (内容変更) | issued/accepted (invoice は入金 0 件のみ) | `reviseAndReissueDocument` (拡張 §6.2) = 入力検証・税ガード → **staging INSERT (document_revision_stagings) → staging 内容で PDF 生成・Storage 保存 → `document_apply_revision` RPC が documents 更新 + 明細置換 + 台帳 append + version 前進を単一トランザクションで確定** (v1.1 — 乖離状態なし §4.5-4) | 明細・宛名・金額を差し替えて version+1。旧版の PDF/台帳行は不変のまま supersedes で参照。版間差分表示 (§11) の対象 |
 | C. 取消 + 再作成 | 上記で扱えないもの (種別間違い・入金済み invoice・案件違い) | **入金済み invoice は先に入金記録を全削除して issued に戻す** (§4.5-1 の自動復帰。paid に voided 遷移はなく、voidDocument も入金 0 件を要求するため — v1.1 手順明記) → `voidDocument` (理由必須) → 必要なら派生元から再 derive | 旧帳票は voided で凍結・保存継続。新帳票は新 doc_no |
 
+**crm 側 deal.stage との関係 (相互参照 — v1.2, Issue #102)**: 経路 C (入金済み invoice の取消) を実行しても `deals.stage='paid'` は自動では戻らない (帳票と案件のステージ乖離は 00-overview §6.2 が許容 — ダッシュボード乖離バッジで可視化)。deal 側を追随させたい場合は crm の `reopenDeal` (01-crm.md §4.2-8) を別途呼ぶ — 終端ステージ (paid/lost) の案件再開専用経路 (理由必須・system activity 監査・RPC 限定 DB バイパス)。sales 側の本経路 (documents 凍結解除・payments 削除) と crm 側の reopenDeal は独立した操作であり、どちらか一方だけを実行しても他方の整合性を壊さない (sales は電帳法要件を自己完結させたまま、deal.stage は単なるパイプライン管理ラベルとして扱われる)。
+
 ### 4.4 派生 (deriveDocument) の意味論
 
 - 許可表は `DERIVATION_RULES` (07 §4.11 canonical): quote→order / quote→invoice / order→delivery / delivery→invoice。表外は **E623**

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEAL_STAGE_REGISTRY, type DealStage } from "@/modules/crm/contracts";
 import {
+  canReopenDeal,
   canTransitionDealStage,
   shouldPromoteLifecycleOnWin,
   shouldRecordWonAt,
@@ -70,6 +71,62 @@ describe("canTransitionDealStage (9×9 全組合せ)", () => {
     for (const from of ALL_STAGES) {
       if (from === "paid" || from === "lost") continue;
       expect(canTransitionDealStage(from, "lost")).toEqual({ kind: "needs_reason" });
+    }
+  });
+});
+
+/**
+ * canReopenDeal (#102 — 終端ステージの案件再開ガード)。canTransitionDealStage とは独立した関数で、
+ * 既存の 9×9 マトリクス (上記) には一切影響しない (回帰確認は上のブロックが担う)。
+ * 期待値: from∈{paid,lost} かつ to∈非終端7値 の 14 セルのみ ok。残り 67 セル (9×9=81 のうち) は invalid
+ * (from が非終端の 49 セル、to が終端の 16 セル ((paid,paid)/(lost,lost) の 2 セルを含む) が invalid に含まれる)。
+ */
+describe("canReopenDeal (9×9 全組合せ — #102)", () => {
+  const NON_TERMINAL: DealStage[] = [
+    "inquiry", "estimating", "quote_sent", "ordered", "in_production", "delivered", "invoiced",
+  ];
+
+  it("全 81 通りが期待どおりに分類される (ok 14 / invalid 67)", () => {
+    let okCount = 0;
+    let invalidCount = 0;
+
+    for (const from of ALL_STAGES) {
+      for (const to of ALL_STAGES) {
+        const result = canReopenDeal(from, to);
+        const expectOk = (from === "paid" || from === "lost") && NON_TERMINAL.includes(to);
+        expect(result, `${from}→${to} は ${expectOk ? "ok" : "invalid"}`).toEqual({
+          kind: expectOk ? "ok" : "invalid",
+        });
+        if (expectOk) okCount++;
+        else invalidCount++;
+      }
+    }
+
+    expect(okCount).toBe(14);
+    expect(invalidCount).toBe(67);
+    expect(okCount + invalidCount).toBe(81);
+  });
+
+  it("paid/lost から非終端 7 値への再開はすべて ok", () => {
+    for (const from of ["paid", "lost"] as const) {
+      for (const to of NON_TERMINAL) {
+        expect(canReopenDeal(from, to), `${from}→${to}`).toEqual({ kind: "ok" });
+      }
+    }
+  });
+
+  it("終端→終端 (paid,paid)/(lost,lost)/(paid,lost)/(lost,paid) はすべて invalid (再開とは呼ばない)", () => {
+    expect(canReopenDeal("paid", "paid")).toEqual({ kind: "invalid" });
+    expect(canReopenDeal("lost", "lost")).toEqual({ kind: "invalid" });
+    expect(canReopenDeal("paid", "lost")).toEqual({ kind: "invalid" });
+    expect(canReopenDeal("lost", "paid")).toEqual({ kind: "invalid" });
+  });
+
+  it("非終端からの「再開」は invalid (再開は終端専用経路 — updateDealStage が別途担う)", () => {
+    for (const from of NON_TERMINAL) {
+      for (const to of ALL_STAGES) {
+        expect(canReopenDeal(from, to), `${from}→${to}`).toEqual({ kind: "invalid" });
+      }
     }
   });
 });

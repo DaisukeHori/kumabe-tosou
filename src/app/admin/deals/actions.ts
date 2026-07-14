@@ -10,10 +10,12 @@ import {
   zDealStage,
   zDealUpdateInput,
   zMarkDealLostInput,
+  zReopenDealInput,
   type DealInput,
   type DealStage,
   type DealUpdateInput,
   type MarkDealLostInput,
+  type ReopenDealInput,
 } from "@/modules/crm/contracts";
 
 /**
@@ -91,6 +93,26 @@ export async function markDealLostAction(
 
   revalidatePath("/admin/deals");
   revalidatePath(`/admin/deals/${id}`);
+  revalidatePath("/admin");
+  return result;
+}
+
+export async function reopenDealAction(
+  dealId: string,
+  input: ReopenDealInput,
+  expectedUpdatedAt: string,
+): Promise<Result<{ updated_at: string }>> {
+  const admin = await platformFacade.requireAdmin();
+  if (!admin.ok) return { ok: false, code: admin.code, detail: admin.detail };
+
+  const parsed = zReopenDealInput.safeParse(input);
+  if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+
+  const result = await crmFacade.reopenDeal(dealId, parsed.data, expectedUpdatedAt);
+  if (!result.ok) return result;
+
+  revalidatePath("/admin/deals");
+  revalidatePath(`/admin/deals/${dealId}`);
   revalidatePath("/admin");
   return result;
 }

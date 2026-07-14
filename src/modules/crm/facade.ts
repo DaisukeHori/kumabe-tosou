@@ -25,6 +25,7 @@ import {
   zMarkDealLostInput,
   zMergeCustomersInput,
   zNoteUpdateInput,
+  zReopenDealInput,
   zTaskInput,
   zTaskListFilter,
   zTaskUpdateInput,
@@ -56,6 +57,7 @@ import {
   type MarkDealLostInput,
   type MergeCustomersInput,
   type NoteUpdateInput,
+  type ReopenDealInput,
   type TaskInput,
   type TaskListFilter,
   type TaskListItem,
@@ -99,6 +101,7 @@ import {
   listTasksPage,
   listTimelinePage,
   mergeCustomers as mergeCustomersRepo,
+  reopenDeal as reopenDealRpc,
   resolveMergedCustomerIdSafe,
   updateCompanyWithCas,
   updateCustomerWithCas,
@@ -114,7 +117,9 @@ import {
 } from "./repository";
 import { resolveDuplicates } from "./internal/dedup";
 import { runIntakeSequence, type IntakeResult } from "./internal/intake";
-import { canTransitionDealStage, shouldPromoteLifecycleOnWin, shouldRecordWonAt } from "./internal/stage-machine";
+import {
+  canReopenDeal, canTransitionDealStage, shouldPromoteLifecycleOnWin, shouldRecordWonAt,
+} from "./internal/stage-machine";
 import { canTransitionTaskStatus } from "./internal/task-machine";
 import { parseActivityPayload } from "./internal/activity";
 import { weightedPipelineJpy } from "./internal/digest";
@@ -182,6 +187,14 @@ export interface CrmFacadeExtended extends CrmFacade {
   getDeal(id: string): Promise<Result<DealDetail>>; // 契約外拡張 (01-crm.md §6.2)
   updateDeal(id: string, input: DealUpdateInput, expectedUpdatedAt: string): Promise<Result<{ updated_at: string }>>; // 契約外拡張 (01-crm.md §6.2)
   markDealLost(id: string, input: MarkDealLostInput, expectedUpdatedAt: string): Promise<Result<void>>; // 契約外拡張 (01-crm.md §6.2)
+  // #102: 終端ステージ (入金済み/失注) の案件再開専用経路。理由必須 + 監査 activity ('system',
+  // code='deal.reopened') + RPC 限定 DB バイパス (crm_reopen_deal — GUC 'kmb.crm_reopen_unlock')。
+  // updateDealStage/markDealLost のガードは無変更 (誤操作防止は維持)。
+  reopenDeal(
+    dealId: string,
+    input: ReopenDealInput,
+    expectedUpdatedAt: string,
+  ): Promise<Result<{ updated_at: string }>>; // 契約外拡張 (01-crm.md §6.2)
   findDealByInquiry(inquiryId: string): Promise<Result<{ deal_id: string } | null>>; // 契約外拡張 (01-crm.md §6.2)
   listTimeline(target: TimelineTarget, p: TimelinePagination): Promise<Result<Paged<TimelineItem>>>; // 契約外拡張 (01-crm.md §6.2)
   updateNoteActivity(id: string, input: NoteUpdateInput, expectedUpdatedAt: string): Promise<Result<void>>; // 契約外拡張 (01-crm.md §6.2)
@@ -1328,6 +1341,83 @@ export const crmFacade: CrmFacadeExtended = {
       );
       if (!updated.ok) return updated;
       return { ok: true, value: undefined };
+    } catch (err) {
+      return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
+  async reopenDeal(dealId, rawInput, expectedUpdatedAt) {
+    try {
+      const parsed = zReopenDealInput.safeParse(rawInput);
+      if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+      const { supabase, user } = await getSessionAndClient();
+      if (!user) return { ok: false, code: "KMB-E201" };
+
+      const deal = await getDealById(supabase, dealId);
+      if (!deal.ok) return deal;
+      if (!deal.value) return { ok: false, code: "KMB-E603" };
+
+      const guard = canReopenDeal(deal.value.stage, parsed.data.to_stage);
+      if (guard.kind === "invalid") {
+        return {
+          ok: false,
+          code: "KMB-E609",
+          detail: "再開は終端ステージ (入金済み/失注) からのみ、戻し先は非終端ステージのみ指定できます",
+        };
+      }
+
+      // §4.2 不変条件1: won_at は isWon 系ステージへの初到達時に 1 回だけ記録する。lost からの再開は
+      // 「lost に落ちる前に一度も won 系ステージに到達していなかった (won_at が null のままだった)」
+      // 案件を won 系ステージ (ordered/in_production/delivered/invoiced) へ戻すケースがあり得るため、
+      // これも「初到達」に該当する (updateDealStage と同じ shouldRecordWonAt 判定を再利用 — isWon の
+      // 唯一の正は DEAL_STAGE_REGISTRY であり SQL 側に重複させない)。既に記録済みなら false を返し
+      // RPC には null を渡す (crm_reopen_deal 側は coalesce(v_deal.won_at, p_won_at) で
+      // 「既存値があれば上書きしない」を再確認する二重防御)。
+      const wonAt = shouldRecordWonAt(parsed.data.to_stage, deal.value.won_at)
+        ? new Date().toISOString()
+        : null;
+
+      const reopened = await reopenDealRpc(
+        supabase,
+        dealId,
+        parsed.data.to_stage,
+        parsed.data.reason,
+        expectedUpdatedAt,
+        wonAt,
+      );
+      if (!reopened.ok) return reopened;
+
+      // 監査 activity ('customer.merged' — facade.ts mergeCustomers と同前例)。ref_table/ref_id は
+      // null (activities_ref_pair check 許容) — 同一 deal の複数回再開が冪等キー (activity_type,
+      // ref_table, ref_id) で誤って dedup されるのを回避する (links のみで deal に紐づける)。
+      // 追記失敗は console.warn のみで主操作 (再開) は成功のまま返す (updateDealStage の lifecycle
+      // 昇格失敗時と同じ「握り潰さず明示ログ」パターン)。
+      const fromLabel = DEAL_STAGE_REGISTRY[deal.value.stage].label;
+      const toLabel = DEAL_STAGE_REGISTRY[parsed.data.to_stage].label;
+      const audit = await appendActivityRow(
+        supabase,
+        {
+          activity_type: "system",
+          occurred_at: new Date().toISOString(),
+          title: "案件を再開",
+          body: null,
+          payload: { code: "deal.reopened", detail: `${fromLabel}→${toLabel}: ${parsed.data.reason}` },
+          ref_table: null,
+          ref_id: null,
+        },
+        user.id,
+      );
+      if (audit.ok) {
+        await linkActivityRow(supabase, audit.value.row.id, {
+          customer_id: null,
+          company_id: null,
+          deal_id: dealId,
+        });
+      } else {
+        console.warn(`[KMB-E901] reopenDeal の監査 activity 追記に失敗しました:`, audit.code, audit.detail);
+      }
+
+      return { ok: true, value: { updated_at: reopened.value.new_updated_at } };
     } catch (err) {
       return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
     }
