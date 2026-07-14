@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,9 +13,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { EntityPicker, type EntityPickerItem } from "@/app/admin/_ui/entity-picker";
 import { searchCompaniesAction } from "@/app/admin/_ui/entity-search-actions";
 import { useSaveShortcut } from "@/app/admin/_ui/use-save-shortcut";
-import type { CustomerDetail, CustomerLifecycle } from "@/modules/crm/contracts";
+import type { CustomerCustomField, CustomerDetail, CustomerLifecycle } from "@/modules/crm/contracts";
 
 import { updateCustomerAction, type CustomerUpdateFormInput } from "../actions";
+
+/**
+ * 追加情報 (custom_fields) のクライアント側検証 (01-crm.md §5.2 zCustomerCustomFields のミラー)。
+ * 両方空の行は自動 drop、片方のみ空の行とラベル重複は保存を中断してエラー表示する
+ * (サーバー側 KMB-E101 と二重防御 — issue #98)。
+ */
+function collectCustomFields(
+  rows: { label: string; value: string }[],
+): { ok: true; value: CustomerCustomField[] } | { ok: false; error: string } {
+  const collected: CustomerCustomField[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const label = row.label.trim();
+    const value = row.value.trim();
+    if (label === "" && value === "") continue;
+    if (label === "" || value === "") {
+      return { ok: false, error: "追加情報は項目名・値の両方を入力してください (空の行は削除してください)。" };
+    }
+    if (seen.has(label)) {
+      return { ok: false, error: `項目名「${label}」が重複しています。` };
+    }
+    seen.add(label);
+    collected.push({ label, value });
+  }
+  return { ok: true, value: collected };
+}
 
 const LIFECYCLE_OPTIONS: { value: CustomerLifecycle; label: string }[] = [
   { value: "lead", label: "見込み" },
@@ -43,21 +70,46 @@ export function CustomerEditSheet({
     address: customer.address,
     notes: customer.notes,
     lifecycle: customer.lifecycle,
+    custom_fields: customer.custom_fields,
   });
   const [companyItem, setCompanyItem] = useState<EntityPickerItem | null>(
     customer.company_id && customer.company_name ? { id: customer.company_id, label: customer.company_name, sublabel: null } : null,
   );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focusNewFieldIndex, setFocusNewFieldIndex] = useState<number | null>(null);
+
+  function addCustomField() {
+    setFocusNewFieldIndex(form.custom_fields.length);
+    setForm((f) => ({ ...f, custom_fields: [...f.custom_fields, { label: "", value: "" }] }));
+  }
+  function updateCustomField(index: number, patch: Partial<{ label: string; value: string }>) {
+    setForm((f) => ({
+      ...f,
+      custom_fields: f.custom_fields.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    }));
+  }
+  function removeCustomField(index: number) {
+    setForm((f) => ({ ...f, custom_fields: f.custom_fields.filter((_, i) => i !== index) }));
+  }
 
   async function handleSave() {
     if (form.name.trim() === "") {
       setError("名前を入力してください。");
       return;
     }
+    const customFields = collectCustomFields(form.custom_fields);
+    if (!customFields.ok) {
+      setError(customFields.error);
+      return;
+    }
     setIsSaving(true);
     setError(null);
-    const result = await updateCustomerAction(customer.id, form, customer.updated_at);
+    const result = await updateCustomerAction(
+      customer.id,
+      { ...form, custom_fields: customFields.value },
+      customer.updated_at,
+    );
     setIsSaving(false);
     if (!result.ok) {
       if (result.code === "KMB-E103") {
@@ -160,6 +212,47 @@ export function CustomerEditSheet({
             <Field>
               <FieldLabel>メモ</FieldLabel>
               <Textarea value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value || null })} />
+            </Field>
+            <Field>
+              <div className="flex items-center justify-between">
+                <FieldLabel>追加情報</FieldLabel>
+                <Button type="button" variant="ghost" size="sm" onClick={addCustomField}>
+                  + 項目を追加
+                </Button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {form.custom_fields.length === 0 && (
+                  <p className="text-xs text-muted-foreground">追加情報はまだありません。</p>
+                )}
+                {form.custom_fields.map((f, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      autoFocus={index === focusNewFieldIndex}
+                      className="w-32 shrink-0 sm:w-40"
+                      placeholder="項目名 (例: 外壁材質)"
+                      value={f.label}
+                      onChange={(e) => updateCustomField(index, { label: e.target.value })}
+                      maxLength={30}
+                    />
+                    <Input
+                      className="flex-1"
+                      placeholder="値"
+                      value={f.value}
+                      onChange={(e) => updateCustomField(index, { value: e.target.value })}
+                      maxLength={300}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="項目を削除"
+                      onClick={() => removeCustomField(index)}
+                    >
+                      <XIcon />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </Field>
           </FieldGroup>
           <div className="flex gap-2">

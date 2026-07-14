@@ -50,6 +50,12 @@ import {
  * #61 (issue-61.md): 本 Issue は既存 facade の app 層合成のみで新規テーブル/enum/DDL を
  * 一切追加しないため、本ファイルへの新規 parity テスト追加は対象外 (受入基準「contracts-ddl-parity
  * テスト PASS (新規 DDL なしのため対象外である旨をテストコメントに明記)」を満たすための記録)。
+ *
+ * #98 (customers.custom_fields): migration 20260715000001 は customers.custom_fields jsonb 列を
+ * 追加するが、check 制約は `jsonb_typeof(custom_fields) = 'array'` の構造整合のみで enum ではない
+ * (文字数上限・重複ラベル拒否・要素 shape は zCustomerCustomFields (crm/contracts.ts) が唯一の正 —
+ * 01-crm.md §2.2 追記 / Issue #98 データモデル変更 3 に明記済み)。よって本ファイルへの新規
+ * parity テスト追加は対象外 (#61 前例に倣い記録)。
  */
 
 const MIGRATIONS_DIR = path.resolve(__dirname, "../supabase/migrations");

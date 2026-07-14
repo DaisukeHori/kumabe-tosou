@@ -1,6 +1,6 @@
 # 隈部塗装 CRM スイート — crm モジュール設計書 (01-crm)
 
-- 版: v1.2 (2026-07-11: **07-contracts-delta v1.2〜v1.7 追随** — relinkActivity の実装意味論 (§6.7 新設)・getCustomerRef/getDealRef/getDealRefs の契約メソッド表追記・§1.2 の ai-providers 将来枠記述の stale 是正。変更点は末尾更新履歴)。旧: v1.1 (2026-07-11: レビュー反映版 — 00-overview v1.0 / 07-contracts-delta v1.1 準拠)
+- 版: v1.3 (2026-07-15: **顧客カスタム項目 (Issue #98)** — customers.custom_fields jsonb (順序保持の {label,value} ペア配列) を契約外拡張のみで追加。migration 20260715000001・§2.2 追記・§5.2 zCustomerCustomFields・§5.3 CustomerDetail・§8.2 編集 Sheet「追加情報」セクション。canonical 契約 (zCustomerInput / CrmFacade シグネチャ) は無変更。変更点は末尾更新履歴)。旧: v1.2 (2026-07-11: **07-contracts-delta v1.2〜v1.7 追随** — relinkActivity の実装意味論 (§6.7 新設)・getCustomerRef/getDealRef/getDealRefs の契約メソッド表追記・§1.2 の ai-providers 将来枠記述の stale 是正。変更点は末尾更新履歴)。旧: v1.1 (2026-07-11: レビュー反映版 — 00-overview v1.0 / 07-contracts-delta v1.1 準拠)
 - 作成: Fable 5 (設計サブエージェント、model=opus 系)
 - 位置づけ: **crm モジュール (customers / companies / deals / activities / activity_links / tasks) の DDL・画面・状態機械・facade 実装意味論の正**。上位 canonical は [00-overview.md](./00-overview.md) (M0 共通基盤・エラーコード採番・認可総表・モジュール割当) と [07-contracts-delta.md](./07-contracts-delta.md) (値契約 Zod・facade シグネチャ・結合シーケンス = module-contracts.md v2.8 差分)。本書は両書と矛盾しない範囲で詳細化する (逸脱時は上位が正)。
 - 姉妹文書 (canonical 分担):
@@ -539,6 +539,48 @@ revoke all on function public.crm_merge_customers(uuid, uuid, timestamptz) from 
 grant execute on function public.crm_merge_customers(uuid, uuid, timestamptz) to authenticated;
 ```
 
+**v1.3 追記 (migration `20260715000001_customers_custom_fields.sql` — Issue #98 顧客カスタム項目)**:
+0023 の customers テーブル定義・crm_merge_customers RPC 全文は上記のまま (履歴として不変)。
+以下は 0023 に対する追加差分 (新規 migration ファイルとして適用。冪等):
+
+```sql
+alter table customers
+  add column if not exists custom_fields jsonb not null default '[]'::jsonb;
+
+comment on column customers.custom_fields is
+  '顧客カスタム項目 (契約外拡張 — 01-crm.md §5.2 zCustomerCustomFields)。順序保持のため '
+  '{label,value} ペアの配列。文字数上限・重複ラベル拒否は Zod のみが正、本 check は構造整合のみ';
+
+alter table customers drop constraint if exists customers_custom_fields_is_array;
+alter table customers add constraint customers_custom_fields_is_array
+  check (jsonb_typeof(custom_fields) = 'array');
+```
+
+`crm_merge_customers` は署名不変 (uuid, uuid, timestamptz) のまま全文差し替え。「勝者の空欄のみ敗者から補完」ブロックに以下を追加 (winner のラベルを優先し、loser のうち winner に同名ラベルが無い要素のみ末尾に append):
+
+```sql
+  update customers set
+    email      = coalesce(email, v_loser.email),
+    tel_e164   = coalesce(tel_e164, v_loser.tel_e164),
+    name_kana  = coalesce(name_kana, v_loser.name_kana),
+    address    = coalesce(address, v_loser.address),
+    company_id = coalesce(company_id, v_loser.company_id),
+    custom_fields = v_winner.custom_fields || coalesce(
+      (
+        select jsonb_agg(e)
+        from jsonb_array_elements(v_loser.custom_fields) e
+        where not exists (
+          select 1 from jsonb_array_elements(v_winner.custom_fields) w
+          where w->>'label' = e->>'label'
+        )
+      ),
+      '[]'::jsonb
+    )
+  where id = p_winner_id;
+```
+
+RLS 追加・grant 変更・index 追加はなし (既存 customers 3 ポリシーが列を包含。検索対象外のため GIN index も v1 では張らない — 一覧の q 検索対象に含めない設計判断は §2.7 と同じ「1 人運用に見合う最小実装」の裁定)。マージで統合後の項目数が Zod 上限 (50) を超えた場合、RPC は Zod を通らないため書き込み自体は成功し、次回編集 Sheet の保存が E101 で拒否される (§15.1 R1 相当のトレードオフ、詳細は Issue #98 リスク1)。
+
 ### 2.3 migration 0024 — crm-digest worker の pg_cron 登録 全文
 
 ファイル名: `supabase/migrations/20260711000024_crm_digest_cron.sql`。0011 の確立パターンを完全踏襲 (Vault 未設定なら raise notice で安全スキップ)。
@@ -858,6 +900,16 @@ import { zDateOnly, zIsoDatetime, zShortText, zTelE164 } from "@/modules/platfor
  * 他モジュールから import してはならない (契約昇格は 07-contracts-delta 改訂が先)。
  * ============================================================ */
 
+/** 顧客カスタム項目 (v1.3 — Issue #98)。順序保持のため {label,value} ペア配列。
+ *  文字数上限は Zod が唯一の正 (DDL check は jsonb_typeof='array' の構造整合のみ) */
+export const zCustomerCustomField = z.object({
+  label: zShortText(30),
+  value: z.string().min(1).max(300),
+}).strict();
+export const zCustomerCustomFields = z.array(zCustomerCustomField).max(50)
+  .refine(fs => new Set(fs.map(f => f.label)).size === fs.length, "項目名が重複しています");
+export type CustomerCustomField = z.infer<typeof zCustomerCustomField>;
+
 /** 顧客更新 (楽観排他の expectedUpdatedAt は facade 引数で別渡し) */
 export const zCustomerUpdateInput = z.object({
   kind: z.enum(["person", "company_contact"]),
@@ -869,6 +921,9 @@ export const zCustomerUpdateInput = z.object({
   address: z.string().max(200).nullable(),
   notes: z.string().max(5000).nullable(),
   lifecycle: zCustomerLifecycle,          // 全遷移許可 (§4.1)
+  // 必須 (default なし — v1.3/#98)。.default([]) にするとデプロイ跨ぎの stale クライアント
+  // (custom_fields を送らない旧編集 Sheet) が既存値を [] へ silent wipe してしまう
+  custom_fields: zCustomerCustomFields,
 }).strict();
 export type CustomerUpdateInput = z.infer<typeof zCustomerUpdateInput>;
 
@@ -1016,6 +1071,7 @@ export type CustomerDetail = CustomerListItem & {
   company_id: string | null;
   merged_into_customer_id: string | null;
   created_by: string | null;
+  custom_fields: CustomerCustomField[]; // v1.3/#98 追加 (追加順で表示)
 };
 
 export type CompanyListItem = {
@@ -1386,10 +1442,11 @@ POST /api/jobs/crm-digest        maxDuration = 60
 
 - zCustomerInput (新規) / zCustomerUpdateInput (編集) を zodResolver で共用。kind 切替で会社選択 (command ピッカー — 会社名インクリメンタル検索 + 「新しい会社を作る」)
 - **E601 (重複候補) の専用 UX**: 送信 → E601 なら Dialog「似ている顧客がいます」— 候補ごとに [開く] [この顧客に統合] [それでも新規作成 (force)] の 3 択 (P5/P17)。Esc で編集に戻る
+- **追加情報 (custom_fields — v1.3/#98)**: 編集 Sheet の「メモ」の下に新設。各行 = ラベル Input (placeholder「項目名 (例: 外壁材質)」、幅 32〜40) + 値 Input + 削除ボタン (X アイコン)。末尾に「+ 項目を追加」ボタン (ghost)。「+ 項目を追加」直後は新行のラベル Input へ autoFocus。保存時 (Cmd/Ctrl+S) に両方空の行は自動 drop、片方のみ空の行・ラベル重複はクライアント側で保存を中断しエラー表示 (サーバー E101 と二重防御)。v1 の新規作成フォーム (`CustomerForm.tsx`) では入力不可 — 作成後に詳細ページへ遷移し編集 Sheet で追記する運用 (canonical の zCustomerInput は不変のため)
 
 **顧客詳細 (`customers/[id]/page.tsx`) — 2 カラム**
 
-- 左 (プロフィール): 基本情報カード (編集 Sheet を開く「編集」ボタン) / 進行中案件リスト (DealListItem、行クリックで案件詳細へ) / open タスクリスト (チェックで complete) / 操作 dropdown-menu (「重複を統合」→ 統合 Dialog (相手を command 検索 → 確認 →mergeCustomersAction)、「アーカイブ」)
+- 左 (プロフィール): 基本情報カード (編集 Sheet を開く「編集」ボタン) / 進行中案件リスト (DealListItem、行クリックで案件詳細へ) / open タスクリスト (チェックで complete) / 操作 dropdown-menu (「重複を統合」→ 統合 Dialog (相手を command 検索 → 確認 →mergeCustomersAction)、「アーカイブ」)。基本情報カードの dl グリッドは「住所」の後に custom_fields を追加順で列挙 (v1.3/#98。0 件なら何も出さない)
 - 右 (タイムライン): ActivityTimeline 部品 (§8.5) + メモ追加ボックス (最上部固定。Textarea + Cmd+S 送信 = addNoteAction)
 - マージ済み顧客 (merged_into 非 NULL) を開いた場合: 上部に警告バナー「この顧客は○○に統合されました → [統合先を開く]」、全編集操作を無効化
 - 会社 Sheet: 会社プロフィール + 所属顧客一覧 + 会社リンクのタイムライン (v1 は company リンク activity が少ない想定のためシート内簡易表示)
@@ -1677,6 +1734,7 @@ crm の顧客/案件/会社ページで使い、Phase 3t 以降は通話詳細 (
 
 | 版 | 日付 | 内容 |
 |---|---|---|
+| v1.3 | 2026-07-15 | **顧客カスタム項目 (Issue #98)**。**§2.2**: migration `20260715000001_customers_custom_fields.sql` を追記 — `customers.custom_fields jsonb not null default '[]'` + `jsonb_typeof='array'` check (文字数上限・重複ラベル拒否は Zod のみが正)、`crm_merge_customers` の「勝者の空欄のみ補完」ブロックに custom_fields 統合 (winner 優先・loser の未重複ラベルのみ末尾 append) を追加。**§5.2**: `zCustomerCustomField` / `zCustomerCustomFields` (label max30・value max300・配列 max50・重複ラベル拒否) を新設、`zCustomerUpdateInput` に `custom_fields` を必須 (default なし — stale クライアントの silent wipe 防止) で追加。**§5.3**: `CustomerDetail` に `custom_fields: CustomerCustomField[]` を追加 (`CustomerListItem` には追加しない)。**§8.2**: 編集 Sheet に「追加情報」セクション (行の追加/編集/削除・autoFocus・クライアント側検証) を新設、基本情報カードに追加順で表示。新規作成フォーム (`CustomerForm.tsx`) は対象外 (canonical `zCustomerInput` 不変)。contracts-ddl-parity テストは新規 enum check なしのため対象外 (#61 前例踏襲、テストコメントに明記) |
 | v1.2 | 2026-07-11 | **07-contracts-delta v1.2〜v1.7 への追随** (final-check V14〜V16)。**§6.1**: 契約メソッド表に `getCustomerRef` / `getDealRef` (07 v1.2 昇格 — 最小射影・merged 終端解決込み) と `getDealRefs` (07 v1.7 batch — 不在 id 除外・空配列 ok([])・N+1 回避) を追記、`relinkActivity` (07 v1.6) を追記。**§6.7 新設**: relinkActivity の実装意味論 — 全置換手順 (parse → 存在確認 → merged 終端解決 → service 実行の DELETE + 冪等 INSERT) / RLS の「note のみ DELETE」は直接操作の制約のままとし RLS を widen しない設計判断 / 監査 'system' activity (code:'activity.relinked'、ref_id=null で毎回記録) / 非トランザクションの縮退根拠。**§3.2/§4.4**: activity_links の認可行と不変性規約に relinkActivity 経路を明記 (不変性の対象は activities 行であり、リンクの訂正は facade 経由で許す)。**§11.3**: relinkActivity 結合テスト行を追加。**§13**: facade 行を契約 13 メソッドに更新 (+50 行)。**§1.2**: 「ai-providers は契約書 §2 に将来枠として記載済み」の stale 記述を是正 (07 §D2 v1.2 で辺自体が削除済み — 将来枠の記載は存在しない) |
 | v1.1 | 2026-07-11 | レビュー反映 (BLOCKER 3 / MAJOR 9 / MINOR 系多数)。**§2.2**: 冪等 index を非部分一意化 (PostgREST の on_conflict は index_predicate を表現できず部分一意では全 INSERT が 42P10 — 設計原則として明文化)・deals 終端ステージ不変の BEFORE UPDATE トリガ追加・crm_merge_customers の CAS NULL ガード + 勝者 lifecycle 再評価。**§0.1/§6.3/§6.5**: intake 複数一致は既存採用をやめ新規 lead + ambiguous マーカーに変更 (家族共用メールの履歴混入防止)・dedup 母集団を全顧客に拡大しマージ敗者行の終端解決を到達可能に是正・archived 単一一致は lead 復帰。**§6.5/§6.6**: マーカー短絡を補修モード化 (links/simulator_estimate/タスクの backfill)・appendActivity は created:false でも links を必ず補完・price_note v1 null 固定。**§6.1**: matchCustomerByPhone 検索母集団是正・updateDealStage の (lost,lost) noop 明確化・createDeal の company_id 自動補完・createTask title 安定性の前提条件。**§6.2/§7.3**: updateDeal が新 updated_at を返す (ステージ提案連鎖のレース解消)・受注合成 (ordered→ブロック原案) の接続点 #6 追記・D6 整合と spam 事後判定の運用注記。**§4.1/§4.2/§5.2**: 既定フィルタ 'active' 化・won 昇格の冪等条件化・9×9 マトリクス期待値確定・誤失注の回復運用ガイド・INQUIRY_TYPE_LABEL を notify.ts と統一。**§8.6/§8.7**: KPI カード「今月の期待値」→「見込み合計 (加重)」改名・リード化済み判定をマーカー併用 2 段に是正。**§12**: done 行 = deal なし取込の明文化・rollback-seed.ts ENTITY_TABLE 拡張 + fail-fast 化 + FK 削除順序を受入条件化 (C7 に count 検証追加)。**§15**: R6 (spam 非同期) 追加。**§1.2**: crm→settings read 依存を明記。版行を 07-delta v1.1 準拠に是正。§11 テストケースを各是正に追随 |
 | v1.0 | 2026-07-11 | 初版。00-overview v1.0 / 07-contracts-delta v1.0 準拠。migration 0023/0024 (0025 返上)、contact_inquiries 併存裁定、マージ RPC、intake 冪等シーケンス、task_event 冪等裁定、E608 追加提案 |

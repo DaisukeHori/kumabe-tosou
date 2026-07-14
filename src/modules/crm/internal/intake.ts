@@ -150,6 +150,7 @@ async function resolveIntakeCustomer(
             address: current.value.address,
             notes: current.value.notes,
             lifecycle: "lead",
+            custom_fields: current.value.custom_fields,
           },
           current.value.updated_at,
         );

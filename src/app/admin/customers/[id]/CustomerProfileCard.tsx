@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,12 @@ export function CustomerProfileCard({ customer }: { customer: CustomerDetail }) 
         <dd>{customer.tel_e164 ?? "—"}</dd>
         <dt className="text-muted-foreground">住所</dt>
         <dd>{customer.address ?? "—"}</dd>
+        {customer.custom_fields.map((f) => (
+          <Fragment key={f.label}>
+            <dt className="text-muted-foreground">{f.label}</dt>
+            <dd className="break-words">{f.value}</dd>
+          </Fragment>
+        ))}
         <dt className="text-muted-foreground">流入元</dt>
         <dd>{customer.source}</dd>
         <dt className="text-muted-foreground">登録日</dt>

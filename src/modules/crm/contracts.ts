@@ -286,6 +286,16 @@ export type DealRef = {
  * 依存する zCustomerLifecycle / zDealStage / zTaskStatus は上の §4.10 写経部で定義済み。
  * ============================================================ */
 
+/** 顧客カスタム項目 (契約外拡張 — 01-crm.md §5.2)。順序保持のため {label,value} ペア配列。
+ *  文字数上限は Zod が唯一の正 (DDL check は jsonb_typeof='array' の構造整合のみ) */
+export const zCustomerCustomField = z.object({
+  label: zShortText(30),
+  value: z.string().min(1).max(300),
+}).strict();
+export const zCustomerCustomFields = z.array(zCustomerCustomField).max(50)
+  .refine(fs => new Set(fs.map(f => f.label)).size === fs.length, "項目名が重複しています");
+export type CustomerCustomField = z.infer<typeof zCustomerCustomField>;
+
 /** 顧客更新 (楽観排他の expectedUpdatedAt は facade 引数で別渡し) */
 export const zCustomerUpdateInput = z.object({
   kind: z.enum(["person", "company_contact"]),
@@ -297,6 +307,10 @@ export const zCustomerUpdateInput = z.object({
   address: z.string().max(200).nullable(),
   notes: z.string().max(5000).nullable(),
   lifecycle: zCustomerLifecycle,          // 全遷移許可 (§4.1)
+  // 必須 (default なし — v1.3/#98)。.default([]) にするとデプロイ跨ぎの stale クライアント
+  // (custom_fields を送らない旧編集 Sheet) が既存値を [] へ silent wipe してしまう。必須なら
+  // stale クライアントは KMB-E101 で保存失敗 → 再読み込みで解消 (データ喪失より安全)
+  custom_fields: zCustomerCustomFields,
 }).strict();
 export type CustomerUpdateInput = z.infer<typeof zCustomerUpdateInput>;
 
@@ -443,6 +457,7 @@ export type CustomerDetail = CustomerListItem & {
   company_id: string | null;
   merged_into_customer_id: string | null;
   created_by: string | null;
+  custom_fields: CustomerCustomField[]; // #98 追加 (顧客カスタム項目。追加順で表示)
 };
 
 /** 顧客カンバン 1 列 (#99 — 01-crm.md §5.3 契約外拡張)。lifecycle は全遷移許可 (§4.1) のため
