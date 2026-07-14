@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getEnv, isPrintTokenSecretConfigured, isServiceRoleConfigured } from "@/lib/env";
+import { getEnv, isPrintTokenSecretConfigured, isResendConfigured, isServiceRoleConfigured } from "@/lib/env";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type { ExecutionContext, Paged, Pagination, Result, TaxCategory } from "@/modules/platform/contracts";
@@ -30,10 +30,12 @@ import {
   zIssuerSnapshot,
   zPaymentInput,
   zReviseDocumentInput,
+  zSendDocumentEmailInput,
   zUpdateDraftDocumentInput,
   type CreateDocumentInput,
   type DocType,
   type DocumentDetail,
+  type DocumentEmailRecord,
   type DocumentListFilter,
   type DocumentListItem,
   type DocumentLineInput,
@@ -44,10 +46,12 @@ import {
   type PaymentInput,
   type ReviseDocumentInput,
   type SalesDigest,
+  type SendDocumentEmailInput,
   type TaxSummary,
   type UpdateDraftDocumentInput,
 } from "./contracts";
 import { diffIssuedSnapshots, type IssuedSnapshotDiff } from "./internal/diff";
+import { sendDocumentEmail } from "./internal/email";
 import { buildIssuerSnapshot } from "./internal/issuer";
 import { generateDocumentPdf } from "./internal/pdf";
 import { issuePrintToken, verifyAndConsumePrintToken } from "./internal/print-token";
@@ -62,13 +66,16 @@ import {
   createDraftDocument as repoCreateDraftDocument,
   deleteDraftDocument as repoDeleteDraftDocument,
   deletePayment as repoDeletePayment,
+  downloadIssuedDocumentPdf,
   finalizeDocumentIssue,
   getDocumentById,
   getIssuedDocumentByVersion,
   getRevisionStagingById,
+  insertDocumentEmail,
   insertPayment,
   insertRevisionStaging,
   issueDocumentNumber,
+  listDocumentEmails,
   listDocumentLines,
   listDocumentsPage,
   listExpiringQuotes,
@@ -202,6 +209,21 @@ export interface SalesFacadeExtended extends SalesFacade {
    * エラー: E627 (指定版が台帳に無い) / E901 (content_snapshot が zIssuedContentSnapshot と不一致)。
    */
   getIssuedContentSnapshot(documentId: string, version: number): Promise<Result<IssuedContentSnapshot>>;
+  // ---- 契約外拡張 (02-sales.md §18 → 本編化のうち #101 実装分) ----
+  /**
+   * 帳票 PDF のメール添付送信 (issue #101 — 02-sales.md §18)。expectedUpdatedAt は取らない
+   * (documents 自体を更新しないため — 送信は document_emails への追記のみで documents.updated_at は
+   * 変わらない。issueDocument 等の状態遷移系メソッドとは異なる設計)。
+   * 手順: Zod → 帳票状態ガード (draft は E621、voided/declined/expired は E623) →
+   * isResendConfigured() 早期判定 (E644) → 版検索 (E627) → PDF ダウンロード (E641) →
+   * internal/email.ts 送信 → document_emails へ結果 INSERT (成功/失敗いずれも) →
+   * 成功時のみ crmFacade.appendActivity('email', direction:'outbound') (失敗は warn のみ)。
+   * エラー: E101(Zod) / E645(宛先不正) / E621 / E623 / E627 / E640 / E641 / E644 / E901。
+   */
+  sendDocumentByEmail(
+    documentId: string,
+    input: SendDocumentEmailInput,
+  ): Promise<Result<{ document_email_id: string; sent_at: string }>>;
 }
 
 /** この Issue (#49) で実装済みのメソッドのみに絞った戻り値型 (上記コメント参照)。
@@ -243,6 +265,9 @@ export type SalesFacadePayments = Pick<
   SalesFacadeExtended,
   "recordPayment" | "deletePayment" | "getSalesDigest" | "markExpiredQuotes" | "getIssuedContentSnapshot"
 >;
+
+/** この Issue (#101) で追加実装するメソッドのみに絞った戻り値型 (上記各 Pick と同型の設計)。 */
+export type SalesFacadeDocumentEmail = Pick<SalesFacadeExtended, "sendDocumentByEmail">;
 
 /** documents.tax_rounding (zTaxRounding と同じリテラル和 — repository.ts の inline 型と 1:1) */
 type TaxRounding = "floor" | "round" | "ceil";
@@ -664,7 +689,7 @@ function checkIssuancePrerequisites(): Result<void> {
 
 export function createSalesFacade(
   injectedClient?: SupabaseClient,
-): SalesFacadeCore & SalesFacadeIssuance & SalesFacadePayments & SalesPrintFacade {
+): SalesFacadeCore & SalesFacadeIssuance & SalesFacadePayments & SalesFacadeDocumentEmail & SalesPrintFacade {
   const ctx = resolveCtx(injectedClient);
 
   return {
@@ -1360,16 +1385,24 @@ export function createSalesFacade(
         const doc = docResult.value;
         if (!doc) return { ok: false, code: "KMB-E621", detail: "帳票が見つかりません。" };
 
-        const [linesResult, paymentsResult, dealRef, versionsResult] = await Promise.all([
+        const [linesResult, paymentsResult, dealRef, versionsResult, emailsResult] = await Promise.all([
           listDocumentLines(client, documentId),
           listPayments(client, documentId),
           crmFacade.getDealRef(doc.deal_id, ctx),
           listIssuedDocumentVersions(client, documentId),
+          listDocumentEmails(client, documentId),
         ]);
         if (!linesResult.ok) return linesResult;
         if (!paymentsResult.ok) return paymentsResult;
         if (!dealRef.ok) return dealRef;
         if (!versionsResult.ok) return versionsResult;
+        if (!emailsResult.ok) return emailsResult;
+
+        // #101: document_emails には version 列が無いため、versions (listIssuedDocumentVersions) の
+        // issued_document_id→version を突き合わせて補完する (repository 層での embed join は行わない
+        // 設計 — DocumentEmailRecord の JSDoc 参照)。突合不能 (整合性崩れ) は 0 として degrade する
+        // (表示上「v0」になるだけで、送信履歴一覧自体を落とすほどの障害ではないため)。
+        const versionByIssuedId = new Map(versionsResult.value.map((v) => [v.issued_document_id, v.version]));
 
         const paidTotal = paymentsResult.value.reduce((sum, p) => sum + p.amount_jpy, 0);
 
@@ -1433,6 +1466,18 @@ export function createSalesFacade(
             issued_at: v.issued_at,
             supersedes: v.supersedes,
             storage_path: v.storage_path,
+          })),
+          emails: emailsResult.value.map((e) => ({
+            id: e.id,
+            to_email: e.to_email,
+            cc_email: e.cc_email,
+            subject: e.subject,
+            body: e.body,
+            status: e.status as DocumentEmailRecord["status"],
+            error_detail: e.error_detail,
+            provider_message_id: e.provider_message_id,
+            version: versionByIssuedId.get(e.issued_document_id) ?? 0,
+            sent_at: e.sent_at,
           })),
           balance_jpy: doc.total_jpy - paidTotal,
           derivable_to: computeDerivableTo(doc.doc_type as DocType, doc.status as DocumentStatus),
@@ -1950,6 +1995,135 @@ export function createSalesFacade(
           };
         }
         return { ok: true, value: parsed.data };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    /**
+     * canonical: 02-sales.md §18 → 本編化 (issue #101)。帳票 PDF のメール添付送信。
+     * expectedUpdatedAt を取らない (documents 自体は更新しない — 送信は document_emails への
+     * 追記のみ)。手順は SalesFacadeExtended.sendDocumentByEmail の JSDoc 参照。
+     */
+    async sendDocumentByEmail(documentId, rawInput) {
+      try {
+        const parsed = zSendDocumentEmailInput.safeParse(rawInput);
+        if (!parsed.success) {
+          // 宛先 (to) の形式不正・未指定のみ専用コード KMB-E645 に区別する (実装者判断 — contracts.ts
+          // zSendDocumentEmailInput の JSDoc 参照)。それ以外のフィールド不正は他メソッドと同じ E101。
+          const toInvalid = parsed.error.issues.some((issue) => issue.path[0] === "to");
+          if (toInvalid) {
+            return { ok: false, code: "KMB-E645", detail: parsed.error.message };
+          }
+          return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+        }
+
+        const resolved = await resolveClientAndUser(injectedClient);
+        if (!resolved.ok) return resolved;
+        const { client, userId } = resolved.value;
+
+        const docResult = await getDocumentById(client, documentId);
+        if (!docResult.ok) return docResult;
+        const doc = docResult.value;
+        if (!doc) return { ok: false, code: "KMB-E621", detail: "帳票が見つかりません。" };
+        if (doc.status === "draft") {
+          return { ok: false, code: "KMB-E621", detail: "未発行の帳票は送付できません。" };
+        }
+        if (doc.status !== "issued" && doc.status !== "accepted" && doc.status !== "paid") {
+          return {
+            ok: false,
+            code: "KMB-E623",
+            detail: `この状態の帳票は送付できません (現在: ${doc.status})。`,
+          };
+        }
+        if (doc.doc_no === null) {
+          // 発行済み系状態であれば doc_no は必ず確定済み (issueDocument と同型の到達不能ガード)。
+          return { ok: false, code: "KMB-E627", detail: "書類番号が未確定です。" };
+        }
+
+        if (!isResendConfigured()) {
+          return { ok: false, code: "KMB-E644", detail: "RESEND_API_KEY が未設定です。メールを送信できません。" };
+        }
+
+        const serviceClientResult = resolvePdfServiceClient(injectedClient);
+        if (!serviceClientResult.ok) return serviceClientResult;
+        const serviceClient = serviceClientResult.value;
+
+        const versionResult = await getIssuedDocumentByVersion(serviceClient, documentId, parsed.data.version);
+        if (!versionResult.ok) return versionResult;
+        if (!versionResult.value) {
+          return { ok: false, code: "KMB-E627", detail: "指定の版が台帳に見つかりません。" };
+        }
+
+        const downloaded = await downloadIssuedDocumentPdf(serviceClient, versionResult.value.storage_path);
+        if (!downloaded.ok) return downloaded;
+
+        // 発行者の返信先 (issuer_snapshot.email)。issued 系状態なら issuer_snapshot は必ず確定済みだが、
+        // parse に失敗しても送信自体は継続する (replyTo 省略に degrade — 主操作の送信を止めない)。
+        const issuerParsed = zIssuerSnapshot.safeParse(doc.issuer_snapshot);
+        const replyTo = issuerParsed.success ? issuerParsed.data.email : null;
+
+        const sent = await sendDocumentEmail({
+          docType: doc.doc_type as DocType,
+          docNo: doc.doc_no,
+          version: parsed.data.version,
+          to: parsed.data.to,
+          cc: parsed.data.cc,
+          subject: parsed.data.subject,
+          body: parsed.data.body,
+          replyTo,
+          pdf: downloaded.value,
+        });
+
+        // 送信結果は成功/失敗いずれも台帳に残す (issue #101 設計「失敗も台帳に残す — 監査」)。
+        const inserted = await insertDocumentEmail(client, {
+          documentId,
+          issuedDocumentId: versionResult.value.id,
+          toEmail: parsed.data.to,
+          ccEmail: parsed.data.cc,
+          subject: parsed.data.subject,
+          body: parsed.data.body,
+          status: sent.ok ? "sent" : "failed",
+          errorDetail: sent.ok ? null : (sent.detail ?? sent.code),
+          providerMessageId: sent.ok ? sent.value.provider_message_id : null,
+          createdBy: userId,
+        });
+        if (!inserted.ok) return inserted;
+
+        if (!sent.ok) return sent;
+
+        // 成功時のみ案件タイムラインへ記録 (issueDocument 手順8と同型のベストエフォート — 失敗は
+        // console.warn のみ、送信自体は成立扱い)。crm 側は direction='outbound' のみ受入れる。
+        const appended = await crmFacade.appendActivity(
+          {
+            activity_type: "email",
+            occurred_at: new Date().toISOString(),
+            title: `送付: ${doc.doc_no}`,
+            body: null,
+            payload: {
+              direction: "outbound",
+              subject: parsed.data.subject,
+              to: parsed.data.to,
+              document_id: documentId,
+              doc_no: doc.doc_no,
+              version: parsed.data.version,
+              provider_message_id: sent.value.provider_message_id,
+            },
+            ref_table: "document_emails",
+            ref_id: inserted.value.id,
+            links: [{ customer_id: null, company_id: null, deal_id: doc.deal_id }],
+          },
+          ctx,
+        );
+        if (!appended.ok) {
+          console.warn(
+            `[KMB-E901] email の appendActivity 記録に失敗しました (document=${documentId}):`,
+            appended.code,
+            appended.detail,
+          );
+        }
+
+        return { ok: true, value: { document_email_id: inserted.value.id, sent_at: inserted.value.sent_at } };
       } catch (err) {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };
       }

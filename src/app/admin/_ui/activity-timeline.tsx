@@ -12,6 +12,7 @@ import {
   HammerIcon,
   InboxIcon,
   InfoIcon,
+  MailIcon,
   PencilIcon,
   PhoneIcon,
   TrashIcon,
@@ -43,6 +44,7 @@ import { cn } from "@/lib/utils";
 import {
   INQUIRY_TYPE_LABEL,
   zCallActivityPayload,
+  zEmailActivityPayload,
   zFormSubmissionActivityPayload,
   zSimulatorEstimateActivityPayload,
   zSystemActivityPayload,
@@ -62,6 +64,7 @@ import {
 } from "./timeline-actions";
 
 type CallPayload = z.infer<typeof zCallActivityPayload>;
+type EmailPayload = z.infer<typeof zEmailActivityPayload>;
 type FormSubmissionPayload = z.infer<typeof zFormSubmissionActivityPayload>;
 type SimulatorEstimatePayload = z.infer<typeof zSimulatorEstimateActivityPayload>;
 type WorkLogPayload = z.infer<typeof zWorkLogActivityPayload>;
@@ -135,6 +138,8 @@ function ActivityIcon({ type }: { type: TimelineItem["activity_type"] }) {
       return <PencilIcon className={cls} />;
     case "call":
       return <PhoneIcon className={cls} />;
+    case "email":
+      return <MailIcon className={cls} />;
     case "form_submission":
       return <InboxIcon className={cls} />;
     case "simulator_estimate":
@@ -146,7 +151,6 @@ function ActivityIcon({ type }: { type: TimelineItem["activity_type"] }) {
     case "task_event":
       return <CheckSquareIcon className={cls} />;
     case "system":
-    case "email":
     default:
       return <InfoIcon className={cls} />;
   }
@@ -283,7 +287,27 @@ function ActivityBody({ item }: { item: TimelineItem }) {
       );
     }
 
-    case "email":
+    case "email": {
+      const p = item.payload as EmailPayload;
+      return (
+        <div className="text-sm">
+          <p>
+            {p.direction === "outbound" ? "送信" : "受信"}
+            {p.to && <span className="text-muted-foreground"> — 宛先 {p.to}</span>}
+          </p>
+          <p className="mt-1 text-muted-foreground">{p.subject}</p>
+          {p.document_id && (
+            <Link
+              href={`/admin/documents/${p.document_id}`}
+              className="mt-1 inline-block text-xs underline underline-offset-4"
+            >
+              帳票詳細へ →
+            </Link>
+          )}
+        </div>
+      );
+    }
+
     default:
       return <p className="text-sm text-muted-foreground">{item.title}</p>;
   }

@@ -97,6 +97,13 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
     ? buildLineage(siblings.value.items, { id: detail.document.id, source_document_id: detail.document.source_document_id })
     : { ancestors: [], descendants: [] };
 
+  // #101: 帳票メール送付ダイアログの既定宛先。facade 側 (SalesFacadeExtended) に crm 依存を
+  // 追加せず、app 層で dealRef.value.customer.customer_id から解決する (issue-101 設計どおり)。
+  // 取得失敗・email 未登録は null (ダイアログ側が警告バナー + 宛先手入力へ degrade — E621/E623等の
+  // ハードエラーにはしない、送付機能自体は使える状態を維持する)。
+  const customerRef = await crmFacade.getCustomerRef(dealRef.value.customer.customer_id);
+  const defaultRecipient = customerRef.ok ? customerRef.value.email : null;
+
   return (
     <DocumentDetailView
       detail={detail}
@@ -104,6 +111,8 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
       dealId={detail.document.deal_id}
       dealUpdatedAt={dealRef.value.updated_at}
       lineage={lineage}
+      defaultRecipient={defaultRecipient}
+      customerId={dealRef.value.customer.customer_id}
     />
   );
 }

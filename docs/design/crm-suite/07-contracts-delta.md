@@ -1,6 +1,9 @@
 # module-contracts.md v2.8 追加差分 (07-contracts-delta)
 
-- 版: v1.8 (2026-07-11: 最終整合 — D1 sales 行の所有テーブルに print_tokens / pdf_render_lock / document_revision_stagings (02-sales v1.1 §2.3.2 新設) と bucket branding-assets (D5 v1.2) を追記、§7.5 の「refusal→E403」を KMB-E821 一本化 (04-telephony v1.1 §9) に是正)。旧: v1.7 (2026-07-11: 02-sales v1.1 レビュー反映と対 — D8 CrmFacade に **getDealRefs (batch)** 追加 + DealRef/CustomerRef に **address** 追加 (Δs4 完結: listDocuments 50 件/頁の N+1 解消と billing_address 複製の源)、§4.10 zDocumentEventActivityPayload.event に **'payment_recorded'** 追加 (Δs5 — 'paid' は完済到達に限定)、§4.11 DocumentTotals コメントの tax.ts パス訂正 + D8 createDraftQuoteFromEstimate の「仮単価 = セル price_max」を 06 §5.4 T1 参照に訂正 (Δs6))。旧: v1.6 (2026-07-11: 04-telephony v1.1 レビュー反映と対 — §4.13 webhook 契約の route 共通則注記 (契約キー pick + 欠落 null 補完)・D8 CrmFacade.relinkActivity 追加 (通話の付け替え/解除で activity_links を張り替える経路 — 01-crm へ実装意味論の反映要)・§7.5 の created:true ガード廃止 (createTask は常に実行 — DB 冪等が担う))。旧: v1.5 (2026-07-11: 01-crm v1.1 レビュー反映と対 — D8/§7.9 の冪等 index を非部分一意へ是正 (PostgREST on_conflict 制約)・appendActivity の created:false 時 links 補完・createTask title 安定性の前提条件・zDealInput コメントの noop 縮退注記)。旧: v1.4 (2026-07-11: D7 4.12 grade_key/size_key の空文字禁止 min(1) — 03-scheduling v1.1 レビュー反映と対)。旧: v1.3 (2026-07-11: D5 の site_settings RLS を 00-overview §3.1.2c (0021) と統一 — site_settings_public_select 改名 + admin_select 併設)。旧: v1.2 (2026-07-11: レビュー指摘反映 — site_settings anon 可読キーの許可リスト化・角印 private 化 (D5)、matchCustomerByPhone の E601 是正・read メソッド昇格・SettingsFacade.get ctx (D8)、§7.5 順序是正 (activity 先行→createTask)、zDealInput.stage 作成 3 値制限、型 alias 網羅、normalizeJpPhoneToE164 完全仕様 ほか。詳細は末尾更新履歴)
+- 版: v1.9 (2026-07-14: issue #101 帳票メール送付 — D1 sales 行に document_emails を追加、§4.10
+  zEmailActivityPayload を to/document_id/doc_no/version/provider_message_id 追加で拡張し J7 Phase 2 を
+  outbound のみ段階解禁 (inbound は引き続き KMB-E604)。00-overview §3.3 に KMB-E644/E645 を追加登録)。
+  旧: v1.8 (2026-07-11: 最終整合 — D1 sales 行の所有テーブルに print_tokens / pdf_render_lock / document_revision_stagings (02-sales v1.1 §2.3.2 新設) と bucket branding-assets (D5 v1.2) を追記、§7.5 の「refusal→E403」を KMB-E821 一本化 (04-telephony v1.1 §9) に是正)。旧: v1.7 (2026-07-11: 02-sales v1.1 レビュー反映と対 — D8 CrmFacade に **getDealRefs (batch)** 追加 + DealRef/CustomerRef に **address** 追加 (Δs4 完結: listDocuments 50 件/頁の N+1 解消と billing_address 複製の源)、§4.10 zDocumentEventActivityPayload.event に **'payment_recorded'** 追加 (Δs5 — 'paid' は完済到達に限定)、§4.11 DocumentTotals コメントの tax.ts パス訂正 + D8 createDraftQuoteFromEstimate の「仮単価 = セル price_max」を 06 §5.4 T1 参照に訂正 (Δs6))。旧: v1.6 (2026-07-11: 04-telephony v1.1 レビュー反映と対 — §4.13 webhook 契約の route 共通則注記 (契約キー pick + 欠落 null 補完)・D8 CrmFacade.relinkActivity 追加 (通話の付け替え/解除で activity_links を張り替える経路 — 01-crm へ実装意味論の反映要)・§7.5 の created:true ガード廃止 (createTask は常に実行 — DB 冪等が担う))。旧: v1.5 (2026-07-11: 01-crm v1.1 レビュー反映と対 — D8/§7.9 の冪等 index を非部分一意へ是正 (PostgREST on_conflict 制約)・appendActivity の created:false 時 links 補完・createTask title 安定性の前提条件・zDealInput コメントの noop 縮退注記)。旧: v1.4 (2026-07-11: D7 4.12 grade_key/size_key の空文字禁止 min(1) — 03-scheduling v1.1 レビュー反映と対)。旧: v1.3 (2026-07-11: D5 の site_settings RLS を 00-overview §3.1.2c (0021) と統一 — site_settings_public_select 改名 + admin_select 併設)。旧: v1.2 (2026-07-11: レビュー指摘反映 — site_settings anon 可読キーの許可リスト化・角印 private 化 (D5)、matchCustomerByPhone の E601 是正・read メソッド昇格・SettingsFacade.get ctx (D8)、§7.5 順序是正 (activity 先行→createTask)、zDealInput.stage 作成 3 値制限、型 alias 網羅、normalizeJpPhoneToE164 完全仕様 ほか。詳細は末尾更新履歴)
 - 旧版: v1.1 (2026-07-11: 統合裁定 — 並列執筆された各モジュール書の契約差分申請 (04 Δ1〜Δ3 / 02 Δs1〜Δs3 / 01 E608・createCustomer ctx / 06 factor 30 ほか) と openIssue を一括裁定し反映。裁定の全記録は末尾「裁定記録」) / v1.0 (2026-07-11)
 - 作成: Fable 5 (設計サブエージェント)。v1.1 統合裁定: Fable 5 (統合裁定サブエージェント)。v1.2 レビュー反映: Fable 5 (レビュー反映サブエージェント)
 - 位置づけ: **docs/module-contracts.md (v2.7) への追加差分の完全本文**。CRM スイート (00-overview.md / 01〜06) の契約変更はすべて本書に集約する。モジュール設計者は module-contracts.md を直接編集しない (裁定 J10 — 並列衝突防止)。統合作業者は本書の D0〜D10 を指定位置にコピペ適用し、v2.8 として 1 回コミットする。
@@ -45,7 +48,7 @@
 | モジュール | 責務 | 所有テーブル | 所有エラーコード | 公開 facade |
 |---|---|---|---|---|
 | `crm` | 顧客/会社/案件/活動タイムライン (全モジュール共通ハブ)/タスク/リード取込 — 01-crm.md が親設計 | customers, companies, deals, activities, activity_links, tasks | KMB-E601〜E619 | CrmFacade |
-| `sales` | 見積/受注/納品/請求/入金消込・採番・税計算・帳票 PDF・電帳法台帳 — 02-sales.md が親設計 | documents, document_lines, payments, document_sequences, issued_documents, print_tokens, pdf_render_lock, document_revision_stagings (v1.8 追記 — 02-sales v1.1 §2.3.2 の service 専用補助 3 テーブル) (+Storage bucket: issued-documents, branding-assets) | KMB-E620〜E649 | SalesFacade |
+| `sales` | 見積/受注/納品/請求/入金消込・採番・税計算・帳票 PDF・電帳法台帳・帳票メール送付 — 02-sales.md が親設計 | documents, document_lines, payments, document_sequences, issued_documents, print_tokens, pdf_render_lock, document_revision_stagings (v1.8 追記 — 02-sales v1.1 §2.3.2 の service 専用補助 3 テーブル), document_emails (v1.9 追記 — issue #101、migration 20260714000036) (+Storage bucket: issued-documents, branding-assets) | KMB-E620〜E649 | SalesFacade |
 | `scheduling` | 作業種別/工数テンプレート/作業ブロック/実績/キャパシティ/外部カレンダー双方向同期 — 03-scheduling.md が親設計 | work_types, work_templates, work_template_items, work_blocks, calendar_connections, calendar_event_links | KMB-E701〜E739 | SchedulingFacade |
 | `telephony` | Twilio 発番設定/着信 webhook/録音/通話ジョブ (転写→議事録→タスク起票)/通話 UI — 04-telephony.md が親設計 | calls, call_recordings, call_jobs (+Storage bucket: call-audio) | KMB-E801〜E839 | TelephonyFacade |
 
@@ -419,10 +422,17 @@ export const zCallActivityPayload = z.object({
   summary: z.string().max(2000).nullable(),     // 議事録要約 (全文は call_jobs 側)
 }).strict();
 
-/** Phase 2 予約 (裁定 J7)。v1 では appendActivity が挿入を拒否する (KMB-E604) */
+/** J7 Phase 2 の段階的解禁 (v1.9 — issue #101): outbound (帳票のメール送付) のみ appendActivity が
+ *  受け入れる。inbound (受信取込) は受信基盤が無いため引き続き KMB-E604 で拒否する
+ *  (判定は crm/facade.ts appendActivity — 二段階 parse 後に payload.direction で判定)。 */
 export const zEmailActivityPayload = z.object({
   direction: z.enum(["inbound", "outbound"]),
   subject: z.string().max(200),
+  to: z.string().email().max(120).nullable(),
+  document_id: z.string().uuid().nullable(),
+  doc_no: zDocumentNo.nullable(),
+  version: z.number().int().min(1).nullable(),
+  provider_message_id: z.string().max(200).nullable(),
 }).strict();
 
 export const zFormSubmissionActivityPayload = z.object({
@@ -490,7 +500,7 @@ export const zSystemActivityPayload = z.object({
 export const ACTIVITY_PAYLOAD_SCHEMAS = {
   note: zNoteActivityPayload,
   call: zCallActivityPayload,
-  email: zEmailActivityPayload,                 // Phase 2 予約 (v1 挿入禁止)
+  email: zEmailActivityPayload,                 // J7 Phase 2 段階解禁 (outbound のみ挿入可。inbound は KMB-E604 — v1.9/#101)
   form_submission: zFormSubmissionActivityPayload,
   simulator_estimate: zSimulatorEstimateActivityPayload,
   document_event: zDocumentEventActivityPayload,
@@ -1172,7 +1182,7 @@ Server Action: SalesFacade.getDocumentLinesForBlocks(受注id)
 payload:  ACTIVITY_PAYLOAD_SCHEMAS[activity_type] で二段階 parse (KMB-E604)
 リンク:   activity_links 1 行 = 厳密に 1 対象 (customer/company/deal)。複数対象は複数行
 時刻:     occurred_at = 業務時刻 / created_at = 記録時刻。表示は occurred_at 降順 keyset
-不変:     編集/削除は type='note' のみ (KMB-E605)。'email' は Phase 2 予約 (v1 挿入禁止)
+不変:     編集/削除は type='note' のみ (KMB-E605)。'email' は outbound のみ挿入可 (v1.9/#101 — inbound は KMB-E604)
 発生源:   telephony('call') / sales('document_event') / scheduling('work_log') /
           app 層('form_submission','simulator_estimate') / crm 内部('task_event','system','note')
 ```
@@ -1226,6 +1236,7 @@ payload:  ACTIVITY_PAYLOAD_SCHEMAS[activity_type] で二段階 parse (KMB-E604)
 
 | 版 | 日付 | 内容 |
 |---|---|---|
+| v1.9 | 2026-07-14 | issue #101 帳票メール送付 (PDF 添付方式): D1 sales 行の所有テーブルに **document_emails** を追加 (migration 20260714000036) / §4.10 `zEmailActivityPayload` に **to/document_id/doc_no/version/provider_message_id** を追加し J7 Phase 2 を **outbound のみ** 段階解禁 (inbound は引き続き KMB-E604 — crm/facade.ts appendActivity が payload.direction で判定) / 00-overview §3.3 に **KMB-E644 (送信失敗) / KMB-E645 (宛先不正)** を新規登録 |
 | v1.8 | 2026-07-11 | 最終整合 (final-check 波及反映): D1 sales 行の所有テーブルに **print_tokens / pdf_render_lock / document_revision_stagings** を追記 (02-sales v1.1 §2.3.2 が新設した service 専用補助 3 テーブル — 申し送り漏れの是正) + Storage bucket に **branding-assets** を追記 (D5 v1.2 の角印 private 化で 0028 が作成) / §7.5 analyzing の「refusal→E403」を **refusal・max_tokens 打ち切り・parse 失敗いずれも KMB-E821** に是正 (04-telephony v1.1 §9 の一本化と同期) |
 | v1.7 | 2026-07-11 | 02-sales v1.1 レビュー反映と対 (裁定 #22〜#24): D8 CrmFacade に **getDealRefs(dealIds) (batch)** を追加 + CustomerRef/DealRef に **address** を追加 (Δs4 完結 — listDocuments 50 件/頁の N+1 解消・billing_address 複製の源) / §4.10 zDocumentEventActivityPayload.event に **'payment_recorded'** を追加し 'paid' を完済到達に限定 (Δs5。§7.9 の実レコード ref 例示にも追記) / §4.11 DocumentTotals コメントの tax.ts パスを `sales/tax.ts` (モジュール直下) に訂正 + D8 createDraftQuoteFromEstimate コメントの「仮単価 = セル price_max」を 06-simulator §5.4 T1 参照に訂正 (Δs6) |
 | v1.6 | 2026-07-11 | 04-telephony v1.1 レビュー反映と対: §4.13 telephony webhook 契約に **route 共通則** (署名検証後に契約キーのみ pick + 欠落キー null 補完 → parse。実 Twilio POST の余剰 10+ パラメータで .strict() が全滅する事故と、busy/no-answer の DialCallDuration 欠落を吸収) と From='anonymous' の意味論注記 / D8 CrmFacade に **relinkActivity(activityId, links, ctx?)** を追加 — activity_links の全置換 (links=[] で全解除)。appendActivity の冪等ヒットは links 補完のみで旧リンクを外せないため、通話の付け替え/解除 (04 §7.2) で誤マッチの旧顧客タイムライン残留を除去する経路 (実装意味論は 01-crm 所掌 — **要反映**) / §7.5 の「created:true のときのみ createTask」を廃止し**常に実行**へ是正 (appendActivity 成功後クラッシュでタスク恒久喪失する at-most-once 化の除去。冪等は (source_activity_id, title) 一意が担う。activity 先行順序は不変) |

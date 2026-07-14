@@ -34,6 +34,7 @@ import {
 import { DOC_TYPE_LABEL, DocumentStatusBadge, formatJpy } from "../_shared";
 import { PaymentDialog } from "./payment-dialog";
 import { RevisionDialog } from "./revision-dialog";
+import { SendEmailDialog } from "./send-email-dialog";
 import { VersionDiffDialog } from "./version-diff-dialog";
 
 const DERIVE_LABEL: Record<DocType, string> = {
@@ -70,6 +71,10 @@ function canRevise(status: string) {
 function canGenerateBlocks(docType: DocType, status: string) {
   return docType === "order" && (status === "issued" || status === "accepted");
 }
+// issue #101 (02-sales.md §18): メール送付は発行済み系状態のみ (draft は非表示 — facade 直呼びは KMB-E621)。
+function canSendEmail(status: string) {
+  return status === "issued" || status === "accepted" || status === "paid";
+}
 
 export type Lineage = { ancestors: DocumentListItem[]; descendants: DocumentListItem[] };
 
@@ -83,12 +88,17 @@ export function DocumentDetailView({
   dealId,
   dealUpdatedAt,
   lineage,
+  defaultRecipient,
+  customerId,
 }: {
   detail: DocumentDetail;
   dealTitle: string;
   dealId: string;
   dealUpdatedAt: string;
   lineage: Lineage;
+  /** #101: 顧客の登録 email (未登録は null — SendEmailDialog が警告バナー + 手入力に degrade)。 */
+  defaultRecipient: string | null;
+  customerId: string;
 }) {
   const router = useRouter();
   const doc = detail.document;
@@ -102,6 +112,7 @@ export function DocumentDetailView({
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
+  const [sendEmailOpen, setSendEmailOpen] = useState(false);
   const [generateBlocksPending, setGenerateBlocksPending] = useState(false);
   const [generateBlocksConfirm, setGenerateBlocksConfirm] = useState<{ existingCount: number } | null>(null);
   const [focusedVersionIndex, setFocusedVersionIndex] = useState(0);
@@ -345,6 +356,11 @@ export function DocumentDetailView({
         <Button type="button" variant="outline" onClick={() => void handleOpenPdf(doc.current_version)}>
           PDF を開く (Cmd/Ctrl+P)
         </Button>
+        {canSendEmail(doc.status) && (
+          <Button type="button" variant="outline" onClick={() => setSendEmailOpen(true)}>
+            メールで送付
+          </Button>
+        )}
         {canReissue(doc.status) && (
           <Button type="button" variant="outline" disabled={isPending} onClick={() => void handleReissue()}>
             再出力 (版+1)
@@ -396,6 +412,29 @@ export function DocumentDetailView({
                 <span className="text-muted-foreground">{new Date(v.issued_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</span>
                 <span className="text-muted-foreground">{v.sha256.slice(0, 8)}</span>
                 <span className="underline underline-offset-4">PDF</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Surface>
+
+      <Surface className="p-6">
+        <h2 className="mb-3 text-sm font-medium">送信履歴</h2>
+        {detail.emails.length === 0 && <p className="text-sm text-muted-foreground">送信履歴がありません。</p>}
+        {detail.emails.length > 0 && (
+          <div className="flex flex-col divide-y divide-border">
+            {detail.emails.map((e) => (
+              <div key={e.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 px-2 py-2 text-xs">
+                <span className="text-muted-foreground">
+                  {new Date(e.sent_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
+                </span>
+                <span className="truncate">
+                  {e.to_email} — {e.subject}
+                </span>
+                <span className="font-medium">v{e.version}</span>
+                <Badge variant={e.status === "failed" ? "destructive" : "outline"}>
+                  {e.status === "failed" ? "失敗" : "送信済み"}
+                </Badge>
               </div>
             ))}
           </div>
@@ -484,6 +523,15 @@ export function DocumentDetailView({
       <RevisionDialog open={revisionOpen} onOpenChange={setRevisionOpen} detail={detail} />
 
       <VersionDiffDialog open={diffOpen} onOpenChange={setDiffOpen} documentId={doc.id} versions={detail.versions} />
+
+      <SendEmailDialog
+        open={sendEmailOpen}
+        onOpenChange={setSendEmailOpen}
+        documentId={doc.id}
+        detail={detail}
+        defaultRecipient={defaultRecipient}
+        customerId={customerId}
+      />
 
       <Dialog open={generateBlocksConfirm !== null} onOpenChange={(open) => !open && setGenerateBlocksConfirm(null)}>
         <DialogContent>

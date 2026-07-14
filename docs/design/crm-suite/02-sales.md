@@ -1494,6 +1494,7 @@ payments INSERT (trigger が検証・消込 — §2.3.1)。invoice_paid = INSERT
 | `voidDocument(documentId, reason, expectedUpdatedAt)` | 取消 (理由必須)。invoice は入金 0 件のみ (E621 — facade 検証に加え **trigger が入金存在を再検証 (v1.1 §2.3.1 — 部分入金との TOCTOU ガード)**) + appendActivity(event:'voided') | E621 / E101 / E103 |
 | `reviseAndReissueDocument(documentId, input: ReviseDocumentInput, expectedUpdatedAt)` | §4.3-B (v1.1 原子化)。Zod + 税ガード → staging INSERT → PDF (staging 描画) → Storage → RPC apply_revision (documents + 台帳 + version を単一トランザクション確定) → activity 'reissued'。冒頭で古い staging / 期限切れ print_tokens をベストエフォート掃除 | E620 / E621 / E101 / E103 / E640 / E641 / E643 / E627 |
 | `deletePayment(paymentId)` | 入金訂正 (trigger が復帰処理) | E621 / E623 / E901 |
+| `sendDocumentByEmail(documentId, input: SendDocumentEmailInput)` | §18 → 本編化 (issue #101)。帳票 PDF のメール添付送信。issued/accepted/paid のみ (draft は E621、voided/declined/expired は E623) → isResendConfigured 判定 (E644) → 版検索・PDF ダウンロード → Resend 送信 → document_emails へ結果 INSERT (成功/失敗いずれも) → 成功時のみ appendActivity('email', direction:'outbound') | E101 / E645 (宛先不正) / E621 / E623 / E627 / E640 / E641 / E644 |
 | `getSalesDigest(ctx?: ExecutionContext)` | crm-digest worker (app 層 route) 用集計 (§5.2 SalesDigest)。digest route は `{mode:'service'}`、ダッシュボード (app 層) は省略 = session (07-delta v1.1 裁定 #8 で ctx 追加) | E901 |
 | `markExpiredQuotes(ctx: ExecutionContext)` | quote issued かつ valid_until < JST 今日 → expired 一括遷移 + activity 'expired'。crm-digest route が service ctx で呼ぶ | E901 |
 | `computeTotalsPreview(lines, rounding)` | `computeDocumentTotals` の facade 露出 (サーバ用。クライアントは sales/tax.ts を直接 import — pricing/estimate.ts 前例) | E101 |
@@ -1521,6 +1522,12 @@ payments INSERT (trigger が検証・消込 — §2.3.1)。invoice_paid = INSERT
 | (route) /print/documents/[id] | | | | | | | | | | | | | ● | |
 
 (E201/E202/E901 は全メソッド共通のため省略。E642 は route 専用)
+
+`sendDocumentByEmail` (issue #101) は上表の帳票発行系メソッドと直交する別軸のエラー帯 (E644/E645 —
+帳票メール送付) を使うため、表の列には含めず §6.2 の行に列挙する。エラー全列挙:
+E101(Zod・to 以外) / E645(宛先不正・未指定) / E621(draft) / E623(voided/declined/expired) /
+E627(版なし・書類番号未確定) / E640(service client 生成失敗) / E641(PDF ダウンロード失敗) /
+E644(Resend 未設定・送信失敗) / E901。
 
 ---
 
@@ -1923,7 +1930,7 @@ src/modules/sales/internal/pdf.ts               … §7.4 (紙面には関与し
 
 ## 12. エラーコード表 (必須章③ — recovery 文言)
 
-採番 canonical は 00-overview §3.3 (KMB-E620〜E649 帯 = sales 所有)。本表は errors.ts (KMB_ERRORS as const map) 登録文言の詳細化。**帯内の追加コードはなし**:
+採番 canonical は 00-overview §3.3 (KMB-E620〜E649 帯 = sales 所有)。本表は errors.ts (KMB_ERRORS as const map) 登録文言の詳細化。**帯内の追加コード (issue #101): KMB-E644 / KMB-E645**:
 
 | コード | 意味 | ユーザー向けメッセージ | recovery |
 |---|---|---|---|
@@ -1939,12 +1946,14 @@ src/modules/sales/internal/pdf.ts               … §7.4 (紙面には関与し
 | KMB-E641 | PDF 保存失敗 (Storage 書込/署名 URL) | PDF の保存に失敗しました。 | 再試行 (保存パスは sha256 入りで版ごとに一意 — 重複は版番号の進行で自然回避)。続く場合は Storage 状態を開発者へ |
 | KMB-E642 | 印刷トークン不正/期限切れ/**消費済み** (v1.1) | このプレビューの有効期限が切れました。 | 帳票画面から「印刷プレビュー」を開き直す (TTL 5 分・**1 回限り** — §7.3) |
 | KMB-E643 | PDF 生成の同時実行制限 | PDF を作成中です。しばらくしてからもう一度お試しください。 | 数秒〜十数秒後に再試行 (グローバル同時実行 1 — §7.4-1。lease は最長 90 秒で自然解放) |
+| KMB-E644 | 帳票メール送付の送信失敗 (issue #101) | メールの送信に失敗しました。 | detail を確認。RESEND_API_KEY 未設定なら env 設定が先。送信失敗は document_emails に status='failed' で記録済みのため、直せば再送できる |
+| KMB-E645 | 帳票メール送付の宛先メールアドレス不正・未指定 (issue #101) | 送信先メールアドレスが不正です。 | 宛先を確認して入力し直す (顧客に email 未登録の場合は先に顧客情報を編集するか、ダイアログで直接入力する) |
 
 運用規則:
 
 - 共用コード: E101 (Zod 入力不正 — 税ガード §5.3 含む) / E103 (楽観排他) / E201・E202 (認証・認可) / E901 (システム)。E602 (deal ステージ) は crm 帯のまま app 層合成 (§7.1-2) で扱う
 - SQL (trigger / RPC) からの送出は `raise exception 'KMB-EXXX: …'` の先頭埋め込み規約 (replace_work_image 前例) — repository がメッセージ先頭をパースして Result.code に変換する (§6.1 recordPayment の注記と同一機構)
-- E628〜E639 / E644〜E649 は未使用のまま返上 (帯は sales 予約継続。追加は 00-overview §3.3 = 契約書の改訂が先)
+- E628〜E639 / E646〜E649 は未使用のまま返上 (帯は sales 予約継続。追加は 00-overview §3.3 = 契約書の改訂が先)
 
 ---
 
@@ -1964,6 +1973,7 @@ src/modules/sales/internal/pdf.ts               … §7.4 (紙面には関与し
 | `tests/sales-issuer-snapshot.test.ts` | internal/issuer.ts | settings 'company' + 'invoice_issuer' の合成 / 任意項目 null (bank_account / seal_storage_path / tel / email / transfer_fee_note) / E626 判定 (キー行なし・issuer_name 空) / registration_number null の保持 (免税モード判定値 — §10.5) |
 | `tests/sales-diff.test.ts` | internal/diff.ts | ヘッダ 1 項目変更 / 明細の追加・削除・変更 (行文字列正規化) / 完全同一 → 空 diff (「再出力」表示の判定) / tax_summary・total の増減サマリ / older/newer の入力順防御 |
 | `tests/sales-contracts.test.ts` | contracts.ts (§5.2) | zUpdateDraftDocumentInput の refine (quote 以外で valid_until 非 null 拒否)・lines 0 行許容 (draft) / **zReviseDocumentInput の refine (quote 以外で valid_until 非 null 拒否 — v1.1。DB check の生 E901 化防止)**・lines min 1・issue_date 必須・transaction_date nullable / zIssuedContentSnapshot の代表 parse (.strict() 未知キー拒否・transaction_date 必須) / zDocumentListFilter / STANDARD_LINE_PRESETS の型・件数 (§8.3 の定型 3 行) |
+| `tests/sales-send-email.test.ts` (issue #101) | facade.ts sendDocumentByEmail (repository/crmFacade/internal/email を vi.mock — sales-facade.test.ts と同型パターン) | E621 (draft・帳票不在) / E623 (voided/declined/expired) / E627 (版なし・doc_no 未確定) / E645 (宛先不正・未指定 — to フィールド由来のみ区別) / E644 (RESEND_API_KEY 未設定・Resend API エラー) + いずれも document_emails に status='failed' 行が記録されること / 成功時の document_emails 行 (status='sent') + appendActivity('email', direction:'outbound') 呼び出し内容 / appendActivity 失敗時も送信は成功扱いで返る (console.warn 縮退) |
 
 ### 13.2 契約 parity (`tests/contracts-ddl-parity.test.ts` へ追加)
 
@@ -1971,6 +1981,7 @@ src/modules/sales/internal/pdf.ts               … §7.4 (紙面には関与し
 - DOC_NO_PREFIX ↔ migration 0022 RPC の case 式の一致 (M0 §3.4 が指定する二重定義検証 — sales フェーズで実装を担う)
 - **document_lines に列名へ `tax` を含む列が存在しないこと** (J5「明細に税額を持たない」の構造的強制の回帰テスト — §2.3.1 の注記どおり)
 - issued_documents.sha256 の check (hex 64 桁) ↔ 保存前の TS 側検証の一致
+- document_emails.status ↔ contracts.ts の zDocumentEmailStatus (issue #101 — migration 20260714000036)
 
 ### 13.3 結合テスト (supabase start — migration 0021〜0028 適用済み実 DB)
 
@@ -1986,6 +1997,7 @@ src/modules/sales/internal/pdf.ts               … §7.4 (紙面には関与し
 | payments 消込 trigger | 部分入金 (status 不変・残高計算) → 完済で paid + paid_at / 超過 E625 / DELETE で paid→issued 自動復帰 / invoice 以外 E623 / 未発行 E621 / voided への入金・削除 E621 / **UPDATE は revoke 済み grant 欠如で permission denied (0 行素通りでないこと — v1.1)** |
 | issued_documents append-only | UPDATE/DELETE が **service_role でも** E627 raise (trigger — §2.3.2) / admin session の直接 INSERT は書込ポリシー不在で拒否 (書込は RPC のみ) |
 | **Storage 不変 trigger (v1.1)** | bucket issued-documents の storage.objects UPDATE/DELETE が **service_role でも** E627 raise / INSERT (upsert:false) は通る / 他バケットは無影響 |
+| **document_emails RLS (issue #101、migration 20260714000036)** | authenticated (admin) の SELECT/INSERT は成功 / UPDATE/DELETE は grant なしで permission denied / anon は revoke 済みで全操作拒否。実 DB 適用・検証はプロジェクト運用方針 (docker 無し — 本番適用後 execute_sql 検証) に従い本 Issue 実装時点では migration ファイル作成のみに留め、適用は別途行う |
 | **print_tokens 消費 (v1.1)** | 1 回目の消費 = returning 1 行 / 2 回目 = 0 行 (403 E642 相当) / 期限切れ = 0 行 / anon・authenticated の直接アクセス不可 (revoke) |
 | **pdf_render_lock lease (v1.1)** | CAS 取得成功 → 並行 2 本目は 0 行 (E643) / locked_until 経過後に再取得可 / 返却 (locked_until=now) 直後に取得可 |
 | RLS マトリクス §3.2 全セル | anon/admin/service の 3 クライアント × 全テーブル (補助 3 テーブル含む) × SELECT/INSERT/UPDATE/DELETE。**admin の列 grant** (doc_no / current_version / issuer_snapshot / issued_at / paid_at の直接 UPDATE → **permission denied** — v1.1 revoke 完全化の回帰点) / documents INSERT の status='draft' 限定 / DELETE の draft 限定 |
@@ -2117,10 +2129,14 @@ src/modules/sales/internal/pdf.ts               … §7.4 (紙面には関与し
 
 ## 18. 将来拡張 (契約予約・拡張余地 — 実装しない)
 
+**「帳票のメール送付 (J7 Phase 2)」は issue #101 で実装済みのため本表から除外した** (PDF「添付」方式。
+署名 URL 方式は TTL 10 分でメール記載に不適のため不採用 — 判断根拠は #101 設計「方式判断」参照)。
+実装内容は §6.2 `sendDocumentByEmail` / §12 KMB-E644・E645 / migration 20260714000036 (document_emails) を参照。
+残る将来拡張は「BCC ログ・受信取込 (inbound)」のみ (00-overview §0.5)。
+
 | 拡張 | 現設計での受け口 |
 |---|---|
 | 適格簡易請求書 (宛名なし様式 — ext-hubspot B-5) | 紙面テンプレートの分岐追加のみで対応可 (通販 = 不特定多数向け)。DDL・契約変更不要 (billing_name は保持したまま印字だけ省略、税率/税額の一方記載は §10.4 の縮約)。v1 は常にフル様式 (§0.5) |
-| 帳票のメール送付 (J7 Phase 2) | activity_type 'email' 予約済み (00-overview §3.2.3)。送付は署名 URL または添付。documents 側の変更不要 |
 | 分割請求 | 同一 source からの多重派生は DDL・派生規則上すでに許容 (§4.4 — v1 は UI 警告のみ)。将来は派生 UI に分割金額の補助を足すだけ |
 | 源泉徴収の減算行 (他業種転用時のみ) | 塗装業は不要で欄を設けない方針を維持 (B-7、§0.5)。転用時は「税率別集計の後段の任意減算行」として合計欄拡張で吸収 (明細・税計算は不変) |
 | 銀行 API / 会計 (freee 等) 連携による自動消込 | payments の構造は不変 (取込元が増えるのみ。method/memo で出所記録)。§0.5 |

@@ -240,7 +240,43 @@ export type DocumentListFilter = z.infer<typeof zDocumentListFilter>;
 
 /** 入金記録入力は zPaymentInput (07 §4.11 canonical) をそのまま使用 */
 
+/** 帳票メール送付入力 (sendDocumentByEmail — #101 契約外拡張)。document_id/issued_document_id は
+ *  facade シグネチャの第 1 引数 (documentId) と発行済み版の解決結果から得るため、本スキーマには含めない。
+ *  `to` の形式検証は Zod の `.email()` に委ねるが、facade はここでの parse 失敗のうち `to` フィールド
+ *  由来のものを KMB-E645 (送信先メールアドレス不正・未指定) として区別して返す (それ以外の
+ *  フィールド不正は他メソッドと同じ KMB-E101 — 実装者判断。openIssues 参照)。 */
+export const zSendDocumentEmailInput = z.object({
+  to: z.string().email().max(120),
+  cc: z.string().email().max(120).nullable(),
+  subject: zShortText(200),
+  body: z.string().max(5000),
+  version: z.number().int().min(1),
+}).strict();
+export type SendDocumentEmailInput = z.infer<typeof zSendDocumentEmailInput>;
+
+/** document_emails.status (DB check 制約と 1:1 — parity テスト対象)。DocumentEmailRecord.status /
+ *  repository の INSERT 値の唯一の正 (facade は文字列リテラルを直書きせずこの enum を使う)。 */
+export const zDocumentEmailStatus = z.enum(["sent", "failed"]);
+export type DocumentEmailStatus = z.infer<typeof zDocumentEmailStatus>;
+
 /* ---------- 読み取りビュー型 (Zod 化しない — DB 出力の正しさは repository + DDL が保証。既存規約 §4.9) ---------- */
+
+/** 帳票メール送付の送信履歴 1 行 (getDocumentDetail.emails — #101)。version は document_emails 自体には
+ *  列が無く、issued_document_id を versions (listIssuedDocumentVersions 由来) と突き合わせて facade が
+ *  補完する (repository 層での embed join は行わない — 既存 listDocuments の deal_title 解決と同じ
+ *  「facade 側で軽量な id→値の map を作る」定石)。 */
+export type DocumentEmailRecord = {
+  id: string;
+  to_email: string;
+  cc_email: string | null;
+  subject: string;
+  body: string;
+  status: DocumentEmailStatus;
+  error_detail: string | null;
+  provider_message_id: string | null;
+  version: number;
+  sent_at: string;
+};
 
 export type DocumentListItem = {
   id: string;
@@ -298,6 +334,9 @@ export type DocumentDetail = {
     issued_document_id: string; version: number; sha256: string; issued_at: string;
     supersedes: string | null; storage_path: string;
   }>;
+  // #101 追加: 帳票メール送付の送信履歴 (versions/payments と同列の集約)。draft (常に空配列) にも
+  // 渡るが、DocumentEditor 側は参照しないため後方互換に影響しない (issue-101 設計「リスク6」)。
+  emails: DocumentEmailRecord[];
   balance_jpy: number;              // invoice のみ意味を持つ (total − Σ入金)
   derivable_to: Array<z.infer<typeof zDocType>>; // DERIVATION_RULES × 現状態から算出
 };

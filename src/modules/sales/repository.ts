@@ -998,9 +998,13 @@ export async function applyDocumentRevision(
 // issued_documents (発行控え台帳 — 読み取りのみ。書込は上記 RPC 経由)
 // ============================================================
 
-export type IssuedDocumentVersionRow = { storage_path: string };
+/** #101: id (issued_document_id) を追加 — sendDocumentByEmail が document_emails.issued_document_id
+ *  (FK, not null) の値として必要とするため (createSignedPdfUrl は storage_path のみ使い、id は無視する
+ *  ので既存呼び出し元への影響はない — 追加のみの後方互換な拡張)。 */
+export type IssuedDocumentVersionRow = { id: string; storage_path: string };
 
-/** createSignedPdfUrl (facade — #50) の版検索。0 行 = 版なし (呼び出し側が KMB-E627 に変換)。 */
+/** createSignedPdfUrl (facade — #50) / sendDocumentByEmail (facade — #101) の版検索。
+ *  0 行 = 版なし (呼び出し側が KMB-E627 に変換)。 */
 export async function getIssuedDocumentByVersion(
   client: SupabaseClient,
   documentId: string,
@@ -1008,12 +1012,106 @@ export async function getIssuedDocumentByVersion(
 ): Promise<Result<IssuedDocumentVersionRow | null>> {
   const { data, error } = await client
     .from("issued_documents")
-    .select("storage_path")
+    .select("id, storage_path")
     .eq("document_id", documentId)
     .eq("version", version)
     .maybeSingle();
   if (error) return pgErrorToResult(error);
   return { ok: true, value: (data as IssuedDocumentVersionRow | null) ?? null };
+}
+
+/**
+ * 発行済み PDF のダウンロード (sendDocumentByEmail — #101。uploadIssuedDocumentPdf の対)。
+ * Storage の失敗は pgErrorToResult を使わず KMB-E641 に直接写像する (uploadIssuedDocumentPdf と同旨 —
+ * StorageError は Postgres エラーコードを持たないため)。data が null (エラー無しだが本文欠落) も
+ * 同じく E641 として扱う (地雷回避: 空 Buffer を ok:true で返して呼び出し元が空 PDF を送付する事故を防ぐ)。
+ */
+export async function downloadIssuedDocumentPdf(
+  client: SupabaseClient,
+  path: string,
+): Promise<Result<Buffer>> {
+  const { data, error } = await client.storage.from(ISSUED_DOCUMENTS_BUCKET).download(path);
+  if (error || !data) {
+    return { ok: false, code: "KMB-E641", detail: error?.message ?? "PDF のダウンロードに失敗しました。" };
+  }
+  const arrayBuffer = await data.arrayBuffer();
+  return { ok: true, value: Buffer.from(arrayBuffer) };
+}
+
+// ============================================================
+// document_emails (帳票メール送付の送信台帳 — migration 0036、#101)
+// ============================================================
+
+export type DocumentEmailRow = {
+  id: string;
+  document_id: string;
+  issued_document_id: string;
+  to_email: string;
+  cc_email: string | null;
+  subject: string;
+  body: string;
+  status: string;
+  error_detail: string | null;
+  provider_message_id: string | null;
+  sent_at: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type InsertDocumentEmailInput = {
+  documentId: string;
+  issuedDocumentId: string;
+  toEmail: string;
+  ccEmail: string | null;
+  subject: string;
+  body: string;
+  status: "sent" | "failed";
+  errorDetail: string | null;
+  providerMessageId: string | null;
+  createdBy: string | null;
+};
+
+/**
+ * 送信結果 (成功/失敗いずれも) を document_emails へ 1 行 INSERT する。失敗時も呼ぶこと
+ * (facade sendDocumentByEmail の設計「失敗も台帳に残す — 監査」)。UPDATE 権限は付与されない
+ * (migration 0036 — 追記専用の送信台帳) ため訂正は行わない。
+ */
+export async function insertDocumentEmail(
+  client: SupabaseClient,
+  input: InsertDocumentEmailInput,
+): Promise<Result<{ id: string; sent_at: string }>> {
+  const { data, error } = await client
+    .from("document_emails")
+    .insert({
+      document_id: input.documentId,
+      issued_document_id: input.issuedDocumentId,
+      to_email: input.toEmail,
+      cc_email: input.ccEmail,
+      subject: input.subject,
+      body: input.body,
+      status: input.status,
+      error_detail: input.errorDetail,
+      provider_message_id: input.providerMessageId,
+      created_by: input.createdBy,
+    })
+    .select("id, sent_at")
+    .single();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: { id: data.id as string, sent_at: data.sent_at as string } };
+}
+
+/** getDocumentDetail (#101) の送信履歴セクション用。sent_at 降順 (最新の送信が先頭)。 */
+export async function listDocumentEmails(
+  client: SupabaseClient,
+  documentId: string,
+): Promise<Result<DocumentEmailRow[]>> {
+  const { data, error } = await client
+    .from("document_emails")
+    .select("*")
+    .eq("document_id", documentId)
+    .order("sent_at", { ascending: false });
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as DocumentEmailRow[] };
 }
 
 /** getDocumentDetail (#51) の版履歴テーブル用 + 版間差分ダイアログ (§11.1) の content_snapshot 取得を

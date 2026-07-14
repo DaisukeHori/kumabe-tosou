@@ -13,14 +13,17 @@ import {
   createDraftDocument,
   deleteDraftDocument,
   deletePayment,
+  downloadIssuedDocumentPdf,
   finalizeDocumentIssue,
   getDocumentById,
   getIssuedDocumentByVersion,
   getRevisionStagingById,
+  insertDocumentEmail,
   insertPayment,
   insertPrintToken,
   insertRevisionStaging,
   issueDocumentNumber,
+  listDocumentEmails,
   listDocumentsPage,
   listExpiringQuotes,
   listPaymentsForDocuments,
@@ -33,6 +36,7 @@ import {
   type ApplyDocumentRevisionInput,
   type CreateDraftDocumentInput,
   type FinalizeDocumentIssueInput,
+  type InsertDocumentEmailInput,
   type InsertRevisionStagingInput,
   type SaveDraftHeader,
 } from "@/modules/sales/repository";
@@ -1246,17 +1250,182 @@ describe("document_revision_stagings / issued_documents 版検索 (訂正発行�
     expect(result).toEqual({ ok: true, value: null });
   });
 
-  it("getIssuedDocumentByVersion: 成功時は storage_path を返す", async () => {
+  it("getIssuedDocumentByVersion: 成功時は id (issued_document_id) と storage_path を返す (#101: id は sendDocumentByEmail が document_emails.issued_document_id として使う)", async () => {
     const { client } = buildClient({
-      fromQueue: [new FakeChain({ data: { storage_path: "documents/doc-1/v1-aaaaaaaa.pdf" }, error: null })],
+      fromQueue: [
+        new FakeChain({ data: { id: "issued-doc-1", storage_path: "documents/doc-1/v1-aaaaaaaa.pdf" }, error: null }),
+      ],
     });
     const result = await getIssuedDocumentByVersion(client, DOC_ID, 1);
-    expect(result).toEqual({ ok: true, value: { storage_path: "documents/doc-1/v1-aaaaaaaa.pdf" } });
+    expect(result).toEqual({
+      ok: true,
+      value: { id: "issued-doc-1", storage_path: "documents/doc-1/v1-aaaaaaaa.pdf" },
+    });
   });
 
   it("getIssuedDocumentByVersion: 取得エラーは伝播する (握り潰さない)", async () => {
     const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: { message: "denied" } })] });
     const result = await getIssuedDocumentByVersion(client, DOC_ID, 1);
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: "denied" });
+  });
+});
+
+// ============================================================
+// downloadIssuedDocumentPdf (issue #101 — uploadIssuedDocumentPdf の対)
+// ============================================================
+
+describe("downloadIssuedDocumentPdf (issued-documents バケットからのダウンロード)", () => {
+  it("成功時は Buffer を返す", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const downloadMock = vi.fn().mockResolvedValue({
+      data: { arrayBuffer: async () => bytes.buffer },
+      error: null,
+    });
+    const client = { storage: { from: vi.fn(() => ({ download: downloadMock })) } } as unknown as SupabaseClient;
+
+    const result = await downloadIssuedDocumentPdf(client, "documents/doc-1/v1-aaaaaaaa.pdf");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(Buffer.isBuffer(result.value)).toBe(true);
+    expect([...result.value]).toEqual([1, 2, 3, 4]);
+    expect(downloadMock).toHaveBeenCalledWith("documents/doc-1/v1-aaaaaaaa.pdf");
+  });
+
+  it("Storage エラーは KMB-E641 へ変換する (握り潰さない — uploadIssuedDocumentPdf と同旨)", async () => {
+    const downloadMock = vi.fn().mockResolvedValue({ data: null, error: { message: "Object not found" } });
+    const client = { storage: { from: vi.fn(() => ({ download: downloadMock })) } } as unknown as SupabaseClient;
+
+    const result = await downloadIssuedDocumentPdf(client, "documents/doc-1/v1-aaaaaaaa.pdf");
+
+    expect(result).toEqual({ ok: false, code: "KMB-E641", detail: "Object not found" });
+  });
+
+  it("エラー無し・本文欠落 (data:null) も KMB-E641 とする (空 Buffer の ok:true 化を防ぐ)", async () => {
+    const downloadMock = vi.fn().mockResolvedValue({ data: null, error: null });
+    const client = { storage: { from: vi.fn(() => ({ download: downloadMock })) } } as unknown as SupabaseClient;
+
+    const result = await downloadIssuedDocumentPdf(client, "documents/doc-1/v1-aaaaaaaa.pdf");
+
+    expect(result.ok).toBe(false);
+  });
+});
+
+// ============================================================
+// document_emails (帳票メール送付の送信台帳 — migration 0036、issue #101)
+// ============================================================
+
+describe("insertDocumentEmail / listDocumentEmails (document_emails repository 層)", () => {
+  it("insertDocumentEmail: 全カラムを INSERT し id/sent_at を返す", async () => {
+    const chain = new FakeChain({ data: { id: "email-1", sent_at: "2026-07-14T00:00:00.000Z" }, error: null });
+    const { client, fromCalls } = buildClient({ fromQueue: [chain] });
+    const input: InsertDocumentEmailInput = {
+      documentId: DOC_ID,
+      issuedDocumentId: "issued-doc-1",
+      toEmail: "customer@example.com",
+      ccEmail: null,
+      subject: "件名",
+      body: "本文",
+      status: "sent",
+      errorDetail: null,
+      providerMessageId: "msg-1",
+      createdBy: "user-1",
+    };
+
+    const result = await insertDocumentEmail(client, input);
+
+    expect(result).toEqual({ ok: true, value: { id: "email-1", sent_at: "2026-07-14T00:00:00.000Z" } });
+    expect(fromCalls).toEqual(["document_emails"]);
+    const insertCall = chain.calls.find((c) => c.method === "insert");
+    expect(insertCall?.args[0]).toEqual({
+      document_id: DOC_ID,
+      issued_document_id: "issued-doc-1",
+      to_email: "customer@example.com",
+      cc_email: null,
+      subject: "件名",
+      body: "本文",
+      status: "sent",
+      error_detail: null,
+      provider_message_id: "msg-1",
+      created_by: "user-1",
+    });
+  });
+
+  it("insertDocumentEmail: 送信失敗行 (status='failed' + error_detail) も同じ経路で INSERT できる (失敗も台帳に残す設計)", async () => {
+    const chain = new FakeChain({ data: { id: "email-2", sent_at: "2026-07-14T00:00:00.000Z" }, error: null });
+    const { client } = buildClient({ fromQueue: [chain] });
+    const input: InsertDocumentEmailInput = {
+      documentId: DOC_ID,
+      issuedDocumentId: "issued-doc-1",
+      toEmail: "customer@example.com",
+      ccEmail: null,
+      subject: "件名",
+      body: "本文",
+      status: "failed",
+      errorDetail: "KMB-E644: RESEND_API_KEY が未設定です。",
+      providerMessageId: null,
+      createdBy: null,
+    };
+
+    const result = await insertDocumentEmail(client, input);
+
+    expect(result.ok).toBe(true);
+    const insertCall = chain.calls.find((c) => c.method === "insert");
+    expect(insertCall?.args[0]).toEqual(
+      expect.objectContaining({ status: "failed", error_detail: "KMB-E644: RESEND_API_KEY が未設定です。" }),
+    );
+  });
+
+  it("insertDocumentEmail: INSERT のエラーは伝播する (握り潰さない)", async () => {
+    const { client } = buildClient({
+      fromQueue: [new FakeChain({ data: null, error: { code: "23503", message: "document_id fk violation" } })],
+    });
+    const input: InsertDocumentEmailInput = {
+      documentId: DOC_ID,
+      issuedDocumentId: "issued-doc-1",
+      toEmail: "customer@example.com",
+      ccEmail: null,
+      subject: "件名",
+      body: "本文",
+      status: "sent",
+      errorDetail: null,
+      providerMessageId: "msg-1",
+      createdBy: null,
+    };
+
+    const result = await insertDocumentEmail(client, input);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E101");
+  });
+
+  it("listDocumentEmails: document_id で絞り込み sent_at 降順で一覧取得する", async () => {
+    const rows = [
+      { id: "email-2", document_id: DOC_ID, issued_document_id: "issued-doc-2", to_email: "b@example.com", cc_email: null, subject: "件名2", body: "本文2", status: "sent", error_detail: null, provider_message_id: "msg-2", sent_at: "2026-07-14T00:00:00.000Z", created_by: null, created_at: "2026-07-14T00:00:00.000Z" },
+      { id: "email-1", document_id: DOC_ID, issued_document_id: "issued-doc-1", to_email: "a@example.com", cc_email: null, subject: "件名1", body: "本文1", status: "sent", error_detail: null, provider_message_id: "msg-1", sent_at: "2026-07-13T00:00:00.000Z", created_by: null, created_at: "2026-07-13T00:00:00.000Z" },
+    ];
+    const chain = new FakeChain({ data: rows, error: null });
+    const { client, fromCalls } = buildClient({ fromQueue: [chain] });
+
+    const result = await listDocumentEmails(client, DOC_ID);
+
+    expect(result).toEqual({ ok: true, value: rows });
+    expect(fromCalls).toEqual(["document_emails"]);
+    const eqCall = chain.calls.find((c) => c.method === "eq");
+    expect(eqCall?.args).toEqual(["document_id", DOC_ID]);
+    const orderCall = chain.calls.find((c) => c.method === "order");
+    expect(orderCall?.args).toEqual(["sent_at", { ascending: false }]);
+  });
+
+  it("listDocumentEmails: 0 件は ok:true value:[] を返す", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: null })] });
+    const result = await listDocumentEmails(client, DOC_ID);
+    expect(result).toEqual({ ok: true, value: [] });
+  });
+
+  it("listDocumentEmails: 取得エラーは伝播する (握り潰さない)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: { message: "denied" } })] });
+    const result = await listDocumentEmails(client, DOC_ID);
     expect(result).toEqual({ ok: false, code: "KMB-E901", detail: "denied" });
   });
 });
