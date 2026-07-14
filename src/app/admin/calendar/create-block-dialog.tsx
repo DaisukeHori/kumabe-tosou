@@ -21,19 +21,22 @@ import type { WorkTypeRow } from "@/modules/scheduling/contracts";
 import { createBlockAction } from "./actions";
 import { DatePicker } from "./_ui/date-picker";
 import { DealPicker } from "./_ui/deal-picker";
-import { isoPlusHours, jstDateTimeToIso, todayJstDateOnly } from "./_ui/jst-time";
+import { isoPlusHours, jstDateTimeToIso, todayJstDateOnly, type DateOnly } from "./_ui/jst-time";
 import { TimeSelect } from "./_ui/time-select";
 
 export function CreateBlockDialog({
   open,
   onOpenChange,
   workTypes,
+  initialPlacement,
   onCreated,
   initialDeal = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workTypes: WorkTypeRow[];
+  /** 週グリッドの空白ドラッグ作成 (#95) からの初期値。「ブロックを作る」ボタン経路は null (従来動作) */
+  initialPlacement?: { date: DateOnly; time: string; hours: number } | null;
   onCreated: () => void;
   /** `?create_deal_id=` からの深いリンク seed (Issue #96 設計 §D)。open 時リセットの
    *  useEffect で dealId/dealLabel の初期値として使う。
@@ -62,12 +65,21 @@ export function CreateBlockDialog({
     setDealLabel(initialDeal?.label ?? null);
     setWorkTypeId(workTypes[0]?.id ?? "");
     setTitle("");
-    setPlannedHours("1");
     setMemo("");
-    setPlaceNow(false);
-    setPlaceDate(todayJstDateOnly());
-    setPlaceTime("09:00");
-  }, [open, workTypes, initialDeal]);
+    if (initialPlacement) {
+      // 空白ドラッグ作成 (#95): 選択範囲をそのまま初期値にする (30 分スナップ選択が既存の
+      // 「placeNow 時 ends = starts + hours」ロジックでそのまま選択範囲どおりの ends_at になる)
+      setPlannedHours(String(initialPlacement.hours));
+      setPlaceNow(true);
+      setPlaceDate(initialPlacement.date);
+      setPlaceTime(initialPlacement.time);
+    } else {
+      setPlannedHours("1");
+      setPlaceNow(false);
+      setPlaceDate(todayJstDateOnly());
+      setPlaceTime("09:00");
+    }
+  }, [open, workTypes, initialDeal, initialPlacement]);
 
   function handleSubmit() {
     const hours = Number(plannedHours);

@@ -140,6 +140,13 @@ export function snapDownToHalfHour(minutesOfDay: number): number {
   return Math.floor(minutesOfDay / 30) * 30;
 }
 
+/** 日内分数 (0〜1440) を「HH:MM」で表示 (空白ドラッグ作成 #95 のプレビューラベル・初期値受け渡し用) */
+export function minutesToHHMM(minutesOfDay: number): string {
+  const h = Math.floor(minutesOfDay / 60);
+  const m = minutesOfDay % 60;
+  return `${pad2(h)}:${pad2(m)}`;
+}
+
 export function isoPlusMinutes(iso: string, minutes: number): string {
   return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString();
 }

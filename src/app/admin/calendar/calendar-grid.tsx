@@ -12,6 +12,8 @@ import {
   isoToJstShifted,
   jstDateTimeToIso,
   jstMinutesOfDay,
+  minutesToHHMM,
+  snapDownToHalfHour,
   todayJstDateOnly,
   type DateOnly,
 } from "./_ui/jst-time";
@@ -56,11 +58,18 @@ const DAY_TOTAL_MIN = 24 * 60;
 export const GRID_VIEWPORT_HOURS = 14; // 07:00-21:00 相当の初期可視高さ
 const VIEWPORT_HEIGHT_PX = GRID_VIEWPORT_HOURS * (60 / ROW_MINUTES) * ROW_HEIGHT_PX;
 const INITIAL_SCROLL_HOUR = 7;
+/** 時刻ガター (grid-cols-[48px_...]) の幅。clientToPosition の日境界判定はこの分をオフセットしないと
+ *  右へずれる (#95 で発見した既存バグの原因)。 */
+const GUTTER_PX = 48;
 
 type DragKind =
   | { kind: "tray"; block: WorkBlockView }
   | { kind: "move"; block: WorkBlockView }
-  | { kind: "resize"; block: WorkBlockView };
+  | { kind: "resize"; block: WorkBlockView }
+  /** 空白グリッドの縦ドラッグによる新規ブロック作成 (#95)。block を持たない唯一の kind。
+   *  anchorMinutes = pointerdown 時点 (30 分丸め済み) の日内分。日は beginCreate 時のカラム
+   *  index に固定し、縦方向のみドラッグを許容する (Google カレンダー同様、日跨ぎ非対応)。 */
+  | { kind: "create"; anchorMinutes: number };
 
 type DragState = {
   drag: DragKind;
@@ -137,6 +146,23 @@ function snapMinutes(minutes: number): number {
   return Math.min(DAY_TOTAL_MIN - ROW_MINUTES, Math.max(0, Math.round(minutes / ROW_MINUTES) * ROW_MINUTES));
 }
 
+/**
+ * 空白ドラッグ作成 (#95) の選択範囲を計算する純関数。anchorMinutes (pointerdown 位置) と
+ * currentMinutes (現在の pointer 位置。生の連続値でよい — 内部で 30 分境界へ floor/ceil する)
+ * から、双方向ドラッグに対応した [startMinutes, startMinutes+durationMinutes) を返す。
+ * 上方向ドラッグ (current < anchor) では選択が anchor の初期セル (30 分) を含んだまま上へ伸びる。
+ * 最低 30 分・0〜1440 (24:00) にクランプする。
+ */
+export function createSelection(anchorMinutes: number, currentMinutes: number): { startMinutes: number; durationMinutes: number } {
+  const floorToStep = (m: number) => Math.floor(m / ROW_MINUTES) * ROW_MINUTES;
+  const ceilToStep = (m: number) => Math.ceil(m / ROW_MINUTES) * ROW_MINUTES;
+  const rawStart = Math.min(floorToStep(anchorMinutes), floorToStep(currentMinutes));
+  const rawEnd = Math.max(floorToStep(anchorMinutes) + ROW_MINUTES, ceilToStep(currentMinutes));
+  const startMinutes = Math.max(0, Math.min(DAY_TOTAL_MIN - ROW_MINUTES, rawStart));
+  const endMinutes = Math.max(startMinutes + ROW_MINUTES, Math.min(DAY_TOTAL_MIN, rawEnd));
+  return { startMinutes, durationMinutes: endMinutes - startMinutes };
+}
+
 export const CalendarGrid = forwardRef<CalendarGridHandle, {
   weekStart: DateOnly;
   blocks: WorkBlockView[];
@@ -146,8 +172,10 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
   onSelectBlock: (id: string) => void;
   onOpenDetail: (id: string) => void;
   onPlaceBlock: (blockId: string, startsAtIso: string, endsAtIso: string, expectedUpdatedAt: string) => void;
+  /** 空白グリッドの縦ドラッグ確定時 (#95)。CreateBlockDialog を初期値付きで開く配線は calendar-board.tsx 側 */
+  onCreateRange: (date: DateOnly, startMinutes: number, durationMinutes: number) => void;
 }>(function CalendarGrid(
-  { weekStart, blocks, proposals, proposalSourceBlocks, selectedBlockId, onSelectBlock, onOpenDetail, onPlaceBlock },
+  { weekStart, blocks, proposals, proposalSourceBlocks, selectedBlockId, onSelectBlock, onOpenDetail, onPlaceBlock, onCreateRange },
   ref,
 ) {
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -162,15 +190,16 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     }
   }, []);
 
-  function clientToPosition(clientX: number, clientY: number): { dayOffset: number; minutes: number } | null {
+  function clientToPosition(clientX: number, clientY: number): { dayOffset: number; minutes: number; rawMinutes: number } | null {
     const rect = columnsRef.current?.getBoundingClientRect();
     if (!rect) return null;
-    const dayWidth = rect.width / 7;
-    const dayOffset = Math.min(6, Math.max(0, Math.floor((clientX - rect.left) / dayWidth)));
+    const dayWidth = (rect.width - GUTTER_PX) / 7;
+    const dayOffset = Math.min(6, Math.max(0, Math.floor((clientX - rect.left - GUTTER_PX) / dayWidth)));
     const scrollTop = bodyRef.current?.scrollTop ?? 0;
     const yWithinTrack = clientY - rect.top + scrollTop;
-    const minutes = snapMinutes((yWithinTrack / ROW_HEIGHT_PX) * ROW_MINUTES);
-    return { dayOffset, minutes };
+    const rawMinutes = (yWithinTrack / ROW_HEIGHT_PX) * ROW_MINUTES;
+    const minutes = snapMinutes(rawMinutes);
+    return { dayOffset, minutes, rawMinutes };
   }
 
   function updatePreview(clientX: number, clientY: number) {
@@ -182,15 +211,31 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
         const duration = Math.max(ROW_MINUTES, pos.minutes - prev.preview.startMinutes);
         return { ...prev, preview: { ...prev.preview, durationMinutes: duration } };
       }
+      if (prev.drag.kind === "create") {
+        // 日は anchor の日 (押下時のカラム index) に固定。縦方向のみ選択範囲を再計算する。
+        const { startMinutes, durationMinutes } = createSelection(prev.drag.anchorMinutes, pos.rawMinutes);
+        return { ...prev, preview: { dayOffset: prev.preview.dayOffset, startMinutes, durationMinutes } };
+      }
       const duration = prev.drag.block.planned_hours * 60 || ROW_MINUTES;
       const startMinutes = snapMinutes(pos.minutes - prev.grabOffsetMinutes);
       return { ...prev, preview: { dayOffset: pos.dayOffset, startMinutes, durationMinutes: duration } };
     });
   }
 
-  function commitDrag() {
+  function commitDrag(clientX: number, clientY: number) {
     setDragState((prev) => {
       if (!prev || !prev.preview) return null;
+      if (prev.drag.kind === "create") {
+        // click-vs-drag 判定 (既存 4px 閾値と同一) — 誤クリックでモーダルが開く事故を防止する
+        // (クリック単発での作成は v1 非対応。Issue #95 リスク欄の判断)。
+        const start = pointerStartRef.current;
+        pointerStartRef.current = null;
+        const moved = start && (Math.abs(clientX - start.x) > 4 || Math.abs(clientY - start.y) > 4);
+        if (!moved) return null;
+        const dayDate = addDaysJst(weekStart, prev.preview.dayOffset);
+        onCreateRange(dayDate, prev.preview.startMinutes, prev.preview.durationMinutes);
+        return null;
+      }
       const dayDate = addDaysJst(weekStart, prev.preview.dayOffset);
       const startsAt = jstDateTimeToIso(dayDate, 0, 0);
       const startsAtWithMinutes = isoPlusMinutes(startsAt, prev.preview.startMinutes);
@@ -208,15 +253,23 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     }
     function handleUp(e: PointerEvent) {
       if (e.pointerId !== dragState?.pointerId) return;
-      commitDrag();
+      commitDrag(e.clientX, e.clientY);
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      // Esc = ドラッグ中プレビューを閉じる (§10.2「Esc = プレビューを閉じる」。全 DragKind に適用)
+      if (e.key !== "Escape") return;
+      pointerStartRef.current = null;
+      setDragState(null);
     }
     document.addEventListener("pointermove", handleMove);
     document.addEventListener("pointerup", handleUp);
     document.addEventListener("pointercancel", handleUp);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("pointermove", handleMove);
       document.removeEventListener("pointerup", handleUp);
       document.removeEventListener("pointercancel", handleUp);
+      document.removeEventListener("keydown", handleKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragState?.pointerId]);
@@ -269,6 +322,26 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     });
   }
 
+  /**
+   * 空白グリッド (日カラム自身、または背景の 30 分行) の pointerdown を新規ブロック作成ドラッグとして
+   * 開始する (#95)。既存札・リサイズハンドル・提案ゴーストからのバブリングは closest() で除外する。
+   */
+  function beginCreate(dayOffset: number, e: React.PointerEvent) {
+    if (e.button !== 0) return; // 左クリックのみ
+    if (e.pointerType === "touch") return; // タッチはスクロールと競合するため無効化 (§10.6 裁定の踏襲)
+    if ((e.target as HTMLElement).closest("button,[data-proposal]")) return;
+    e.preventDefault(); // トレイ onDragStart と同型: テキスト選択抑止
+    const pos = clientToPosition(e.clientX, e.clientY);
+    const anchor = snapDownToHalfHour(Math.max(0, Math.min(DAY_TOTAL_MIN - ROW_MINUTES, pos ? pos.rawMinutes : 0)));
+    pointerStartRef.current = { x: e.clientX, y: e.clientY };
+    setDragState({
+      drag: { kind: "create", anchorMinutes: anchor },
+      pointerId: e.pointerId,
+      grabOffsetMinutes: 0,
+      preview: { dayOffset, startMinutes: anchor, durationMinutes: ROW_MINUTES },
+    });
+  }
+
   function handleBlockPointerUp(block: WorkBlockView, e: React.PointerEvent) {
     if (!dragState) {
       // ドラッグが一度も発生していない (pointerdown 直後に pointerup) = クリックとして詳細を開く
@@ -277,13 +350,13 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
       return;
     }
     // 【地雷】pointerup はリリース時にカーソル直下にある要素へネイティブにバブルするため、
-    // (1) トレイからの外部ドラッグ (kind='tray') や (2) 下端リサイズ中 (kind='resize') に
-    // 別のブロックの <button> の上でポインタを離した場合や、(3) リサイズ中に自分自身の
-    // <button> の上で離した場合にも、このハンドラが「無関係な block」引数で呼ばれ得る。
-    // click-vs-drag 判定 (setDragState(null) による確定前キャンセル) は「今まさに move 中の
-    // 対象ブロックそのもの」の pointerup でのみ行う。それ以外は何もせず、document 側の
-    // pointerup リスナー (commitDrag) に確定処理を完全に委ねる — 誤って他ブロックの詳細を開いたり
-    // トレイ配置/リサイズの結果を握り潰したりしないための安全策。
+    // (1) トレイからの外部ドラッグ (kind='tray') や (2) 下端リサイズ中 (kind='resize') や
+    // (4) 空白ドラッグ作成中 (kind='create') に別のブロックの <button> の上でポインタを離した
+    // 場合や、(3) リサイズ中に自分自身の <button> の上で離した場合にも、このハンドラが
+    // 「無関係な block」引数で呼ばれ得る。click-vs-drag 判定 (setDragState(null) による確定前
+    // キャンセル) は「今まさに move 中の対象ブロックそのもの」の pointerup でのみ行う。それ以外は
+    // 何もせず、document 側の pointerup リスナー (commitDrag) に確定処理を完全に委ねる —
+    // 誤って他ブロックの詳細を開いたりトレイ配置/リサイズ/作成の結果を握り潰したりしないための安全策。
     if (dragState.drag.kind !== "move" || dragState.drag.block.id !== block.id) return;
     const start = pointerStartRef.current;
     pointerStartRef.current = null;
@@ -325,7 +398,11 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
             ))}
           </div>
           {Array.from({ length: 7 }, (_, dayOffset) => (
-            <div key={dayOffset} className="relative border-l border-border">
+            <div
+              key={dayOffset}
+              className="relative border-l border-border"
+              onPointerDown={(e) => beginCreate(dayOffset, e)}
+            >
               {Array.from({ length: ROWS_PER_DAY }, (_, row) => (
                 <div
                   key={row}
@@ -408,6 +485,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
                 .map((seg, i) => (
                   <div
                     key={`proposal-${seg.proposal.block_id}-${i}`}
+                    data-proposal="true"
                     className="absolute inset-x-0.5 z-0 overflow-hidden rounded-md border-2 border-dashed px-1 py-0.5 text-[11px] leading-tight opacity-70"
                     style={{
                       top: (seg.startMinutes / ROW_MINUTES) * ROW_HEIGHT_PX,
@@ -421,12 +499,19 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
                 ))}
               {dragState?.preview && dragState.preview.dayOffset === dayOffset && (
                 <div
-                  className="pointer-events-none absolute inset-x-0.5 z-20 rounded-md border-2 border-dashed border-soul bg-soul/20"
+                  className="pointer-events-none absolute inset-x-0.5 z-20 overflow-hidden rounded-md border-2 border-dashed border-soul bg-soul/20"
                   style={{
                     top: (dragState.preview.startMinutes / ROW_MINUTES) * ROW_HEIGHT_PX,
                     height: Math.max(ROW_HEIGHT_PX, (dragState.preview.durationMinutes / ROW_MINUTES) * ROW_HEIGHT_PX),
                   }}
-                />
+                >
+                  {dragState.drag.kind === "create" && (
+                    <span className="block truncate px-1 py-0.5 text-[10px] font-medium text-soul">
+                      {minutesToHHMM(dragState.preview.startMinutes)}〜
+                      {minutesToHHMM(dragState.preview.startMinutes + dragState.preview.durationMinutes)}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           ))}
