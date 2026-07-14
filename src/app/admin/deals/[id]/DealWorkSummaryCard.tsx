@@ -18,9 +18,11 @@ const VISIBLE_BLOCK_LIMIT = 5;
  * 受注書があれば `GenerateBlocksButton` (document-detail.tsx から抽出した共用部品) を表示する
  * (帳票が複数ある場合は doc_no を添えて複数ボタン)。
  *
- * documentsResult が ok:false のときは generatableDocs を空配列に倒すだけでなく、DealDocumentsCard
- * (隣接カード) と同じく code+detail を明示表示する。取得失敗を「受注後に…」「受注書を発行すると…」
- * の誘導文で偽装しない (Result を握り潰さない、レビュー観点1)。
+ * workSummaryResult / documentsResult が ok:false のときは blocks / generatableDocs をそれぞれ空配列に
+ * 倒すだけでなく、DealDocumentsCard (隣接カード) と同じく code+detail を明示表示する。取得失敗を
+ * 「受注後に…」「受注書を発行すると…」の空状態向け誘導文で偽装しない
+ * (Result を握り潰さない、レビュー観点1。空状態ガードは workSummaryResult.ok && documentsResult.ok が両方
+ * 真のときのみ成立させる)。
  */
 export function DealWorkSummaryCard({
   dealId,
@@ -89,7 +91,7 @@ export function DealWorkSummaryCard({
         </div>
       )}
 
-      {documentsResult.ok && generatableDocs.length === 0 && blocks.length === 0 && (
+      {workSummaryResult.ok && documentsResult.ok && generatableDocs.length === 0 && blocks.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {isWon ? (
             <>

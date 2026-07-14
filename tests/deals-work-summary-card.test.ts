@@ -57,7 +57,7 @@ function makeSummary(overrides: Partial<DealWorkSummary> = {}): DealWorkSummary 
 }
 
 describe("DealWorkSummaryCard", () => {
-  it("workSummary 取得失敗時は code/detail を表示する", () => {
+  it("workSummary 取得失敗時は code/detail を表示し、誘導文で偽装しない (ブロックが実在してもfetch失敗時は0件扱いにしない)", () => {
     const html = renderToStaticMarkup(
       createElement(DealWorkSummaryCard, {
         dealId: DEAL_ID,
@@ -68,6 +68,8 @@ describe("DealWorkSummaryCard", () => {
     );
     expect(html).toContain("KMB-E901");
     expect(html).toContain("db down");
+    expect(html).not.toContain("受注後に、受注書の明細から自動で用意できます。");
+    expect(html).not.toContain("受注書を発行すると、明細から作業ブロックを自動で用意できます。");
   });
 
   it("documentsResult 取得失敗時は code/detail を表示し、誘導文で偽装しない (ボタンも出さない)", () => {
