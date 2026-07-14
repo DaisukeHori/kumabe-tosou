@@ -10,12 +10,13 @@ export const metadata: Metadata = { title: "サイト設定" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
-  const [company, hero, seoDefaults, opsLimits, notifications, aiKeys] = await Promise.all([
+  const [company, hero, seoDefaults, opsLimits, notifications, workCapacity, aiKeys] = await Promise.all([
     settingsFacade.getWithMeta("company"),
     settingsFacade.getWithMeta("hero"),
     settingsFacade.getWithMeta("seo_defaults"),
     settingsFacade.getWithMeta("ops_limits"),
     settingsFacade.getWithMeta("notifications"),
+    settingsFacade.getWithMeta("work_capacity"),
     aiProvidersFacade.listKeys(),
   ]);
 
@@ -25,6 +26,7 @@ export default async function AdminSettingsPage() {
     seo_defaults: seoDefaults.ok ? seoDefaults.value : { value: null, updatedAt: null, isUnset: true },
     ops_limits: opsLimits.ok ? opsLimits.value : { value: null, updatedAt: null, isUnset: true },
     notifications: notifications.ok ? notifications.value : { value: null, updatedAt: null, isUnset: true },
+    work_capacity: workCapacity.ok ? workCapacity.value : { value: null, updatedAt: null, isUnset: true },
   };
 
   return (

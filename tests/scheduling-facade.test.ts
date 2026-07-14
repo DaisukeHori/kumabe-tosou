@@ -26,6 +26,10 @@ const deleteWorkTypeMock = vi.fn();
 const listWorkTemplatesMock = vi.fn();
 const upsertWorkTemplateMock = vi.fn();
 const deleteWorkTemplateMock = vi.fn();
+const getWorkTypeSnapshotMock = vi.fn();
+const insertWorkBlockMock = vi.fn();
+const getWorkBlockByIdMock = vi.fn();
+const updateWorkBlockDetailMock = vi.fn();
 
 vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/scheduling/repository")>();
@@ -40,6 +44,10 @@ vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
     listWorkTemplates: (...args: unknown[]) => listWorkTemplatesMock(...args),
     upsertWorkTemplate: (...args: unknown[]) => upsertWorkTemplateMock(...args),
     deleteWorkTemplate: (...args: unknown[]) => deleteWorkTemplateMock(...args),
+    getWorkTypeSnapshot: (...args: unknown[]) => getWorkTypeSnapshotMock(...args),
+    insertWorkBlock: (...args: unknown[]) => insertWorkBlockMock(...args),
+    getWorkBlockById: (...args: unknown[]) => getWorkBlockByIdMock(...args),
+    updateWorkBlockDetail: (...args: unknown[]) => updateWorkBlockDetailMock(...args),
   };
 });
 
@@ -278,6 +286,103 @@ describe("createSchedulingFacade().deleteWorkTemplate", () => {
     deleteWorkTemplateMock.mockResolvedValue(undefined);
     const facade = createSchedulingFacade();
     const result = await facade.deleteWorkTemplate("template-1");
+    expect(result).toEqual({ ok: true, value: undefined });
+  });
+});
+
+describe("createSchedulingFacade().createBlock", () => {
+  function blockInput() {
+    return {
+      deal_id: DEAL_ID,
+      work_type_id: WORK_TYPE_ID,
+      title: "研磨",
+      starts_at: null,
+      ends_at: null,
+      planned_hours: 3,
+      memo: null,
+    };
+  }
+
+  it("work_type が不在または無効化済み (repository が null を返す) 場合は KMB-E702 を返す", async () => {
+    // getWorkTypeSnapshot は repository 側で is_active=true も条件に含める (03-scheduling.md
+    // §6.2 createBlock コメント「E702 (work_type 不在・無効)」) — ここでは null 返却として
+    // その挙動 (不在/無効いずれも facade が KMB-E702 に変換する) を検証する。
+    getWorkTypeSnapshotMock.mockResolvedValue(null);
+    const facade = createSchedulingFacade();
+    const result = await facade.createBlock(blockInput());
+    expect(result).toEqual(expect.objectContaining({ ok: false, code: "KMB-E702" }));
+    expect(insertWorkBlockMock).not.toHaveBeenCalled();
+  });
+
+  it("正常系: consumes_capacity をスナップショットして作成し block_id を返す", async () => {
+    getWorkTypeSnapshotMock.mockResolvedValue({ consumes_capacity: true });
+    insertWorkBlockMock.mockResolvedValue({ id: "block-1", updated_at: "2026-01-01T00:00:00.000Z" });
+    const facade = createSchedulingFacade();
+    const result = await facade.createBlock(blockInput());
+    expect(result).toEqual({ ok: true, value: { block_id: "block-1" } });
+    expect(insertWorkBlockMock).toHaveBeenCalledWith(
+      expect.objectContaining({ consumes_capacity: true }),
+    );
+  });
+});
+
+describe("createSchedulingFacade().updateBlock", () => {
+  function updateInput() {
+    return {
+      work_type_id: WORK_TYPE_ID,
+      title: "研磨",
+      planned_hours: 3,
+      memo: null,
+      deal_id: DEAL_ID,
+    };
+  }
+
+  function currentBlock(status: "scheduled" | "done" = "scheduled") {
+    return {
+      id: "block-1",
+      deal_id: DEAL_ID,
+      source_document_id: null,
+      work_type_id: WORK_TYPE_ID,
+      title: "研磨",
+      status,
+      starts_at: "2026-01-05T00:00:00.000Z",
+      ends_at: "2026-01-05T03:00:00.000Z",
+      planned_hours: 3,
+      actual_hours: null,
+      performed_on: null,
+      consumes_capacity: true,
+      quantity: null,
+      memo: null,
+      updated_at: "2026-01-01T00:00:00.000Z",
+      work_types: { key: "sanding", label: "研磨", color: "#8d6e63" },
+    };
+  }
+
+  it("done への編集は KMB-E703 を返す (repository へは到達しない)", async () => {
+    getWorkBlockByIdMock.mockResolvedValue(currentBlock("done"));
+    const facade = createSchedulingFacade();
+    const result = await facade.updateBlock("block-1", updateInput(), "2026-01-01T00:00:00.000Z");
+    expect(result).toEqual(expect.objectContaining({ ok: false, code: "KMB-E703" }));
+    expect(updateWorkBlockDetailMock).not.toHaveBeenCalled();
+  });
+
+  it("変更先 work_type_id が不在または無効化済み (ForeignKeyViolationError) は KMB-E702 を返す", async () => {
+    // repository (updateWorkBlockDetail) 側の work_types SELECT が is_active=true も条件に含め、
+    // 見つからない場合 ForeignKeyViolationError を投げる契約 — facade はそれを KMB-E702 に変換する。
+    getWorkBlockByIdMock.mockResolvedValue(currentBlock());
+    updateWorkBlockDetailMock.mockRejectedValue(
+      new ForeignKeyViolationError("work_type_id ... が見つからないか無効です"),
+    );
+    const facade = createSchedulingFacade();
+    const result = await facade.updateBlock("block-1", updateInput(), "2026-01-01T00:00:00.000Z");
+    expect(result).toEqual(expect.objectContaining({ ok: false, code: "KMB-E702" }));
+  });
+
+  it("正常系: 更新成功で ok:true を返す", async () => {
+    getWorkBlockByIdMock.mockResolvedValue(currentBlock());
+    updateWorkBlockDetailMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    const facade = createSchedulingFacade();
+    const result = await facade.updateBlock("block-1", updateInput(), "2026-01-01T00:00:00.000Z");
     expect(result).toEqual({ ok: true, value: undefined });
   });
 });

@@ -1,7 +1,8 @@
 // scheduling モジュールの値契約。
 // canonical: docs/design/crm-suite/07-contracts-delta.md §4.12 (07-contracts-delta が正。
 // 03-scheduling.md §3.1 は写しであり内容は一致する)。差異があれば 07-contracts-delta を採用する。
-// 実装は Issue #52 (03-scheduling.md §2.2 DDL + §7.1 テンプレ展開 + repository) の対象分のみ。
+// 実装は Issue #52 (03-scheduling.md §2.2 DDL + §7.1 テンプレ展開 + repository) と
+// Issue #53 (§3.2 契約外拡張スキーマ + ブロック CRUD/状態機械/キャパ/自動配置) の対象分。
 import { z } from "zod";
 
 import { zDateOnly, zIsoDatetime, zShortText } from "@/modules/platform/contracts";
@@ -120,14 +121,60 @@ export type CalendarConnectionMeta = z.infer<typeof zCalendarConnectionMeta>;
 // ============================================================================
 // 契約外拡張スキーマ (canonical: 03-scheduling.md §3.2)。
 // 自モジュールの admin UI (Server Actions) 専用の入力契約。他モジュールからの import 禁止。
-// このファイルには Issue #52 (作業種別/テンプレート CRUD + generateBlocksFromLines) が使う分は
-// 無い (zPlaceBlockInput 等は §6.2 の未実装メソッド専用のため、未使用 export による lint 警告を
-// 避けて後続 Issue (#53/#54) がここへ追記する)。
+// zExternalDeletionResolution / zOrphanedLinkResolution は calendar_event_links (migration 0030)
+// を前提とする #54 の担当分のため、この Issue (#53) では追記しない (未使用 export による
+// lint 警告を避ける — #52 の先例踏襲)。
 // ============================================================================
+
+/** ブロック配置/移動 (placeBlock)。starts < ends は refine + DB check (E701) の二重検証 */
+export const zPlaceBlockInput = z.object({
+  starts_at: zIsoDatetime,
+  ends_at: zIsoDatetime,
+}).strict().refine(
+  (v) => new Date(v.starts_at).getTime() < new Date(v.ends_at).getTime(),
+  "開始は終了より前である必要があります (KMB-E701)",
+);
+
+/** ブロック編集 (updateBlock)。配置・状態・実績は専用メソッド経由のためここに含めない */
+export const zUpdateWorkBlockInput = z.object({
+  work_type_id: z.string().uuid(),   // 変更時は consumes_capacity を再スナップショット (§5.1)
+  title: zShortText(80).nullable(),  // zWorkBlockInput.title と対称 (空文字不可)
+  planned_hours: z.number().min(0).max(999),
+  memo: z.string().max(1000).nullable(),
+  deal_id: z.string().uuid().nullable(),
+}).strict();
+
+/** admin 操作で許す状態遷移 (transitionBlock)。全遷移表は §5.1 — repository/internal で二重検証 */
+export const zBlockTransition = z.enum(["in_progress", "cancelled"]);
+
+/** カレンダー表示範囲の取得 (getCalendarRange / getExternalBusy) */
+export const zCalendarRangeQuery = z.object({
+  from: zIsoDatetime,
+  to: zIsoDatetime,
+}).strict().refine(
+  (v) => {
+    const ms = new Date(v.to).getTime() - new Date(v.from).getTime();
+    return ms > 0 && ms < 62 * 24 * 60 * 60 * 1000; // Graph getSchedule の「62 日未満」制約 (ext-calendar §4)
+  },
+  "範囲は 62 日未満で指定してください",
+);
+
+/** 自動提案配置の要求 (§7.4)。対象は backlog ブロック集合 */
+export const zProposePlacementInput = z.object({
+  block_ids: z.array(z.string().uuid()).min(1).max(50),
+  from: zIsoDatetime,                     // この時刻以降に置く (通常 = 今)
+}).strict();
+
+export type PlaceBlockInput = z.infer<typeof zPlaceBlockInput>;
+export type UpdateWorkBlockInput = z.infer<typeof zUpdateWorkBlockInput>;
+export type BlockTransition = z.infer<typeof zBlockTransition>;
+export type CalendarRangeQuery = z.infer<typeof zCalendarRangeQuery>;
+export type ProposePlacementInput = z.infer<typeof zProposePlacementInput>;
 
 // ============================================================================
 // 読み取りビュー型 (Zod 化しない — §4.9「DB 出力の正しさは repository + DDL が保証」)。
-// canonical: 03-scheduling.md §3.1 末尾。WorkBlockView 以降は #53 以降が使うため未転記。
+// canonical: 03-scheduling.md §3.1 末尾 / §3.2 末尾。
+// CalendarConnectionView / SyncIssueItem は calendar_event_links 前提の #54 分のため未転記。
 // ============================================================================
 
 export type WorkTypeRow = {
@@ -141,4 +188,38 @@ export type WorkTemplateView = {
   is_active: boolean; updated_at: string;
   items: Array<{ work_type_id: string; work_type_key: string; work_type_label: string;
                  hours: number; sort_order: number }>;
+};
+
+export type WorkBlockView = {
+  id: string; deal_id: string | null; deal_title: string | null;
+  source_document_id: string | null;
+  work_type_id: string; work_type_key: string; work_type_label: string; color: string;
+  title: string | null; status: WorkBlockStatus;
+  starts_at: string | null; ends_at: string | null;
+  planned_hours: number; actual_hours: number | null; performed_on: string | null;
+  consumes_capacity: boolean; quantity: number | null; memo: string | null;
+  // #53 時点は calendar_event_links (migration 0030) が存在しないため、facade は常に [] を返す
+  // (#54 が実データを繋ぐ — worktree 実装計画書の地雷2)。
+  sync: Array<{ provider: "google" | "microsoft";
+                sync_status: EventLinkSyncStatus;
+                last_error_code: string | null }>;
+  updated_at: string;
+};
+
+export type BusyInterval = { starts_at: string; ends_at: string }; // 外部 free/busy 帯 (§8.1)。#53 は常に []
+
+export type DealWorkSummary = {
+  deal_id: string;
+  planned_total_hours: number;   // cancelled 除く全ブロック
+  actual_total_hours: number;    // done のみ
+  done_count: number; open_count: number; // open = backlog+scheduled+in_progress
+  blocks: Array<Pick<WorkBlockView,
+    "id" | "work_type_label" | "status" | "planned_hours" | "actual_hours" | "performed_on">>;
+};
+
+/** proposeBlockPlacement (§7.4) の戻り値。提案のみ (永続化しない) */
+export type PlacementProposal = {
+  block_id: string; starts_at: string; ends_at: string;
+  expected_updated_at: string;   // 提案生成時の block.updated_at — applyPlacementProposalsAction が
+                                 // placeBlock(…, expectedUpdatedAt) へ透過 (楽観排他を形骸化させない §9.2)
 };

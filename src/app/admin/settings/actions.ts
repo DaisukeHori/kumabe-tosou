@@ -11,6 +11,7 @@ import {
   zNotificationSettings,
   zOpsLimits,
   zSeoDefaults,
+  zWorkCapacitySettings,
   type SettingsKey,
   type SettingsValue,
 } from "@/modules/settings/contracts";
@@ -140,6 +141,26 @@ export async function updateAiBudgetAction(
     ai_default_image_model: emptyToNull(formData.get("ai_default_image_model")),
   };
   return submitSettingsForm("ops_limits", zOpsLimits, raw, String(formData.get("expected_updated_at") ?? ""));
+}
+
+/**
+ * 「週間稼働」タブ (03-scheduling.md §3.4)。weekly_hours 数値入力 1 個のみ。
+ * scheduling モジュールからの読み出しは SettingsFacade.get('work_capacity') 経由 (facade §6.2)。
+ * 書込 (update) は所有モジュールの settings 側 Server Action で行う規約どおり、ここに置く。
+ */
+export async function updateWorkCapacityAction(
+  _prevState: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const raw = {
+    weekly_hours: Number(formData.get("weekly_hours") ?? 0),
+  };
+  return submitSettingsForm(
+    "work_capacity",
+    zWorkCapacitySettings,
+    raw,
+    String(formData.get("expected_updated_at") ?? ""),
+  );
 }
 
 export async function updateNotificationsAction(
