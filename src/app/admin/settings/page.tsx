@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { PageHeader, Surface } from "@/app/admin/_ui";
+import { ensureMediaItems, listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 import { getEnv } from "@/lib/env";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { aiProvidersFacade } from "@/modules/ai-providers/facade";
@@ -47,8 +48,11 @@ export default async function AdminSettingsPage() {
     telephony,
     businessHours,
     invoiceIssuer,
+    analytics,
+    branding,
     aiKeys,
     setupStatus,
+    mediaList,
   ] = await Promise.all([
     settingsFacade.getWithMeta("company"),
     settingsFacade.getWithMeta("hero"),
@@ -59,8 +63,20 @@ export default async function AdminSettingsPage() {
     settingsFacade.getWithMeta("telephony"),
     settingsFacade.getWithMeta("business_hours"),
     settingsFacade.getWithMeta("invoice_issuer"),
+    settingsFacade.getWithMeta("analytics"),
+    settingsFacade.getWithMeta("branding"),
     aiProvidersFacade.listKeys(),
     telephonyFacade.getTelephonySetupStatus(),
+    listMediaForPicker(),
+  ]);
+
+  const seoValue = seoDefaults.ok ? seoDefaults.value.value : null;
+  const brandingValue = branding.ok ? branding.value.value : null;
+  // 一覧取得 (limit 既定 100) の外に選択済み media が居ても必ずプレビュー表示できるよう補完する
+  // (WorkForm.tsx 等、既存の cover_media_id 補完パターンと同型。§6.1)。
+  const mediaCatalog = await ensureMediaItems(mediaList.items, [
+    seoValue?.og_media_id,
+    brandingValue?.favicon_media_id,
   ]);
 
   const data: SettingsTabsData = {
@@ -73,6 +89,8 @@ export default async function AdminSettingsPage() {
     telephony: telephony.ok ? telephony.value : { value: null, updatedAt: null, isUnset: true },
     business_hours: businessHours.ok ? businessHours.value : { value: null, updatedAt: null, isUnset: true },
     invoice_issuer: invoiceIssuer.ok ? invoiceIssuer.value : { value: null, updatedAt: null, isUnset: true },
+    analytics: analytics.ok ? analytics.value : { value: null, updatedAt: null, isUnset: true },
+    branding: branding.ok ? branding.value : { value: null, updatedAt: null, isUnset: true },
   };
 
   const sealPreviewUrl = await resolveSealPreviewUrl(
@@ -83,7 +101,7 @@ export default async function AdminSettingsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="サイト設定"
-        description="会社情報・ヒーロー・SEO既定値・運用上限・通知設定・電話・営業時間・請求書発行者・AI プロバイダを編集します (保存は楽観的排他)。"
+        description="会社情報・ヒーロー・SEO既定値・計測・ブランディング・運用上限・通知設定・電話・営業時間・請求書発行者・AI プロバイダを編集します (保存は楽観的排他)。"
       />
       <Surface className="p-6">
         <SettingsTabs
@@ -92,6 +110,8 @@ export default async function AdminSettingsPage() {
           telephonySetupStatus={setupStatus.ok ? setupStatus.value : null}
           siteUrl={getEnv().NEXT_PUBLIC_SITE_URL}
           sealPreviewUrl={sealPreviewUrl}
+          mediaCatalog={mediaCatalog}
+          mediaNextCursor={mediaList.nextCursor}
         />
       </Surface>
     </div>

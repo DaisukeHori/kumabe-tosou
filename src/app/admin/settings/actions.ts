@@ -1,13 +1,16 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import type { z } from "zod";
 
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { mediaFacade } from "@/modules/media/facade";
 import type { Result } from "@/modules/platform/contracts";
 import { getErrorInfo } from "@/modules/platform/errors";
 import { platformFacade } from "@/modules/platform/facade";
 import {
+  zAnalyticsSettings,
+  zBrandingSettings,
   zCompanySettings,
   zHeroSettings,
   zInvoiceIssuerSettings,
@@ -18,7 +21,7 @@ import {
   type SettingsKey,
   type SettingsValue,
 } from "@/modules/settings/contracts";
-import { settingsFacade } from "@/modules/settings/facade";
+import { SITE_SETTINGS_CACHE_TAG, settingsFacade } from "@/modules/settings/facade";
 
 import type { SettingsFormState } from "./form-state";
 
@@ -90,6 +93,11 @@ export async function submitSettingsForm<K extends SettingsKey>(
   }
 
   revalidatePath("/admin/settings");
+  // 05-site-settings.md §5.6 / issue #47: getPublicValue (unstable_cache, タグ "site_settings")
+  // は書き込み側が revalidate する規約 (facade.ts の SITE_SETTINGS_CACHE_TAG コメント参照)。
+  // 全キー共通のこの関数からタグ失効させることで、analytics/branding/seo_defaults 等
+  // 公開側が参照するキーの保存が公開ページ (generateMetadata・GA 注入・/icon) に反映される。
+  revalidateTag(SITE_SETTINGS_CACHE_TAG);
   return { error: null, conflict: false, success: true };
 }
 
@@ -122,6 +130,11 @@ export async function updateHeroSettingsAction(
   return submitSettingsForm("hero", zHeroSettings, raw, String(formData.get("expected_updated_at") ?? ""));
 }
 
+/** OG 画像の推奨サイズ (1200x630、1.91:1)。§6.2「OG 寸法逸脱」判定の基準値。 */
+const OG_IMAGE_TARGET_RATIO = 1200 / 630;
+/** 縦横比の許容誤差 (±10%)。canonical に明記なし — 実装者判断 (issue-47.md 成果物3-4 参照)。 */
+const OG_IMAGE_RATIO_TOLERANCE = 0.1;
+
 export async function updateSeoDefaultsAction(
   _prevState: SettingsFormState,
   formData: FormData,
@@ -131,12 +144,94 @@ export async function updateSeoDefaultsAction(
     description: String(formData.get("description") ?? ""),
     og_media_id: String(formData.get("og_media_id") ?? ""),
   };
-  return submitSettingsForm(
+  const result = await submitSettingsForm(
     "seo_defaults",
     zSeoDefaults,
     raw,
     String(formData.get("expected_updated_at") ?? ""),
   );
+  if (!result.success) return result;
+
+  // 保存成功後のベストエフォート後処理 (issue-47.md 成果物3-4 の設計判断: submitSettingsForm の
+  // シグネチャは変えず、共通関数の戻り値をこの Action 内で受け取ってから warning を上書きする。
+  // canonical (05-site-settings.md §4.3/§6.2) は warning を返す仕様のみ明記し、共通関数と
+  // 各 Action の分担方法までは規定していないため実装者判断 — 理由: submitSettingsForm は他 8
+  // Action からも呼ばれる共通ルートであり、JPEG ensure や寸法判定という seo_defaults 固有の
+  // 責務をそこに混ぜると他キーの保存経路にまで影響する変更になってしまう)。
+  // JPEG ensure/寸法チェックの失敗はここでは保存を失敗させない (result.success は変えない) —
+  // 既に site_settings への書き込みは完了しているため、ここで ok:false 相当を返すと
+  // 「保存できたのに失敗したように見える」誤報告になる。
+  const ensureResult = await mediaFacade.getJpegRenditionUrl(raw.og_media_id);
+  if (!ensureResult.ok) {
+    console.error("[settings/actions] OG 画像の JPEG 変換 (ensure) に失敗しました:", ensureResult.detail);
+    // JPEG ensure 失敗と寸法警告が両方発生しうる場合は ensure 失敗を優先 (early return)。
+    // canonical に優先順位の明記なし — 実装コスト最小の単純な early return を採用
+    // (issue-47.md 未解決点#3 の判断をそのまま踏襲)。
+    return { ...result, warning: "OG 画像の JPEG 変換に失敗しました。再保存で再試行されます。" };
+  }
+
+  const media = await mediaFacade.getById(raw.og_media_id);
+  // getById 失敗 (media 行が見つからない等) は寸法警告を出さずにスキップ — ベストエフォートで
+  // あり、保存自体は既に成功しているため、ここでの二次取得失敗をユーザーへ露呈しない。
+  if (media.ok) {
+    const ratio = media.value.width / media.value.height;
+    const deviation = Math.abs(ratio - OG_IMAGE_TARGET_RATIO) / OG_IMAGE_TARGET_RATIO;
+    if (deviation > OG_IMAGE_RATIO_TOLERANCE) {
+      return {
+        ...result,
+        warning: "OG 画像の縦横比が推奨サイズ (1200×630, 1.91:1) から外れています。",
+      };
+    }
+  }
+  return result;
+}
+
+/** 「計測」タブ (05-site-settings.md §6.2 AnalyticsForm)。GA4 測定 ID 1 項目のみ、空欄で計測無効。 */
+export async function updateAnalyticsSettingsAction(
+  _prevState: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const raw = { ga4_measurement_id: emptyToNull(formData.get("ga4_measurement_id")) };
+  return submitSettingsForm(
+    "analytics",
+    zAnalyticsSettings,
+    raw,
+    String(formData.get("expected_updated_at") ?? ""),
+  );
+}
+
+/**
+ * 「ブランディング」タブ (05-site-settings.md §6.2 BrandingForm)。favicon の media 参照 1 項目。
+ * 寸法警告 (非正方形/128px未満) は保存を失敗させない — submitSettingsForm の戻り値をここで
+ * 受け取ってから warning を上書きする設計 (updateSeoDefaultsAction と同型。issue-47.md
+ * 成果物3-3 の判断根拠も同様: 共通関数のシグネチャを変えずに済み、warning 判定はキー固有の
+ * 責務として各 Action に閉じ込められる)。
+ */
+export async function updateBrandingSettingsAction(
+  _prevState: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const faviconMediaId = emptyToNull(formData.get("favicon_media_id"));
+  const result = await submitSettingsForm(
+    "branding",
+    zBrandingSettings,
+    { favicon_media_id: faviconMediaId },
+    String(formData.get("expected_updated_at") ?? ""),
+  );
+  // 「既定に戻す」(favicon_media_id = null) での保存は寸法チェック対象外。
+  if (!result.success || !faviconMediaId) return result;
+
+  const media = await mediaFacade.getById(faviconMediaId);
+  // getById 失敗はベストエフォートでスキップ (保存自体は既に成功済み — 誤報告を避ける)。
+  if (!media.ok) return result;
+  const { width, height } = media.value;
+  if (width !== height || Math.min(width, height) < 128) {
+    return {
+      ...result,
+      warning: "もう少し正方形に近い画像がおすすめです (推奨: 512×512 以上の正方形 PNG)。",
+    };
+  }
+  return result;
 }
 
 /**

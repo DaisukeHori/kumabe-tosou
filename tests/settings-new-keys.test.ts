@@ -73,3 +73,42 @@ describe("zBrandingSettings", () => {
     expect(result.success).toBe(false);
   });
 });
+
+/**
+ * #47 (管理画面) 追記分: zMediaId (= z.string().uuid()) の境界テスト。
+ * #45 は「有効な uuid / null / 明らかに uuid でない文字列」のみカバーしており、
+ * 「uuid 形式に近いが厳密には不正」な境界値は未カバーだったため追加する
+ * (issue-47.md 前提「#45 が未カバーの境界を追加」)。
+ */
+describe("zBrandingSettings.favicon_media_id の uuid 境界値 (#47 追記)", () => {
+  it("空文字列は拒否する (uuid 形式ではない)", () => {
+    const result = zBrandingSettings.safeParse({ favicon_media_id: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("前後に空白を含む uuid は拒否する (trim されない)", () => {
+    const result = zBrandingSettings.safeParse({
+      favicon_media_id: " 11111111-1111-4111-8111-111111111111",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("ハイフンが欠けた32桁の16進数文字列は拒否する", () => {
+    const result = zBrandingSettings.safeParse({
+      favicon_media_id: "11111111111141118111111111111111",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("大文字を含む uuid は受け付ける (z.string().uuid() は大文字小文字を区別しない)", () => {
+    const result = zBrandingSettings.safeParse({
+      favicon_media_id: "11111111-1111-4111-8111-111111111111".toUpperCase(),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("undefined (フィールド自体が無い) は拒否する (nullable であって optional ではない)", () => {
+    const result = zBrandingSettings.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});

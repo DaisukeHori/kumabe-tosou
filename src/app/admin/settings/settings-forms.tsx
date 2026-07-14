@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { MediaPicker, type PickerMediaItem } from "@/app/admin/_ui";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -20,6 +21,8 @@ import type { AiKeyMeta } from "@/modules/ai-providers/contracts";
 import type { SettingsKey, SettingsValue } from "@/modules/settings/contracts";
 
 import {
+  updateAnalyticsSettingsAction,
+  updateBrandingSettingsAction,
   updateCompanySettingsAction,
   updateHeroSettingsAction,
   updateNotificationsAction,
@@ -36,12 +39,17 @@ export type SettingsMetaFor<K extends SettingsKey> = {
   value: SettingsValue<K> | null;
   updatedAt: string | null;
   isUnset: boolean;
+  /** §6.5: 契約不一致行 (手動 SQL 事故等)。true のとき警告バナー表示 + 生 updated_at で再保存可能。
+   *  facade.SettingsMeta.corrupted と同型 (後方互換 optional)。 */
+  corrupted?: boolean;
 };
 
 export type SettingsTabsData = {
   company: SettingsMetaFor<"company">;
   hero: SettingsMetaFor<"hero">;
   seo_defaults: SettingsMetaFor<"seo_defaults">;
+  analytics: SettingsMetaFor<"analytics">;
+  branding: SettingsMetaFor<"branding">;
   ops_limits: SettingsMetaFor<"ops_limits">;
   notifications: SettingsMetaFor<"notifications">;
   work_capacity: SettingsMetaFor<"work_capacity">;
@@ -52,11 +60,10 @@ export type SettingsTabsData = {
 
 /**
  * "ai" は site_settings の SettingsKey ではなく ai-providers 由来のタブのため、別ユニオンで扱う。
- * #45 (07-contracts-delta §D5) で SettingsKey は 11 キーに拡張されたが、本管理画面がタブとして
- * 描画するのは従来の 5 キー + work_capacity (#53) + telephony/business_hours (#59) +
- * invoice_issuer (#51) の計 9 キーのみ (analytics/branding 等の残りの新規キーのタブ・
- * Server Actions は他 Issue のスコープ)。SettingsKey をそのまま使うと未実装タブの型要求が
- * 漏れ伝播するため、この画面が実際に扱うキーだけの明示ユニオンに固定する。
+ * #45 (07-contracts-delta §D5) で SettingsKey は 11 キーに拡張され、本管理画面はそのうち
+ * 従来の 5 キー + work_capacity (#53) + telephony/business_hours (#59) + invoice_issuer (#51) +
+ * analytics/branding (#47) の計 11 キー全てをタブとして描画する。SettingsKey をそのまま使うと
+ * 未実装タブの型要求が漏れ伝播するため、この画面が実際に扱うキーだけの明示ユニオンに固定する。
  */
 type TabKey =
   | Extract<
@@ -64,6 +71,8 @@ type TabKey =
       | "company"
       | "hero"
       | "seo_defaults"
+      | "analytics"
+      | "branding"
       | "ops_limits"
       | "notifications"
       | "work_capacity"
@@ -77,6 +86,8 @@ const TAB_LABELS: Record<TabKey, string> = {
   company: "会社情報",
   hero: "ヒーロー",
   seo_defaults: "SEO既定値",
+  analytics: "計測",
+  branding: "ブランディング",
   ops_limits: "運用上限",
   notifications: "通知",
   work_capacity: "週間稼働",
@@ -93,14 +104,30 @@ function useFormFeedback(state: SettingsFormState, label: string) {
   }, [state.success, label]);
 }
 
-function UpdatedAtHint({ updatedAt, isUnset }: { updatedAt: string | null; isUnset: boolean }) {
-  if (isUnset) {
-    return <p className="text-xs text-muted-foreground">まだ設定されていません。入力して保存してください。</p>;
-  }
+function UpdatedAtHint({
+  updatedAt,
+  isUnset,
+  corrupted,
+}: {
+  updatedAt: string | null;
+  isUnset: boolean;
+  corrupted?: boolean;
+}) {
   return (
-    <p className="text-xs text-muted-foreground">
-      最終更新: {updatedAt ? new Date(updatedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) : "-"}
-    </p>
+    <>
+      {corrupted && (
+        <p role="alert" className="text-sm text-destructive">
+          保存されている値が現在の形式と一致しません。保存すると入力した値で上書きされます。
+        </p>
+      )}
+      {isUnset ? (
+        <p className="text-xs text-muted-foreground">まだ設定されていません。入力して保存してください。</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          最終更新: {updatedAt ? new Date(updatedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) : "-"}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -110,6 +137,8 @@ export function SettingsTabs({
   telephonySetupStatus,
   siteUrl,
   sealPreviewUrl,
+  mediaCatalog,
+  mediaNextCursor,
 }: {
   data: SettingsTabsData;
   aiKeys: AiKeyMeta[];
@@ -117,6 +146,9 @@ export function SettingsTabs({
   siteUrl: string;
   /** 角印画像の署名 URL (TTL 5 分)。page.tsx が Server Component 内で解決済み。null = 未設定/解決失敗。 */
   sealPreviewUrl: string | null;
+  /** favicon (branding) / OG 画像 (seo_defaults) の MediaPicker 用初期カタログ (§6.1) */
+  mediaCatalog: PickerMediaItem[];
+  mediaNextCursor: string | null;
 }) {
   const [active, setActive] = useState<TabKey>("company");
   // "ai" タブは複数の独立したフォーム (キー追加/予算) を持つため単一の Cmd+S 対象を持たない
@@ -164,8 +196,28 @@ export function SettingsTabs({
       <TabsContent value="seo_defaults" className="mt-6">
         <SeoDefaultsForm
           data={data.seo_defaults}
+          mediaCatalog={mediaCatalog}
+          mediaNextCursor={mediaNextCursor}
           formRef={(el) => {
             formRefs.current.seo_defaults = el;
+          }}
+        />
+      </TabsContent>
+      <TabsContent value="analytics" className="mt-6">
+        <AnalyticsForm
+          data={data.analytics}
+          formRef={(el) => {
+            formRefs.current.analytics = el;
+          }}
+        />
+      </TabsContent>
+      <TabsContent value="branding" className="mt-6">
+        <BrandingForm
+          data={data.branding}
+          mediaCatalog={mediaCatalog}
+          mediaNextCursor={mediaNextCursor}
+          formRef={(el) => {
+            formRefs.current.branding = el;
           }}
         />
       </TabsContent>
@@ -241,7 +293,7 @@ function CompanyForm({
   return (
     <form ref={formRef} action={action} className="max-w-xl">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
-      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
       <FieldGroup className="mt-4">
         <Field>
           <FieldLabel htmlFor="company-name">会社名</FieldLabel>
@@ -304,7 +356,7 @@ function HeroForm({
   return (
     <form ref={formRef} action={action} className="max-w-xl">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
-      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
       <FieldDescription className="mt-4">
         ヒーロー画像は /admin/visual のビジュアルエディタ (トップページのヒーロー写真) から差し替えてください。ここでは見出し・CTA テキストのみを編集します。
       </FieldDescription>
@@ -338,19 +390,31 @@ function HeroForm({
 
 function SeoDefaultsForm({
   data,
+  mediaCatalog,
+  mediaNextCursor,
   formRef,
 }: {
   data: SettingsMetaFor<"seo_defaults">;
+  mediaCatalog: PickerMediaItem[];
+  mediaNextCursor: string | null;
   formRef: (el: HTMLFormElement | null) => void;
 }) {
   const [state, action, isPending] = useActionState(updateSeoDefaultsAction, SETTINGS_FORM_INITIAL_STATE);
   useFormFeedback(state, "SEO既定値");
   const v = data.value;
+  // og_media_id は zSeoDefaults 上 nullable ではない (選択必須) — issue-47.md 成果物4-5 の指示どおり
+  // 「既定に戻す」ボタンは付けない。未選択のまま保存すると submitSettingsForm が E101 相当の
+  // フィールドエラーを返す (FieldError で表示)。
+  const [ogMediaId, setOgMediaId] = useState<string | null>(v?.og_media_id ?? null);
+  const [catalog, setCatalog] = useState<PickerMediaItem[]>(mediaCatalog);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const current = catalog.find((m) => m.id === ogMediaId) ?? null;
 
   return (
     <form ref={formRef} action={action} className="max-w-xl">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
-      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <input type="hidden" name="og_media_id" value={ogMediaId ?? ""} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
       <FieldGroup className="mt-4">
         <Field>
           <FieldLabel htmlFor="seo-title-template">タイトルテンプレート</FieldLabel>
@@ -376,14 +440,187 @@ function SeoDefaultsForm({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="seo-og-media-id">OGP 画像 media ID</FieldLabel>
-          <Input id="seo-og-media-id" name="og_media_id" defaultValue={v?.og_media_id ?? ""} required placeholder="uuid" />
+          <FieldLabel>OGP 画像</FieldLabel>
+          <div className="flex items-center gap-3">
+            {current ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={current.url}
+                alt={current.alt}
+                className="h-20 w-20 shrink-0 rounded-lg border border-border object-cover"
+              />
+            ) : (
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-[11px] text-muted-foreground">
+                未選択
+              </div>
+            )}
+            <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+              画像を選択
+            </Button>
+          </div>
+          <FieldDescription>
+            推奨サイズ 1200×630 (1.91:1)。SNS シェア時のカード画像に使われます。
+          </FieldDescription>
+        </Field>
+      </FieldGroup>
+      {state.warning && (
+        <p role="status" className="mt-3 text-sm text-amber-600">
+          {state.warning}
+        </p>
+      )}
+      <FieldError errors={state.error ? [{ message: state.error }] : undefined} className="mt-3" />
+      <Button type="submit" disabled={isPending} className="mt-6">
+        {isPending ? "保存中..." : "保存 (Cmd+S)"}
+      </Button>
+      <MediaPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        mode="single"
+        title="OGP 画像を選ぶ"
+        initialItems={catalog}
+        initialNextCursor={mediaNextCursor}
+        selectedIds={ogMediaId ? [ogMediaId] : []}
+        onConfirm={(ids) => setOgMediaId(ids[0] ?? null)}
+        onItemsLoaded={(items) => setCatalog((prev) => [...prev, ...items])}
+      />
+    </form>
+  );
+}
+
+/** 「計測」タブ (05-site-settings.md §6.2 AnalyticsForm)。GA4 測定 ID 1 項目のみ、空欄で計測無効。 */
+function AnalyticsForm({
+  data,
+  formRef,
+}: {
+  data: SettingsMetaFor<"analytics">;
+  formRef: (el: HTMLFormElement | null) => void;
+}) {
+  const [state, action, isPending] = useActionState(updateAnalyticsSettingsAction, SETTINGS_FORM_INITIAL_STATE);
+  useFormFeedback(state, "計測設定");
+  const v = data.value;
+
+  return (
+    <form ref={formRef} action={action} className="max-w-xl">
+      <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
+      <FieldDescription className="mt-4">
+        Google アナリティクス (GA4) の測定 ID。設定すると公開サイトのみ計測されます
+        (管理画面・編集画面は対象外)。空欄で保存すると計測を停止します。
+        プレビュー環境では設定に関わらず計測されません。
+      </FieldDescription>
+      <FieldGroup className="mt-4">
+        <Field>
+          <FieldLabel htmlFor="analytics-ga4-id">GA4 測定 ID</FieldLabel>
+          <Input
+            id="analytics-ga4-id"
+            name="ga4_measurement_id"
+            placeholder="G-XXXXXXXXXX"
+            defaultValue={v?.ga4_measurement_id ?? ""}
+          />
         </Field>
       </FieldGroup>
       <FieldError errors={state.error ? [{ message: state.error }] : undefined} className="mt-3" />
       <Button type="submit" disabled={isPending} className="mt-6">
         {isPending ? "保存中..." : "保存 (Cmd+S)"}
       </Button>
+    </form>
+  );
+}
+
+/**
+ * 「ブランディング」タブ (05-site-settings.md §6.2 BrandingForm)。favicon の media 参照 1 項目。
+ * plain useState + hidden input で MediaPicker と連携する (issue-47.md 成果物4-4 の指示どおり —
+ * 既存 settings フォームは全て plain useActionState 方式のため、WorkForm.tsx の RHF
+ * (setValue/watch) 方式はそのまま流用せず、この画面独自に組む)。
+ */
+function BrandingForm({
+  data,
+  mediaCatalog,
+  mediaNextCursor,
+  formRef,
+}: {
+  data: SettingsMetaFor<"branding">;
+  mediaCatalog: PickerMediaItem[];
+  mediaNextCursor: string | null;
+  formRef: (el: HTMLFormElement | null) => void;
+}) {
+  const [state, action, isPending] = useActionState(updateBrandingSettingsAction, SETTINGS_FORM_INITIAL_STATE);
+  useFormFeedback(state, "ブランディング");
+  useEffect(() => {
+    if (state.warning) toast.warning(state.warning);
+  }, [state.warning]);
+  const v = data.value;
+  const [faviconId, setFaviconId] = useState<string | null>(v?.favicon_media_id ?? null);
+  const [catalog, setCatalog] = useState<PickerMediaItem[]>(mediaCatalog);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const current = catalog.find((m) => m.id === faviconId) ?? null;
+
+  return (
+    <form ref={formRef} action={action} className="max-w-xl">
+      <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
+      <input type="hidden" name="favicon_media_id" value={faviconId ?? ""} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
+      <FieldDescription className="mt-4">
+        サイトのタブに表示されるアイコン。正方形 PNG (512×512 推奨) をアップロードしてください。
+        未設定のときは従来のアイコンが表示されます。
+      </FieldDescription>
+      <FieldGroup className="mt-4">
+        <Field>
+          <FieldLabel>favicon 画像</FieldLabel>
+          <div className="flex items-center gap-4">
+            {current ? (
+              <div className="flex items-end gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={current.url}
+                  alt={current.alt}
+                  className="h-8 w-8 rounded border border-border object-cover"
+                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={current.url}
+                  alt={current.alt}
+                  className="h-16 w-16 rounded border border-border object-cover"
+                />
+              </div>
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded border border-dashed border-border text-[11px] text-muted-foreground">
+                未選択
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+                画像を選択
+              </Button>
+              {faviconId && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setFaviconId(null)}>
+                  既定に戻す
+                </Button>
+              )}
+            </div>
+          </div>
+        </Field>
+      </FieldGroup>
+      {state.warning && (
+        <p role="status" className="mt-3 text-sm text-amber-600">
+          {state.warning}
+        </p>
+      )}
+      <FieldError errors={state.error ? [{ message: state.error }] : undefined} className="mt-3" />
+      <Button type="submit" disabled={isPending} className="mt-6">
+        {isPending ? "保存中..." : "保存 (Cmd+S)"}
+      </Button>
+      <MediaPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        mode="single"
+        title="favicon 画像を選ぶ"
+        initialItems={catalog}
+        initialNextCursor={mediaNextCursor}
+        selectedIds={faviconId ? [faviconId] : []}
+        onConfirm={(ids) => setFaviconId(ids[0] ?? null)}
+        onItemsLoaded={(items) => setCatalog((prev) => [...prev, ...items])}
+      />
     </form>
   );
 }
@@ -410,7 +647,7 @@ function OpsLimitsForm({
       />
       <input type="hidden" name="ai_monthly_image_limit" value={v?.ai_monthly_image_limit ?? 200} />
       <input type="hidden" name="ai_default_image_model" value={v?.ai_default_image_model ?? ""} />
-      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
       <FieldGroup className="mt-4">
         <Field>
           <FieldLabel htmlFor="ops-x-limit">X 月間投稿上限 (課金ガード)</FieldLabel>
@@ -449,7 +686,7 @@ function WorkCapacityForm({
   return (
     <form ref={formRef} action={action} className="max-w-xl">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
-      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
       <FieldGroup className="mt-4">
         <Field>
           <FieldLabel htmlFor="work-capacity-weekly-hours">週の稼働時間 (h)</FieldLabel>
@@ -488,7 +725,7 @@ function NotificationsForm({
   return (
     <form ref={formRef} action={action} className="max-w-xl">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
-      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
       <FieldGroup className="mt-4">
         <Field>
           <FieldLabel htmlFor="notif-inquiry-to">問い合わせ通知の宛先メール</FieldLabel>

@@ -50,6 +50,14 @@ export interface SettingsMeta<K extends SettingsKey> {
   updatedAt: string | null;
   /** true = site_settings に行がまだ存在しない (初回保存前) */
   isUnset: boolean;
+  /**
+   * 05-site-settings.md §6.5 (v1.1 新設): 行は存在するが値が SETTINGS_SCHEMAS と不一致
+   * (手動 SQL 事故・将来のスキーマ厳格化) の破損行を表す。後方互換のため optional —
+   * 既存呼び出し側 (facade.get / getPublicValue 経由の呼び出し元) はこのフィールドを
+   * 意識しなくてよい。true のとき `updatedAt` には行の生の updated_at が入る
+   * (isUnset は false のまま — 「破損」と「未設定」を混同しないため)。
+   */
+  corrupted?: boolean;
 }
 
 export interface SettingsFacadeExtended extends SettingsFacade {
@@ -125,10 +133,19 @@ export const settingsFacade: SettingsFacadeExtended = {
       }
       const parsed = SETTINGS_SCHEMAS[key].safeParse(row.value);
       if (!parsed.success) {
+        // §6.5 破損行復旧経路: 行はあるが値が契約と不一致 (手動 SQL 事故等)。
+        // ここを従来どおり ok:false (KMB-E901) で返すと、呼び出し元 (settings/page.tsx) が
+        // { value:null, updatedAt:null, isUnset:true } に丸めてしまい、hidden
+        // expected_updated_at が空文字列になる → upsertSetting の `.eq("updated_at", "")` が
+        // 既存行に対して恒久的に不一致 (KMB-E103) となり、正しい値を再入力しても保存できず
+        // UI から脱出不能になる (§6.5 実測バグ)。
+        // ok:true + corrupted:true で返し、行の生 updated_at をそのまま runtime に渡すことで
+        // 「正しい値での再保存」を成立させる (楽観排他自体は維持 — 他者が先に直せば通常どおり
+        // E103 になる)。isUnset は false のまま (「未設定」と「破損」を混同させない — UI 側の
+        // 文言分岐に必要)。
         return {
-          ok: false,
-          code: "KMB-E901",
-          detail: `site_settings.${key} の値が契約 (SETTINGS_SCHEMAS) と一致しません`,
+          ok: true,
+          value: { value: null, updatedAt: row.updated_at, isUnset: false, corrupted: true },
         };
       }
       return {
