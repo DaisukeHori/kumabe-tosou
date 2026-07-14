@@ -157,7 +157,7 @@ export function CustomersKanban({ initialColumns }: { initialColumns: CustomerKa
 
       <KanbanCollapsedColumn
         label={LIFECYCLE_LABEL.archived}
-        count={archivedColumn?.customers.length ?? 0}
+        count={archivedColumn?.total_count ?? 0}
         expanded={expandedArchived}
         onToggleExpanded={() => setExpandedArchived((v) => !v)}
         onDragOver={(e) => e.preventDefault()}

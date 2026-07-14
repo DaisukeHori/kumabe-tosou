@@ -58,6 +58,10 @@ export default async function AdminCustomersPage({
     if (trimmedQ) params.set("q", trimmedQ);
     if (nextTab === "customers" && lifecycle !== "active") params.set("lifecycle", lifecycle);
     if (nextTab !== "customers") params.set("tab", nextTab);
+    // 顧客タブ+カンバン表示中に顧客タブピルを再クリックしても view=kanban を維持する
+    // (維持しないと href から view が落ち、意図せずテーブル表示に戻ってしまう)。
+    // 会社タブへの遷移では view を保持しない = Kanban を離脱するのが意図通りなのでこの分岐で十分。
+    if (nextTab === "customers" && isKanbanView) params.set("view", "kanban");
     const qs = params.toString();
     return qs ? `/admin/customers?${qs}` : "/admin/customers";
   }
