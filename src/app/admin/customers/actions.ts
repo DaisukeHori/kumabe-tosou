@@ -10,11 +10,13 @@ import {
   zCompanyInput,
   zCompanyUpdateInput,
   zCustomerInput,
+  zCustomerLifecycle,
   zCustomerUpdateInput,
   zMergeCustomersInput,
   type CompanyInput,
   type CompanyUpdateInput,
   type CustomerInput,
+  type CustomerLifecycle,
   type CustomerUpdateInput,
   type MergeCustomersInput,
 } from "@/modules/crm/contracts";
@@ -81,6 +83,30 @@ export async function updateCustomerAction(
   if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
 
   const result = await crmFacade.updateCustomer(id, parsed.data, expectedUpdatedAt);
+  if (!result.ok) return result;
+
+  revalidatePath("/admin/customers");
+  revalidatePath(`/admin/customers/${id}`);
+  return result;
+}
+
+/**
+ * 顧客カンバン (#99) の DnD / Shift+←→ 専用。updateCustomerAction (zCustomerUpdateInput 全項目必須)
+ * とは別に lifecycle 1 カラムのみを送る — 他フィールドをカード側の手元の古い値で再送してしまうのを
+ * 避けるため (crmFacade.updateCustomerLifecycle のコメント参照)。
+ */
+export async function updateCustomerLifecycleAction(
+  id: string,
+  lifecycle: CustomerLifecycle,
+  expectedUpdatedAt: string,
+): Promise<Result<void>> {
+  const admin = await platformFacade.requireAdmin();
+  if (!admin.ok) return { ok: false, code: admin.code, detail: admin.detail };
+
+  const parsed = zCustomerLifecycle.safeParse(lifecycle);
+  if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+
+  const result = await crmFacade.updateCustomerLifecycle(id, parsed.data, expectedUpdatedAt);
   if (!result.ok) return result;
 
   revalidatePath("/admin/customers");

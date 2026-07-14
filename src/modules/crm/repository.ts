@@ -358,6 +358,21 @@ export async function updateCustomerWithCas(
   return updateRowWithCas<CustomerRow>(client, "customers", id, input, expectedUpdatedAt);
 }
 
+/**
+ * lifecycle 単カラム更新の CAS (#99)。updateCustomerWithCas (CustomerUpdatePatch = 全項目必須の
+ * read-modify-write) を DnD/Shift+←→ のためだけに呼ぶと、他フィールドを呼び出し元の手元の古い値で
+ * 再送してしまい並行編集を巻き込む (実装計画書 issue-99.md 成果物2 の判断) — lifecycle 1 カラムのみを
+ * PATCH する専用関数を設ける。CAS 不一致は updateRowWithCas と同じく KMB-E103。
+ */
+export async function updateCustomerLifecycleWithCas(
+  client: SupabaseClient,
+  id: string,
+  lifecycle: CustomerLifecycle,
+  expectedUpdatedAt: string,
+): Promise<Result<CustomerRow>> {
+  return updateRowWithCas<CustomerRow>(client, "customers", id, { lifecycle }, expectedUpdatedAt);
+}
+
 /** batch 取得 (getDealRefs 等)。空配列入力は ok([])。 */
 export async function getCustomersByIds(
   client: SupabaseClient,
@@ -419,6 +434,31 @@ export async function listCustomersPage(
   const { data, error } = await query;
   if (error) return pgErrorToResult(error);
   return pageByCreatedAt((data ?? []) as CustomerRow[], pagination.limit);
+}
+
+/**
+ * カンバン列用の生集計 (#99)。listDealsByStage と同型: 列ごとに 1 回呼び、rows は表示用
+ * (limit 件、facade が列ごとの limit を決める — lead/customer=100, archived=20)、
+ * total は count: "exact" によるヘッダ表示用の正確な件数 (limit 超過時の乖離を UI 側で
+ * 「表示は直近N件」注記として明示するために rows.length とは別に返す)。
+ * merged_into_customer_id が非 NULL (統合済み) の行は listCustomersPage の既定除外規約
+ * (§4.1「一覧の既定フィルタから除外」) に揃えて除く。
+ */
+export async function listCustomersByLifecycle(
+  client: SupabaseClient,
+  lifecycle: CustomerLifecycle,
+  limit: number,
+): Promise<Result<{ rows: CustomerRow[]; total: number }>> {
+  const { data, error, count } = await client
+    .from("customers")
+    .select("*", { count: "exact" })
+    .eq("lifecycle", lifecycle)
+    .is("merged_into_customer_id", null)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: { rows: (data ?? []) as CustomerRow[], total: count ?? 0 } };
 }
 
 // ---- 重複検索 (§6.3) + マージポインタ終端解決 ----

@@ -14,6 +14,7 @@ import {
   zCompanyInput,
   zCompanyUpdateInput,
   zCustomerInput,
+  zCustomerLifecycle,
   zCustomerListFilter,
   zCustomerUpdateInput,
   zDealInput,
@@ -40,6 +41,8 @@ import {
   type CrmDigest,
   type CustomerDetail,
   type CustomerInput,
+  type CustomerKanbanColumn,
+  type CustomerLifecycle,
   type CustomerListFilter,
   type CustomerListItem,
   type CustomerRef,
@@ -93,6 +96,7 @@ import {
   listActivityLinksByActivity,
   listAwaitingLeadDeals,
   listCompaniesPage,
+  listCustomersByLifecycle,
   listCustomersPage,
   listDealsByStage,
   listDealsPage,
@@ -104,6 +108,7 @@ import {
   reopenDeal as reopenDealRpc,
   resolveMergedCustomerIdSafe,
   updateCompanyWithCas,
+  updateCustomerLifecycleWithCas,
   updateCustomerWithCas,
   updateDealWithCas,
   updateNoteActivity as updateNoteActivityRow,
@@ -172,8 +177,15 @@ export interface CrmFacadeExtended extends CrmFacade {
   listCustomers(filter: CustomerListFilter, p: Pagination): Promise<Result<Paged<CustomerListItem>>>; // 契約外拡張 (01-crm.md §6.2)
   // #44 で追加。会社 Sheet の所属顧客一覧専用 (zCustomerListFilter に company_id が無いための新設 — 上記コメント参照)。
   listCustomersByCompany(companyId: string, p: Pagination): Promise<Result<Paged<CustomerListItem>>>;
+  // #99 で追加。顧客カンバン (/admin/customers?view=kanban) 用 — listDealsKanban と同型
+  // (lead/customer は limit 100, archived は limit 20)。DB エラーは 1 列でも失敗したら Result エラーで
+  // 全体を伝播する (握り潰し厳禁)。
+  listCustomersKanban(): Promise<Result<CustomerKanbanColumn[]>>;
   getCustomer(id: string): Promise<Result<CustomerDetail>>; // 契約外拡張 (01-crm.md §6.2)
   updateCustomer(id: string, input: CustomerUpdateInput, expectedUpdatedAt: string): Promise<Result<void>>; // 契約外拡張 (01-crm.md §6.2)
+  // #99 で追加。顧客カンバンの DnD/Shift+←→ 専用 (lifecycle 全遷移許可、§4.1) — updateCustomer
+  // (CustomerUpdateInput 全項目必須) の read-modify-write を避けるための 1 カラム更新版。
+  updateCustomerLifecycle(id: string, lifecycle: CustomerLifecycle, expectedUpdatedAt: string): Promise<Result<void>>;
   mergeCustomers(input: MergeCustomersInput, expectedWinnerUpdatedAt: string): Promise<Result<void>>; // 契約外拡張 (01-crm.md §6.2)
   listCompanies(filter: { q: string | null }, p: Pagination): Promise<Result<Paged<CompanyListItem>>>; // 契約外拡張 (01-crm.md §6.2)
   getCompany(id: string): Promise<Result<CompanyRow>>; // 契約外拡張 (01-crm.md §6.2)
@@ -1031,6 +1043,31 @@ export const crmFacade: CrmFacadeExtended = {
     }
   },
 
+  // #99 で追加。顧客カンバン (/admin/customers?view=kanban) 用。listDealsKanban と同型:
+  // lifecycle 列ごとに listCustomersByLifecycle を呼び、enrichCustomerListItems (listCustomers と共用)
+  // で会社名・進行中案件数をエンリッチする。archived は 20 件、lead/customer は 100 件の列上限
+  // (deals の paid/lost=20 と同じ判断基準)。DB エラーは 1 列でも失敗したら即 Result エラーで返す
+  // (空配列や ok:true への無言変換は禁止)。
+  async listCustomersKanban() {
+    try {
+      const { supabase, user } = await getSessionAndClient();
+      if (!user) return { ok: false, code: "KMB-E201" };
+
+      const columns: CustomerKanbanColumn[] = [];
+      for (const lifecycle of zCustomerLifecycle.options) {
+        const limit = lifecycle === "archived" ? 20 : 100;
+        const page = await listCustomersByLifecycle(supabase, lifecycle, limit);
+        if (!page.ok) return page;
+        const items = await enrichCustomerListItems(supabase, page.value.rows);
+        if (!items.ok) return items;
+        columns.push({ lifecycle, total_count: page.value.total, customers: items.value });
+      }
+      return { ok: true, value: columns };
+    } catch (err) {
+      return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
   async getCustomer(id) {
     try {
       const { supabase, user } = await getSessionAndClient();
@@ -1086,6 +1123,24 @@ export const crmFacade: CrmFacadeExtended = {
         if (!company.value) return { ok: false, code: "KMB-E603", detail: "指定の会社が見つかりません" };
       }
       const updated = await updateCustomerWithCas(supabase, id, parsed.data, expectedUpdatedAt);
+      if (!updated.ok) return updated;
+      return { ok: true, value: undefined };
+    } catch (err) {
+      return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
+    }
+  },
+
+  // #99 で追加。顧客カンバンの DnD/Shift+←→ 専用 (updateCustomerLifecycleWithCas コメント参照)。
+  // lifecycle は §4.1 で全遷移許可のため updateDealStage のような canTransitionDealStage 相当の
+  // ガードは不要 — Zod parse + CAS のみで足りる。
+  async updateCustomerLifecycle(id, lifecycle, expectedUpdatedAt) {
+    try {
+      const parsed = zCustomerLifecycle.safeParse(lifecycle);
+      if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+      const { supabase, user } = await getSessionAndClient();
+      if (!user) return { ok: false, code: "KMB-E201" };
+
+      const updated = await updateCustomerLifecycleWithCas(supabase, id, parsed.data, expectedUpdatedAt);
       if (!updated.ok) return updated;
       return { ok: true, value: undefined };
     } catch (err) {
