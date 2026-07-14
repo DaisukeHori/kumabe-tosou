@@ -113,6 +113,20 @@ describe("SettingsTabs: initialTab による ?tab= ディープリンク (#92)",
     expect(html).toContain(TAB_MARKERS.company);
   });
 
+  // 敵対的レビュー指摘: `initialTab in TAB_LABELS` は Object.prototype 継承プロパティにもマッチする。
+  // ?tab=constructor 等では active が "constructor" になり、TabsTrigger/TabsContent のどれとも
+  // 一致しないため会社情報タブへのフォールバックが破られ (タブ内容が完全に空白レンダリング)、
+  // かつ Cmd+S 押下時 formRefs.current["constructor"] がプロトタイプ継承の Object コンストラクタを
+  // 掴み requestSubmit is not a function で例外化しうる。hasOwnProperty ベースの検証で防ぐ。
+  it.each(["constructor", "toString", "hasOwnProperty", "valueOf", "__proto__", "isPrototypeOf", "propertyIsEnumerable", "toLocaleString"])(
+    "initialTab=%s (Object.prototype 継承プロパティ名) でも会社情報タブにフォールバックする",
+    (tabKey) => {
+      const html = renderTabs(tabKey);
+      expect(html).toContain(TAB_MARKERS.company);
+      expect(html).not.toContain(TAB_MARKERS.telephony);
+    },
+  );
+
   it("initialTab=telephony は SetupChecklist (Webhook URL) を含む電話タブを初期表示する", () => {
     const html = renderTabs("telephony");
     expect(html).toContain("セットアップチェックリスト");

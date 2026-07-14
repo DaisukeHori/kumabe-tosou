@@ -155,7 +155,13 @@ export function SettingsTabs({
   mediaNextCursor: string | null;
 }) {
   const [active, setActive] = useState<TabKey>(() =>
-    initialTab && initialTab in TAB_LABELS ? (initialTab as TabKey) : "company",
+    // `in` 演算子は Object.prototype 継承プロパティ (constructor/toString/hasOwnProperty 等) にも
+    // マッチしてしまい、?tab=constructor 等でどの TabsTrigger/TabsContent にも一致しない active を
+    // 生成しうる (タブ空白化 + Cmd+S 時 formRefs.current[active] がプロトタイプ継承値を掴み
+    // requestSubmit is not a function で例外化)。hasOwnProperty で自身のキーのみ許可する。
+    initialTab && Object.prototype.hasOwnProperty.call(TAB_LABELS, initialTab)
+      ? (initialTab as TabKey)
+      : "company",
   );
   // "ai" タブは複数の独立したフォーム (キー追加/予算) を持つため単一の Cmd+S 対象を持たない
   // (キーを設定しない = そのタブでは Cmd+S が何もしない、という割り切り)。
