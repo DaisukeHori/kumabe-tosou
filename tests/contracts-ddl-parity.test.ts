@@ -338,6 +338,22 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
     expect([...taxIdentifiers]).toEqual(["tax_category"]);
   });
 
+  // ---- sales (#50: migration 20260711000027_sales_issuance.sql) ----
+  it("issued_documents.doc_type ↔ sales の zDocType (電帳法台帳。documents.doc_type と同一集合)", () => {
+    const expected = [...zDocType.options].sort();
+    const actual = findCheck(checks, "issued_documents", "doc_type").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("print_tokens.purpose ↔ 固定 2 値 ('pdf','preview') (02-sales §7.3。専用 named export が無いため固定値比較 — documents.billing_suffix と同型)", () => {
+    const actual = findCheck(checks, "print_tokens", "purpose").sort();
+    expect(actual).toEqual(["pdf", "preview"].sort());
+  });
+
+  it("issued_documents.sha256 の check が hex 64 桁の正規表現であること (§13.2 — findCheck の in 句パーサでは正規表現 check を抽出できないため、リテラル文字列の存在確認に留める。実装計画書「未解決点3」の簡易案どおり)", () => {
+    expect(sql).toContain("check (sha256 ~ '^[0-9a-f]{64}$')");
+  });
+
   // ---- scheduling (#52: migration 20260711000029_scheduling_core.sql) ----
   it("work_blocks.status ↔ scheduling の zWorkBlockStatus", () => {
     const expected = [...zWorkBlockStatus.options].sort();

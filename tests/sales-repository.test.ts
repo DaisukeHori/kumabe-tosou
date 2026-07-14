@@ -3,16 +3,33 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { DocumentLineInput, DocumentTotals, PaymentInput } from "@/modules/sales/contracts";
 import {
+  acquirePdfRenderLock,
+  appendDocumentVersion,
+  applyDocumentRevision,
+  cleanupExpiredPrintTokens,
+  cleanupOrphanRevisionStagings,
+  consumePrintToken,
   createDraftDocument,
   deleteDraftDocument,
   deletePayment,
+  finalizeDocumentIssue,
   getDocumentById,
+  getIssuedDocumentByVersion,
+  getRevisionStagingById,
   insertPayment,
+  insertPrintToken,
+  insertRevisionStaging,
   issueDocumentNumber,
   listDocumentsPage,
+  releasePdfRenderLock,
   saveDraftDocument,
   updateDocumentStatusWithCas,
+  uploadIssuedDocumentPdf,
+  type AppendDocumentVersionInput,
+  type ApplyDocumentRevisionInput,
   type CreateDraftDocumentInput,
+  type FinalizeDocumentIssueInput,
+  type InsertRevisionStagingInput,
   type SaveDraftHeader,
 } from "@/modules/sales/repository";
 
@@ -65,6 +82,15 @@ class FakeChain implements PromiseLike<PgResult> {
   }
   limit(...a: unknown[]): this {
     return this.record("limit", a);
+  }
+  is(...a: unknown[]): this {
+    return this.record("is", a);
+  }
+  gt(...a: unknown[]): this {
+    return this.record("gt", a);
+  }
+  lt(...a: unknown[]): this {
+    return this.record("lt", a);
   }
   async single(): Promise<PgResult> {
     return this.result;
@@ -621,5 +647,502 @@ describe("listDocumentsPage (keyset ページング)", () => {
     );
     const orCall = chain.calls.find((c) => c.method === "or");
     expect(orCall?.args[0]).toBe("doc_no.ilike.%100\\%%,billing_name.ilike.%100\\%%");
+  });
+});
+
+// ============================================================
+// finalizeDocumentIssue / appendDocumentVersion / applyDocumentRevision
+// (document_finalize_issue / document_append_version / document_apply_revision RPC ラッパ — #50)
+// canonical: 02-sales.md §2.3.2 (raise exception 'KMB-Exxx: …' 埋め込みメッセージ、
+// supabase/migrations/20260711000027_sales_issuance.sql に 1:1)。エラー握り潰し厳禁の回帰対象
+// (この 3 関数はこれまで一切テストが無かった — repository.ts の他関数と同水準まで引き上げる)。
+// ============================================================
+
+describe("finalizeDocumentIssue (document_finalize_issue RPC 接続)", () => {
+  const input: FinalizeDocumentIssueInput = {
+    documentId: DOC_ID,
+    expectedUpdatedAt: "u1",
+    docNo: "Q-2026-0001",
+    issueDate: "2026-07-12",
+    subtotalJpy: 10_000,
+    taxSummary: [{ tax_category: "standard_10", taxable_jpy: 10_000, tax_jpy: 1_000 }],
+    totalJpy: 11_000,
+    issuerSnapshot: { issuer_name: "隈部塗装" },
+    sha256: "a".repeat(64),
+    storagePath: "documents/doc-1/v1-aaaaaaaa.pdf",
+    counterparty: "サンプル建設",
+    contentSnapshot: { doc_no: "Q-2026-0001" },
+  };
+
+  it("p_ prefix 付きパラメータで RPC を呼び、配列レスポンスの先頭行を返す", async () => {
+    const { client, rpcCalls } = buildClient({
+      rpc: { data: [{ issued_document_id: "ledger-1", doc_version: 1, new_updated_at: "u2" }], error: null },
+    });
+    const result = await finalizeDocumentIssue(client, input);
+    expect(rpcCalls).toEqual([
+      {
+        name: "document_finalize_issue",
+        params: {
+          p_document_id: DOC_ID,
+          p_expected_updated_at: "u1",
+          p_doc_no: "Q-2026-0001",
+          p_issue_date: "2026-07-12",
+          p_subtotal_jpy: 10_000,
+          p_tax_summary: input.taxSummary,
+          p_total_jpy: 11_000,
+          p_issuer_snapshot: input.issuerSnapshot,
+          p_sha256: input.sha256,
+          p_storage_path: input.storagePath,
+          p_counterparty: "サンプル建設",
+          p_content_snapshot: input.contentSnapshot,
+        },
+      },
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      value: { issued_document_id: "ledger-1", doc_version: 1, new_updated_at: "u2" },
+    });
+  });
+
+  it("CAS 不一致 (KMB-E103 埋め込み) を握り潰さず伝播する", async () => {
+    const { client } = buildClient({
+      rpc: { data: null, error: { message: "KMB-E103: 帳票が他の操作で更新されています" } },
+    });
+    const result = await finalizeDocumentIssue(client, input);
+    expect(result).toEqual({ ok: false, code: "KMB-E103", detail: "KMB-E103: 帳票が他の操作で更新されています" });
+  });
+
+  it("非 draft (KMB-E621 埋め込み) を伝播する", async () => {
+    const { client } = buildClient({
+      rpc: { data: null, error: { message: "KMB-E621: draft 以外は発行できません (現在: issued)" } },
+    });
+    const result = await finalizeDocumentIssue(client, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E621");
+  });
+
+  it("明細 0 行 (KMB-E620 埋め込み) を伝播する", async () => {
+    const { client } = buildClient({
+      rpc: { data: null, error: { message: "KMB-E620: 明細が 0 行のため発行できません" } },
+    });
+    const result = await finalizeDocumentIssue(client, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E620");
+  });
+
+  it("書類番号重複 (KMB-E622 埋め込み) を伝播する", async () => {
+    const { client } = buildClient({
+      rpc: { data: null, error: { message: "KMB-E622: 書類番号または保存パスが重複しました (Q-2026-0001)" } },
+    });
+    const result = await finalizeDocumentIssue(client, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E622");
+  });
+
+  it("RPC が結果を返さない場合は KMB-E901 として明示的に失敗させる (握り潰さない)", async () => {
+    const { client } = buildClient({ rpc: { data: null, error: null } });
+    const result = await finalizeDocumentIssue(client, input);
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: expect.any(String) });
+  });
+});
+
+describe("appendDocumentVersion (document_append_version RPC 接続 — §4.3-A 再出力)", () => {
+  const input: AppendDocumentVersionInput = {
+    documentId: DOC_ID,
+    expectedUpdatedAt: "u1",
+    sha256: "b".repeat(64),
+    storagePath: "documents/doc-1/v2-bbbbbbbb.pdf",
+    counterparty: "サンプル建設",
+    contentSnapshot: { doc_no: "Q-2026-0001", version: 2 },
+  };
+
+  it("p_ prefix 付きパラメータで RPC を呼ぶ (issue_date/doc_no は含まない — 内容同一の再出力)", async () => {
+    const { client, rpcCalls } = buildClient({
+      rpc: { data: [{ issued_document_id: "ledger-2", doc_version: 2, new_updated_at: "u2" }], error: null },
+    });
+    const result = await appendDocumentVersion(client, input);
+    expect(rpcCalls).toEqual([
+      {
+        name: "document_append_version",
+        params: {
+          p_document_id: DOC_ID,
+          p_expected_updated_at: "u1",
+          p_sha256: input.sha256,
+          p_storage_path: input.storagePath,
+          p_counterparty: "サンプル建設",
+          p_content_snapshot: input.contentSnapshot,
+        },
+      },
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      value: { issued_document_id: "ledger-2", doc_version: 2, new_updated_at: "u2" },
+    });
+  });
+
+  it("現行版が台帳に見つからない (KMB-E627 埋め込み) を伝播する", async () => {
+    const { client } = buildClient({
+      rpc: { data: null, error: { message: "KMB-E627: 台帳に現行版 (v1) が見つかりません" } },
+    });
+    const result = await appendDocumentVersion(client, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E627");
+  });
+
+  it("CAS 不一致 (KMB-E103 埋め込み) を伝播する", async () => {
+    const { client } = buildClient({
+      rpc: { data: null, error: { message: "KMB-E103: 帳票が他の操作で更新されています" } },
+    });
+    const result = await appendDocumentVersion(client, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E103");
+  });
+
+  it("RPC が結果を返さない場合は KMB-E901 (握り潰さない)", async () => {
+    const { client } = buildClient({ rpc: { data: null, error: null } });
+    const result = await appendDocumentVersion(client, input);
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: expect.any(String) });
+  });
+});
+
+describe("applyDocumentRevision (document_apply_revision RPC 接続 — §4.3-B 訂正発行)", () => {
+  const input: ApplyDocumentRevisionInput = {
+    documentId: DOC_ID,
+    expectedUpdatedAt: "u1",
+    stagingId: "staging-1",
+    sha256: "c".repeat(64),
+    storagePath: "documents/doc-1/v3-cccccccc.pdf",
+    contentSnapshot: { doc_no: "Q-2026-0001", version: 3 },
+  };
+
+  it("p_ prefix 付きパラメータ (p_staging_id を含む) で RPC を呼ぶ", async () => {
+    const { client, rpcCalls } = buildClient({
+      rpc: { data: [{ issued_document_id: "ledger-3", doc_version: 3, new_updated_at: "u2" }], error: null },
+    });
+    const result = await applyDocumentRevision(client, input);
+    expect(rpcCalls).toEqual([
+      {
+        name: "document_apply_revision",
+        params: {
+          p_document_id: DOC_ID,
+          p_expected_updated_at: "u1",
+          p_staging_id: "staging-1",
+          p_sha256: input.sha256,
+          p_storage_path: input.storagePath,
+          p_content_snapshot: input.contentSnapshot,
+        },
+      },
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      value: { issued_document_id: "ledger-3", doc_version: 3, new_updated_at: "u2" },
+    });
+  });
+
+  it("staging 不在 (KMB-E621 埋め込み) を伝播する", async () => {
+    const { client } = buildClient({
+      rpc: { data: null, error: { message: "KMB-E621: 訂正内容 (staging) が見つかりません" } },
+    });
+    const result = await applyDocumentRevision(client, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E621");
+  });
+
+  it("入金記録のある請求書の訂正拒否 (KMB-E621 埋め込み) を伝播する", async () => {
+    const { client } = buildClient({
+      rpc: {
+        data: null,
+        error: {
+          message: "KMB-E621: 入金記録のある請求書は訂正できません (入金を削除するか、取消して再発行してください)",
+        },
+      },
+    });
+    const result = await applyDocumentRevision(client, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E621");
+  });
+
+  it("明細 0 行の訂正 (KMB-E620 埋め込み) を伝播する", async () => {
+    const { client } = buildClient({
+      rpc: { data: null, error: { message: "KMB-E620: 明細が 0 行の訂正はできません" } },
+    });
+    const result = await applyDocumentRevision(client, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E620");
+  });
+
+  it("RPC が結果を返さない場合は KMB-E901 (握り潰さない)", async () => {
+    const { client } = buildClient({ rpc: { data: null, error: null } });
+    const result = await applyDocumentRevision(client, input);
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: expect.any(String) });
+  });
+});
+
+// ============================================================
+// acquirePdfRenderLock / releasePdfRenderLock (pdf_render_lock CAS lease — §7.4-1)
+// advisory lock は pgbouncer のため不使用。singleton 行 (id=1) への CAS UPDATE で代替する設計の
+// 単体検証 (DB 側の実際の同時実行排他は結合テスト側 — 実装計画書「テスト戦略」節)。
+// ============================================================
+
+describe("acquirePdfRenderLock / releasePdfRenderLock (pdf_render_lock CAS lease)", () => {
+  it("取得成功: locked_until < now の行が更新され true を返す", async () => {
+    const chain = new FakeChain({ data: [{ id: 1 }], error: null });
+    const { client, fromCalls } = buildClient({ fromQueue: [chain] });
+    const result = await acquirePdfRenderLock(client, "instance-a");
+    expect(result).toEqual({ ok: true, value: true });
+    expect(fromCalls).toEqual(["pdf_render_lock"]);
+    const updateCall = chain.calls.find((c) => c.method === "update");
+    expect(updateCall?.args[0]).toMatchObject({ locked_by: "instance-a" });
+    const eqCall = chain.calls.find((c) => c.method === "eq");
+    expect(eqCall?.args).toEqual(["id", 1]);
+    const ltCall = chain.calls.find((c) => c.method === "lt");
+    expect(ltCall?.args[0]).toBe("locked_until");
+  });
+
+  it("他インスタンスが実行中 (0 行) は value:false (KMB-E643 への変換は internal/pdf.ts の責務)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: [], error: null })] });
+    const result = await acquirePdfRenderLock(client, "instance-a");
+    expect(result).toEqual({ ok: true, value: false });
+  });
+
+  it("UPDATE 自体のエラーは伝播する (握り潰さない — false と混同しない)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: { message: "connection reset by peer" } })] });
+    const result = await acquirePdfRenderLock(client, "instance-a");
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: "connection reset by peer" });
+  });
+
+  it("releasePdfRenderLock: id=1 かつ locked_by 一致行のみを対象に UPDATE する (他インスタンスの lease を誤って割り込まない)", async () => {
+    const chain = new FakeChain({ data: null, error: null });
+    const { client, fromCalls } = buildClient({ fromQueue: [chain] });
+    const result = await releasePdfRenderLock(client, "instance-a");
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(fromCalls).toEqual(["pdf_render_lock"]);
+    const eqCalls = chain.calls.filter((c) => c.method === "eq");
+    expect(eqCalls).toEqual([
+      { method: "eq", args: ["id", 1] },
+      { method: "eq", args: ["locked_by", "instance-a"] },
+    ]);
+  });
+
+  it("releasePdfRenderLock: エラーは伝播する (ベストエフォートだが repository 層では握り潰さない)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: { message: "timeout" } })] });
+    const result = await releasePdfRenderLock(client, "instance-a");
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: "timeout" });
+  });
+});
+
+// ============================================================
+// uploadIssuedDocumentPdf (Storage bucket issued-documents — §7.4-6)
+// StorageError は Postgres エラーコードを持たないため pgErrorToResult を経由せず直接 KMB-E641 へ
+// 写像する分岐の検証。
+// ============================================================
+
+describe("uploadIssuedDocumentPdf (issued-documents バケット、upsert:false 固定)", () => {
+  it("upsert:false 固定でアップロードする (電帳法の不変保存対象 — capture.ts の upsert:true を流用しない)", async () => {
+    const uploadMock = vi.fn().mockResolvedValue({ data: { path: "documents/doc-1/v1-aaaaaaaa.pdf" }, error: null });
+    const client = { storage: { from: vi.fn(() => ({ upload: uploadMock })) } } as unknown as SupabaseClient;
+
+    const result = await uploadIssuedDocumentPdf(client, "documents/doc-1/v1-aaaaaaaa.pdf", Buffer.from("pdf-bytes"));
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(uploadMock).toHaveBeenCalledWith("documents/doc-1/v1-aaaaaaaa.pdf", expect.any(Buffer), {
+      contentType: "application/pdf",
+      upsert: false,
+    });
+  });
+
+  it("重複 (upsert:false の衝突) は KMB-E641 へ変換する (握り潰さない)", async () => {
+    const uploadMock = vi.fn().mockResolvedValue({ data: null, error: { message: "The resource already exists" } });
+    const client = { storage: { from: vi.fn(() => ({ upload: uploadMock })) } } as unknown as SupabaseClient;
+
+    const result = await uploadIssuedDocumentPdf(client, "documents/doc-1/v1-aaaaaaaa.pdf", Buffer.from("pdf-bytes"));
+
+    expect(result).toEqual({ ok: false, code: "KMB-E641", detail: "The resource already exists" });
+  });
+});
+
+// ============================================================
+// print_tokens repository 層 (insertPrintToken/consumePrintToken/cleanupExpiredPrintTokens)
+// internal/print-token.ts の呼び出し元は tests/sales-print-token.test.ts で検証済みだが、
+// repository 層自体の RPC/クエリ配線とエラー伝播はここで検証する (これまで未検証だった層)。
+// ============================================================
+
+describe("insertPrintToken / consumePrintToken / cleanupExpiredPrintTokens (print_tokens repository 層)", () => {
+  it("insertPrintToken: token_hash/document_id/purpose/payload/expires_at を INSERT する", async () => {
+    const chain = new FakeChain({ data: null, error: null });
+    const { client, fromCalls } = buildClient({ fromQueue: [chain] });
+    const result = await insertPrintToken(client, {
+      tokenHash: "a".repeat(64),
+      documentId: DOC_ID,
+      purpose: "pdf",
+      payload: { doc_no: "Q-2026-0001" },
+      expiresAt: "2026-07-12T00:05:00.000Z",
+    });
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(fromCalls).toEqual(["print_tokens"]);
+    const insertCall = chain.calls.find((c) => c.method === "insert");
+    expect(insertCall?.args[0]).toEqual({
+      token_hash: "a".repeat(64),
+      document_id: DOC_ID,
+      purpose: "pdf",
+      payload: { doc_no: "Q-2026-0001" },
+      expires_at: "2026-07-12T00:05:00.000Z",
+    });
+  });
+
+  it("insertPrintToken: token_hash 重複 (23505) を KMB-E102 へ変換する (握り潰さない)", async () => {
+    const { client } = buildClient({
+      fromQueue: [
+        new FakeChain({ data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "print_tokens_pkey"' } }),
+      ],
+    });
+    const result = await insertPrintToken(client, {
+      tokenHash: "a".repeat(64),
+      documentId: DOC_ID,
+      purpose: "pdf",
+      payload: null,
+      expiresAt: "2026-07-12T00:05:00.000Z",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E102");
+  });
+
+  it("consumePrintToken: consumed_at is null / expires_at > now の 1 行を UPDATE し、消費できた行を返す", async () => {
+    const chain = new FakeChain({ data: { document_id: DOC_ID, purpose: "pdf", payload: null }, error: null });
+    const { client, fromCalls } = buildClient({ fromQueue: [chain] });
+    const result = await consumePrintToken(client, "a".repeat(64));
+    expect(result).toEqual({ ok: true, value: { document_id: DOC_ID, purpose: "pdf", payload: null } });
+    expect(fromCalls).toEqual(["print_tokens"]);
+    const isCall = chain.calls.find((c) => c.method === "is");
+    expect(isCall?.args).toEqual(["consumed_at", null]);
+    const gtCall = chain.calls.find((c) => c.method === "gt");
+    expect(gtCall?.args[0]).toBe("expires_at");
+  });
+
+  it("consumePrintToken: 0 行 (消費済み/期限切れ/未登録) は ok:true value:null (エラーと不在を混同しない)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: null })] });
+    const result = await consumePrintToken(client, "a".repeat(64));
+    expect(result).toEqual({ ok: true, value: null });
+  });
+
+  it("consumePrintToken: UPDATE 自体のエラーは伝播する (握り潰さない)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: { message: "connection reset by peer" } })] });
+    const result = await consumePrintToken(client, "a".repeat(64));
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: "connection reset by peer" });
+  });
+
+  it("cleanupExpiredPrintTokens: expires_at < now の行を DELETE する (発行時ベストエフォート掃除)", async () => {
+    const chain = new FakeChain({ data: null, error: null });
+    const { client, fromCalls } = buildClient({ fromQueue: [chain] });
+    const result = await cleanupExpiredPrintTokens(client);
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(fromCalls).toEqual(["print_tokens"]);
+    expect(chain.calls[0]?.method).toBe("delete");
+    const ltCall = chain.calls.find((c) => c.method === "lt");
+    expect(ltCall?.args[0]).toBe("expires_at");
+  });
+
+  it("cleanupExpiredPrintTokens: DELETE のエラーは repository 層では握り潰さず Result.code として返す (黙殺は呼び出し元 internal/print-token.ts の裁量)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: { message: "denied" } })] });
+    const result = await cleanupExpiredPrintTokens(client);
+    expect(result.ok).toBe(false);
+  });
+});
+
+// ============================================================
+// document_revision_stagings / issued_documents 版検索
+// (insertRevisionStaging/getRevisionStagingById/cleanupOrphanRevisionStagings/getIssuedDocumentByVersion — §50)
+// ============================================================
+
+describe("document_revision_stagings / issued_documents 版検索 (訂正発行・再出力 repository 層)", () => {
+  const totals: DocumentTotals = { subtotal_jpy: 5_000, tax_summary: [], total_jpy: 5_500 };
+
+  it("insertRevisionStaging: header/lines/totals/created_by を INSERT し id を返す", async () => {
+    const chain = new FakeChain({ data: { id: "staging-1" }, error: null });
+    const { client, fromCalls } = buildClient({ fromQueue: [chain] });
+    const input: InsertRevisionStagingInput = {
+      documentId: DOC_ID,
+      header: { billing_name: "サンプル建設" },
+      lines: [lineInput],
+      totals,
+      createdBy: null,
+    };
+    const result = await insertRevisionStaging(client, input);
+    expect(result).toEqual({ ok: true, value: { id: "staging-1" } });
+    expect(fromCalls).toEqual(["document_revision_stagings"]);
+    const insertCall = chain.calls.find((c) => c.method === "insert");
+    expect(insertCall?.args[0]).toEqual({
+      document_id: DOC_ID,
+      header: { billing_name: "サンプル建設" },
+      lines: [lineInput],
+      subtotal_jpy: 5_000,
+      tax_summary: [],
+      total_jpy: 5_500,
+      created_by: null,
+    });
+  });
+
+  it("insertRevisionStaging: INSERT のエラーは伝播する", async () => {
+    const { client } = buildClient({
+      fromQueue: [new FakeChain({ data: null, error: { code: "23503", message: "document_id fk violation" } })],
+    });
+    const input: InsertRevisionStagingInput = {
+      documentId: DOC_ID,
+      header: {},
+      lines: [],
+      totals,
+      createdBy: null,
+    };
+    const result = await insertRevisionStaging(client, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E101");
+  });
+
+  it("getRevisionStagingById: 存在しない場合は ok:true value:null (エラーと不在を混同しない)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: null })] });
+    const result = await getRevisionStagingById(client, "staging-404");
+    expect(result).toEqual({ ok: true, value: null });
+  });
+
+  it("getRevisionStagingById: 取得エラーは伝播する (握り潰さない)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: { message: "timeout" } })] });
+    const result = await getRevisionStagingById(client, "staging-1");
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: "timeout" });
+  });
+
+  it("cleanupOrphanRevisionStagings: 対象 document_id の staging を全 DELETE する (孤児掃除 — document_apply_revision 成功時は RPC 自身が DELETE 済みのため、残存分は前回失敗の孤児のみ)", async () => {
+    const chain = new FakeChain({ data: null, error: null });
+    const { client, fromCalls } = buildClient({ fromQueue: [chain] });
+    const result = await cleanupOrphanRevisionStagings(client, DOC_ID);
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(fromCalls).toEqual(["document_revision_stagings"]);
+    const eqCall = chain.calls.find((c) => c.method === "eq");
+    expect(eqCall?.args).toEqual(["document_id", DOC_ID]);
+  });
+
+  it("cleanupOrphanRevisionStagings: DELETE のエラーは repository 層では握り潰さず返す", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: { message: "denied" } })] });
+    const result = await cleanupOrphanRevisionStagings(client, DOC_ID);
+    expect(result.ok).toBe(false);
+  });
+
+  it("getIssuedDocumentByVersion: 対象版が台帳に無い場合は ok:true value:null (KMB-E627 判定は facade の責務)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: null })] });
+    const result = await getIssuedDocumentByVersion(client, DOC_ID, 3);
+    expect(result).toEqual({ ok: true, value: null });
+  });
+
+  it("getIssuedDocumentByVersion: 成功時は storage_path を返す", async () => {
+    const { client } = buildClient({
+      fromQueue: [new FakeChain({ data: { storage_path: "documents/doc-1/v1-aaaaaaaa.pdf" }, error: null })],
+    });
+    const result = await getIssuedDocumentByVersion(client, DOC_ID, 1);
+    expect(result).toEqual({ ok: true, value: { storage_path: "documents/doc-1/v1-aaaaaaaa.pdf" } });
+  });
+
+  it("getIssuedDocumentByVersion: 取得エラーは伝播する (握り潰さない)", async () => {
+    const { client } = buildClient({ fromQueue: [new FakeChain({ data: null, error: { message: "denied" } })] });
+    const result = await getIssuedDocumentByVersion(client, DOC_ID, 1);
+    expect(result).toEqual({ ok: false, code: "KMB-E901", detail: "denied" });
   });
 });

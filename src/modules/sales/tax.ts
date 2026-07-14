@@ -13,8 +13,10 @@ import type { DocumentTotals, TaxSummary } from "./contracts";
 type TaxRounding = z.infer<typeof zTaxRounding>;
 type LineForTax = { amount_jpy: number; tax_category: TaxCategory };
 
-/** 税率区分の走査順 (固定)。出現しない区分は集計行を作らない (§5.3 アルゴリズム 2) */
-const TAX_CATEGORY_ORDER: readonly TaxCategory[] = ["standard_10", "reduced_8", "zero", "exempt"];
+/** 税率区分の走査順 (固定)。出現しない区分は集計行を作らない (§5.3 アルゴリズム 2)。
+ *  export: 紙面 (DocumentSheet — 02-sales §10.4「tax_summary を standard_10→reduced_8→
+ *  zero→exempt の固定順」) が同じ定数を参照するため (Issue #50 — 走査順の二重定義を避ける)。 */
+export const TAX_CATEGORY_ORDER: readonly TaxCategory[] = ["standard_10", "reduced_8", "zero", "exempt"];
 
 /**
  * 丸め (数学的定義。floor = 負方向、ceil = 正方向、round = Math.round に一致)。
