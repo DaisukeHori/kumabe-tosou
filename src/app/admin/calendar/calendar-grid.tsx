@@ -78,6 +78,19 @@ type DragState = {
   grabOffsetMinutes: number;
   /** 現在のプレビュー位置 (週内の日オフセット 0-6 と、日内開始分) */
   preview: { dayOffset: number; startMinutes: number; durationMinutes: number } | null;
+  /**
+   * Esc でキャンセル済みか (#95 敵対的レビュー2件目 — create 自身の中に残っていたバグの修正)。
+   *
+   * 【地雷】Esc 押下時に dragState を直接 null にしてはならない。keydown は pointerup と非同期な
+   * 別イベントであり、同期的に null 化すると再レンダー後の handleBlockPointerUp が
+   * `!dragState` = 単純クリック分岐に落ち、「create ドラッグ中に既存ブロックの <button> 上へ
+   * カーソルを移動して Esc → 動かさず pointerup」という操作順で無関係なブロックの詳細ダイアログが
+   * 誤って開いてしまう。この canceled フラグはプレビューの表示のみを止め (レンダー条件で参照)、
+   * dragState 自体の null 化は対応する pointerup/pointercancel (commitDrag) に委ねる。これにより
+   * handleBlockPointerUp 時点でも dragState は truthy (kind: "create") のままなので、
+   * shouldIgnoreBlockPointerUp の move 判定に落ちて無害化される。create 以外では常に未設定。
+   */
+  canceled?: boolean;
 };
 
 export type CalendarGridHandle = {
@@ -176,6 +189,36 @@ export function shouldCancelDragOnEscape(kind: DragKind["kind"]): boolean {
   return kind === "create";
 }
 
+/**
+ * handleKeyDown (Esc) が dragState に対して実際に行う更新を表す純関数 (#95 敵対的レビュー2件目の
+ * 核心修正)。dragState を null にする代わりに canceled フラグを立てるだけに留める。対象外の
+ * kind (move/resize/tray) では何もせず同じ dragState をそのまま返す (既存挙動を維持)。
+ */
+export function applyEscapeCancel(dragState: DragState | null): DragState | null {
+  if (!dragState || !shouldCancelDragOnEscape(dragState.drag.kind)) return dragState;
+  return { ...dragState, canceled: true };
+}
+
+/**
+ * commitDrag (create) が onCreateRange を実際に呼んでよいかを判定する純関数。canceled
+ * (Esc キャンセル済み) の場合は、その後どれだけポインタが動いていようと何も作成しない —
+ * これが #95 敵対的レビュー2件目 (create 自身の中の Esc→pointerup 誤爆) の直接的な防止策。
+ */
+export function shouldCommitCreate(canceled: boolean | undefined, moved: unknown): boolean {
+  return !canceled && Boolean(moved);
+}
+
+/**
+ * handleBlockPointerUp が「このブロックの pointerup を無視すべきか」を判定する純関数。
+ * dragState が truthy である限り (Esc キャンセル済みの create を含む)、move 中の対象ブロック
+ * 自身の pointerup でなければ何もしない — 無関係な block 引数でこのハンドラが呼ばれても
+ * (トレイ/リサイズ/作成ドラッグ中の他ブロック上でのリリースを含む) 詳細ダイアログを開かないための
+ * 安全策そのもの (#95 敵対的レビュー2件目の防止策)。
+ */
+export function shouldIgnoreBlockPointerUp(drag: DragKind, blockId: string): boolean {
+  return drag.kind !== "move" || drag.block.id !== blockId;
+}
+
 export const CalendarGrid = forwardRef<CalendarGridHandle, {
   weekStart: DateOnly;
   blocks: WorkBlockView[];
@@ -240,11 +283,13 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
       if (!prev || !prev.preview) return null;
       if (prev.drag.kind === "create") {
         // click-vs-drag 判定 (既存 4px 閾値と同一) — 誤クリックでモーダルが開く事故を防止する
-        // (クリック単発での作成は v1 非対応。Issue #95 リスク欄の判断)。
+        // (クリック単発での作成は v1 非対応。Issue #95 リスク欄の判断)。canceled (Esc 済み) の
+        // 場合は shouldCommitCreate が moved に関わらず false を返すため、ここで何も作成せず
+        // dragState を null に戻すだけで終わる (#95 敵対的レビュー2件目の修正)。
         const start = pointerStartRef.current;
         pointerStartRef.current = null;
         const moved = start && (Math.abs(clientX - start.x) > 4 || Math.abs(clientY - start.y) > 4);
-        if (!moved) return null;
+        if (!shouldCommitCreate(prev.canceled, moved)) return null;
         const dayDate = addDaysJst(weekStart, prev.preview.dayOffset);
         onCreateRange(dayDate, prev.preview.startMinutes, prev.preview.durationMinutes);
         return null;
@@ -271,10 +316,15 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     function handleKeyDown(e: KeyboardEvent) {
       // Esc = create (空白ドラッグ新規作成) のプレビューのみ閉じる。判定は shouldCancelDragOnEscape
       // (このファイル冒頭で定義・export、tests/calendar-grid-selection.test.ts で単体検証済み) に委譲する。
+      // 【地雷】ここで setDragState(null) してはならない (#95 敵対的レビュー2件目)。dragState を
+      // 直接 null にすると、対応する pointerup より前に再レンダーが走り、handleBlockPointerUp が
+      // 「dragState が無い = 単純クリック」分岐に落ちて無関係なブロックの詳細が誤って開く。
+      // applyEscapeCancel は dragState を canceled フラグ付きの truthy な値のまま保つ
+      // (実際の null 化は commitDrag に委ねる)。
       if (e.key !== "Escape") return;
       if (!dragState || !shouldCancelDragOnEscape(dragState.drag.kind)) return;
       pointerStartRef.current = null;
-      setDragState(null);
+      setDragState((prev) => applyEscapeCancel(prev));
     }
     document.addEventListener("pointermove", handleMove);
     document.addEventListener("pointerup", handleUp);
@@ -366,13 +416,15 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     }
     // 【地雷】pointerup はリリース時にカーソル直下にある要素へネイティブにバブルするため、
     // (1) トレイからの外部ドラッグ (kind='tray') や (2) 下端リサイズ中 (kind='resize') や
-    // (4) 空白ドラッグ作成中 (kind='create') に別のブロックの <button> の上でポインタを離した
-    // 場合や、(3) リサイズ中に自分自身の <button> の上で離した場合にも、このハンドラが
+    // (4) 空白ドラッグ作成中 (kind='create'。Esc キャンセル済み = canceled:true でも dragState
+    // 自体は truthy のまま — #95 敵対的レビュー2件目) に別のブロックの <button> の上でポインタを
+    // 離した場合や、(3) リサイズ中に自分自身の <button> の上で離した場合にも、このハンドラが
     // 「無関係な block」引数で呼ばれ得る。click-vs-drag 判定 (setDragState(null) による確定前
     // キャンセル) は「今まさに move 中の対象ブロックそのもの」の pointerup でのみ行う。それ以外は
     // 何もせず、document 側の pointerup リスナー (commitDrag) に確定処理を完全に委ねる —
     // 誤って他ブロックの詳細を開いたりトレイ配置/リサイズ/作成の結果を握り潰したりしないための安全策。
-    if (dragState.drag.kind !== "move" || dragState.drag.block.id !== block.id) return;
+    // 判定は shouldIgnoreBlockPointerUp (このファイル冒頭で定義・export) に委譲する。
+    if (shouldIgnoreBlockPointerUp(dragState.drag, block.id)) return;
     const start = pointerStartRef.current;
     pointerStartRef.current = null;
     const moved = start && (Math.abs(e.clientX - start.x) > 4 || Math.abs(e.clientY - start.y) > 4);
@@ -512,7 +564,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
                     <span className="block truncate font-medium">{seg.label}</span>
                   </div>
                 ))}
-              {dragState?.preview && dragState.preview.dayOffset === dayOffset && (
+              {dragState?.preview && !dragState.canceled && dragState.preview.dayOffset === dayOffset && (
                 <div
                   className="pointer-events-none absolute inset-x-0.5 z-20 overflow-hidden rounded-md border-2 border-dashed border-soul bg-soul/20"
                   style={{

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { createSelection, shouldCancelDragOnEscape } from "@/app/admin/calendar/calendar-grid";
+import {
+  applyEscapeCancel,
+  createSelection,
+  shouldCancelDragOnEscape,
+  shouldCommitCreate,
+  shouldIgnoreBlockPointerUp,
+} from "@/app/admin/calendar/calendar-grid";
+import type { WorkBlockView } from "@/modules/scheduling/contracts";
 
 /**
  * canonical: GitHub Issue #95 設計 §F。
@@ -83,5 +90,132 @@ describe("shouldCancelDragOnEscape", () => {
 
   it("tray (未配置トレイからの外部ドラッグ) 中は false (Esc は無視 — 既存挙動を維持)", () => {
     expect(shouldCancelDragOnEscape("tray")).toBe(false);
+  });
+});
+
+/** テスト用の最小 WorkBlockView フィクスチャ (id 以外のフィールドは本テストで参照しない)。 */
+function fakeBlock(id: string): WorkBlockView {
+  return { id } as unknown as WorkBlockView;
+}
+
+/**
+ * canonical: Issue #95 敵対的レビュー (2件目) — 「create 自身の中に残っていたバグ」の回帰防止。
+ *
+ * shouldCancelDragOnEscape により Esc キャンセルを create 限定にしても、handleKeyDown が
+ * dragState を直接 `setDragState(null)` していると、create ドラッグ中に既存ブロックの <button>
+ * 上へカーソルを移動した状態で Esc → 動かさず pointerup、という操作順で
+ * handleBlockPointerUp の「dragState が無い = 単純クリック」分岐に落ち、無関係なブロックの
+ * 詳細ダイアログが誤って開いてしまう。
+ *
+ * 修正 (最小侵襲パターン): Esc 押下時は dragState を null にせず canceled フラグを立てるだけに
+ * 留め (applyEscapeCancel)、実際の null 化は対応する pointerup (commitDrag 内の
+ * shouldCommitCreate) に委ねる。この結果、handleBlockPointerUp 時点でも dragState は truthy な
+ * ままなので、shouldIgnoreBlockPointerUp の move 判定に落ちて無害化される。
+ */
+describe("applyEscapeCancel", () => {
+  it("create ドラッグ中は canceled:true を付与するが dragState 自体は null にしない (truthy を維持)", () => {
+    const dragState = {
+      drag: { kind: "create" as const, anchorMinutes: 540 },
+      pointerId: 1,
+      grabOffsetMinutes: 0,
+      preview: { dayOffset: 0, startMinutes: 540, durationMinutes: 30 },
+    };
+    const result = applyEscapeCancel(dragState);
+    expect(result).not.toBeNull();
+    expect(result?.canceled).toBe(true);
+    expect(result?.drag.kind).toBe("create");
+  });
+
+  it("move ドラッグ中は変更されずそのまま返る (Esc は無視 — 既存挙動を維持)", () => {
+    const dragState = {
+      drag: { kind: "move" as const, block: fakeBlock("block-1") },
+      pointerId: 1,
+      grabOffsetMinutes: 0,
+      preview: { dayOffset: 0, startMinutes: 540, durationMinutes: 60 },
+    };
+    const result = applyEscapeCancel(dragState);
+    expect(result).toBe(dragState);
+    expect(result?.canceled).toBeUndefined();
+  });
+
+  it("resize/tray ドラッグ中も変更されずそのまま返る (Esc は無視 — 既存挙動を維持)", () => {
+    const resizeState = {
+      drag: { kind: "resize" as const, block: fakeBlock("block-2") },
+      pointerId: 1,
+      grabOffsetMinutes: 0,
+      preview: { dayOffset: 0, startMinutes: 540, durationMinutes: 60 },
+    };
+    const trayState = {
+      drag: { kind: "tray" as const, block: fakeBlock("block-3") },
+      pointerId: 2,
+      grabOffsetMinutes: 0,
+      preview: { dayOffset: 0, startMinutes: 540, durationMinutes: 60 },
+    };
+    expect(applyEscapeCancel(resizeState)).toBe(resizeState);
+    expect(applyEscapeCancel(trayState)).toBe(trayState);
+  });
+
+  it("dragState が null の場合は null を返す", () => {
+    expect(applyEscapeCancel(null)).toBeNull();
+  });
+});
+
+describe("shouldCommitCreate", () => {
+  it("canceled:true の場合は moved の値に関わらず何も作成しない (Esc キャンセル後の pointerup で誤作成しない)", () => {
+    expect(shouldCommitCreate(true, true)).toBe(false);
+    expect(shouldCommitCreate(true, false)).toBe(false);
+  });
+
+  it("canceled でなく moved の場合のみ作成する (既存の click-vs-drag 閾値挙動を維持)", () => {
+    expect(shouldCommitCreate(false, true)).toBe(true);
+    expect(shouldCommitCreate(undefined, true)).toBe(true);
+    expect(shouldCommitCreate(false, false)).toBe(false);
+    expect(shouldCommitCreate(undefined, false)).toBe(false);
+  });
+});
+
+describe("shouldIgnoreBlockPointerUp", () => {
+  it("create ドラッグ中 (Esc キャンセル済みでも dragState は truthy) は move 対象ではないため無視する — 無関係なブロックの詳細を誤って開かない", () => {
+    const createDrag = { kind: "create" as const, anchorMinutes: 540 };
+    expect(shouldIgnoreBlockPointerUp(createDrag, "unrelated-block-id")).toBe(true);
+  });
+
+  it("move 中で対象ブロック自身の pointerup は無視しない (通常のクリック確定処理を継続)", () => {
+    const moveDrag = { kind: "move" as const, block: fakeBlock("block-1") };
+    expect(shouldIgnoreBlockPointerUp(moveDrag, "block-1")).toBe(false);
+  });
+
+  it("move 中でも別ブロックの pointerup は無視する", () => {
+    const moveDrag = { kind: "move" as const, block: fakeBlock("block-1") };
+    expect(shouldIgnoreBlockPointerUp(moveDrag, "block-2")).toBe(true);
+  });
+
+  it("resize/tray 中は move ではないため常に無視する", () => {
+    const resizeDrag = { kind: "resize" as const, block: fakeBlock("block-1") };
+    const trayDrag = { kind: "tray" as const, block: fakeBlock("block-1") };
+    expect(shouldIgnoreBlockPointerUp(resizeDrag, "block-1")).toBe(true);
+    expect(shouldIgnoreBlockPointerUp(trayDrag, "block-1")).toBe(true);
+  });
+
+  it("回帰再現: create ドラッグ中に Esc → 動かさず既存ブロック上で pointerup しても詳細ダイアログは開かない", () => {
+    // 1. 空白でドラッグ開始 (create)
+    const dragState = {
+      drag: { kind: "create" as const, anchorMinutes: 540 },
+      pointerId: 1,
+      grabOffsetMinutes: 0,
+      preview: { dayOffset: 0, startMinutes: 540, durationMinutes: 30 },
+    };
+    // 2. カーソルが既存ブロックの <button> 上にある状態で Esc → canceled フラグが立つのみ
+    //    (setDragState(null) はしない)
+    const afterEscape = applyEscapeCancel(dragState);
+    expect(afterEscape).not.toBeNull(); // dragState は truthy のまま = handleBlockPointerUp の
+    // 「dragState が無い = 単純クリック」分岐 (!dragState) には入らない
+
+    // 3. 動かさずそのまま pointerup → handleBlockPointerUp が呼ばれるが、shouldIgnoreBlockPointerUp
+    //    が true を返すため無関係なブロックの詳細は開かない
+    expect(shouldIgnoreBlockPointerUp(afterEscape!.drag, "unrelated-existing-block-id")).toBe(true);
+
+    // 4. 対応する document 側の pointerup (commitDrag) では canceled のため何も作成されない
+    expect(shouldCommitCreate(afterEscape!.canceled, false)).toBe(false);
   });
 });
