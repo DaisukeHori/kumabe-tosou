@@ -87,12 +87,15 @@ describe("crmFacade.reopenDeal", () => {
 
     expect(result).toEqual({ ok: true, value: { updated_at: "2026-07-14T00:00:00.000Z" } });
 
+    // paid は won_at が既に記録済み (dealRow 既定値) — shouldRecordWonAt は false を返し、
+    // repository.reopenDeal (RPC ラッパ) には wonAt=null (「据え置き」を意味する) を渡す。
     expect(reopenDealMock).toHaveBeenCalledWith(
       {},
       DEAL_ID,
       "invoiced",
       "誤って入金済みにしてしまった",
       "2026-07-01T00:00:00.000Z",
+      null,
     );
 
     // 監査 activity: ref_table/ref_id は null (冪等キーによる誤 dedup を避けるため — links のみで紐づける)
@@ -128,7 +131,78 @@ describe("crmFacade.reopenDeal", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(reopenDealMock).toHaveBeenCalledWith({}, DEAL_ID, "estimating", "作り直し", "2026-07-01T00:00:00.000Z");
+    // won_at が既に記録済み (dealRow 既定値) かつ estimating は非 won 系 — いずれにせよ wonAt=null。
+    expect(reopenDealMock).toHaveBeenCalledWith(
+      {}, DEAL_ID, "estimating", "作り直し", "2026-07-01T00:00:00.000Z", null,
+    );
+  });
+
+  it("lost かつ won_at が null (lost に落ちる前に一度も won 系ステージへ到達していなかった) の案件を won " +
+    "系ステージへ再開すると、新規の won_at を RPC に渡す (§4.2 不変条件1 — レビュー是正: isWon なのに " +
+    "won_at=null という不整合行を防ぐ)", async () => {
+    getDealByIdMock.mockResolvedValue({
+      ok: true,
+      value: dealRow({ stage: "lost", won_at: null, lost_reason: "価格が合わなかった" }),
+    });
+    reopenDealMock.mockResolvedValue({ ok: true, value: { new_updated_at: "2026-07-14T00:00:00.000Z" } });
+    appendActivityRowMock.mockResolvedValue({ ok: true, value: { row: { id: ACTIVITY_ID }, created: true } });
+    linkActivityRowMock.mockResolvedValue({ ok: true, value: { row: {}, created: true } });
+
+    const result = await crmFacade.reopenDeal(
+      DEAL_ID,
+      { to_stage: "invoiced", reason: "作り直し" },
+      "2026-07-01T00:00:00.000Z",
+    );
+
+    expect(result.ok).toBe(true);
+    expect(reopenDealMock).toHaveBeenCalledTimes(1);
+    const wonAtArg = reopenDealMock.mock.calls[0][5];
+    expect(wonAtArg).not.toBeNull();
+    expect(typeof wonAtArg).toBe("string");
+    expect(() => new Date(wonAtArg as string).toISOString()).not.toThrow();
+  });
+
+  it("lost かつ won_at が既に記録済み (以前に won 系ステージへ到達してから失注した) の案件を won 系ステージへ" +
+    "再開しても、RPC には wonAt=null を渡す (既存 won_at は coalesce により RPC 側で保持される — 上書き禁止)", async () => {
+    getDealByIdMock.mockResolvedValue({
+      ok: true,
+      value: dealRow({ stage: "lost", won_at: "2026-01-01T00:00:00.000Z", lost_reason: "価格が合わなかった" }),
+    });
+    reopenDealMock.mockResolvedValue({ ok: true, value: { new_updated_at: "2026-07-14T00:00:00.000Z" } });
+    appendActivityRowMock.mockResolvedValue({ ok: true, value: { row: { id: ACTIVITY_ID }, created: true } });
+    linkActivityRowMock.mockResolvedValue({ ok: true, value: { row: {}, created: true } });
+
+    const result = await crmFacade.reopenDeal(
+      DEAL_ID,
+      { to_stage: "ordered", reason: "作り直し" },
+      "2026-07-01T00:00:00.000Z",
+    );
+
+    expect(result.ok).toBe(true);
+    expect(reopenDealMock).toHaveBeenCalledWith(
+      {}, DEAL_ID, "ordered", "作り直し", "2026-07-01T00:00:00.000Z", null,
+    );
+  });
+
+  it("lost かつ won_at が null の案件を非 won 系ステージへ再開する場合は wonAt=null のまま (isWon でない到達は記録しない)", async () => {
+    getDealByIdMock.mockResolvedValue({
+      ok: true,
+      value: dealRow({ stage: "lost", won_at: null, lost_reason: "価格が合わなかった" }),
+    });
+    reopenDealMock.mockResolvedValue({ ok: true, value: { new_updated_at: "2026-07-14T00:00:00.000Z" } });
+    appendActivityRowMock.mockResolvedValue({ ok: true, value: { row: { id: ACTIVITY_ID }, created: true } });
+    linkActivityRowMock.mockResolvedValue({ ok: true, value: { row: {}, created: true } });
+
+    const result = await crmFacade.reopenDeal(
+      DEAL_ID,
+      { to_stage: "estimating", reason: "作り直し" },
+      "2026-07-01T00:00:00.000Z",
+    );
+
+    expect(result.ok).toBe(true);
+    expect(reopenDealMock).toHaveBeenCalledWith(
+      {}, DEAL_ID, "estimating", "作り直し", "2026-07-01T00:00:00.000Z", null,
+    );
   });
 
   it("非終端ステージからの再開は KMB-E609 (canReopenDeal ガードが RPC 呼び出し前に弾く)", async () => {

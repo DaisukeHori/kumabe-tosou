@@ -1356,12 +1356,24 @@ export const crmFacade: CrmFacadeExtended = {
         };
       }
 
+      // §4.2 不変条件1: won_at は isWon 系ステージへの初到達時に 1 回だけ記録する。lost からの再開は
+      // 「lost に落ちる前に一度も won 系ステージに到達していなかった (won_at が null のままだった)」
+      // 案件を won 系ステージ (ordered/in_production/delivered/invoiced) へ戻すケースがあり得るため、
+      // これも「初到達」に該当する (updateDealStage と同じ shouldRecordWonAt 判定を再利用 — isWon の
+      // 唯一の正は DEAL_STAGE_REGISTRY であり SQL 側に重複させない)。既に記録済みなら false を返し
+      // RPC には null を渡す (crm_reopen_deal 側は coalesce(v_deal.won_at, p_won_at) で
+      // 「既存値があれば上書きしない」を再確認する二重防御)。
+      const wonAt = shouldRecordWonAt(parsed.data.to_stage, deal.value.won_at)
+        ? new Date().toISOString()
+        : null;
+
       const reopened = await reopenDealRpc(
         supabase,
         dealId,
         parsed.data.to_stage,
         parsed.data.reason,
         expectedUpdatedAt,
+        wonAt,
       );
       if (!reopened.ok) return reopened;
 

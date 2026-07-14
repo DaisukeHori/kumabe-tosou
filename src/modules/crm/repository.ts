@@ -771,6 +771,11 @@ export type ReopenDealResult = { new_updated_at: string };
  * 終端ステージ (入金済み/失注) の案件再開。crm_reopen_deal RPC (migration 20260714000036) を
  * 呼ぶ薄いラッパ — mergeCustomers (crm_merge_customers ラッパ) と同型。エラー変換は
  * pgErrorToResult が RPC の `raise exception 'KMB-Exxx: ...'` 埋め込みをそのまま拾う。
+ *
+ * wonAt: §4.2 不変条件1 の won_at 初到達を facade 側の shouldRecordWonAt で判定した結果
+ * (非 null = このタイミングで won_at を記録する / null = 記録しない・据え置き)。lost からの
+ * 再開が won 系ステージ (ordered/in_production/delivered/invoiced) への初到達になるケース
+ * (lost に落ちる前に一度も won 系に到達していなかった案件) を補足するために必要 (#102 是正)。
  */
 export async function reopenDeal(
   client: SupabaseClient,
@@ -778,12 +783,14 @@ export async function reopenDeal(
   toStage: DealStage,
   reason: string,
   expectedUpdatedAt: string,
+  wonAt: string | null,
 ): Promise<Result<ReopenDealResult>> {
   const { data, error } = await client.rpc("crm_reopen_deal", {
     p_deal_id: dealId,
     p_to_stage: toStage,
     p_reason: reason,
     p_expected_updated_at: expectedUpdatedAt,
+    p_won_at: wonAt,
   });
   if (error) return pgErrorToResult(error);
   const row = (Array.isArray(data) ? data[0] : data) as ReopenDealResult | undefined | null;

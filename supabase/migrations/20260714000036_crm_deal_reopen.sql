@@ -10,7 +10,14 @@
 --   (20260711000027) と同型のパターンを crm に移植)。
 --   1) deals_guard_terminal_stage() の create or replace (GUC バイパス追加)
 --   2) 新 RPC public.crm_reopen_deal (security definer + is_admin() ガード。
---      crm_merge_customers (20260711000023 L297-381) と同パターン)
+--      crm_merge_customers (20260711000023 L297-381) と同パターン)。won_at は facade が
+--      shouldRecordWonAt (§4.2 不変条件1 と同一の判定関数) で計算した結果を p_won_at として渡し、
+--      RPC は「既存値があれば絶対に上書きしない」の二重防御のみを担う (isWon の唯一の正である
+--      DEAL_STAGE_REGISTRY を SQL 側に複製しないための設計 — レビュー是正: lost 案件のうち
+--      lost に落ちる前に一度も won 系ステージへ到達していなかったもの (won_at が null のまま) を
+--      won 系ステージ (ordered/in_production/delivered/invoiced) へ再開すると、それが正に「初到達」
+--      であり won_at を記録しないと §4.2 不変条件1 が破れる — v1 はこのケースで won_at を
+--      SET しない設計だったが誤りだった)
 --
 -- 本 migration が行わないこと:
 --   - テーブル・列の追加/変更 (deals は既存カラムのみ使用)
@@ -41,15 +48,24 @@ $$;
 -- 2) crm_reopen_deal: 終端ステージ (入金済み/失注) の案件再開 RPC (§4.2 v1.2)
 --    security definer + is_admin() ガード (crm_merge_customers 0023 L297-381 と同パターン)。
 --    FOR UPDATE 行ロックで直列化 (advisory lock 禁止規約)。
---    won_at は SET しない (§4.2 不変条件1維持)。lost_reason は常に null クリア
---    (deals_lost_requires_reason check 「stage<>'lost' or lost_reason is not null」と整合 —
---     理由は呼び出し側 (facade) が監査 activity に退避する)
+--    lost_reason は常に null クリア (deals_lost_requires_reason check
+--    「stage<>'lost' or lost_reason is not null」と整合 — 理由は呼び出し側 (facade) が監査
+--    activity に退避する)。
+--    won_at (レビュー是正): p_won_at は facade の shouldRecordWonAt (§4.2 不変条件1 の判定
+--    関数そのもの) が計算した「このタイミングで新規記録すべき won_at 値 (該当しなければ null)」。
+--    RPC は coalesce(v_deal.won_at, p_won_at) で「既存値があれば p_won_at を無視し絶対に
+--    上書きしない (不変条件1 の『以後変更しない』)」を保証する二重防御のみを担う。
+--    旧設計は「won_at は SET しない」だったが、lost に落ちる前に一度も won 系ステージへ
+--    到達していなかった (won_at が null のまま失注した) 案件を won 系ステージ
+--    (ordered/in_production/delivered/invoiced) へ再開するケースは won_at にとって正に「初到達」
+--    であり、SET しないままだと isWon なのに won_at=null という不整合行が残り不変条件1を破る。
 -- =========================================================
 create or replace function public.crm_reopen_deal(
   p_deal_id uuid,
   p_to_stage text,
   p_reason text,
-  p_expected_updated_at timestamptz
+  p_expected_updated_at timestamptz,
+  p_won_at timestamptz
 )
 returns table (new_updated_at timestamptz)
 language plpgsql
@@ -63,7 +79,8 @@ begin
     raise exception 'permission denied: crm_reopen_deal requires admin';
   end if;
   -- CAS 引数含む NULL ガード (crm_merge_customers v1.1 の教訓と同根拠 — plpgsql の IF は NULL を
-  -- false 扱いするため、NULL のまま進むと下の判定が無音でバイパスされる)
+  -- false 扱いするため、NULL のまま進むと下の判定が無音でバイパスされる)。p_won_at は
+  -- 「記録しない」を意味する正当な NULL 値のため、このガードには含めない。
   if p_deal_id is null or p_to_stage is null or p_reason is null or p_expected_updated_at is null then
     raise exception 'KMB-E101: 再開の引数が不足しています (deal_id/to_stage/reason/expected_updated_at は必須)';
   end if;
@@ -90,7 +107,10 @@ begin
   -- transaction-local GUC: 本トランザクション内でのみ終端ガードを解除 (pgbouncer 安全)
   perform set_config('kmb.crm_reopen_unlock', 'on', true);
 
-  update deals set stage = p_to_stage, lost_reason = null
+  update deals set
+    stage = p_to_stage,
+    lost_reason = null,
+    won_at = coalesce(v_deal.won_at, p_won_at)
   where id = p_deal_id;
 
   return query
@@ -98,5 +118,5 @@ begin
 end;
 $$;
 
-revoke all on function public.crm_reopen_deal(uuid, text, text, timestamptz) from public, anon;
-grant execute on function public.crm_reopen_deal(uuid, text, text, timestamptz) to authenticated;
+revoke all on function public.crm_reopen_deal(uuid, text, text, timestamptz, timestamptz) from public, anon;
+grant execute on function public.crm_reopen_deal(uuid, text, text, timestamptz, timestamptz) to authenticated;
