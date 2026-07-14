@@ -18,6 +18,25 @@ export function canTransitionDealStage(from: DealStage, to: DealStage): StageTra
   return { kind: "ok" };
 }
 
+/** reopenDeal 専用ガード (#102)。canTransitionDealStage は一切変更しない — 別関数として隔離する。 */
+export type ReopenDealGuard = { kind: "ok" } | { kind: "invalid" };
+
+const REOPEN_TARGET_STAGES: ReadonlySet<DealStage> = new Set([
+  "inquiry", "estimating", "quote_sent", "ordered", "in_production", "delivered", "invoiced",
+]);
+
+/**
+ * 終端ステージ (入金済み/失注) の案件再開ガード (01-crm.md §4.2 v1.2 — #102)。
+ * from が終端 (paid/lost) かつ to が非終端 7 値のときのみ ok。それ以外 (from が非終端 / to が終端 /
+ * from===to の終端同士含む) は invalid — 「終端→終端」も再開とは呼ばない (KMB-E609)。
+ */
+export function canReopenDeal(from: DealStage, to: DealStage): ReopenDealGuard {
+  if ((from === "paid" || from === "lost") && REOPEN_TARGET_STAGES.has(to)) {
+    return { kind: "ok" };
+  }
+  return { kind: "invalid" };
+}
+
 /**
  * won_at の初到達判定 (§4.2 不変条件 1): isWon 系ステージへの初到達時に 1 回だけ記録し、
  * 以後どの遷移でも変更しない。既に記録済みなら false (据え置き)。

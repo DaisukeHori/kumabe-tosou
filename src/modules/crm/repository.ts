@@ -763,6 +763,36 @@ export async function updateDealWithCas(
   return updateRowWithCas<DealRow>(client, "deals", id, patch, expectedUpdatedAt);
 }
 
+// ---- 案件再開 RPC ラッパ (§4.2 v1.2 — #102) ----
+
+export type ReopenDealResult = { new_updated_at: string };
+
+/**
+ * 終端ステージ (入金済み/失注) の案件再開。crm_reopen_deal RPC (migration 20260714000036) を
+ * 呼ぶ薄いラッパ — mergeCustomers (crm_merge_customers ラッパ) と同型。エラー変換は
+ * pgErrorToResult が RPC の `raise exception 'KMB-Exxx: ...'` 埋め込みをそのまま拾う。
+ */
+export async function reopenDeal(
+  client: SupabaseClient,
+  dealId: string,
+  toStage: DealStage,
+  reason: string,
+  expectedUpdatedAt: string,
+): Promise<Result<ReopenDealResult>> {
+  const { data, error } = await client.rpc("crm_reopen_deal", {
+    p_deal_id: dealId,
+    p_to_stage: toStage,
+    p_reason: reason,
+    p_expected_updated_at: expectedUpdatedAt,
+  });
+  if (error) return pgErrorToResult(error);
+  const row = (Array.isArray(data) ? data[0] : data) as ReopenDealResult | undefined | null;
+  if (!row) {
+    return { ok: false, code: "KMB-E901", detail: "crm_reopen_deal が結果を返しませんでした" };
+  }
+  return { ok: true, value: row };
+}
+
 /** batch 取得 (getDealRefs — 02-sales listDocuments の N+1 回避)。空配列入力は ok([])。不在 id は結果から除外。 */
 export async function getDealsByIds(client: SupabaseClient, ids: string[]): Promise<Result<DealRow[]>> {
   if (ids.length === 0) return { ok: true, value: [] };

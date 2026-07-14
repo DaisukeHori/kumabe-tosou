@@ -15,17 +15,20 @@ import type { DealDetail } from "@/modules/crm/contracts";
 
 import { getOpenBlockCountForDealAction } from "@/app/admin/calendar/actions";
 
-import { markDealLostAction, updateDealStageAction } from "../actions";
+import { markDealLostAction, reopenDealAction, updateDealStageAction } from "../actions";
 import { CancelBlocksDialog } from "../cancel-blocks-dialog";
 import { LostReasonDialog } from "../lost-reason-dialog";
+import { ReopenDealDialog, type ReopenTargetStage } from "../reopen-deal-dialog";
 
 /**
  * 案件詳細ヘッダの操作 (01-crm.md §8.3): dropdown-menu (「失注にする」→ 理由 Dialog /
  * 「受注にする」→ v1 は updateDealStage のみ。02-sales 配線の帳票発行合成は Phase 3s 以降)。
+ * 終端 (paid/lost) は「操作」ドロップダウンの代わりに「案件を再開…」ボタンを表示する (#102)。
  */
 export function DealHeaderActions({ deal }: { deal: DealDetail }) {
   const router = useRouter();
   const [lostOpen, setLostOpen] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
   const [cancelBlocksCount, setCancelBlocksCount] = useState<number | null>(null);
 
@@ -60,6 +63,17 @@ export function DealHeaderActions({ deal }: { deal: DealDetail }) {
     router.refresh();
   }
 
+  async function handleReopen(toStage: ReopenTargetStage, reason: string) {
+    const result = await reopenDealAction(deal.id, { to_stage: toStage, reason }, deal.updated_at);
+    if (!result.ok) {
+      toast.error(result.detail ?? "案件を再開できませんでした。");
+      return;
+    }
+    toast.success("案件を再開しました。");
+    setReopenOpen(false);
+    router.refresh();
+  }
+
   // BLOCKER 修正 (敵対レビュー): isTerminal での早期 return をコンポーネント全体に掛けると、
   // handleLost() 成功後の router.refresh() で deal.stage が 'lost' になった新しい props が
   // 流れてきた瞬間にコンポーネント自体がアンマウントされ、直後に開こうとする CancelBlocksDialog
@@ -67,6 +81,9 @@ export function DealHeaderActions({ deal }: { deal: DealDetail }) {
   // 表示前後を問わず必ず消えてしまう。「操作」ドロップダウン (受注/失注を選ぶ入口) だけを
   // isTerminal で隠し、LostReasonDialog・CancelBlocksDialog は deal.stage の変化と無関係に
   // 常時マウントしたままにする (deals-kanban.tsx の DealsKanban と同型の設計に揃える)。
+  // #102: isTerminal のとき「操作」ドロップダウンの代わりに「案件を再開…」ボタンを表示する
+  // (同じ理由で ReopenDealDialog も常時マウント — reopenDeal 成功後の router.refresh() で
+  // isTerminal が false になっても Dialog 自体は消えない)。
   return (
     <>
       {!isTerminal && (
@@ -84,7 +101,19 @@ export function DealHeaderActions({ deal }: { deal: DealDetail }) {
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+      {isTerminal && (
+        <Button type="button" variant="outline" size="sm" onClick={() => setReopenOpen(true)}>
+          案件を再開…
+        </Button>
+      )}
       <LostReasonDialog open={lostOpen} onOpenChange={setLostOpen} dealTitle={deal.title} onConfirm={handleLost} />
+      <ReopenDealDialog
+        open={reopenOpen}
+        onOpenChange={setReopenOpen}
+        dealTitle={deal.title}
+        fromStage={deal.stage}
+        onConfirm={handleReopen}
+      />
       {cancelBlocksCount !== null && (
         <CancelBlocksDialog
           open={cancelBlocksCount !== null}

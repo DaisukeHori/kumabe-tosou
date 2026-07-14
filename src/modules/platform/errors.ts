@@ -197,6 +197,11 @@ export const KMB_ERRORS = {
     message: "この組み合わせでは統合できません。",
     recovery: "統合済み顧客は選べません。統合先 (残す側) を確認",
   },
+  "KMB-E609": {
+    category: "6xx CRM",
+    message: "案件の再開が不正です。",
+    recovery: "再開は終端 (入金済み/失注) からのみ・戻し先は非終端ステージのみ・理由入力が必須です",
+  },
 
   "KMB-E620": {
     category: "6xx 受注・帳票",

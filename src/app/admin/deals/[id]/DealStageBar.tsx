@@ -46,33 +46,37 @@ export function DealStageBar({ deal }: { deal: DealDetail }) {
   }
 
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {BAR_STAGES.filter((s) => s !== "lost").map((stage, idx) => {
-        const isCurrent = stage === current.stage;
-        const isPast = idx < currentIndex;
-        return (
-          <button
-            key={stage}
-            type="button"
-            disabled={isPending || isTerminal || isCurrent}
-            onClick={() => void handleClick(stage)}
-            className={cn(
-              "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-              isCurrent && "border-primary bg-primary text-primary-foreground",
-              !isCurrent && isPast && "border-border bg-muted text-muted-foreground",
-              !isCurrent && !isPast && "border-dashed border-border text-muted-foreground hover:bg-muted/60",
-              (isTerminal || isPending) && !isCurrent && "cursor-not-allowed opacity-60",
-            )}
-          >
-            {DEAL_STAGE_REGISTRY[stage].label}
-          </button>
-        );
-      })}
-      {current.stage === "lost" && (
-        <span className="rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive">
-          失注
-        </span>
-      )}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {BAR_STAGES.filter((s) => s !== "lost").map((stage, idx) => {
+          const isCurrent = stage === current.stage;
+          const isPast = idx < currentIndex;
+          return (
+            <button
+              key={stage}
+              type="button"
+              disabled={isPending || isTerminal || isCurrent}
+              onClick={() => void handleClick(stage)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                isCurrent && "border-primary bg-primary text-primary-foreground",
+                !isCurrent && isPast && "border-border bg-muted text-muted-foreground",
+                !isCurrent && !isPast && "border-dashed border-border text-muted-foreground hover:bg-muted/60",
+                (isTerminal || isPending) && !isCurrent && "cursor-not-allowed opacity-60",
+              )}
+            >
+              {DEAL_STAGE_REGISTRY[stage].label}
+            </button>
+          );
+        })}
+        {current.stage === "lost" && (
+          <span className="rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive">
+            失注
+          </span>
+        )}
+      </div>
+      {/* #102: 終端 (paid/lost) は本バー上では遷移不可のまま — 再開はヘッダの専用経路に隔離する */}
+      {isTerminal && <p className="text-xs text-muted-foreground">再開はヘッダの「案件を再開…」から</p>}
     </div>
   );
 }
