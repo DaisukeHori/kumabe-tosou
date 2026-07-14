@@ -624,6 +624,16 @@ export async function getStyleProfile(
   return { ok: true, value: (data as StyleProfileRow | null) ?? null };
 }
 
+/**
+ * 全チャネル分をまとめて取得する (Issue #20: DistributionFacade.getStyleProfiles)。
+ * DB に行が無いチャネルは結果に含まれない (facade 側で既定値とマージする)。
+ */
+export async function listStyleProfiles(client: SupabaseClient): Promise<Result<StyleProfileRow[]>> {
+  const { data, error } = await client.from("style_profiles").select(STYLE_PROFILE_SELECT);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as StyleProfileRow[] };
+}
+
 export type UpsertStyleProfileInput = {
   channel: string;
   tone_instructions: string;

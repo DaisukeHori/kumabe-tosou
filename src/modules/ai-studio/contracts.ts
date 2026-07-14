@@ -280,6 +280,31 @@ export const zRegenerateReq = z
 export const zSourceInputType = z.enum(["audio", "text"]);
 
 /**
+ * Issue #20: distribution/contracts.ts の StyleProfile と構造的に同一の型をここでも定義する。
+ * ai-studio → distribution の import は依存方向ルール (module-contracts.md §2) で禁止されている
+ * ため (distribution → ai-studio が既に定義されており逆方向を足すと循環になる)、
+ * DistributionFacade.getStyleProfiles() の戻り値を app 層 (route handler、POST /api/ai/runs) が
+ * 取得し、本モジュールの startRun の引数として渡す合成パターンで解決する
+ * (フィールドを変更する場合は distribution/contracts.ts の StyleProfile も同期させること)。
+ */
+export const zChannelStyleProfile = z
+  .object({
+    tone_instructions: z.string(),
+    format_rules: z.string(),
+    example_output: z.string().nullable(),
+  })
+  .strict();
+export type ChannelStyleProfile = z.infer<typeof zChannelStyleProfile>;
+
+/**
+ * startRun 時点で確定させ ai_runs.style_profiles (jsonb) に保存する 4 チャネル全件のマップ。
+ * zod v4 の z.record + enum key は exhaustive (全キー必須) になるため、DistributionFacade
+ * .getStyleProfiles() が常に 4 チャネル全件を返す前提と一致する。
+ */
+export const zStyleProfilesByChannel = z.record(zChannel, zChannelStyleProfile);
+export type StyleProfilesByChannel = z.infer<typeof zStyleProfilesByChannel>;
+
+/**
  * 実装時に判明した契約の抜け (オーケストレーターへ報告済み):
  * 設計書 §4.7 の zCreateSourceReq には audio_storage_path が無く、
  * input_type='audio' の場合に「アップロード済み音声をどの source に紐付けるか」が

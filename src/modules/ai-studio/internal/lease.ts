@@ -17,6 +17,8 @@ export type AcquireLeaseRawResult = {
   source_id: string;
   brief: unknown;
   research_notes: unknown;
+  /** Issue #20: migration 20260714000036 で ai_run_acquire_lease の返り値に追加。 */
+  style_profiles: unknown;
   result_kind: "acquired" | "held" | "exhausted" | "terminal" | "not_found";
 } | null;
 

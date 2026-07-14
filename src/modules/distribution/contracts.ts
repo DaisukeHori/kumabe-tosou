@@ -180,3 +180,19 @@ export type StyleProfileView = {
   example_output: string | null;
   updated_at: string;
 };
+
+/**
+ * canonical: docs/module-contracts.md §5 DistributionFacade.getStyleProfiles
+ * (契約書 v2.2 記載分)。channel を持たない (呼び出し側が Record<Channel, StyleProfile>
+ * のキーとして既に持っているため) 以外は StyleProfileView と同じ 3 フィールド。
+ *
+ * ai-studio モジュールはこの型を直接 import できない (依存方向ルールにより
+ * ai-studio → distribution の辺は張れない、module-contracts.md §2) ため、
+ * ai-studio/contracts.ts の ChannelStyleProfile が構造的に同一の型を独自に持つ
+ * (Issue #20)。フィールドを変更する場合は両方を同期させること。
+ */
+export type StyleProfile = {
+  tone_instructions: string;
+  format_rules: string;
+  example_output: string | null;
+};
