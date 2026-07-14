@@ -6,9 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * (next/cache・platformFacade.requireAdmin・facade 群を最小フェイクに差し替え、
  * actions.ts のロジックのみ検証) を踏襲する。実 DB には触れない。
  *
- * 敵対的レビュー指摘の是正 (Issue #98): custom_fields が 50 件を超えたとき、
- * zod v4 の ZodError#message (issues の JSON.stringify — 生の英語 JSON) がそのまま
- * Result.detail として UI に漏れないこと、代わりに日本語ガイダンスへ変換されることを検証する。
+ * 敵対的レビュー指摘の是正 (Issue #98): custom_fields 関連の validation エラー全般
+ * (件数超過・空ラベル・重複ラベル・個別行の文字数超過) で zod v4 の ZodError#message
+ * (issues の JSON.stringify — 生の英語 JSON) がそのまま Result.detail として UI に漏れないこと、
+ * 代わりに日本語ガイダンスへ変換されることを検証する。特に「件数超過 (too_big, 配列レベル)」用の
+ * 文言が個別行の too_big (label/value 超過) に誤爆しないことを重点的に確認する。
  */
 
 const revalidatePath = vi.fn();
@@ -85,6 +87,62 @@ describe("updateCustomerAction", () => {
 
     expect(result.ok).toBe(true);
     expect(updateCustomerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("custom_fields のラベルが空文字 (too_small) のとき生の Zod JSON を含まない日本語メッセージを返す", async () => {
+    const result = await updateCustomerAction(
+      CUSTOMER_ID,
+      baseFormInput([{ label: "", value: "v" }]),
+      EXPECTED_UPDATED_AT,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("KMB-E101");
+      expect(result.detail).not.toMatch(/too_small|too_big|origin|minimum|"code"/);
+      // 件数超過用の文言 (誤爆) を返さないこと
+      expect(result.detail).not.toBe("項目が多すぎます。不要な行を削除してください。");
+      expect(result.detail).toBeTruthy();
+    }
+    expect(updateCustomerMock).not.toHaveBeenCalled();
+  });
+
+  it("custom_fields のラベルが重複 (custom refine) のとき生の Zod JSON を含まない日本語メッセージを返す", async () => {
+    const result = await updateCustomerAction(
+      CUSTOMER_ID,
+      baseFormInput([
+        { label: "同じ名前", value: "v1" },
+        { label: "同じ名前", value: "v2" },
+      ]),
+      EXPECTED_UPDATED_AT,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("KMB-E101");
+      expect(result.detail).not.toMatch(/"code"|項目名が重複しています/);
+      expect(result.detail).not.toBe("項目が多すぎます。不要な行を削除してください。");
+      expect(result.detail).toBeTruthy();
+    }
+    expect(updateCustomerMock).not.toHaveBeenCalled();
+  });
+
+  it("custom_fields の 1 行だけ value が 301 文字 (個別 too_big) のとき「項目が多すぎます」を誤爆しない", async () => {
+    const result = await updateCustomerAction(
+      CUSTOMER_ID,
+      baseFormInput([{ label: "備考", value: "a".repeat(301) }]),
+      EXPECTED_UPDATED_AT,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("KMB-E101");
+      // 件数超過のメッセージ (誤爆) ではないこと — 1 行しかないので件数の話ではない
+      expect(result.detail).not.toBe("項目が多すぎます。不要な行を削除してください。");
+      expect(result.detail).not.toMatch(/too_big|origin|maximum|"code"/);
+      expect(result.detail).toBeTruthy();
+    }
+    expect(updateCustomerMock).not.toHaveBeenCalled();
   });
 
   it("custom_fields 以外の validation エラー (名前が空) は too_big 用の変換を行わない", async () => {

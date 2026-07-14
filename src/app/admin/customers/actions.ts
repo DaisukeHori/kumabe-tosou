@@ -43,18 +43,29 @@ function normalizeTelOrNull(raw: string | null): { ok: true; value: string | nul
 
 /**
  * zCustomerUpdateInput の検証失敗を Result.detail 文字列へ変換する。
- * custom_fields が 50 件を超えた場合 (too_big) は Zod の既定メッセージ
- * (zod v4 の ZodError#message は issues の JSON.stringify — 生の英語 JSON がそのまま UI に
- * 出てしまう) ではなく、issue #98 で約束していた日本語ガイダンスへ変換する。
- * CustomerEditSheet の collectCustomFields (クライアント側 50 件上限チェック) をすり抜けた
- * 場合 (API 直叩き等) の保険。
+ * custom_fields 関連の検証エラー (zod v4 の ZodError#message は issues の JSON.stringify —
+ * 生の英語 JSON がそのまま UI に出てしまう) は、issue #98 で約束していた日本語ガイダンスへ
+ * 変換する。CustomerEditSheet の collectCustomFields (クライアント側の件数/文字数/重複チェック)
+ * をすり抜けた場合 (API 直叩き等) の保険。
+ *
+ * custom_fields 配下の issue には複数の形がある (path はいずれも先頭が "custom_fields"):
+ *   - 配列全体の too_big (51 件以上、path=["custom_fields"] のみ、origin="array")
+ *     → 「項目が多すぎます」
+ *   - 個別行の label/value の too_small・too_big (path=["custom_fields", idx, "label"|"value"])
+ *   - 重複ラベルの custom (.refine() 由来、path=["custom_fields"])
+ *     → いずれも件数の話ではないため汎用メッセージにフォールバックする
+ * custom_fields 以外のバリデーションエラー (名前必須等) は従来通り error.message のまま。
  */
 function customerUpdateErrorDetail(error: z.ZodError): string {
-  const hasTooManyCustomFields = error.issues.some(
-    (issue) => issue.code === "too_big" && issue.path[0] === "custom_fields",
+  const customFieldIssues = error.issues.filter((issue) => issue.path[0] === "custom_fields");
+  if (customFieldIssues.length === 0) return error.message;
+
+  const isArrayLevelTooBig = customFieldIssues.some(
+    (issue) => issue.code === "too_big" && issue.path.length === 1,
   );
-  if (hasTooManyCustomFields) return "項目が多すぎます。不要な行を削除してください。";
-  return error.message;
+  if (isArrayLevelTooBig) return "項目が多すぎます。不要な行を削除してください。";
+
+  return "入力内容を確認してください(項目名は30文字以内、値は300文字以内、項目名の重複不可)。";
 }
 
 export type CustomerFormInput = Omit<CustomerInput, "tel_e164"> & { tel_raw: string | null };
