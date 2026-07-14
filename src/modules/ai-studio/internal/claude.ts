@@ -12,6 +12,7 @@ import {
   zSnsImagePromptOutput,
   type Brief,
   type CleanedTranscript,
+  type ChannelStyleProfile,
   type Claim,
   type ChannelContent,
   type ResearchNotes,
@@ -151,17 +152,23 @@ export async function researchBrief(
   });
 }
 
-/** stage 4: チャネル別脚色。content と claims を同時出力させる (zChannelDraftOutput)。 */
+/**
+ * stage 4: チャネル別脚色。content と claims を同時出力させる (zChannelDraftOutput)。
+ * styleProfile は startRun 時点で確定させた ai_runs.style_profiles (Issue #20:
+ * DistributionFacade.getStyleProfiles() → route handler → startRun 引数) の
+ * 対象チャネル分を呼び出し元 (facade.ts) が渡す。
+ */
 export async function draftChannel(
   channel: Channel,
   brief: Brief,
   researchNotes: ResearchNotes | null,
   instruction: string | null,
+  styleProfile: ChannelStyleProfile,
   onDelta?: (delta: string) => void,
 ): Promise<Result<{ data: { content: ChannelContent[Channel]; claims: Claim[] }; usage: TokenUsage }>> {
   const schema = zChannelDraftOutput(channel);
   return runStructured(schema, {
-    userPrompt: buildDraftUserPrompt(channel, brief, researchNotes, instruction),
+    userPrompt: buildDraftUserPrompt(channel, brief, researchNotes, instruction, styleProfile),
     responseSchema: channelDraftOutputFormat(channel),
     onDelta,
   }) as Promise<Result<{ data: { content: ChannelContent[Channel]; claims: Claim[] }; usage: TokenUsage }>>;

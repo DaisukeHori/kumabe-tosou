@@ -16,6 +16,7 @@ import type { NoteContent, XContent } from "@/modules/ai-studio/contracts";
 
 import { resolveAiStudioFacade } from "./internal/ai-studio-bridge";
 import { estimateXCostCents, exceedsMonthlyBillingGuard } from "./internal/billing";
+import { DEFAULT_STYLE_PROFILES } from "./internal/default-style-profiles";
 import {
   exchangeMetaAuthorizationCode,
   exchangeForLongLivedToken,
@@ -49,6 +50,7 @@ import {
   type NoteAccountInput,
   type NoteDraftStatus,
   type ScheduleEntry,
+  type StyleProfile,
   type StyleProfileInput,
   type StyleProfileView,
 } from "./contracts";
@@ -68,6 +70,15 @@ export interface DistributionFacade {
   cancel(postId: string): Promise<Result<void>>;
   markNotePublished(postId: string, externalUrl: string): Promise<Result<void>>;
   getMonthlyXPostCount(): Promise<Result<number>>;
+  /**
+   * 全チャネルの文体プロファイルを一括取得 (4チャネル全件、行の無いチャネルは既定値で補う)。
+   * canonical: docs/module-contracts.md §5 (契約書 v2.2 記載分)。
+   * ai-studio の draft 生成は本メソッドの結果を **app 層 (route handler、POST /api/ai/runs)**
+   * が取得して AiStudioFacade.startRun に引数で渡す合成パターンで使う
+   * (ai-studio → distribution の依存を作らないため。Wave2-E の暫定ハードコードを解消する正式解
+   * — Issue #20)。
+   */
+  getStyleProfiles(): Promise<Result<Record<Channel, StyleProfile>>>;
 }
 
 export interface DistributionFacadeExtended extends DistributionFacade {
@@ -412,6 +423,30 @@ async function getStyleProfile(channel: Channel): Promise<Result<StyleProfileVie
   return { ok: true, value: result.value ? toStyleProfileView(result.value) : null };
 }
 
+const STYLE_CHANNELS = Object.keys(DEFAULT_STYLE_PROFILES) as Channel[];
+
+/**
+ * canonical §5 (契約書 v2.2 記載分、Issue #20)。DB に行が無いチャネルは
+ * DEFAULT_STYLE_PROFILES で補う (admin が一度も編集していない初期状態でも
+ * 4 チャネル全件を必ず返す — 呼び出し元 [route handler] が欠損チャネルを
+ * 個別にハンドリングしなくて済むようにする)。
+ */
+async function getStyleProfiles(): Promise<Result<Record<Channel, StyleProfile>>> {
+  const client = await createSupabaseServerClient();
+  const result = await repo.listStyleProfiles(client);
+  if (!result.ok) return result;
+
+  const byChannel = new Map(result.value.map((row) => [row.channel, row]));
+  const merged = {} as Record<Channel, StyleProfile>;
+  for (const channel of STYLE_CHANNELS) {
+    const row = byChannel.get(channel);
+    merged[channel] = row
+      ? { tone_instructions: row.tone_instructions, format_rules: row.format_rules, example_output: row.example_output }
+      : DEFAULT_STYLE_PROFILES[channel];
+  }
+  return { ok: true, value: merged };
+}
+
 async function updateStyleProfile(channel: Channel, input: StyleProfileInput): Promise<Result<void>> {
   const { supabase, user } = await getSessionAndClient();
   if (!user) return { ok: false, code: "KMB-E201" };
@@ -695,6 +730,7 @@ export const distributionFacade: DistributionFacadeExtended = {
   saveNoteSessionCookie,
   markChannelExpired,
   getStyleProfile,
+  getStyleProfiles,
   updateStyleProfile,
   completeXOAuthCallback,
   exchangeMetaCodeAndListPages,

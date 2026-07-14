@@ -24,6 +24,7 @@ describe("ai-studio lease 取得結果の解釈", () => {
     source_id: "22222222-2222-2222-2222-222222222222",
     brief: null,
     research_notes: null,
+    style_profiles: null,
   };
 
   it("result_kind='acquired' → kind='acquired' で行データをそのまま透過する", () => {

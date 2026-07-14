@@ -13,6 +13,7 @@ import {
   zBrief,
   zCreateSourceReq,
   zResearchNotes,
+  zStyleProfilesByChannel,
   type ApprovedDraft,
   type Brief,
   type CreateSourceInput,
@@ -20,6 +21,7 @@ import {
   type InstagramContent,
   type RunStage,
   type RunStatus,
+  type StyleProfilesByChannel,
   type TokenUsage,
   type XContent,
 } from "./contracts";
@@ -75,10 +77,17 @@ export interface AiStudioFacade {
   ): Promise<Result<{ upload_url: string; storage_path: string }>>;
   /** 整文の人間確定 (stage 1.5) */
   confirmCleanedText(sourceId: string, finalText: string): Promise<Result<void>>;
+  /**
+   * styleProfiles: Issue #20 — DistributionFacade.getStyleProfiles() の結果 (4チャネル全件) を
+   * app 層 (route handler、POST /api/ai/runs) が取得して渡す合成パターン (ai-studio →
+   * distribution の依存を作らないため)。startRun 時点で ai_runs.style_profiles に確定保存し、
+   * drafting ステージ・regenerateDraft は run の生存期間中この値を使い続ける。
+   */
   startRun(
     sourceId: string,
     channels: Channel[],
     research: boolean,
+    styleProfiles: StyleProfilesByChannel,
   ): Promise<Result<{ run_id: string }>>;
   /** 1 呼び出し = 1 stage (lease 取得込み、§7.1) */
   advanceRun(runId: string): Promise<Result<{ status: RunStatus }>>;
@@ -176,6 +185,7 @@ async function runOneStage(
     target_channels: string[];
     brief: unknown;
     research_notes: unknown;
+    style_profiles: unknown;
   },
 ): Promise<AdvanceOutcome> {
   if (stage === "extracting") {
@@ -222,8 +232,13 @@ async function runOneStage(
     const brief = zBrief.parse(row.brief);
     const researchNotes = row.research_notes ? zResearchNotes.parse(row.research_notes) : null;
     const channels = row.target_channels as Channel[];
+    // Issue #20: startRun 時点で確定させた style_profiles (DistributionFacade.getStyleProfiles()
+    // の結果) をチャネル別に取り出して draftChannel に渡す。
+    const styleProfiles = zStyleProfilesByChannel.parse(row.style_profiles);
 
-    const results = await Promise.all(channels.map((ch) => draftChannel(ch, brief, researchNotes, null)));
+    const results = await Promise.all(
+      channels.map((ch) => draftChannel(ch, brief, researchNotes, null, styleProfiles[ch])),
+    );
     const firstFailure = results.find((r) => !r.ok);
     if (firstFailure && !firstFailure.ok) {
       await releaseLeaseAfterFailure(supabase, runId, firstFailure.code);
@@ -409,7 +424,7 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
     }
   },
 
-  async startRun(sourceId, channels, research) {
+  async startRun(sourceId, channels, research, styleProfiles) {
     try {
       const { supabase, user } = await getSessionAndClient();
       if (!user) return { ok: false, code: "KMB-E201" };
@@ -420,10 +435,16 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
         return { ok: false, code: "KMB-E101", detail: "整文確定 (confirmCleanedText) が未実施です" };
       }
 
+      const parsedStyleProfiles = zStyleProfilesByChannel.safeParse(styleProfiles);
+      if (!parsedStyleProfiles.success) {
+        return { ok: false, code: "KMB-E101", detail: parsedStyleProfiles.error.message };
+      }
+
       const runId = await insertRun(supabase, {
         sourceId,
         targetChannels: channels,
         researchEnabled: research,
+        styleProfiles: parsedStyleProfiles.data,
         createdBy: user.id,
       });
       return { ok: true, value: { run_id: runId } };
@@ -674,8 +695,11 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
 
       const brief = zBrief.parse(run.brief);
       const researchNotes = run.research_notes ? zResearchNotes.parse(run.research_notes) : null;
+      // Issue #20: 再生成も同一 run の style_profiles (startRun 時点で確定済み) を使い続ける
+      // (admin が生成の途中で style_profiles を編集しても、既に走っている run の一貫性を保つ)。
+      const styleProfiles = zStyleProfilesByChannel.parse(run.style_profiles);
 
-      const result = await draftChannel(draft.channel, brief, researchNotes, instruction);
+      const result = await draftChannel(draft.channel, brief, researchNotes, instruction, styleProfiles[draft.channel]);
       if (!result.ok) return result;
 
       const revision = await insertAiRevision(supabase, draftId, result.value.data.content, result.value.data.claims);

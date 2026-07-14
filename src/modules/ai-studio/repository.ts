@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Channel } from "@/modules/platform/contracts";
 
 import type { AcquireLeaseRawResult } from "./internal/lease";
-import type { Claim, ChannelContent, ImageCandidate, RunStatus } from "./contracts";
+import type { Claim, ChannelContent, ImageCandidate, RunStatus, StyleProfilesByChannel } from "./contracts";
 
 type Supa = SupabaseClient;
 
@@ -140,17 +140,29 @@ export type RunRow = {
   stage_attempts: number;
   /** P4: image_generation ステージが生成した候補画像 (migration 20260710000019)。 */
   image_candidates: ImageCandidate[];
+  /**
+   * Issue #20: startRun 時点で確定させた DistributionFacade.getStyleProfiles() の結果
+   * (migration 20260714000036)。zStyleProfilesByChannel.parse() で検証してから使う
+   * (brief/research_notes と同じ「unknown で持って利用箇所で parse する」規約)。
+   */
+  style_profiles: unknown;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 };
 
 const RUN_SELECT =
-  "id, source_id, status, target_channels, research_enabled, brief, research_notes, error_code, token_usage, lease_expires_at, stage_attempts, image_candidates, created_by, created_at, updated_at";
+  "id, source_id, status, target_channels, research_enabled, brief, research_notes, error_code, token_usage, lease_expires_at, stage_attempts, image_candidates, style_profiles, created_by, created_at, updated_at";
 
 export async function insertRun(
   supabase: Supa,
-  row: { sourceId: string; targetChannels: Channel[]; researchEnabled: boolean; createdBy: string | null },
+  row: {
+    sourceId: string;
+    targetChannels: Channel[];
+    researchEnabled: boolean;
+    styleProfiles: StyleProfilesByChannel;
+    createdBy: string | null;
+  },
 ): Promise<string> {
   const { data, error } = await supabase
     .from("ai_runs")
@@ -158,6 +170,7 @@ export async function insertRun(
       source_id: row.sourceId,
       target_channels: row.targetChannels,
       research_enabled: row.researchEnabled,
+      style_profiles: row.styleProfiles,
       created_by: row.createdBy,
     })
     .select("id")
