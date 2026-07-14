@@ -68,12 +68,18 @@ export function CalendarBoard({
   initialBacklog,
   initialCapacity,
   workTypes,
+  initialCreateDeal = null,
 }: {
   initialWeekStart: DateOnly;
   initialBlocks: WorkBlockView[];
   initialBacklog: Paged<WorkBlockView>;
   initialCapacity: WeeklyCapacity | null;
   workTypes: WorkTypeRow[];
+  /** `?create_deal_id=` の解決結果 (Issue #96 設計 §D)。非 null なら「ブロックを作る」ダイアログを
+   *  該当案件セット済みで初期オープンする。一度きりの seed であり、マウント時に
+   *  `createDealSeed` state へ写し取った後は URL からも剥がす (下記 useEffect) —
+   *  ツールバーの汎用「ブロックを作る」ボタンや F5 再読み込みで何度も蘇らせない。 */
+  initialCreateDeal?: { id: string; label: string } | null;
 }) {
   const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
@@ -92,7 +98,14 @@ export function CalendarBoard({
   const [trayFocusIndex, setTrayFocusIndex] = useState(0);
 
   const [detailBlockId, setDetailBlockId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  // 初期 state 設定のみで自動オープンを実装する (#61 の教訓を踏襲: useEffect での後追いオープンは
+  // 他 Dialog のアンマウント地雷を踏みやすい — calendar-board.tsx はこれまでも #53/#54/#55/#61 が
+  // 重ねて触った衝突多発ファイル。Issue #96 設計 §リスク4)。
+  const [createOpen, setCreateOpen] = useState(initialCreateDeal !== null);
+  // 深いリンク seed の「一度きり」実体。マウント時の initialCreateDeal を写し取るだけで、
+  // 以降は Dialog が閉じるたび (キャンセル/作成成功いずれも) null に戻す (下記 onOpenChange)。
+  // ツールバーの汎用ボタンで再オープンしたときに前回の案件が残り続けるレビュー指摘の修正。
+  const [createDealSeed, setCreateDealSeed] = useState(initialCreateDeal);
   const [proposals, setProposals] = useState<PlacementProposal[]>([]);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -105,6 +118,17 @@ export function CalendarBoard({
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
+  }, []);
+
+  // 深いリンク seed を消費したら ?create_deal_id= を URL から剥がす。残したままだと F5 再読み込みの
+  // たびにダイアログが自動再オープンしてしまう (レビュー指摘)。マウント時 1 回のみでよい —
+  // initialCreateDeal はマウント時点の値を createDealSeed / createOpen の初期値として
+  // 既に消費済みなので、以降その値が変化しても再実行する必要はない。
+  useEffect(() => {
+    if (initialCreateDeal) {
+      router.replace("/admin/calendar", { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadRange = useCallback(async () => {
@@ -472,7 +496,17 @@ export function CalendarBoard({
         workTypes={workTypes}
         onChanged={() => void refreshAll()}
       />
-      <CreateBlockDialog open={createOpen} onOpenChange={setCreateOpen} workTypes={workTypes} onCreated={() => void refreshAll()} />
+      <CreateBlockDialog
+        open={createOpen}
+        onOpenChange={(next) => {
+          setCreateOpen(next);
+          // 閉じたら seed を使い切ったものとして破棄する (一度きりの初期値、レビュー指摘の修正)。
+          if (!next) setCreateDealSeed(null);
+        }}
+        workTypes={workTypes}
+        onCreated={() => void refreshAll()}
+        initialDeal={createDealSeed}
+      />
     </div>
   );
 }

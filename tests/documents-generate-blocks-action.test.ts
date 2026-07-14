@@ -138,6 +138,10 @@ describe("generateBlocksAction — 合成順序 (countBlocksBySourceDocument →
     expect(revalidatePath).toHaveBeenCalledWith("/admin/calendar");
     expect(revalidatePath).toHaveBeenCalledWith("/admin/documents");
     expect(revalidatePath).toHaveBeenCalledWith(`/admin/documents/${DOCUMENT_ID}`);
+    // Issue #96 §G: 案件詳細ページの作業ブロックカード (DealWorkSummaryCard.tsx) にも
+    // 即時反映させるため、成功時は /admin/deals/[dealId] も revalidate する
+    // (issueDocumentAction が既に同様に revalidatePath している既存パターンに揃える)。
+    expect(revalidatePath).toHaveBeenCalledWith(`/admin/deals/${DEAL_ID}`);
   });
 
   it("getDocumentLinesForBlocks には documentId のみを渡す", async () => {

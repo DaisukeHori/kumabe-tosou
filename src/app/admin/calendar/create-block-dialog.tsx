@@ -29,11 +29,19 @@ export function CreateBlockDialog({
   onOpenChange,
   workTypes,
   onCreated,
+  initialDeal = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workTypes: WorkTypeRow[];
   onCreated: () => void;
+  /** `?create_deal_id=` からの深いリンク seed (Issue #96 設計 §D)。open 時リセットの
+   *  useEffect で dealId/dealLabel の初期値として使う。
+   *  【契約】呼び出し側 (calendar-board.tsx) が「一度きり」を保証する — Dialog が閉じたら
+   *  呼び出し側で null に戻す。本コンポーネント自身は open が true になるたび無条件に
+   *  この値を採用するだけなので、呼び出し側がこの契約を破ると (例: 同じ値を渡し続けると)
+   *  無関係なブロック作成のたびに前回の案件が誤って紐付いてしまう。 */
+  initialDeal?: { id: string; label: string } | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +58,8 @@ export function CreateBlockDialog({
   useEffect(() => {
     if (!open) return;
     setError(null);
-    setDealId(null);
-    setDealLabel(null);
+    setDealId(initialDeal?.id ?? null);
+    setDealLabel(initialDeal?.label ?? null);
     setWorkTypeId(workTypes[0]?.id ?? "");
     setTitle("");
     setPlannedHours("1");
@@ -59,7 +67,7 @@ export function CreateBlockDialog({
     setPlaceNow(false);
     setPlaceDate(todayJstDateOnly());
     setPlaceTime("09:00");
-  }, [open, workTypes]);
+  }, [open, workTypes, initialDeal]);
 
   function handleSubmit() {
     const hours = Number(plannedHours);

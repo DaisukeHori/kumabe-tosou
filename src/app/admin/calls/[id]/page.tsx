@@ -40,11 +40,7 @@ export default async function AdminCallDetailPage({ params }: { params: Promise<
       <PageHeader
         title={call.customer_name ?? call.from_e164 ?? "番号非通知"}
         description="Esc で一覧へ戻る、Space でプレイヤー再生/停止 (フォーカス時)、Cmd+S でメモを保存します。"
-        actions={
-          <Link href="/admin/calls" className="text-sm underline underline-offset-4">
-            ← 一覧へ
-          </Link>
-        }
+        backHref="/admin/calls"
       />
 
       <div className="flex flex-wrap items-center gap-2 text-sm">

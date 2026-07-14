@@ -288,6 +288,9 @@ export async function generateBlocksAction(
 
   revalidatePath("/admin/calendar");
   revalidateDocumentPaths(idParsed.data);
+  // Issue #96 §G: 案件詳細の作業ブロックカード (DealWorkSummaryCard.tsx) にも即時反映させる
+  // (issueDocumentAction が既に同様に /admin/deals/[id] を revalidate しているのと同型)。
+  revalidatePath(`/admin/deals/${dealIdParsed.data}`);
 
   return {
     ok: true,

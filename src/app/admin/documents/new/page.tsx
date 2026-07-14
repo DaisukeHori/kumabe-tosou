@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
 /**
  * 帳票新規作成 (§8.3 の簡易版 — 実装計画書「成果物4」)。deal 選択 + doc_type 選択 + 明細 1 行の
  * 最小入力で draft を作成し、`/admin/documents/[id]` (明細エディタ本体) へ redirect する。
- * `?deal_id=` があれば案件詳細 (crm 画面。将来配線 — 本 Issue のスコープ外) からの事前選択として使う。
+ * `?deal_id=` があれば案件詳細からの事前選択として使う (Issue #96 で配線完了: 案件詳細ページの
+ * 帳票カード「新規帳票→」/ 受注成功トーストの「受注書を作成」action がこの受け皿へ遷移する)。
  */
 export default async function NewDocumentPage({
   searchParams,

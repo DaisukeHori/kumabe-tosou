@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -14,14 +13,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Surface } from "@/app/admin/_ui";
 import { EntityPicker, type EntityPickerItem } from "@/app/admin/_ui/entity-picker";
 import { searchCompaniesAction } from "@/app/admin/_ui/entity-search-actions";
+import { isOverlayOpen } from "@/app/admin/_ui/use-escape-to-list";
 import { useSaveShortcut } from "@/app/admin/_ui/use-save-shortcut";
-import { DEAL_STAGE_REGISTRY, type DealDetail, type DealUpdateInput } from "@/modules/crm/contracts";
+import type { DealDetail, DealUpdateInput } from "@/modules/crm/contracts";
 
 import { updateDealAction } from "../actions";
 
-const jpy = new Intl.NumberFormat("ja-JP");
-
-/** 案件詳細ページの概要カード (01-crm.md §8.3): 金額・見込み%・期日・顧客・会社・流入元・失注理由 + 編集。 */
+/**
+ * 案件詳細ページの基本情報カード (Issue #96 設計 §C-左1): 顧客・会社・流入元・メモ + 編集。
+ * タイトル (PageHeader へ移設) / 金額・見込み完了日・見込み%・失注理由 (DealStageSummary.tsx へ
+ * 移設 — 重複表示の排除) は表示しない。編集フォーム自体は従来どおり金額/期日も編集可能に保つ
+ * (「編集はカードから」の導線は維持する判断 — 設計 §リスク5)。
+ */
 export function DealOverviewCard({ deal }: { deal: DealDetail }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -58,9 +61,26 @@ export function DealOverviewCard({ deal }: { deal: DealDetail }) {
 
   useSaveShortcut(() => void handleSave(), isEditing);
 
+  // 編集モードの Esc→キャンセルを実挙動化 (問題5: これまでラベルのみで未バインドだった既知バグの
+  // 修正)。EntityPicker (会社検索) の Popover が開いている間の Esc はポップオーバー自身に
+  // 処理させる (isOverlayOpen で横取りを避ける — 誤って編集ごとキャンセルしない)。
+  // `data-esc-guard` は use-escape-to-list.ts のページレベル Esc-to-list に「今は概要カードの
+  // 編集中なので一覧へ戻らないでほしい」ことを伝えるマーカー。
+  useEffect(() => {
+    if (!isEditing) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (isOverlayOpen()) return;
+      e.preventDefault();
+      setIsEditing(false);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isEditing]);
+
   if (isEditing) {
     return (
-      <Surface className="flex flex-col gap-3 p-4">
+      <Surface data-esc-guard className="flex flex-col gap-3 p-4">
         {error && <p className="text-sm text-destructive">{error}</p>}
         <FieldGroup>
           <Field>
@@ -105,32 +125,18 @@ export function DealOverviewCard({ deal }: { deal: DealDetail }) {
 
   return (
     <Surface className="flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold">{deal.title}</h2>
-          <p className="text-sm text-muted-foreground">
-            <Link href={`/admin/customers/${deal.customer_id}`} className="underline underline-offset-4">
-              {deal.customer_name}
-            </Link>
-            {deal.company_name && <span> / {deal.company_name}</span>}
-          </p>
-        </div>
-        <Badge variant="outline">見込み {DEAL_STAGE_REGISTRY[deal.stage].probability}%</Badge>
-      </div>
+      <h3 className="text-sm font-medium">基本情報</h3>
+
+      <p className="text-sm">
+        <Link href={`/admin/customers/${deal.customer_id}`} className="underline underline-offset-4">
+          {deal.customer_name}
+        </Link>
+        {deal.company_name && <span className="text-muted-foreground"> / {deal.company_name}</span>}
+      </p>
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-        <dt className="text-muted-foreground">金額</dt>
-        <dd>{deal.amount_jpy !== null ? `¥${jpy.format(deal.amount_jpy)}` : "—"}</dd>
-        <dt className="text-muted-foreground">見込み完了日</dt>
-        <dd>{deal.expected_close_on ?? "—"}</dd>
         <dt className="text-muted-foreground">流入元</dt>
         <dd>{deal.source}</dd>
-        {deal.stage === "lost" && deal.lost_reason && (
-          <>
-            <dt className="text-muted-foreground">失注理由</dt>
-            <dd className="text-destructive">{deal.lost_reason}</dd>
-          </>
-        )}
       </dl>
 
       {deal.notes && <p className="whitespace-pre-wrap rounded-lg bg-muted/40 p-2.5 text-sm">{deal.notes}</p>}

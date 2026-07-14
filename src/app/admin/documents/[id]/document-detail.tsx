@@ -18,7 +18,6 @@ import {
 import { FieldError } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { Surface } from "@/app/admin/_ui";
-import { getErrorInfo } from "@/modules/platform/errors";
 import type { DocType, DocumentDetail, DocumentListItem } from "@/modules/sales/contracts";
 
 import {
@@ -27,11 +26,11 @@ import {
   declineQuoteAction,
   deletePaymentAction,
   deriveDocumentAction,
-  generateBlocksAction,
   reissueDocumentAction,
   voidDocumentAction,
 } from "../actions";
-import { DOC_TYPE_LABEL, DocumentStatusBadge, formatJpy } from "../_shared";
+import { canGenerateBlocks, DOC_TYPE_LABEL, DocumentStatusBadge, formatJpy } from "../_shared";
+import { GenerateBlocksButton } from "../generate-blocks-button";
 import { PaymentDialog } from "./payment-dialog";
 import { RevisionDialog } from "./revision-dialog";
 import { SendEmailDialog } from "./send-email-dialog";
@@ -64,13 +63,9 @@ function canReissue(status: string) {
 function canRevise(status: string) {
   return status === "issued" || status === "accepted";
 }
-// 実装計画書 issue-61.md 成果物2: 「作業ブロックを用意」ボタンの表示専用判定
-// (docType==='order' かつ status in (issued, accepted))。他の canX と同じく表示専用であり、
-// 実際の可否は generateBlocksAction → SalesFacade.getDocumentLinesForBlocks が session client 側で
-// 再検証する (二重チェック、意図的 — 計画書「注意・地雷」参照)。
-function canGenerateBlocks(docType: DocType, status: string) {
-  return docType === "order" && (status === "issued" || status === "accepted");
-}
+// canGenerateBlocks (実装計画書 issue-61.md 成果物2) は Issue #96 で `../_shared` へ export
+// 移動した (`DealWorkSummaryCard.tsx` からも同一判定を再利用するため — 2 箇所で判定がズレることを
+// 防ぐ)。ここでは import して使うのみ。
 // issue #101 (02-sales.md §18): メール送付は発行済み系状態のみ (draft は非表示 — facade 直呼びは KMB-E621)。
 function canSendEmail(status: string) {
   return status === "issued" || status === "accepted" || status === "paid";
@@ -113,8 +108,6 @@ export function DocumentDetailView({
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [sendEmailOpen, setSendEmailOpen] = useState(false);
-  const [generateBlocksPending, setGenerateBlocksPending] = useState(false);
-  const [generateBlocksConfirm, setGenerateBlocksConfirm] = useState<{ existingCount: number } | null>(null);
   const [focusedVersionIndex, setFocusedVersionIndex] = useState(0);
   const [focusedPaymentIndex, setFocusedPaymentIndex] = useState(0);
   const versionsRef = useRef<HTMLDivElement>(null);
@@ -216,36 +209,6 @@ export function DocumentDetailView({
     router.refresh();
   }
 
-  /**
-   * 「作業ブロックを用意」(実装計画書 issue-61.md 成果物2)。`confirmed=false` で 1 回目を呼び、
-   * `confirm_required` が返ったら確認ダイアログを出して `confirmed=true` で再実行する
-   * (PaymentDialog の paidConfirmOpen ネスト Dialog と同型の「確認→再実行」パターン)。
-   * `generateBlocksFromLines` が全滅したときは facade が KMB-E704 を返し Result 自体が
-   * `ok:false` になる (block_ids が空の成功はあり得ない設計 — 計画書「注意・地雷」参照) ため、
-   * ここでは `!result.ok` 分岐でのみエラートーストを出す。
-   */
-  async function handleGenerateBlocks(confirmed: boolean) {
-    setGenerateBlocksPending(true);
-    const result = await generateBlocksAction(doc.id, dealId, confirmed);
-    setGenerateBlocksPending(false);
-    if (!result.ok) {
-      setGenerateBlocksConfirm(null);
-      toast.error(result.detail ?? getErrorInfo(result.code).message);
-      return;
-    }
-    if (result.value.status === "confirm_required") {
-      setGenerateBlocksConfirm({ existingCount: result.value.existingCount });
-      return;
-    }
-    setGenerateBlocksConfirm(null);
-    const { block_ids, skipped } = result.value;
-    toast.success(
-      `作業ブロックを ${block_ids.length} 件用意しました${skipped.length > 0 ? ` (${skipped.length} 件は対象外です)` : ""}`,
-      { action: { label: "カレンダーを開く", onClick: () => router.push("/admin/calendar") } },
-    );
-    router.refresh();
-  }
-
   function handleVersionsKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -339,14 +302,7 @@ export function DocumentDetailView({
           </Button>
         ))}
         {canGenerateBlocks(doc.doc_type, doc.status) && (
-          <Button
-            type="button"
-            variant="outline"
-            disabled={generateBlocksPending}
-            onClick={() => void handleGenerateBlocks(false)}
-          >
-            作業ブロックを用意
-          </Button>
+          <GenerateBlocksButton documentId={doc.id} dealId={dealId} />
         )}
         {doc.doc_type === "invoice" && doc.status === "issued" && (
           <Button type="button" onClick={() => setPaymentOpen(true)}>
@@ -532,25 +488,6 @@ export function DocumentDetailView({
         defaultRecipient={defaultRecipient}
         customerId={customerId}
       />
-
-      <Dialog open={generateBlocksConfirm !== null} onOpenChange={(open) => !open && setGenerateBlocksConfirm(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>すでに作業ブロックがあります</DialogTitle>
-            <DialogDescription>
-              すでに {generateBlocksConfirm?.existingCount ?? 0} 件の作業ブロックがあります。もう一度実行すると重複して生成されます。続けますか?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setGenerateBlocksConfirm(null)}>
-              キャンセル
-            </Button>
-            <Button type="button" disabled={generateBlocksPending} onClick={() => void handleGenerateBlocks(true)}>
-              続ける
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

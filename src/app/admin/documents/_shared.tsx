@@ -59,3 +59,15 @@ export const jpy = new Intl.NumberFormat("ja-JP");
 export function formatJpy(value: number): string {
   return `¥${jpy.format(value)}`;
 }
+
+/**
+ * 「作業ブロックを用意」ボタンの表示専用判定 (docType==='order' かつ status in (issued,
+ * accepted))。実装計画書 issue-61.md 成果物2で `document-detail.tsx` に private 関数として実装
+ * されていたものを、Issue #96 で `DealWorkSummaryCard.tsx` からも同一判定を再利用するために
+ * ここへ export 移動した (2 箇所で判定がズレることを防ぐ)。他の canX 系判定と同じく表示専用の
+ * ショートカットであり、実際の可否は generateBlocksAction → SalesFacade.getDocumentLinesForBlocks
+ * が session client 側で再検証する (二重チェック、意図的)。
+ */
+export function canGenerateBlocks(docType: DocType, status: string): boolean {
+  return docType === "order" && (status === "issued" || status === "accepted");
+}
