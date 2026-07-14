@@ -105,7 +105,7 @@ export default async function AdminCustomersPage({
         </Link>
       </div>
 
-      {tab === "customers" && !isKanbanView && (
+      {!isKanbanView && (
         <CustomersSearchBar q={q ?? ""} lifecycle={lifecycle} tab={tab} filters={LIFECYCLE_FILTERS} />
       )}
 
