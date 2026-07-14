@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/app/admin/_ui";
-import { isGoogleCalendarConfigured } from "@/lib/env";
+import { isGoogleCalendarConfigured, isMsCalendarConfigured } from "@/lib/env";
 import { KMB_ERRORS, type KmbErrorCode } from "@/modules/platform/errors";
+import type { CalendarProvider } from "@/modules/scheduling/contracts";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
 
 import { CalendarSecondaryTabs } from "../_ui/secondary-tabs";
@@ -14,6 +15,15 @@ export const dynamic = "force-dynamic";
 
 function isKmbErrorCode(code: string): code is KmbErrorCode {
   return code in KMB_ERRORS;
+}
+
+const PROVIDER_LABEL: Record<CalendarProvider, string> = {
+  google: "Google カレンダー",
+  microsoft: "Microsoft カレンダー",
+};
+
+function isCalendarProvider(value: string): value is CalendarProvider {
+  return value === "google" || value === "microsoft";
 }
 
 /**
@@ -43,17 +53,18 @@ export default async function AdminCalendarConnectionsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="外部連携" description="Google カレンダーとの双方向同期の接続状態・同期の問題を管理します。" />
+      <PageHeader title="外部連携" description="Google / Microsoft カレンダーとの双方向同期の接続状態・同期の問題を管理します。" />
       <CalendarSecondaryTabs />
 
       {params.cal_connected && (
         <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
-          Google カレンダーに接続しました。
+          {isCalendarProvider(params.cal_connected) ? PROVIDER_LABEL[params.cal_connected] : params.cal_connected}
+          に接続しました。
         </div>
       )}
       {params.cal_error === "disabled" && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          Google カレンダー連携が設定されていません (env 未設定)。
+          外部カレンダー連携が設定されていません (env 未設定)。
         </div>
       )}
       {params.cal_error && params.cal_error !== "disabled" && (
@@ -68,6 +79,7 @@ export default async function AdminCalendarConnectionsPage({
       <CalendarConnectionCards
         connections={connectionsResult.ok ? connectionsResult.value : []}
         googleEnabled={isGoogleCalendarConfigured()}
+        msEnabled={isMsCalendarConfigured()}
       />
 
       <div className="flex flex-col gap-3">

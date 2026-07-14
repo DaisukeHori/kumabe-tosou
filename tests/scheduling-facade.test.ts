@@ -12,6 +12,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * deleteWorkTemplate (E702) / listWorkTypes・listWorkTemplates (パススルー)。
  */
 
+// getExternalBusy/runCalendarMaintenance の provider ループが resolveProviderEnv(provider) 経由で
+// getEnv() を呼ぶため、実 env 検証 (KMB-E901) に落ちないよう固定値を与える
+// (tests/scheduling-sync-engine.integration.test.ts と同型のモック)。
+vi.mock("@/lib/env", () => ({
+  getEnv: () => ({
+    GOOGLE_CALENDAR_CLIENT_ID: "test-google-client-id",
+    GOOGLE_CALENDAR_CLIENT_SECRET: "test-google-client-secret",
+    MS_CALENDAR_CLIENT_ID: "test-ms-client-id",
+    MS_CALENDAR_CLIENT_SECRET: "test-ms-client-secret",
+  }),
+}));
+
 const getSessionAndClientMock = vi.fn();
 vi.mock("@/lib/supabase/session", () => ({
   getSessionAndClient: (...args: unknown[]) => getSessionAndClientMock(...args),
@@ -50,6 +62,8 @@ const cancelOpenWorkBlocksForDealMock = vi.fn();
 const getCalendarConnectionMock = vi.fn();
 const upsertPendingPushLinkMock = vi.fn();
 const getRecentDoneBlocksForWorkLogResendMock = vi.fn();
+const vaultReadSecretMock = vi.fn();
+const rollCalendarSyncWindowMock = vi.fn();
 
 vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/scheduling/repository")>();
@@ -75,6 +89,51 @@ vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
     getCalendarConnection: (...args: unknown[]) => getCalendarConnectionMock(...args),
     upsertPendingPushLink: (...args: unknown[]) => upsertPendingPushLinkMock(...args),
     getRecentDoneBlocksForWorkLogResend: (...args: unknown[]) => getRecentDoneBlocksForWorkLogResendMock(...args),
+    vaultReadSecret: (...args: unknown[]) => vaultReadSecretMock(...args),
+    rollCalendarSyncWindow: (...args: unknown[]) => rollCalendarSyncWindowMock(...args),
+  };
+});
+
+// getExternalBusy (BLOCKER 回帰テスト) / runCalendarMaintenance のローリングウィンドウ (MAJOR 回帰
+// テスト) は token.ts の実 Vault 読み取り経路や google-api.ts/ms-api.ts の実 HTTP 呼び出しを経由
+// させると FAKE_SERVICE_CLIENT (プレーンオブジェクト) の .rpc/.from が存在せず無関係な例外になる
+// ため、adapter.getBusy/calendarExists と getValidCalendarSecret だけを差し替える
+// (他のメソッド — ensureAppCalendar 等 — は実体のまま。instanceof 判定に使う
+// TokenExpiredError/TokenClientMisconfiguredError も実体のクラスを維持する)。
+const getValidCalendarSecretMock = vi.fn();
+vi.mock("@/modules/scheduling/internal/token", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/scheduling/internal/token")>();
+  return {
+    ...actual,
+    getValidCalendarSecret: (...args: unknown[]) => getValidCalendarSecretMock(...args),
+  };
+});
+
+const googleGetBusyMock = vi.fn();
+const googleCalendarExistsMock = vi.fn();
+vi.mock("@/modules/scheduling/internal/google-api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/scheduling/internal/google-api")>();
+  return {
+    ...actual,
+    googleCalendarAdapter: {
+      ...actual.googleCalendarAdapter,
+      getBusy: (...args: unknown[]) => googleGetBusyMock(...args),
+      calendarExists: (...args: unknown[]) => googleCalendarExistsMock(...args),
+    },
+  };
+});
+
+const msGetBusyMock = vi.fn();
+const msCalendarExistsMock = vi.fn();
+vi.mock("@/modules/scheduling/internal/ms-api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/scheduling/internal/ms-api")>();
+  return {
+    ...actual,
+    msCalendarAdapter: {
+      ...actual.msCalendarAdapter,
+      getBusy: (...args: unknown[]) => msGetBusyMock(...args),
+      calendarExists: (...args: unknown[]) => msCalendarExistsMock(...args),
+    },
   };
 });
 
@@ -120,6 +179,19 @@ beforeEach(() => {
   createSupabaseServiceClientMock.mockReturnValue(FAKE_SERVICE_CLIENT);
   getCalendarConnectionMock.mockResolvedValue({ ok: true, value: null });
   upsertPendingPushLinkMock.mockResolvedValue({ ok: true, value: undefined });
+  // getExternalBusy / runCalendarMaintenance のローリングウィンドウテスト用デフォルト
+  // (他の describe ブロックはこれらを呼ぶ経路に到達しないため無害)。
+  vaultReadSecretMock.mockResolvedValue({ ok: true, value: null }); // トークン健全性チェックを素通りさせる
+  rollCalendarSyncWindowMock.mockResolvedValue({ ok: true, value: undefined });
+  getValidCalendarSecretMock.mockResolvedValue({
+    access_token: "access-token",
+    refresh_token: "refresh-token",
+    expires_at: "2099-01-01T00:00:00.000Z",
+  });
+  googleGetBusyMock.mockResolvedValue([]);
+  msGetBusyMock.mockResolvedValue([]);
+  googleCalendarExistsMock.mockResolvedValue(true);
+  msCalendarExistsMock.mockResolvedValue(true);
 });
 
 describe("createSchedulingFacade().generateBlocksFromLines", () => {
@@ -599,7 +671,12 @@ describe("createSchedulingFacade().transitionBlock — カレンダー同期", (
 describe("createSchedulingFacade().cancelOpenBlocksForDeal — カレンダー同期", () => {
   it("scheduled 由来のブロックのみ pending_push を upsert する (backlog 由来は対象外)", async () => {
     cancelOpenWorkBlocksForDealMock.mockResolvedValue({ cancelled: 2, scheduledBlockIds: ["block-sched-1"] });
-    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    // #55 で SUPPORTED_CALENDAR_PROVIDERS に "microsoft" が加わったため、この 1 provider だけ
+    // 接続済みのシナリオを検証するテストは provider ごとに応答を出し分ける必要がある
+    // (google のみ接続・microsoft は未接続)。
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(provider === "google" ? CONNECTED_GOOGLE : { ok: true, value: null }),
+    );
     const facade = createSchedulingFacade();
     const result = await facade.cancelOpenBlocksForDeal(DEAL_ID);
     expect(result).toEqual({ ok: true, value: { cancelled: 2 } });
@@ -670,5 +747,170 @@ describe("createSchedulingFacade().runCalendarMaintenance — work_log 再送", 
     const facade = createSchedulingFacade();
     const result = await facade.runCalendarMaintenance({ mode: "service" });
     expect(result).toEqual({ ok: true, value: undefined });
+  });
+});
+
+// ============================================================================
+// #55 敵対レビュー BLOCKER 修正の回帰テスト: getExternalBusy の provider ループ化
+// (旧実装は provider="google" 決め打ちで msCalendarAdapter.getBusy が到達不能だった)
+// ============================================================================
+
+function connectedMeta(overrides: Record<string, unknown> = {}) {
+  return {
+    account_email: "owner@example.com",
+    app_calendar_id: "cal-app-1",
+    token_expires_at: "2099-01-01T00:00:00.000Z",
+    sync_window_start: "2026-06-01",
+    sync_window_end: "2027-01-01",
+    ...overrides,
+  };
+}
+
+function connectedRow(provider: "google" | "microsoft", overrides: Record<string, unknown> = {}) {
+  return {
+    ok: true as const,
+    value: {
+      provider,
+      status: "connected" as const,
+      last_error_code: null,
+      updated_at: "2026-07-01T00:00:00.000Z",
+      meta: connectedMeta(),
+      ...overrides,
+    },
+  };
+}
+
+const DISCONNECTED = { ok: true as const, value: null };
+
+describe("createSchedulingFacade().getExternalBusy — provider ループ (BLOCKER 回帰)", () => {
+  it("Microsoft だけ接続の場合、msCalendarAdapter.getBusy の結果を返す (旧実装は google 決め打ちで常に空配列だった)", async () => {
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(provider === "microsoft" ? connectedRow("microsoft") : DISCONNECTED),
+    );
+    msGetBusyMock.mockResolvedValue([{ start: "2026-07-12T00:00:00.000Z", end: "2026-07-12T01:00:00.000Z" }]);
+
+    const facade = createSchedulingFacade();
+    const result = await facade.getExternalBusy({ from: "2026-07-12T00:00:00Z", to: "2026-07-13T00:00:00Z" });
+
+    expect(result).toEqual({
+      ok: true,
+      value: [{ starts_at: "2026-07-12T00:00:00.000Z", ends_at: "2026-07-12T01:00:00.000Z" }],
+    });
+    expect(msGetBusyMock).toHaveBeenCalledTimes(1);
+    expect(googleGetBusyMock).not.toHaveBeenCalled();
+  });
+
+  it("両方接続している場合、google と microsoft の busy 帯をマージして返す", async () => {
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(connectedRow(provider as "google" | "microsoft")),
+    );
+    googleGetBusyMock.mockResolvedValue([{ start: "2026-07-12T01:00:00.000Z", end: "2026-07-12T02:00:00.000Z" }]);
+    msGetBusyMock.mockResolvedValue([{ start: "2026-07-12T03:00:00.000Z", end: "2026-07-12T04:00:00.000Z" }]);
+
+    const facade = createSchedulingFacade();
+    const result = await facade.getExternalBusy({ from: "2026-07-12T00:00:00Z", to: "2026-07-13T00:00:00Z" });
+
+    expect(result).toEqual({
+      ok: true,
+      value: [
+        { starts_at: "2026-07-12T01:00:00.000Z", ends_at: "2026-07-12T02:00:00.000Z" },
+        { starts_at: "2026-07-12T03:00:00.000Z", ends_at: "2026-07-12T04:00:00.000Z" },
+      ],
+    });
+  });
+
+  it("両方未接続の場合は空配列 (エラーにしない — §6.2)", async () => {
+    getCalendarConnectionMock.mockResolvedValue(DISCONNECTED);
+    const facade = createSchedulingFacade();
+    const result = await facade.getExternalBusy({ from: "2026-07-12T00:00:00Z", to: "2026-07-13T00:00:00Z" });
+    expect(result).toEqual({ ok: true, value: [] });
+    expect(googleGetBusyMock).not.toHaveBeenCalled();
+    expect(msGetBusyMock).not.toHaveBeenCalled();
+  });
+
+  it("いずれかの provider が 'expired' の場合は KMB-E720 を返す (再連携要求 — 安全側 fail-fast)", async () => {
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(
+        provider === "google" ? connectedRow("google", { status: "expired" }) : connectedRow("microsoft"),
+      ),
+    );
+    const facade = createSchedulingFacade();
+    const result = await facade.getExternalBusy({ from: "2026-07-12T00:00:00Z", to: "2026-07-13T00:00:00Z" });
+    expect(result).toEqual({ ok: false, code: "KMB-E720", detail: expect.any(String) });
+  });
+});
+
+// ============================================================================
+// #55 敵対レビュー MAJOR 修正の回帰テスト: runCalendarMaintenance の Graph ローリングウィンドウ
+// 切り直し (§8.8)。旧実装はこの節が no-op で、KMB-E725 発火後に Microsoft 同期が恒久停止した。
+// ============================================================================
+
+describe("createSchedulingFacade().runCalendarMaintenance — Graph ローリングウィンドウ切り直し (§8.8, MAJOR 回帰)", () => {
+  it("last_error_code='KMB-E725' の場合、窓を切り直し・sync_token/cursor を破棄し・last_error_code をクリアする", async () => {
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(
+        provider === "microsoft"
+          ? connectedRow("microsoft", { last_error_code: "KMB-E725", meta: connectedMeta({ sync_window_end: "2027-06-01" }) })
+          : DISCONNECTED,
+      ),
+    );
+
+    const facade = createSchedulingFacade();
+    const result = await facade.runCalendarMaintenance({ mode: "service" });
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(rollCalendarSyncWindowMock).toHaveBeenCalledTimes(1);
+    const [, provider, patch] = rollCalendarSyncWindowMock.mock.calls[0] as [unknown, string, { meta: Record<string, unknown>; clearSafetyValveError: boolean }];
+    expect(provider).toBe("microsoft");
+    expect(patch.clearSafetyValveError).toBe(true);
+    expect(typeof patch.meta.sync_window_start).toBe("string");
+    expect(typeof patch.meta.sync_window_end).toBe("string");
+  });
+
+  it("sync_window_end が90日以上先で last_error_code も null の場合は切り直さない", async () => {
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(
+        provider === "microsoft"
+          ? connectedRow("microsoft", { last_error_code: null, meta: connectedMeta({ sync_window_end: "2099-01-01" }) })
+          : DISCONNECTED,
+      ),
+    );
+
+    const facade = createSchedulingFacade();
+    const result = await facade.runCalendarMaintenance({ mode: "service" });
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(rollCalendarSyncWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("sync_window_end まで90日未満 (経年劣化) の場合はエラーコードが無くても切り直す。ただし last_error_code はクリアしない (安全弁が理由ではないため)", async () => {
+    const soonEnd = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(
+        provider === "microsoft"
+          ? connectedRow("microsoft", { last_error_code: null, meta: connectedMeta({ sync_window_end: soonEnd }) })
+          : DISCONNECTED,
+      ),
+    );
+
+    const facade = createSchedulingFacade();
+    const result = await facade.runCalendarMaintenance({ mode: "service" });
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(rollCalendarSyncWindowMock).toHaveBeenCalledTimes(1);
+    const [, , patch] = rollCalendarSyncWindowMock.mock.calls[0] as [unknown, string, { clearSafetyValveError: boolean }];
+    expect(patch.clearSafetyValveError).toBe(false);
+  });
+
+  it("google は窓を使わないため (resolveSyncWindow が microsoft 限定) rollCalendarSyncWindow を呼ばない", async () => {
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(provider === "google" ? connectedRow("google", { last_error_code: "KMB-E725" }) : DISCONNECTED),
+    );
+
+    const facade = createSchedulingFacade();
+    const result = await facade.runCalendarMaintenance({ mode: "service" });
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(rollCalendarSyncWindowMock).not.toHaveBeenCalled();
   });
 });
