@@ -26,10 +26,12 @@ import { Surface } from "@/app/admin/_ui";
 import { cn } from "@/lib/utils";
 import type { TaskListItem } from "@/modules/crm/contracts";
 
-import { cancelTaskAction, completeTaskAction, reopenTaskAction, undoCompleteTaskAction } from "./actions";
+import { cancelTaskAction, reopenTaskAction } from "./actions";
 import { TaskEditSheet } from "./TaskEditSheet";
+import { useTaskComplete } from "./use-task-complete";
 
-const ORIGIN_LABEL: Record<TaskListItem["origin"], string> = {
+// tasks-kanban.tsx でも共用 (#99)。
+export const ORIGIN_LABEL: Record<TaskListItem["origin"], string> = {
   manual: "手動",
   ai_call: "電話AI",
   form: "フォーム",
@@ -38,10 +40,12 @@ const ORIGIN_LABEL: Record<TaskListItem["origin"], string> = {
 
 /**
  * やること一覧の行群 (01-crm.md §8.4)。Checkbox クリック/Space = completeTaskAction
- * (即時反映 + toast「元に戻す」)。行 dropdown: 編集 (Sheet) / 取り消し (確認 Dialog)。
+ * (即時反映 + toast「元に戻す」— useTaskComplete フック、#99 で tasks-kanban.tsx と共用化)。
+ * 行 dropdown: 編集 (Sheet) / 取り消し (確認 Dialog)。
  */
 export function TasksList({ tasks: initialTasks }: { tasks: TaskListItem[] }) {
   const router = useRouter();
+  const { completeTask } = useTaskComplete();
   const [tasks, setTasks] = useState(initialTasks);
   const [editingTask, setEditingTask] = useState<TaskListItem | null>(null);
   const [cancellingTask, setCancellingTask] = useState<TaskListItem | null>(null);
@@ -51,27 +55,7 @@ export function TasksList({ tasks: initialTasks }: { tasks: TaskListItem[] }) {
 
   async function handleComplete(task: TaskListItem) {
     setTasks((prev) => prev.filter((t) => t.id !== task.id));
-    const result = await completeTaskAction(task.id, task.updated_at);
-    if (!result.ok) {
-      toast.error(result.detail ?? "完了にできませんでした。");
-      setTasks((prev) => [task, ...prev]);
-      return;
-    }
-    toast.success(`「${task.title}」を完了にしました。`, {
-      action: {
-        label: "元に戻す",
-        onClick: () => {
-          void undoCompleteTaskAction(task.id).then((r) => {
-            if (!r.ok) {
-              toast.error(r.detail ?? "元に戻せませんでした。");
-              return;
-            }
-            router.refresh();
-          });
-        },
-      },
-    });
-    router.refresh();
+    await completeTask(task, () => setTasks((prev) => [task, ...prev]));
   }
 
   async function handleReopen(task: TaskListItem) {

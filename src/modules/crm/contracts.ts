@@ -445,6 +445,17 @@ export type CustomerDetail = CustomerListItem & {
   created_by: string | null;
 };
 
+/** 顧客カンバン 1 列 (#99 — 01-crm.md §5.3 契約外拡張)。lifecycle は全遷移許可 (§4.1) のため
+ *  DnD/Shift+←→ の遷移にステージガードは不要 (deals の DealKanbanColumn と異なり lost 相当の
+ *  「専用メソッド経由でしか入れない終端」は存在しない)。total_count は DB 側 exact count
+ *  (customers 配列は列上限 (lead/customer=100, archived=20) で切られるため、超過時の
+ *  「表示は直近N件」注記に使う)。 */
+export type CustomerKanbanColumn = {
+  lifecycle: CustomerLifecycle;
+  total_count: number;
+  customers: CustomerListItem[];
+};
+
 export type CompanyListItem = {
   id: string;
   name: string;

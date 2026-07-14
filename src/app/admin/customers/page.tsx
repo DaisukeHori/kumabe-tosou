@@ -7,6 +7,7 @@ import { PageHeader } from "@/app/admin/_ui";
 import { crmFacade } from "@/modules/crm/facade";
 
 import { CompaniesTable } from "./companies-table";
+import { CustomersKanban } from "./customers-kanban";
 import { CustomersSearchBar, type LifecycleFilterValue } from "./customers-search-bar";
 import { CustomersTable } from "./customers-table";
 
@@ -25,9 +26,9 @@ const LIFECYCLE_VALUES = LIFECYCLE_FILTERS.map((f) => f.value);
 export default async function AdminCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; lifecycle?: string; tab?: string; cursor?: string }>;
+  searchParams: Promise<{ q?: string; lifecycle?: string; tab?: string; view?: string; cursor?: string }>;
 }) {
-  const { q, lifecycle: lifecycleParam, tab: tabParam, cursor } = await searchParams;
+  const { q, lifecycle: lifecycleParam, tab: tabParam, view, cursor } = await searchParams;
   const tab: "customers" | "companies" = tabParam === "companies" ? "companies" : "customers";
   const lifecycle: LifecycleFilterValue = (
     LIFECYCLE_VALUES as string[]
@@ -35,9 +36,13 @@ export default async function AdminCustomersPage({
     ? (lifecycleParam as LifecycleFilterValue)
     : "active";
   const trimmedQ = q?.trim() || null;
+  // 顧客カンバン (#99)。deals カンバンと異なり既定はテーブル (検索・会社タブ・ページングが主導線 —
+  // 01-crm-suite issue-99.md の判断)。companies タブにはカンバンが無いため tab === "customers" 限定。
+  const isKanbanView = view === "kanban" && tab === "customers";
 
+  const kanbanResult = isKanbanView ? await crmFacade.listCustomersKanban() : null;
   const customersResult =
-    tab === "customers"
+    tab === "customers" && !isKanbanView
       ? await crmFacade.listCustomers(
           { q: trimmedQ, lifecycle, include_merged: false },
           { cursor: cursor ?? null, limit: 50 },
@@ -53,6 +58,10 @@ export default async function AdminCustomersPage({
     if (trimmedQ) params.set("q", trimmedQ);
     if (nextTab === "customers" && lifecycle !== "active") params.set("lifecycle", lifecycle);
     if (nextTab !== "customers") params.set("tab", nextTab);
+    // 顧客タブ+カンバン表示中に顧客タブピルを再クリックしても view=kanban を維持する
+    // (維持しないと href から view が落ち、意図せずテーブル表示に戻ってしまう)。
+    // 会社タブへの遷移では view を保持しない = Kanban を離脱するのが意図通りなのでこの分岐で十分。
+    if (nextTab === "customers" && isKanbanView) params.set("view", "kanban");
     const qs = params.toString();
     return qs ? `/admin/customers?${qs}` : "/admin/customers";
   }
@@ -61,8 +70,30 @@ export default async function AdminCustomersPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="顧客"
-        description="↑↓ で移動、Enter で詳細、/ で検索、Esc で選択解除します。"
-        actions={<Button render={<Link href="/admin/customers/new" />}>新規顧客</Button>}
+        description={
+          isKanbanView
+            ? "←→ で列移動、↑↓ でカード移動、Shift+←/→ で状態移動、Enter で詳細です。"
+            : "↑↓ で移動、Enter で詳細、/ で検索、Esc で選択解除します。"
+        }
+        actions={
+          <>
+            {tab === "customers" &&
+              (isKanbanView ? (
+                <Link href="/admin/customers">
+                  <Badge variant="outline" className="cursor-pointer px-3 py-1">
+                    テーブル表示
+                  </Badge>
+                </Link>
+              ) : (
+                <Link href="/admin/customers?view=kanban">
+                  <Badge variant="default" className="cursor-pointer px-3 py-1">
+                    カンバン表示
+                  </Badge>
+                </Link>
+              ))}
+            <Button render={<Link href="/admin/customers/new" />}>新規顧客</Button>
+          </>
+        }
       />
 
       <div className="flex gap-2">
@@ -78,9 +109,22 @@ export default async function AdminCustomersPage({
         </Link>
       </div>
 
-      <CustomersSearchBar q={q ?? ""} lifecycle={lifecycle} tab={tab} filters={LIFECYCLE_FILTERS} />
+      {!isKanbanView && (
+        <CustomersSearchBar q={q ?? ""} lifecycle={lifecycle} tab={tab} filters={LIFECYCLE_FILTERS} />
+      )}
 
-      {tab === "customers" && customersResult && (
+      {isKanbanView && kanbanResult && (
+        <>
+          {!kanbanResult.ok && (
+            <p className="text-sm text-destructive">
+              取得に失敗しました ({kanbanResult.code}): {kanbanResult.detail}
+            </p>
+          )}
+          {kanbanResult.ok && <CustomersKanban initialColumns={kanbanResult.value} />}
+        </>
+      )}
+
+      {tab === "customers" && !isKanbanView && customersResult && (
         <>
           {!customersResult.ok && (
             <p className="text-sm text-destructive">

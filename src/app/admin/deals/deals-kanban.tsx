@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
-import { Surface } from "@/app/admin/_ui";
+import { KanbanBoard, KanbanCard, KanbanCollapsedColumn, KanbanColumn, Surface, useKanbanKeyboard } from "@/app/admin/_ui";
 import { DEAL_STAGE_REGISTRY, zDealStage, type DealKanbanColumn, type DealListItem, type DealStage } from "@/modules/crm/contracts";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +12,6 @@ import { getOpenBlockCountForDealAction } from "@/app/admin/calendar/actions";
 
 import { markDealLostAction, updateDealStageAction } from "./actions";
 import { CancelBlocksDialog } from "./cancel-blocks-dialog";
-import { useDealsKanbanKeyboard } from "./deals-kanban-keyboard";
 import { LostReasonDialog } from "./lost-reason-dialog";
 
 const jpy = new Intl.NumberFormat("ja-JP");
@@ -128,10 +126,10 @@ export function DealsKanban({
     void applyStageChange(deal, currentStage, targetStage);
   }
 
-  const { focus, setFocus, handleKeyDown } = useDealsKanbanKeyboard({
-    columns: mainColumns,
+  const { focus, setFocus, handleKeyDown } = useKanbanKeyboard<DealStage>({
+    columns: mainColumns.map((c) => ({ key: c.stage, items: c.deals })),
     onOpenDetail: (dealId) => router.push(`/admin/deals/${dealId}`),
-    onMoveStage: handleMoveStage,
+    onMoveItem: handleMoveStage,
   });
 
   function handleDrop(toStage: DealStage) {
@@ -154,105 +152,76 @@ export function DealsKanban({
         <span className="text-lg font-semibold">¥{jpy.format(weightedPipelineJpy)}</span>
       </Surface>
 
-      <div
-        role="grid"
-        aria-label="案件カンバン"
-        tabIndex={0}
-        onKeyDown={handleKeyDown}
-        className="flex gap-3 overflow-x-auto pb-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      >
+      <KanbanBoard ariaLabel="案件カンバン" onKeyDown={handleKeyDown}>
         {mainColumns.map((column, colIndex) => (
-          <div
+          <KanbanColumn
             key={column.stage}
-            role="group"
-            aria-label={DEAL_STAGE_REGISTRY[column.stage].label}
+            ariaLabel={DEAL_STAGE_REGISTRY[column.stage].label}
             onDragOver={(e) => e.preventDefault()}
             onDrop={() => handleDrop(column.stage)}
-            className="flex w-64 shrink-0 flex-col gap-2 rounded-xl border border-border bg-muted/30 p-2"
+            header={DEAL_STAGE_REGISTRY[column.stage].label}
+            meta={`${column.deals.length}件 / ¥${jpy.format(column.total_jpy)}`}
           >
-            <div className="flex items-center justify-between px-1 text-xs">
-              <span className="font-medium text-foreground">{DEAL_STAGE_REGISTRY[column.stage].label}</span>
-              <span className="text-muted-foreground">
-                {column.deals.length}件 / ¥{jpy.format(column.total_jpy)}
-              </span>
-            </div>
-            <div className="flex min-h-16 flex-col gap-2">
-              {column.deals.map((deal, rowIndex) => {
-                const isFocused = focus?.col === colIndex && focus.row === rowIndex;
-                return (
-                  <Surface
-                    key={deal.id}
-                    draggable
-                    onDragStart={() => setDraggingId(deal.id)}
-                    onDragEnd={() => setDraggingId(null)}
-                    onClick={() => {
-                      setFocus({ col: colIndex, row: rowIndex });
-                      router.push(`/admin/deals/${deal.id}`);
-                    }}
-                    className={cn(
-                      "cursor-pointer p-2.5 text-xs transition-colors",
-                      isFocused && "ring-2 ring-ring",
+            {column.deals.map((deal, rowIndex) => {
+              const isFocused = focus?.col === colIndex && focus.row === rowIndex;
+              return (
+                <KanbanCard
+                  key={deal.id}
+                  isFocused={isFocused}
+                  onDragStart={() => setDraggingId(deal.id)}
+                  onDragEnd={() => setDraggingId(null)}
+                  onClick={() => {
+                    setFocus({ col: colIndex, row: rowIndex });
+                    router.push(`/admin/deals/${deal.id}`);
+                  }}
+                >
+                  <p className="truncate text-sm font-medium">{deal.title}</p>
+                  <p className="mt-0.5 truncate text-muted-foreground">{deal.customer_name}</p>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span>{deal.amount_jpy !== null ? `¥${jpy.format(deal.amount_jpy)}` : "—"}</span>
+                    {deal.expected_close_on && (
+                      <span
+                        className={cn(
+                          "text-[11px]",
+                          deal.expected_close_on < jstTodayDateOnly() ? "font-medium text-destructive" : "text-muted-foreground",
+                        )}
+                      >
+                        {deal.expected_close_on}
+                      </span>
                     )}
-                  >
-                    <p className="truncate text-sm font-medium">{deal.title}</p>
-                    <p className="mt-0.5 truncate text-muted-foreground">{deal.customer_name}</p>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span>{deal.amount_jpy !== null ? `¥${jpy.format(deal.amount_jpy)}` : "—"}</span>
-                      {deal.expected_close_on && (
-                        <span
-                          className={cn(
-                            "text-[11px]",
-                            deal.expected_close_on < jstTodayDateOnly() ? "font-medium text-destructive" : "text-muted-foreground",
-                          )}
-                        >
-                          {deal.expected_close_on}
-                        </span>
-                      )}
-                    </div>
-                  </Surface>
-                );
-              })}
-            </div>
-          </div>
+                  </div>
+                </KanbanCard>
+              );
+            })}
+          </KanbanColumn>
         ))}
-      </div>
+      </KanbanBoard>
 
       <div className="flex flex-wrap gap-3">
         {[
           { stage: "paid" as const, column: paidColumn, expanded: expandedPaid, setExpanded: setExpandedPaid },
           { stage: "lost" as const, column: lostColumn, expanded: expandedLost, setExpanded: setExpandedLost },
         ].map(({ stage, column, expanded, setExpanded }) => (
-          <div
+          <KanbanCollapsedColumn
             key={stage}
+            label={DEAL_STAGE_REGISTRY[stage].label}
+            count={column?.deals.length ?? 0}
+            expanded={expanded}
+            onToggleExpanded={() => setExpanded((v) => !v)}
             onDragOver={(e) => e.preventDefault()}
             onDrop={() => handleDrop(stage)}
-            className="flex w-64 flex-col gap-2 rounded-xl border border-dashed border-border p-2"
           >
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="flex items-center justify-between px-1 text-xs"
-            >
-              <span className="font-medium">
-                {DEAL_STAGE_REGISTRY[stage].label} <Badge variant="outline">{column?.deals.length ?? 0}</Badge>
-              </span>
-              <span className="text-muted-foreground">{expanded ? "折りたたむ" : "展開する"}</span>
-            </button>
-            {expanded && (
-              <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
-                {(column?.deals ?? []).map((deal) => (
-                  <Surface
-                    key={deal.id}
-                    className="cursor-pointer p-2.5 text-xs"
-                    onClick={() => router.push(`/admin/deals/${deal.id}`)}
-                  >
-                    <p className="truncate text-sm font-medium">{deal.title}</p>
-                    <p className="mt-0.5 truncate text-muted-foreground">{deal.customer_name}</p>
-                  </Surface>
-                ))}
-              </div>
-            )}
-          </div>
+            {(column?.deals ?? []).map((deal) => (
+              <Surface
+                key={deal.id}
+                className="cursor-pointer p-2.5 text-xs"
+                onClick={() => router.push(`/admin/deals/${deal.id}`)}
+              >
+                <p className="truncate text-sm font-medium">{deal.title}</p>
+                <p className="mt-0.5 truncate text-muted-foreground">{deal.customer_name}</p>
+              </Surface>
+            ))}
+          </KanbanCollapsedColumn>
         ))}
       </div>
 
