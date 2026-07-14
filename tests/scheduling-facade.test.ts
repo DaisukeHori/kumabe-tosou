@@ -17,6 +17,19 @@ vi.mock("@/lib/supabase/session", () => ({
   getSessionAndClient: (...args: unknown[]) => getSessionAndClientMock(...args),
 }));
 
+const createSupabaseServiceClientMock = vi.fn();
+vi.mock("@/lib/supabase/service", () => ({
+  createSupabaseServiceClient: (...args: unknown[]) => createSupabaseServiceClientMock(...args),
+}));
+
+const appendActivityMock = vi.fn();
+vi.mock("@/modules/crm/facade", () => ({
+  crmFacade: {
+    appendActivity: (...args: unknown[]) => appendActivityMock(...args),
+    getDealRefs: vi.fn().mockResolvedValue({ ok: true, value: [] }),
+  },
+}));
+
 const listActiveWorkTypesForExpandMock = vi.fn();
 const listActiveWorkTemplatesForExpandMock = vi.fn();
 const insertWorkBlocksMock = vi.fn();
@@ -30,6 +43,13 @@ const getWorkTypeSnapshotMock = vi.fn();
 const insertWorkBlockMock = vi.fn();
 const getWorkBlockByIdMock = vi.fn();
 const updateWorkBlockDetailMock = vi.fn();
+const updateWorkBlockPlacementMock = vi.fn();
+const unscheduleWorkBlockMock = vi.fn();
+const transitionWorkBlockStatusMock = vi.fn();
+const cancelOpenWorkBlocksForDealMock = vi.fn();
+const getCalendarConnectionMock = vi.fn();
+const upsertPendingPushLinkMock = vi.fn();
+const getRecentDoneBlocksForWorkLogResendMock = vi.fn();
 
 vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/scheduling/repository")>();
@@ -48,6 +68,13 @@ vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
     insertWorkBlock: (...args: unknown[]) => insertWorkBlockMock(...args),
     getWorkBlockById: (...args: unknown[]) => getWorkBlockByIdMock(...args),
     updateWorkBlockDetail: (...args: unknown[]) => updateWorkBlockDetailMock(...args),
+    updateWorkBlockPlacement: (...args: unknown[]) => updateWorkBlockPlacementMock(...args),
+    unscheduleWorkBlock: (...args: unknown[]) => unscheduleWorkBlockMock(...args),
+    transitionWorkBlockStatus: (...args: unknown[]) => transitionWorkBlockStatusMock(...args),
+    cancelOpenWorkBlocksForDeal: (...args: unknown[]) => cancelOpenWorkBlocksForDealMock(...args),
+    getCalendarConnection: (...args: unknown[]) => getCalendarConnectionMock(...args),
+    upsertPendingPushLink: (...args: unknown[]) => upsertPendingPushLinkMock(...args),
+    getRecentDoneBlocksForWorkLogResend: (...args: unknown[]) => getRecentDoneBlocksForWorkLogResendMock(...args),
   };
 });
 
@@ -83,9 +110,16 @@ function genBlocksInput() {
   };
 }
 
+const FAKE_SERVICE_CLIENT = { __fake: "service-client" };
+
 beforeEach(() => {
   vi.clearAllMocks();
   getSessionAndClientMock.mockResolvedValue({ supabase: {}, user: { id: "user-1" } });
+  // markConnectedProvidersPendingPush (facade.ts) のデフォルト: 未接続扱いにして、
+  // 明示的にテストする describe ブロック以外への影響を避ける。
+  createSupabaseServiceClientMock.mockReturnValue(FAKE_SERVICE_CLIENT);
+  getCalendarConnectionMock.mockResolvedValue({ ok: true, value: null });
+  upsertPendingPushLinkMock.mockResolvedValue({ ok: true, value: undefined });
 });
 
 describe("createSchedulingFacade().generateBlocksFromLines", () => {
@@ -415,5 +449,226 @@ describe("createSchedulingFacade() 読み取り系のパススルー", () => {
     const facade = createSchedulingFacade();
     const result = await facade.listWorkTypes();
     expect(result).toEqual(expect.objectContaining({ ok: false, code: "KMB-E901" }));
+  });
+});
+
+// ============================================================================
+// #54 敵対レビュー BLOCKER 修正の回帰テスト: placeBlock/createBlock/unscheduleBlock/
+// transitionBlock('cancelled')/cancelOpenBlocksForDeal が接続済み provider の
+// calendar_event_links を pending_push で upsert すること (03-scheduling.md §6.1/§6.2)。
+// ============================================================================
+
+function scheduledBlockRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "block-1",
+    deal_id: DEAL_ID,
+    source_document_id: null,
+    work_type_id: WORK_TYPE_ID,
+    title: "研磨",
+    status: "scheduled" as const,
+    starts_at: "2026-01-05T00:00:00.000Z",
+    ends_at: "2026-01-05T03:00:00.000Z",
+    planned_hours: 3,
+    actual_hours: null,
+    performed_on: null,
+    consumes_capacity: true,
+    quantity: null,
+    memo: null,
+    updated_at: "2026-01-01T00:00:00.000Z",
+    work_types: { key: "sanding", label: "研磨", color: "#8d6e63" },
+    ...overrides,
+  };
+}
+
+const CONNECTED_GOOGLE = { ok: true as const, value: { provider: "google" as const, status: "connected" as const } };
+
+describe("createSchedulingFacade().placeBlock — カレンダー同期", () => {
+  it("配置成功後、接続済み google の links を pending_push で upsert する", async () => {
+    getWorkBlockByIdMock.mockResolvedValue(scheduledBlockRow({ status: "backlog", starts_at: null, ends_at: null }));
+    updateWorkBlockPlacementMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    const facade = createSchedulingFacade();
+    const result = await facade.placeBlock(
+      "block-1",
+      "2026-01-05T00:00:00.000Z",
+      "2026-01-05T03:00:00.000Z",
+      "2026-01-01T00:00:00.000Z",
+    );
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "block-1", "google");
+  });
+
+  it("未接続の場合は upsert しない (placeBlock 自体は成功する)", async () => {
+    getWorkBlockByIdMock.mockResolvedValue(scheduledBlockRow({ status: "backlog", starts_at: null, ends_at: null }));
+    updateWorkBlockPlacementMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue({ ok: true, value: null });
+    const facade = createSchedulingFacade();
+    const result = await facade.placeBlock(
+      "block-1",
+      "2026-01-05T00:00:00.000Z",
+      "2026-01-05T03:00:00.000Z",
+      "2026-01-01T00:00:00.000Z",
+    );
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(upsertPendingPushLinkMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("createSchedulingFacade().createBlock — 配置ありで直接 scheduled 作成時のカレンダー同期", () => {
+  it("starts_at 非NULL (直接 scheduled 作成) は接続済み google の links を pending_push で upsert する", async () => {
+    getWorkTypeSnapshotMock.mockResolvedValue({ consumes_capacity: true });
+    insertWorkBlockMock.mockResolvedValue({ id: "block-2", updated_at: "2026-01-01T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    const facade = createSchedulingFacade();
+    const result = await facade.createBlock({
+      deal_id: DEAL_ID,
+      work_type_id: WORK_TYPE_ID,
+      title: "研磨",
+      starts_at: "2026-01-05T00:00:00.000Z",
+      ends_at: "2026-01-05T03:00:00.000Z",
+      planned_hours: 3,
+      memo: null,
+    });
+    expect(result).toEqual({ ok: true, value: { block_id: "block-2" } });
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "block-2", "google");
+  });
+
+  it("starts_at NULL (backlog 作成) は upsert しない", async () => {
+    getWorkTypeSnapshotMock.mockResolvedValue({ consumes_capacity: true });
+    insertWorkBlockMock.mockResolvedValue({ id: "block-3", updated_at: "2026-01-01T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    const facade = createSchedulingFacade();
+    const result = await facade.createBlock({
+      deal_id: DEAL_ID,
+      work_type_id: WORK_TYPE_ID,
+      title: "研磨",
+      starts_at: null,
+      ends_at: null,
+      planned_hours: 3,
+      memo: null,
+    });
+    expect(result).toEqual({ ok: true, value: { block_id: "block-3" } });
+    expect(upsertPendingPushLinkMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("createSchedulingFacade().unscheduleBlock — カレンダー同期", () => {
+  it("未配置化に成功したら、接続済み google の links を削除マーク (pending_push) する", async () => {
+    getWorkBlockByIdMock.mockResolvedValue(scheduledBlockRow());
+    unscheduleWorkBlockMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    const facade = createSchedulingFacade();
+    const result = await facade.unscheduleBlock("block-1", "2026-01-01T00:00:00.000Z");
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "block-1", "google");
+  });
+});
+
+describe("createSchedulingFacade().transitionBlock — カレンダー同期", () => {
+  it("'cancelled' への遷移成功時は、接続済み google の links を削除マークする", async () => {
+    getWorkBlockByIdMock.mockResolvedValue(scheduledBlockRow());
+    transitionWorkBlockStatusMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    const facade = createSchedulingFacade();
+    const result = await facade.transitionBlock("block-1", "cancelled", "2026-01-01T00:00:00.000Z");
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "block-1", "google");
+  });
+
+  it("'in_progress' への遷移は upsert しない (配置内容は変わらないため再送不要)", async () => {
+    getWorkBlockByIdMock.mockResolvedValue(scheduledBlockRow());
+    transitionWorkBlockStatusMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    const facade = createSchedulingFacade();
+    const result = await facade.transitionBlock("block-1", "in_progress", "2026-01-01T00:00:00.000Z");
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(upsertPendingPushLinkMock).not.toHaveBeenCalled();
+  });
+
+  it("backlog→cancelled (元々 starts_at NULL) は upsert しない (外部イベントが存在し得ないため)", async () => {
+    getWorkBlockByIdMock.mockResolvedValue(scheduledBlockRow({ status: "backlog", starts_at: null, ends_at: null }));
+    transitionWorkBlockStatusMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    const facade = createSchedulingFacade();
+    const result = await facade.transitionBlock("block-1", "cancelled", "2026-01-01T00:00:00.000Z");
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(upsertPendingPushLinkMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("createSchedulingFacade().cancelOpenBlocksForDeal — カレンダー同期", () => {
+  it("scheduled 由来のブロックのみ pending_push を upsert する (backlog 由来は対象外)", async () => {
+    cancelOpenWorkBlocksForDealMock.mockResolvedValue({ cancelled: 2, scheduledBlockIds: ["block-sched-1"] });
+    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    const facade = createSchedulingFacade();
+    const result = await facade.cancelOpenBlocksForDeal(DEAL_ID);
+    expect(result).toEqual({ ok: true, value: { cancelled: 2 } });
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledTimes(1);
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "block-sched-1", "google");
+  });
+
+  it("scheduled 由来のブロックが無ければ upsert しない", async () => {
+    cancelOpenWorkBlocksForDealMock.mockResolvedValue({ cancelled: 1, scheduledBlockIds: [] });
+    getCalendarConnectionMock.mockResolvedValue(CONNECTED_GOOGLE);
+    const facade = createSchedulingFacade();
+    const result = await facade.cancelOpenBlocksForDeal(DEAL_ID);
+    expect(result).toEqual({ ok: true, value: { cancelled: 1 } });
+    expect(upsertPendingPushLinkMock).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// #54 敵対レビュー MAJOR 修正の回帰テスト: runCalendarMaintenance の work_log 再送
+// (03-scheduling.md §8.8 — 「滞留警告」のみが Phase 5 明記、work_log 再送は v1 必須)。
+// ============================================================================
+
+describe("createSchedulingFacade().runCalendarMaintenance — work_log 再送", () => {
+  function doneBlockRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "block-done-1",
+      deal_id: DEAL_ID,
+      source_document_id: null,
+      work_type_id: WORK_TYPE_ID,
+      title: null,
+      status: "done" as const,
+      starts_at: "2026-01-05T00:00:00.000Z",
+      ends_at: "2026-01-05T03:00:00.000Z",
+      planned_hours: 3,
+      actual_hours: 3,
+      performed_on: "2026-01-05",
+      consumes_capacity: true,
+      quantity: null,
+      memo: null,
+      updated_at: "2026-01-05T03:00:00.000Z",
+      work_types: { key: "sanding", label: "研磨", color: "#8d6e63" },
+      ...overrides,
+    };
+  }
+
+  it("直近7日の done ブロック (deal_id 非NULL) へ appendActivity を冪等再送する (service ctx)", async () => {
+    getCalendarConnectionMock.mockResolvedValue({ ok: true, value: null }); // provider ループは即 continue
+    getRecentDoneBlocksForWorkLogResendMock.mockResolvedValue([doneBlockRow()]);
+    appendActivityMock.mockResolvedValue({ ok: true, value: { activity_id: "act-1", created: false } });
+    const facade = createSchedulingFacade();
+    const result = await facade.runCalendarMaintenance({ mode: "service" });
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(appendActivityMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activity_type: "work_log",
+        ref_table: "work_blocks",
+        ref_id: "block-done-1",
+        links: [{ customer_id: null, company_id: null, deal_id: DEAL_ID }],
+      }),
+      { mode: "service", client: FAKE_SERVICE_CLIENT },
+    );
+  });
+
+  it("appendActivity が失敗しても runCalendarMaintenance 自体は ok:true を返す (E902 ログのみ)", async () => {
+    getCalendarConnectionMock.mockResolvedValue({ ok: true, value: null });
+    getRecentDoneBlocksForWorkLogResendMock.mockResolvedValue([doneBlockRow({ id: "block-done-2" })]);
+    appendActivityMock.mockResolvedValue({ ok: false, code: "KMB-E901", detail: "db down" });
+    const facade = createSchedulingFacade();
+    const result = await facade.runCalendarMaintenance({ mode: "service" });
+    expect(result).toEqual({ ok: true, value: undefined });
   });
 });

@@ -26,7 +26,12 @@ import {
   zTaskStatus,
 } from "@/modules/crm/contracts";
 import { DOC_NO_PREFIX, zDocType, zDocumentStatus, zPaymentInput } from "@/modules/sales/contracts";
-import { zWorkBlockStatus } from "@/modules/scheduling/contracts";
+import {
+  zCalendarConnectionStatus,
+  zCalendarProvider,
+  zEventLinkSyncStatus,
+  zWorkBlockStatus,
+} from "@/modules/scheduling/contracts";
 import {
   zCallDirection,
   zCallHandling,
@@ -358,6 +363,27 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
   it("work_blocks.status ↔ scheduling の zWorkBlockStatus", () => {
     const expected = [...zWorkBlockStatus.options].sort();
     const actual = findCheck(checks, "work_blocks", "status").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  // ---- scheduling (#54: migration 20260711000030_calendar_sync.sql) ----
+  it("calendar_connections.provider / calendar_event_links.provider ↔ scheduling の zCalendarProvider", () => {
+    const expected = [...zCalendarProvider.options].sort();
+    for (const table of ["calendar_connections", "calendar_event_links"]) {
+      const actual = findCheck(checks, table, "provider").sort();
+      expect(actual).toEqual(expected);
+    }
+  });
+
+  it("calendar_connections.status ↔ scheduling の zCalendarConnectionStatus", () => {
+    const expected = [...zCalendarConnectionStatus.options].sort();
+    const actual = findCheck(checks, "calendar_connections", "status").sort();
+    expect(actual).toEqual(expected);
+  });
+
+  it("calendar_event_links.sync_status ↔ scheduling の zEventLinkSyncStatus", () => {
+    const expected = [...zEventLinkSyncStatus.options].sort();
+    const actual = findCheck(checks, "calendar_event_links", "sync_status").sort();
     expect(actual).toEqual(expected);
   });
 
