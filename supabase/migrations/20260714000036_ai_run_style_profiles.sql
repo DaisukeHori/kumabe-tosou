@@ -84,6 +84,10 @@ where style_profiles = '{}'::jsonb;
 -- ---------------------------------------------------------
 -- 2) ai_run_acquire_lease (migration 20260710000019 定義の create or replace)
 -- ---------------------------------------------------------
+-- CREATE OR REPLACE FUNCTION は RETURNS TABLE (OUT パラメータ) の行型を変更できないため
+-- (42P13: cannot change return type of existing function)、先に既存定義を drop する。
+drop function if exists public.ai_run_acquire_lease(uuid);
+
 create or replace function public.ai_run_acquire_lease(p_run_id uuid)
 returns table (
   id uuid,
