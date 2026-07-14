@@ -727,6 +727,7 @@ export const crmFacade: CrmFacadeExtended = {
               address: customer.value.address,
               notes: customer.value.notes,
               lifecycle: "customer",
+              custom_fields: customer.value.custom_fields,
             },
             customer.value.updated_at,
           );
@@ -1104,6 +1105,7 @@ export const crmFacade: CrmFacadeExtended = {
         company_id: c.company_id,
         merged_into_customer_id: c.merged_into_customer_id,
         created_by: c.created_by,
+        custom_fields: c.custom_fields, // #98 追加
       };
       return { ok: true, value: detail };
     } catch (err) {

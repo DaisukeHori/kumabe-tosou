@@ -73,6 +73,7 @@ export function CustomerDetailActions({ customer }: { customer: CustomerDetail }
         address: customer.address,
         notes: customer.notes,
         lifecycle: "archived",
+        custom_fields: customer.custom_fields,
       },
       customer.updated_at,
     );
