@@ -36,7 +36,11 @@ export function CreateBlockDialog({
   workTypes: WorkTypeRow[];
   onCreated: () => void;
   /** `?create_deal_id=` からの深いリンク seed (Issue #96 設計 §D)。open 時リセットの
-   *  useEffect で dealId/dealLabel の初期値として使う。 */
+   *  useEffect で dealId/dealLabel の初期値として使う。
+   *  【契約】呼び出し側 (calendar-board.tsx) が「一度きり」を保証する — Dialog が閉じたら
+   *  呼び出し側で null に戻す。本コンポーネント自身は open が true になるたび無条件に
+   *  この値を採用するだけなので、呼び出し側がこの契約を破ると (例: 同じ値を渡し続けると)
+   *  無関係なブロック作成のたびに前回の案件が誤って紐付いてしまう。 */
   initialDeal?: { id: string; label: string } | null;
 }) {
   const [isPending, startTransition] = useTransition();

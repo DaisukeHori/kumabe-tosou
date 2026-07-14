@@ -70,6 +70,22 @@ describe("DealWorkSummaryCard", () => {
     expect(html).toContain("db down");
   });
 
+  it("documentsResult 取得失敗時は code/detail を表示し、誘導文で偽装しない (ボタンも出さない)", () => {
+    const html = renderToStaticMarkup(
+      createElement(DealWorkSummaryCard, {
+        dealId: DEAL_ID,
+        dealStage: "ordered",
+        workSummaryResult: { ok: true, value: makeSummary() },
+        documentsResult: { ok: false, code: "KMB-E901", detail: "db timeout" },
+      }),
+    );
+    expect(html).toContain("KMB-E901");
+    expect(html).toContain("db timeout");
+    expect(html).not.toContain("作業ブロックを用意");
+    expect(html).not.toContain("受注後に、受注書の明細から自動で用意できます。");
+    expect(html).not.toContain("受注書を発行すると、明細から作業ブロックを自動で用意できます。");
+  });
+
   it("未受注 (inquiry) かつ帳票/ブロック0件は「受注後に」の誘導文のみ (ボタンは出さない)", () => {
     const html = renderToStaticMarkup(
       createElement(DealWorkSummaryCard, {

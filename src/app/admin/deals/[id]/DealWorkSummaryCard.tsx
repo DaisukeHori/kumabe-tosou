@@ -17,6 +17,10 @@ const VISIBLE_BLOCK_LIMIT = 5;
  * `schedulingFacade.getDealWorkSummary(id)` の予実サマリー+ブロック一覧に加え、issued/accepted の
  * 受注書があれば `GenerateBlocksButton` (document-detail.tsx から抽出した共用部品) を表示する
  * (帳票が複数ある場合は doc_no を添えて複数ボタン)。
+ *
+ * documentsResult が ok:false のときは generatableDocs を空配列に倒すだけでなく、DealDocumentsCard
+ * (隣接カード) と同じく code+detail を明示表示する。取得失敗を「受注後に…」「受注書を発行すると…」
+ * の誘導文で偽装しない (Result を握り潰さない、レビュー観点1)。
  */
 export function DealWorkSummaryCard({
   dealId,
@@ -44,6 +48,12 @@ export function DealWorkSummaryCard({
       {!workSummaryResult.ok && (
         <p className="text-sm text-destructive">
           取得に失敗しました ({workSummaryResult.code}): {workSummaryResult.detail}
+        </p>
+      )}
+
+      {!documentsResult.ok && (
+        <p className="text-sm text-destructive">
+          帳票の取得に失敗しました ({documentsResult.code}): {documentsResult.detail}
         </p>
       )}
 
@@ -79,7 +89,7 @@ export function DealWorkSummaryCard({
         </div>
       )}
 
-      {generatableDocs.length === 0 && blocks.length === 0 && (
+      {documentsResult.ok && generatableDocs.length === 0 && blocks.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {isWon ? (
             <>
