@@ -24,7 +24,13 @@ function emptyToNull(value: FormDataEntryValue | null): string | null {
   return s.length === 0 ? null : s;
 }
 
-async function submitSettingsForm<K extends SettingsKey>(
+/**
+ * #59 (telephony 画面): calls/actions.ts の saveTelephonySettingsAction / saveBusinessHoursAction が
+ * 本ヘルパーを再利用するため export 化した (計画書 issue-59.md 未解決点#1 のデフォルト方針 —
+ * canonical 04-telephony.md §7.4 が Server Actions の実装場所を `src/app/admin/calls/actions.ts` と
+ * 明記しているため、フォーム描画は settings 配下でも保存アクションの本体は calls/actions.ts に置く)。
+ */
+export async function submitSettingsForm<K extends SettingsKey>(
   key: K,
   schema: z.ZodType<SettingsValue<K>>,
   raw: unknown,

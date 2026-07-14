@@ -89,6 +89,60 @@ export type CallListItem = {
   started_at: string;
 };
 
+/**
+ * 通話詳細の読み取りビュー型 (04-telephony.md §7.2「CallDetail は読み取りビュー型 —
+ * Zod 化しない (§4.9 既存規約)」)。#59 で新規追加 — canonical にコードブロック明記が無いため
+ * §8.2 (通話詳細画面の 8 セクション) から逆算して組み立てた (計画書 issue-59.md 「未解決点 #4」)。
+ * ヘッダ/コスト内訳 (§8.2-1)・音声プレイヤー (§8.2-2)・議事録カード/全文タブ (§8.2-3/5)・
+ * 処理状態フッタ (§8.2-7)・メモ欄 (§8.2-8) の表示に必要な列を network 1 往復ぶんに集約する。
+ * 起票タスク一覧 (§8.2-4) は jobs[].link_result.task_ids から呼び出し側 (app 層) が
+ * CrmFacade 経由で解決する (telephony facade は task_id の配列を返すところまでが責務 —
+ * タスク本体は crm 所有のため facade をまたいだ二重解決をここでは行わない)。
+ */
+export type CallDetail = {
+  call: CallListItem & {
+    memo: string | null;
+    match_status: CallMatchStatus;
+    twilio_cost_estimate_micro_usd: number;
+    ai_cost_micro_usd: number;
+    updated_at: string;
+  };
+  recordings: Array<{
+    id: string;
+    source: CallRecordingSource;
+    duration_seconds: number;
+    /** null = ダウンロード未完了 (§7.1 createRecordingPlaybackUrl の E805 判定対象)。 */
+    storage_path: string | null;
+  }>;
+  jobs: Array<{
+    id: string;
+    status: CallJobStatus;
+    error_code: string | null;
+    transcript: CallTranscript | null;
+    analysis: CallAnalysis | null;
+    link_result: CallJobLinkResult | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+};
+
+/**
+ * /admin/calls 一覧専用の表示補助型 (04-telephony.md §8.1: 「要約冒頭40字」「要確認バッジ
+ * (match_status='ambiguous')」「処理状態 (JobStatusBadge + failed は error_code ツールチップ)」)。
+ *
+ * 【判断根拠 — レビュー指摘対応】CallListItem (直上ブロック — D7 §4.13 一字一句写経) はそのまま
+ * 維持し、一覧固有の追加列は CallDetail (すぐ上の型) と同じパターンで別型として合成する
+ * (契約外拡張 — telephony/facade.ts の listCalls も D8 に無い契約外拡張メソッドのため、
+ * その戻り値型をこの型へ差し替えても D8/D7 のいずれにも抵触しない。他モジュールからの
+ * 参照は禁止)。job_error_code/summary_preview は job_status と同じ「最新 job (created_at 最大)」
+ * から採る (§8.1 の「処理状態」列との一貫性)。
+ */
+export type CallListItemView = CallListItem & {
+  match_status: CallMatchStatus;
+  job_error_code: string | null;
+  summary_preview: string | null;
+};
+
 /* 型 alias (v1.2 — D8 参照分) */
 export type CallDirection = z.infer<typeof zCallDirection>;
 export type CallHandling = z.infer<typeof zCallHandling>;
