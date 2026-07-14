@@ -10,7 +10,10 @@ import { platformFacade } from "@/modules/platform/facade";
 import {
   zActualInput,
   zBlockTransition,
+  zCalendarProvider,
   zCalendarRangeQuery,
+  zExternalDeletionResolution,
+  zOrphanedLinkResolution,
   zProposePlacementInput,
   zUpdateWorkBlockInput,
   zWorkBlockInput,
@@ -18,7 +21,11 @@ import {
   zWorkTypeInput,
   type ActualInput,
   type BlockTransition,
+  type CalendarProvider,
   type CalendarRangeQuery,
+  type CalendarSyncReport,
+  type ExternalDeletionResolution,
+  type OrphanedLinkResolution,
   type PlacementProposal,
   type ProposePlacementInput,
   type UpdateWorkBlockInput,
@@ -34,14 +41,15 @@ import { createSchedulingFacade } from "@/modules/scheduling/facade";
  * /admin/calendar 系の Server Actions (03-scheduling.md §9.2)。
  * 全 Action の先頭で requireAdmin() + Zod parse を必須とする (契約書 §3.5 / 既存規約)。
  * calendar_connections/calendar_event_links 前提の Action (disconnectCalendarAction 等) は
- * migration 0030 を追加する #54 の担当のため、この Issue (#53) では未実装。
+ * #54 (migration 0030) で追加する。
  *
- * 【計画書からの逸脱】計画書は「actions.ts は export const maxDuration = 60 を明示」と
- * 指示しているが、実測 (`npm run build`) で Next.js 15 が
- * 「"use server" ファイルは async 関数以外を export できない」でビルドを拒否することを確認した。
- * requestSyncNowAction 自体が #54 スコープ (この Issue には存在しない) であり、
- * この Issue で追加する Action はいずれも DB 操作数件で完結し既定のタイムアウトで十分なため、
- * ビルドを壊してまで指示に従う理由がない (安全側の判断 — 機能を壊さないことを優先)。
+ * 【計画書からの逸脱を踏襲】計画書 (#53/#54 いずれも) は「actions.ts は export const
+ * maxDuration = 60 を明示」と指示しているが、#53 が実測 (`npm run build`) で Next.js 15 が
+ * 「"use server" ファイルは async 関数以外を export できない」でビルドを拒否することを確認済み
+ * (直上のコミット履歴参照)。requestSyncNowAction (push 5 links + pull 5 ページ/provider の
+ * 縮小上限 — facade 側の MANUAL_SYNC_PUSH_LIMIT/MANUAL_SYNC_PULL_PAGES) を含め、この Issue で
+ * 追加する Action もいずれも既定のタイムアウトで十分なため、ビルドを壊してまで指示に従う
+ * 理由がない (#53 の判断をそのまま踏襲— 安全側・機能を壊さないことを優先)。
  */
 const schedulingFacade = createSchedulingFacade();
 
@@ -293,4 +301,83 @@ export async function searchDealsForCalendarAction(q: string): Promise<Result<De
   );
   if (!page.ok) return page;
   return { ok: true, value: page.value.items };
+}
+
+// ---- 外部カレンダー接続管理 / 同期運用 (#54, §9.2) ----
+
+export async function disconnectCalendarAction(provider: CalendarProvider): Promise<Result<void>> {
+  const admin = await ensureAdmin();
+  if (!admin.ok) return admin;
+  const parsed = zCalendarProvider.safeParse(provider);
+  if (!parsed.success) {
+    return { ok: false, code: "KMB-E101", detail: parsed.error.issues.map((i) => i.message).join(" / ") };
+  }
+  const result = await schedulingFacade.disconnectCalendar(parsed.data);
+  if (result.ok) revalidatePath("/admin/calendar/connections");
+  return result;
+}
+
+export async function resolveExternalDeletionAction(
+  linkId: string,
+  action: ExternalDeletionResolution,
+): Promise<Result<void>> {
+  const admin = await ensureAdmin();
+  if (!admin.ok) return admin;
+  const parsed = zExternalDeletionResolution.safeParse(action);
+  if (!parsed.success) {
+    return { ok: false, code: "KMB-E101", detail: parsed.error.issues.map((i) => i.message).join(" / ") };
+  }
+  const result = await schedulingFacade.resolveExternalDeletion(linkId, parsed.data);
+  if (result.ok) {
+    revalidatePath("/admin/calendar/connections");
+    revalidatePath("/admin/calendar");
+  }
+  return result;
+}
+
+export async function reconcilePushUnknownAction(linkId: string): Promise<Result<{ resolved: boolean }>> {
+  const admin = await ensureAdmin();
+  if (!admin.ok) return admin;
+  const result = await schedulingFacade.reconcilePushUnknown(linkId);
+  if (result.ok) revalidatePath("/admin/calendar/connections");
+  return result;
+}
+
+export async function resendConflictedLinkAction(linkId: string): Promise<Result<void>> {
+  const admin = await ensureAdmin();
+  if (!admin.ok) return admin;
+  const result = await schedulingFacade.resendConflictedLink(linkId);
+  if (result.ok) revalidatePath("/admin/calendar/connections");
+  return result;
+}
+
+export async function resolveOrphanedLinkAction(
+  linkId: string,
+  action: OrphanedLinkResolution,
+): Promise<Result<void>> {
+  const admin = await ensureAdmin();
+  if (!admin.ok) return admin;
+  const parsed = zOrphanedLinkResolution.safeParse(action);
+  if (!parsed.success) {
+    return { ok: false, code: "KMB-E101", detail: parsed.error.issues.map((i) => i.message).join(" / ") };
+  }
+  const result = await schedulingFacade.resolveOrphanedLink(linkId, parsed.data);
+  if (result.ok) {
+    revalidatePath("/admin/calendar/connections");
+    revalidatePath("/admin/calendar");
+  }
+  return result;
+}
+
+export async function requestSyncNowAction(): Promise<
+  Result<{ reports: CalendarSyncReport[]; skipped_running: boolean }>
+> {
+  const admin = await ensureAdmin();
+  if (!admin.ok) return admin;
+  const result = await schedulingFacade.requestSyncNow();
+  if (result.ok) {
+    revalidatePath("/admin/calendar/connections");
+    revalidatePath("/admin/calendar");
+  }
+  return result;
 }

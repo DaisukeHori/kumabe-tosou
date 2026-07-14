@@ -2,18 +2,22 @@
 -- scheduling (#52): work_types/work_templates/work_template_items/work_blocks の
 --   RLS (0015パターン: anon全拒否 / admin 4操作可 / service bypass) + seed 5件冪等性 +
 --   site_settings.work_capacity バックフィル存在確認、結合検証 (再現可能アーティファクト — 未実行)
+-- 追加 (#54): ⑧〜⑪ calendar_connections / calendar_event_links の RLS
+--   (admin全権 for connections / authenticated書込拒否 for links / anon拒否 / service bypass)。
+--   受入基準 C2 の核心 (calendar_event_links の authenticated 書込拒否) を検証する。
 --
 -- canonical:
 --   - docs/design/crm-suite/03-scheduling.md §2.2 (migration 20260711000029_scheduling_core.sql 全文)
+--   - docs/design/crm-suite/03-scheduling.md §2.3 (migration 20260711000030_calendar_sync.sql 全文。#54)
 --   - docs/design/crm-suite/03-scheduling.md §4.2 (RLS テーブル認可マトリクス)
 --   - docs/design/crm-suite/03-scheduling.md §13.2 (テストファイル×子Issue対応)
---   - 実装計画書 (scratchpad/plans/issue-52.md) §「テスト戦略」§「結合」
+--   - 実装計画書 (scratchpad/plans/issue-52.md / issue-54.md) §「テスト戦略」§「結合」
 --
 -- ★ 本ファイルはこのセッションでは一度も実行していない (docker 無し / migration
---   20260711000029_scheduling_core.sql が本番へ未適用のため実行環境が無い。加えて本 migration は
---   0023_crm_core.sql (deals) と 0026_sales_core.sql (documents) に依存するため、#42/#48 の
---   本番適用後でないと適用不可)。
---   migration 0021〜0026/0029 を本番 (Supabase) に手動 apply した後、Supabase MCP の
+--   20260711000029_scheduling_core.sql・20260711000030_calendar_sync.sql が本番へ未適用のため
+--   実行環境が無い。0029 は 0023_crm_core.sql (deals) と 0026_sales_core.sql (documents) に、
+--   0030 は 0029 (work_blocks) に依存するため、#42/#48/#52 の本番適用後でないと適用不可)。
+--   migration 0021〜0026/0029/0030 を本番 (Supabase) に手動 apply した後、Supabase MCP の
 --   execute_sql ツールに本ファイルの内容をそのまま渡して実行し、末尾の scheduling_test_log の
 --   結果 (全行 passed=true) で検証すること。
 --
@@ -582,6 +586,282 @@ exception
   when others then
     insert into scheduling_test_log (section, check_name, passed, detail)
       values ('⑦FK違反', 'work_type FK違反確認 (予期せぬ失敗)', false, format('FAIL: %s', sqlerrm));
+    reset role;
+end $$;
+
+-- =========================================================
+-- ⑧〜⑪: calendar_connections / calendar_event_links の RLS (#54: migration
+--   20260711000030_calendar_sync.sql §4.2 認可マトリクス)。実装計画書「テスト戦略」§結合
+--   「tests/scheduling-rls.integration.test.ts (既存ファイル拡張): calendar_connections/
+--   calendar_event_links 分を追加 (admin全権 for connections / authenticated書込拒否 for links、
+--   3クライアント検証)」への対応。
+--
+--   地雷 (最重要): calendar_event_links は admin であっても INSERT/UPDATE/DELETE ポリシーが
+--   一切無く (grant 自体を revoke している)、service_role のみが書ける設計 (§8.3 の repository
+--   関数が全て serviceClient を要求する根拠そのもの)。⑨で「admin (authenticated) の書込が
+--   permission denied になること」を明示的に確認する — ここが緩んでいると、admin セッション
+--   経由の facade メソッドが誤って calendar_event_links に直接書こうとした際に検出できない。
+--
+--   provider は 'google'/'microsoft' の2値しか存在しない (合成テスト用キーを作れない)。
+--   'microsoft' は #55 (Microsoft 実装) まで未使用のため実運用データと衝突するリスクが低いが、
+--   トランザクション全体を最終的に ROLLBACK するため 'google' を使っても実害は無い。ここでは
+--   実運用 (#54 適用後に実際に Google 接続済みの可能性がある) との混同を避けるため 'microsoft'
+--   を主に使う。
+-- =========================================================
+
+-- ⑧ admin (authenticated + is_admin()): calendar_connections への SELECT/INSERT/UPDATE/DELETE
+--    4操作すべてが行えること (§4.2 admin 全権)
+do $$
+declare
+  v_admin_id uuid;
+  v_selected_count int;
+begin
+  select id into v_admin_id from scheduling_test_fixture where key = 'admin';
+  if v_admin_id is null then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑧calendar_connections-admin全権', 'admin: calendar_connections SELECT/INSERT/UPDATE/DELETE が一通り行えること', true,
+              'SKIPPED: 管理者行なし');
+    return;
+  end if;
+
+  execute 'set local role authenticated';
+  perform set_config('request.jwt.claims', format('{"role":"authenticated","sub":"%s"}', v_admin_id::text), true);
+
+  insert into calendar_connections (provider, status, vault_secret_name, meta)
+    values ('microsoft', 'disconnected', null, '{}'::jsonb)
+    on conflict (provider) do update set status = excluded.status;
+
+  select count(*) into v_selected_count from calendar_connections where provider = 'microsoft';
+
+  update calendar_connections set last_error_detail = '__scheduling_test__ 更新後' where provider = 'microsoft';
+
+  delete from calendar_connections where provider = 'microsoft';
+
+  if v_selected_count = 1 and not exists (select 1 from calendar_connections where provider = 'microsoft') then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑧calendar_connections-admin全権', 'admin: calendar_connections SELECT/INSERT/UPDATE/DELETE が一通り行えること', true,
+              'OK: 4 操作とも成功');
+  else
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑧calendar_connections-admin全権', 'admin: calendar_connections SELECT/INSERT/UPDATE/DELETE が一通り行えること', false,
+              'FAIL: いずれかの操作が反映されていない');
+  end if;
+
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+exception
+  when others then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑧calendar_connections-admin全権', 'admin: calendar_connections 4操作確認 (予期せぬ失敗)', false, format('FAIL: %s', sqlerrm));
+    reset role;
+end $$;
+
+-- ⑨ calendar_event_links: admin (authenticated) は SELECT のみ許可、INSERT/UPDATE/DELETE は
+--    permission denied になること (§4.2 核心 — 受入基準 C2「authenticated 書込拒否」)
+do $$
+declare
+  v_admin_id uuid;
+  v_deal_id uuid;
+  v_work_type_id uuid;
+  v_block_id uuid;
+  v_link_id uuid;
+begin
+  select id into v_admin_id from scheduling_test_fixture where key = 'admin';
+  select id into v_deal_id from scheduling_test_fixture where key = 'deal';
+  select id into v_work_type_id from scheduling_test_fixture where key = 'work_type_sanding';
+  if v_admin_id is null or v_work_type_id is null then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑨calendar_event_links-authenticated書込拒否', 'admin: calendar_event_links は SELECT 可・INSERT/UPDATE/DELETE 不可であること', true,
+              'SKIPPED: 管理者行または sanding 種別が無い環境');
+    return;
+  end if;
+
+  -- フィクスチャ準備 (service_role — calendar_connections 'google' 行 + work_block + link 1件)
+  execute 'set local role service_role';
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+  insert into calendar_connections (provider, status, vault_secret_name, meta)
+    values ('google', 'connected', 'calendar_google_oauth', '{}'::jsonb)
+    on conflict (provider) do update set status = 'connected';
+
+  insert into work_blocks (deal_id, work_type_id, title, starts_at, ends_at, planned_hours, consumes_capacity, status)
+    values (v_deal_id, v_work_type_id, '__scheduling_test__ RLS用ブロック',
+            '2026-08-01T00:00:00+00:00', '2026-08-01T03:00:00+00:00', 3, true, 'scheduled')
+    returning id into v_block_id;
+
+  insert into calendar_event_links (work_block_id, provider, sync_status)
+    values (v_block_id, 'google', 'pending_push')
+    returning id into v_link_id;
+
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+
+  -- 本検証: authenticated (admin) ロールで SELECT/INSERT/UPDATE/DELETE を試す
+  execute 'set local role authenticated';
+  perform set_config('request.jwt.claims', format('{"role":"authenticated","sub":"%s"}', v_admin_id::text), true);
+
+  declare
+    v_select_ok boolean := false;
+    v_insert_denied boolean := false;
+    v_update_denied boolean := false;
+    v_delete_denied boolean := false;
+  begin
+    perform 1 from calendar_event_links where id = v_link_id;
+    v_select_ok := true;
+  exception
+    when others then
+      v_select_ok := false;
+  end;
+
+  begin
+    -- provider='google' (unique(work_block_id,provider) 的にはこの block に既に 'google' の
+    -- link が存在するため本来 23503/23505 級の制約違反にもなり得るが、grant 自体が revoke
+    -- 済みのため権限チェックが制約評価より先に働き insufficient_privilege になる想定
+    -- (PostgreSQL は ACL チェックを実行計画の早い段階で行う)。
+    insert into calendar_event_links (work_block_id, provider, sync_status) values (v_block_id, 'google', 'pending_push');
+    v_insert_denied := false;
+  exception
+    when insufficient_privilege then
+      v_insert_denied := true;
+  end;
+
+  begin
+    update calendar_event_links set sync_status = 'conflict' where id = v_link_id;
+    v_update_denied := false;
+  exception
+    when insufficient_privilege then
+      v_update_denied := true;
+  end;
+
+  begin
+    delete from calendar_event_links where id = v_link_id;
+    v_delete_denied := false;
+  exception
+    when insufficient_privilege then
+      v_delete_denied := true;
+  end;
+
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+
+  if v_select_ok and v_insert_denied and v_update_denied and v_delete_denied then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑨calendar_event_links-authenticated書込拒否', 'admin: calendar_event_links は SELECT 可・INSERT/UPDATE/DELETE 不可であること', true,
+              format('OK: select=%s insert_denied=%s update_denied=%s delete_denied=%s',
+                v_select_ok, v_insert_denied, v_update_denied, v_delete_denied));
+  else
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑨calendar_event_links-authenticated書込拒否', 'admin: calendar_event_links は SELECT 可・INSERT/UPDATE/DELETE 不可であること', false,
+              format('FAIL: select=%s insert_denied=%s update_denied=%s delete_denied=%s (期待は全て true)',
+                v_select_ok, v_insert_denied, v_update_denied, v_delete_denied));
+  end if;
+
+  -- 後片付け (service_role)
+  execute 'set local role service_role';
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  delete from calendar_event_links where id = v_link_id;
+  delete from work_blocks where id = v_block_id;
+  delete from calendar_connections where provider = 'google' and status = 'connected'
+    and vault_secret_name = 'calendar_google_oauth' and last_error_code is null and sync_token is null;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+exception
+  when others then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑨calendar_event_links-authenticated書込拒否', 'calendar_event_links 書込拒否確認 (予期せぬ失敗)', false, format('FAIL: %s', sqlerrm));
+    reset role;
+end $$;
+
+-- ⑩ anon: calendar_connections / calendar_event_links いずれも permission denied (grant 自体が無い)
+do $$
+begin
+  execute 'set local role anon';
+  perform set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+  begin
+    perform count(*) from calendar_connections;
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑩anon拒否', 'anon: calendar_connections SELECT は permission denied を期待', false, 'FAIL: anon が実行できてしまった');
+  exception
+    when insufficient_privilege then
+      insert into scheduling_test_log (section, check_name, passed, detail)
+        values ('⑩anon拒否', 'anon: calendar_connections SELECT は permission denied を期待', true, 'OK: permission denied (42501)');
+  end;
+
+  begin
+    perform count(*) from calendar_event_links;
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑩anon拒否', 'anon: calendar_event_links SELECT は permission denied を期待', false, 'FAIL: anon が実行できてしまった');
+  exception
+    when insufficient_privilege then
+      insert into scheduling_test_log (section, check_name, passed, detail)
+        values ('⑩anon拒否', 'anon: calendar_event_links SELECT は permission denied を期待', true, 'OK: permission denied (42501)');
+  end;
+
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+exception
+  when others then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑩anon拒否', 'anon 拒否確認 (ロール切替等の予期せぬ失敗)', false, format('FAIL: %s', sqlerrm));
+    reset role;
+end $$;
+
+-- ⑪ service_role: calendar_event_links への INSERT/UPDATE/DELETE が RLS bypass で成功すること
+--    (worker / facade 内部の serviceClient 経路が機能する前提の確認)
+do $$
+declare
+  v_deal_id uuid;
+  v_work_type_id uuid;
+  v_block_id uuid;
+  v_link_id uuid;
+begin
+  select id into v_deal_id from scheduling_test_fixture where key = 'deal';
+  select id into v_work_type_id from scheduling_test_fixture where key = 'work_type_sanding';
+  if v_work_type_id is null then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑪service bypass-calendar_event_links', 'service_role: calendar_event_links への INSERT/UPDATE/DELETE が RLS bypass で成功する', true,
+              'SKIPPED: sanding 種別が無い環境');
+    return;
+  end if;
+
+  execute 'set local role service_role';
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+  insert into calendar_connections (provider, status, vault_secret_name, meta)
+    values ('google', 'connected', 'calendar_google_oauth', '{}'::jsonb)
+    on conflict (provider) do update set status = 'connected';
+
+  insert into work_blocks (deal_id, work_type_id, title, starts_at, ends_at, planned_hours, consumes_capacity, status)
+    values (v_deal_id, v_work_type_id, '__scheduling_test__ service bypass用ブロック',
+            '2026-08-02T00:00:00+00:00', '2026-08-02T03:00:00+00:00', 3, true, 'scheduled')
+    returning id into v_block_id;
+
+  insert into calendar_event_links (work_block_id, provider, sync_status)
+    values (v_block_id, 'google', 'pending_push')
+    returning id into v_link_id;
+
+  update calendar_event_links set sync_status = 'synced', external_event_id = '__test_ext_1__' where id = v_link_id;
+
+  if exists (select 1 from calendar_event_links where id = v_link_id and sync_status = 'synced') then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑪service bypass-calendar_event_links', 'service_role: calendar_event_links への INSERT/UPDATE/DELETE が RLS bypass で成功する', true, 'OK');
+  else
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑪service bypass-calendar_event_links', 'service_role: calendar_event_links への INSERT/UPDATE/DELETE が RLS bypass で成功する', false, 'FAIL: 反映されていない');
+  end if;
+
+  delete from calendar_event_links where id = v_link_id;
+  delete from work_blocks where id = v_block_id;
+  delete from calendar_connections where provider = 'google' and status = 'connected'
+    and vault_secret_name = 'calendar_google_oauth' and last_error_code is null and sync_token is null;
+
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+exception
+  when others then
+    insert into scheduling_test_log (section, check_name, passed, detail)
+      values ('⑪service bypass-calendar_event_links', 'service_role bypass 確認 (予期せぬ失敗)', false, format('FAIL: %s', sqlerrm));
     reset role;
 end $$;
 

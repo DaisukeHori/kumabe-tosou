@@ -1,8 +1,11 @@
 // scheduling モジュールの値契約。
 // canonical: docs/design/crm-suite/07-contracts-delta.md §4.12 (07-contracts-delta が正。
 // 03-scheduling.md §3.1 は写しであり内容は一致する)。差異があれば 07-contracts-delta を採用する。
-// 実装は Issue #52 (03-scheduling.md §2.2 DDL + §7.1 テンプレ展開 + repository) と
-// Issue #53 (§3.2 契約外拡張スキーマ + ブロック CRUD/状態機械/キャパ/自動配置) の対象分。
+// 実装は Issue #52 (03-scheduling.md §2.2 DDL + §7.1 テンプレ展開 + repository)、
+// Issue #53 (§3.2 契約外拡張スキーマ + ブロック CRUD/状態機械/キャパ/自動配置)、
+// Issue #54 (§2.3 calendar_connections/calendar_event_links DDL + §3.2 の外部同期解決アクション
+// zExternalDeletionResolution/zOrphanedLinkResolution + §3.2 末尾の CalendarConnectionView/
+// SyncIssueItem 読み取りビュー型 + WorkBlockView.sync の実データ化) の対象分。
 import { z } from "zod";
 
 import { zDateOnly, zIsoDatetime, zShortText } from "@/modules/platform/contracts";
@@ -121,9 +124,6 @@ export type CalendarConnectionMeta = z.infer<typeof zCalendarConnectionMeta>;
 // ============================================================================
 // 契約外拡張スキーマ (canonical: 03-scheduling.md §3.2)。
 // 自モジュールの admin UI (Server Actions) 専用の入力契約。他モジュールからの import 禁止。
-// zExternalDeletionResolution / zOrphanedLinkResolution は calendar_event_links (migration 0030)
-// を前提とする #54 の担当分のため、この Issue (#53) では追記しない (未使用 export による
-// lint 警告を避ける — #52 の先例踏襲)。
 // ============================================================================
 
 /** ブロック配置/移動 (placeBlock)。starts < ends は refine + DB check (E701) の二重検証 */
@@ -165,16 +165,30 @@ export const zProposePlacementInput = z.object({
   from: zIsoDatetime,                     // この時刻以降に置く (通常 = 今)
 }).strict();
 
+/** 外部削除 (deleted_externally) の解決アクション (§9.2 resolveExternalDeletionAction) */
+export const zExternalDeletionResolution = z.enum([
+  "unschedule",    // ブロックを未配置 (backlog) に戻し、リンクを削除
+  "cancel_block",  // ブロックを cancelled にし、リンクを削除
+  "repush",        // 外部イベントを再作成 (external_event_id を捨てて pending_push)
+]);
+
+/** orphaned link の解決アクション (§9.2 resolveOrphanedLinkAction — §5.3/§10.4) */
+export const zOrphanedLinkResolution = z.enum([
+  "repush",       // 外部イベントを再作成 (external_event_id/etag/hash を捨てて pending_push)
+  "delete_link",  // link 行のみ削除 (ブロックは触らない)
+]);
+
 export type PlaceBlockInput = z.infer<typeof zPlaceBlockInput>;
 export type UpdateWorkBlockInput = z.infer<typeof zUpdateWorkBlockInput>;
 export type BlockTransition = z.infer<typeof zBlockTransition>;
 export type CalendarRangeQuery = z.infer<typeof zCalendarRangeQuery>;
 export type ProposePlacementInput = z.infer<typeof zProposePlacementInput>;
+export type ExternalDeletionResolution = z.infer<typeof zExternalDeletionResolution>;
+export type OrphanedLinkResolution = z.infer<typeof zOrphanedLinkResolution>;
 
 // ============================================================================
 // 読み取りビュー型 (Zod 化しない — §4.9「DB 出力の正しさは repository + DDL が保証」)。
 // canonical: 03-scheduling.md §3.1 末尾 / §3.2 末尾。
-// CalendarConnectionView / SyncIssueItem は calendar_event_links 前提の #54 分のため未転記。
 // ============================================================================
 
 export type WorkTypeRow = {
@@ -198,15 +212,17 @@ export type WorkBlockView = {
   starts_at: string | null; ends_at: string | null;
   planned_hours: number; actual_hours: number | null; performed_on: string | null;
   consumes_capacity: boolean; quantity: number | null; memo: string | null;
-  // #53 時点は calendar_event_links (migration 0030) が存在しないため、facade は常に [] を返す
-  // (#54 が実データを繋ぐ — worktree 実装計画書の地雷2)。
-  sync: Array<{ provider: "google" | "microsoft";
+  // calendar_event_links (migration 0030) を JOIN した実データ (facade.toWorkBlockView が詰める)。
+  // link_id は #54 レビュー修正で追加 (deleted_externally 検知時に block-detail-dialog.tsx が
+  // resolveExternalDeletionAction(linkId, action) をカレンダー画面上から直接呼べるようにするため —
+  // 03-scheduling.md §10.2「deleted_externally の link を持つブロック: クリックで解決ダイアログ」)。
+  sync: Array<{ link_id: string; provider: "google" | "microsoft";
                 sync_status: EventLinkSyncStatus;
                 last_error_code: string | null }>;
   updated_at: string;
 };
 
-export type BusyInterval = { starts_at: string; ends_at: string }; // 外部 free/busy 帯 (§8.1)。#53 は常に []
+export type BusyInterval = { starts_at: string; ends_at: string }; // 外部 free/busy 帯 (§8.1)
 
 export type DealWorkSummary = {
   deal_id: string;
@@ -222,4 +238,22 @@ export type PlacementProposal = {
   block_id: string; starts_at: string; ends_at: string;
   expected_updated_at: string;   // 提案生成時の block.updated_at — applyPlacementProposalsAction が
                                  // placeBlock(…, expectedUpdatedAt) へ透過 (楽観排他を形骸化させない §9.2)
+};
+
+/** getCalendarConnections (§6.2) の戻り値。calendar_connections 1 行 ↔ 1 要素 (provider 単位) */
+export type CalendarConnectionView = {
+  provider: "google" | "microsoft";
+  status: CalendarConnectionStatus;
+  account_email: string | null; app_calendar_id: string | null;
+  token_expires_at: string | null; last_pulled_at: string | null;
+  last_error_code: string | null; connected_at: string | null;
+};
+
+/** listSyncIssues (§6.2) の戻り値。deleted_externally / conflict / orphaned の一覧 (§10.4) */
+export type SyncIssueItem = {
+  link_id: string; provider: "google" | "microsoft";
+  sync_status: EventLinkSyncStatus;
+  last_error_code: string | null;
+  block: Pick<WorkBlockView, "id" | "title" | "work_type_label" | "starts_at" | "ends_at" | "status">;
+  deleted_externally_at: string | null;
 };

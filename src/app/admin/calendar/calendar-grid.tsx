@@ -30,6 +30,25 @@ import {
  * (安全側の解釈 — 機能を壊さない)。
  */
 
+/**
+ * sync_status → ドット色 (03-scheduling.md §10.2「札の右下に provider アイコン + sync_status
+ * ドット」の最小実装 — #54 の小追記)。orphaned は管理画面 (/admin/calendar/connections) 側で
+ * のみ扱う状態のため週グリッドのドット表現には含めない (§10.2 表に無い)。
+ */
+const SYNC_DOT_COLOR: Record<string, string> = {
+  synced: "bg-emerald-500",
+  pending_push: "bg-amber-500",
+  conflict: "bg-orange-500",
+  deleted_externally: "bg-destructive",
+};
+
+/** ブロックが持つ sync 情報のうち表示優先度が最も高いものを 1 件選ぶ (deleted_externally > conflict > pending_push > synced)。 */
+function pickPrimarySync(sync: WorkBlockView["sync"]): WorkBlockView["sync"][number] | null {
+  if (sync.length === 0) return null;
+  const priority = ["deleted_externally", "conflict", "pending_push", "synced"];
+  return [...sync].sort((a, b) => priority.indexOf(a.sync_status) - priority.indexOf(b.sync_status))[0];
+}
+
 const ROW_MINUTES = 30;
 const ROWS_PER_DAY = (24 * 60) / ROW_MINUTES; // 48
 const ROW_HEIGHT_PX = 22;
@@ -316,55 +335,74 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
               ))}
               {segments
                 .filter((s) => s.dayOffset === dayOffset)
-                .map((seg) => (
-                  <button
-                    key={`${seg.block.id}-${seg.dayOffset}`}
-                    type="button"
-                    onPointerDown={(e) => beginMove(seg.block, e)}
-                    onPointerUp={(e) => handleBlockPointerUp(seg.block, e)}
-                    onFocus={() => onSelectBlock(seg.block.id)}
-                    onKeyDown={(e) => {
-                      // Enter/Space によるキーボード操作専用の経路 (C12: Tab でフォーカスした
-                      // ブロックを選択・詳細を開けること)。ネイティブ <button> の Enter/Space は
-                      // デフォルトで click を合成するが、resize ハンドル (button の子要素) への
-                      // pointerdown → button 内での pointerup でも同じ合成 click が発火し得るため
-                      // (地雷: handleBlockPointerUp の click-vs-drag 判定を素通りしてしまう)、
-                      // onClick は使わずここで preventDefault してキーボード専用に閉じる。
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onSelectBlock(seg.block.id);
-                        onOpenDetail(seg.block.id);
-                      }
-                    }}
-                    className={cn(
-                      "absolute inset-x-0.5 z-10 overflow-hidden rounded-md border px-1 py-0.5 text-left text-[11px] leading-tight shadow-sm",
-                      seg.block.id === selectedBlockId ? "border-l-4 border-l-soul" : "border-transparent",
-                      !seg.block.consumes_capacity && "opacity-60",
-                    )}
-                    style={{
-                      top: (seg.startMinutes / ROW_MINUTES) * ROW_HEIGHT_PX,
-                      height: Math.max(ROW_HEIGHT_PX, ((seg.endMinutes - seg.startMinutes) / ROW_MINUTES) * ROW_HEIGHT_PX),
-                      backgroundColor: seg.block.consumes_capacity ? `${seg.block.color}cc` : undefined,
-                      backgroundImage: !seg.block.consumes_capacity
-                        ? `repeating-linear-gradient(45deg, ${seg.block.color}55, ${seg.block.color}55 4px, transparent 4px, transparent 8px)`
-                        : undefined,
-                      color: seg.block.consumes_capacity ? "#fff" : undefined,
-                    }}
-                  >
-                    <span className="block truncate font-medium">
-                      {!seg.block.consumes_capacity && "⏳ "}
-                      {seg.block.title || seg.block.work_type_label}
-                    </span>
-                    <span className="block truncate opacity-80">{seg.block.planned_hours}h</span>
-                    {seg.block.status === "scheduled" && seg.block.consumes_capacity && (
-                      <div
-                        role="presentation"
-                        onPointerDown={(e) => beginResize(seg.block, e)}
-                        className="absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize"
-                      />
-                    )}
-                  </button>
-                ))}
+                .map((seg) => {
+                  // sync 状態ドット (03-scheduling.md §10.2「札の右下に provider アイコン +
+                  // sync_status ドット」— #54 の小追記。calendar-board.tsx 経由でこの
+                  // CalendarGrid が実データを描画する箇所)。
+                  const primarySync = pickPrimarySync(seg.block.sync);
+                  const hasDeletedExternally = seg.block.sync.some((s) => s.sync_status === "deleted_externally");
+                  return (
+                    <button
+                      key={`${seg.block.id}-${seg.dayOffset}`}
+                      type="button"
+                      onPointerDown={(e) => beginMove(seg.block, e)}
+                      onPointerUp={(e) => handleBlockPointerUp(seg.block, e)}
+                      onFocus={() => onSelectBlock(seg.block.id)}
+                      onKeyDown={(e) => {
+                        // Enter/Space によるキーボード操作専用の経路 (C12: Tab でフォーカスした
+                        // ブロックを選択・詳細を開けること)。ネイティブ <button> の Enter/Space は
+                        // デフォルトで click を合成するが、resize ハンドル (button の子要素) への
+                        // pointerdown → button 内での pointerup でも同じ合成 click が発火し得るため
+                        // (地雷: handleBlockPointerUp の click-vs-drag 判定を素通りしてしまう)、
+                        // onClick は使わずここで preventDefault してキーボード専用に閉じる。
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onSelectBlock(seg.block.id);
+                          onOpenDetail(seg.block.id);
+                        }
+                      }}
+                      title={hasDeletedExternally ? "外部カレンダー側で削除されています。クリックして解決してください。" : undefined}
+                      className={cn(
+                        "absolute inset-x-0.5 z-10 overflow-hidden rounded-md border px-1 py-0.5 text-left text-[11px] leading-tight shadow-sm",
+                        seg.block.id === selectedBlockId ? "border-l-4 border-l-soul" : "border-transparent",
+                        !seg.block.consumes_capacity && "opacity-60",
+                        hasDeletedExternally && "border-2 border-dashed border-destructive",
+                      )}
+                      style={{
+                        top: (seg.startMinutes / ROW_MINUTES) * ROW_HEIGHT_PX,
+                        height: Math.max(ROW_HEIGHT_PX, ((seg.endMinutes - seg.startMinutes) / ROW_MINUTES) * ROW_HEIGHT_PX),
+                        backgroundColor: seg.block.consumes_capacity ? `${seg.block.color}cc` : undefined,
+                        backgroundImage: !seg.block.consumes_capacity
+                          ? `repeating-linear-gradient(45deg, ${seg.block.color}55, ${seg.block.color}55 4px, transparent 4px, transparent 8px)`
+                          : undefined,
+                        color: seg.block.consumes_capacity ? "#fff" : undefined,
+                      }}
+                    >
+                      <span className="block truncate font-medium">
+                        {hasDeletedExternally && "⚠ "}
+                        {!seg.block.consumes_capacity && "⏳ "}
+                        {seg.block.title || seg.block.work_type_label}
+                      </span>
+                      <span className="block truncate opacity-80">{seg.block.planned_hours}h</span>
+                      {primarySync && (
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "absolute right-0.5 bottom-0.5 size-1.5 rounded-full border border-white/60",
+                            SYNC_DOT_COLOR[primarySync.sync_status] ?? "bg-muted-foreground",
+                          )}
+                        />
+                      )}
+                      {seg.block.status === "scheduled" && seg.block.consumes_capacity && (
+                        <div
+                          role="presentation"
+                          onPointerDown={(e) => beginResize(seg.block, e)}
+                          className="absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
               {proposalSegments
                 .filter((s) => s.dayOffset === dayOffset)
                 .map((seg, i) => (

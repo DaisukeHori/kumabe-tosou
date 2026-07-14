@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  * /admin/calendar 系 4 画面共通のセカンダリタブ (03-scheduling.md §10.1)。
  * 予定表 | 作業種別 | テンプレート | 外部連携。
  * `/admin/calendar/connections` は #54 (calendar_connections/calendar_event_links = migration 0030)
- * の担当のため、この Issue (#53) 時点ではリンク先が 404 のまま残る (Out 節で明示許容 — 地雷3)。
+ * で実装済み (接続管理 + 同期の問題一覧 — §10.4)。
  */
 const TABS = [
   { href: "/admin/calendar", label: "予定表" },

@@ -1,5 +1,9 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { getEnv } from "@/lib/env";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import { crmFacade } from "@/modules/crm/facade";
 import type { ExecutionContext, Paged, Pagination, Result } from "@/modules/platform/contracts";
@@ -10,12 +14,17 @@ import type {
   ActualInput,
   BlockTransition,
   BusyInterval,
+  CalendarConnectionView,
+  CalendarProvider,
   CalendarRangeQuery,
   CalendarSyncReport,
   DealWorkSummary,
+  ExternalDeletionResolution,
   GenerateBlocksInput,
+  OrphanedLinkResolution,
   PlacementProposal,
   ProposePlacementInput,
+  SyncIssueItem,
   UpdateWorkBlockInput,
   WeeklyCapacity,
   WorkBlockInput,
@@ -28,8 +37,11 @@ import type {
 import {
   zActualInput,
   zBlockTransition,
+  zCalendarConnectionMeta,
   zCalendarRangeQuery,
+  zExternalDeletionResolution,
   zGenerateBlocksInput,
+  zOrphanedLinkResolution,
   zPlaceBlockInput,
   zProposePlacementInput,
   zUpdateWorkBlockInput,
@@ -46,13 +58,33 @@ import {
   derivePlacementStatus,
 } from "./internal/block-state";
 import { computeWeeklyCapacity, isJstMonday, resolveWeekRangeJst } from "./internal/capacity";
+import { computeWrittenHash } from "./internal/echo";
+import { decodeGoogleIdTokenEmail, exchangeGoogleAuthorizationCode, googleCalendarAdapter } from "./internal/google-api";
+import { MANUAL_SYNC_PULL_PAGES, MANUAL_SYNC_PUSH_LIMIT } from "./internal/lease";
+import { OAuthTokenError } from "./internal/provider";
+import { resolveProviderEnv, runPull, runPush } from "./internal/sync-engine";
+import {
+  canReconcilePushUnknown,
+  canResendConflictedLink,
+  canResolveExternalDeletion,
+  canResolveOrphanedLink,
+} from "./internal/sync-state";
 import { expandLinesToBlocks } from "./internal/template-expand";
+import { forceRefreshCalendarSecret, getValidCalendarSecret, TokenClientMisconfiguredError, TokenExpiredError } from "./internal/token";
+import { CALENDAR_VAULT_SECRET_NAMES, zCalendarVaultSecret, type CalendarVaultSecret } from "./internal/vault-names";
 import {
   DeleteGuardViolationError,
+  deleteCalendarEventLinksForProvider,
   ForeignKeyViolationError,
+  getCalendarConnection,
+  getCalendarEventLinkById,
+  markLinkSynced,
   OptimisticLockError,
+  resetLinkForRepush,
+  resetLinkForResend,
   UniqueViolationError,
   cancelOpenWorkBlocksForDeal,
+  deleteCalendarEventLink,
   deleteWorkBlockRow,
   deleteWorkTemplate as deleteWorkTemplateRow,
   deleteWorkType as deleteWorkTypeRow,
@@ -60,23 +92,37 @@ import {
   getBookedBlocksForAutoPlaceWindow,
   getDealWorkBlocks,
   getWeeklyBookedBlocks,
+  getRecentDoneBlocksForWorkLogResend,
   getWorkBlockById,
   getWorkBlocksByIds,
   getWorkBlocksInRange,
+  getWorkBlocksNeedingPushBackfill,
   getWorkTypeSnapshot,
+  hasUndeletedExternalCalendarLink,
   insertWorkBlock,
   insertWorkBlocks,
   listActiveWorkTemplatesForExpand,
   listActiveWorkTypesForExpand,
+  listCalendarConnections,
+  listSyncIssueLinks,
   listWorkTemplates as listWorkTemplatesRows,
   listWorkTypes as listWorkTypesRows,
+  markLinkPendingPush,
   recordWorkBlockActual,
   transitionWorkBlockStatus,
   unscheduleWorkBlock,
+  updateCalendarConnectionStatus,
   updateWorkBlockDetail,
   updateWorkBlockPlacement,
+  upsertCalendarConnection,
+  upsertPendingPushLink,
   upsertWorkTemplate,
   upsertWorkType,
+  vaultDeleteSecret,
+  vaultReadSecret,
+  vaultUpsertSecret,
+  type CalendarConnectionRow,
+  type SyncIssueLinkRow,
   type WorkBlockJoinRow,
 } from "./repository";
 
@@ -87,25 +133,24 @@ import {
  * `SchedulingFacadeExtended` (§6.2 契約外拡張。他モジュールから呼ぶこと禁止) を型として
  * フルセットで宣言する (crm/facade.ts の CrmFacade/CrmFacadeExtended 分割と同型)。
  *
- * ---- この Issue (#53) での実装範囲 ----
- * #52 が実装した generateBlocksFromLines + 作業種別/テンプレート CRUD 6 つに加え、
- * placeBlock/recordActual/getWeeklyCapacity (契約メソッド) と、createBlock/updateBlock/
- * unscheduleBlock/transitionBlock/deleteBlock/cancelOpenBlocksForDeal/getCalendarRange/
- * getBacklogBlocks/getDealWorkSummary/getExternalBusy/proposeBlockPlacement (契約外拡張) を
- * 実装する。runCalendarSync/runCalendarMaintenance (契約メソッド) と、外部カレンダー接続管理系
- * 8 メソッド (getCalendarConnections/disconnectCalendar/listSyncIssues/resolveExternalDeletion/
- * reconcilePushUnknown/resendConflictedLink/resolveOrphanedLink/requestSyncNow) は
- * calendar_connections/calendar_event_links (migration 0030) を前提とし、そのテーブルは
- * #54 が追加するため、この Issue では実装しない。前者 2 つは既に SchedulingFacade 側で型宣言
- * 済みなので `SchedulingFacadeExtended` に残るが Pick から外す。後者 8 つは戻り値/引数の型
- * (CalendarConnectionView / SyncIssueItem / zExternalDeletionResolution /
- * zOrphanedLinkResolution) 自体が #53 の contracts.ts にまだ存在しない設計判断
- * (worktree 実装計画書 §3.2 の指示) のため、インターフェース宣言そのものを #54 に委ねる
- * (存在しない型を参照する宣言だけを先に書いても tsc が通らず、かつ「型だけ先に書いて
- * 実装しない」ことによる利益がないため — オーケストレーターへの実装判断報告事項)。
+ * ---- この Issue (#54) での実装範囲 ----
+ * #52/#53 が実装済みの分に加え、runCalendarSync/runCalendarMaintenance (契約メソッド) と、
+ * 外部カレンダー接続管理系 8 メソッド (getCalendarConnections/disconnectCalendar/
+ * listSyncIssues/resolveExternalDeletion/reconcilePushUnknown/resendConflictedLink/
+ * resolveOrphanedLink/requestSyncNow) を実装する。加えて OAuth callback route (§8.2) が
+ * ビジネスロジックを持たないよう `completeGoogleCalendarOAuthCallback` を契約外拡張として
+ * 追加する (distribution/facade.ts の completeXOAuthCallback と同型パターン。canonical §6.2
+ * の公開契約一覧には無いが、実装計画書「OAuth ルート」節が明示的に指示する内部メソッド)。
+ * `toWorkBlockView` の `sync` フィールドも calendar_event_links の実 JOIN データを詰めるよう
+ * repository.ts (WORK_BLOCK_JOIN_COLUMNS) と合わせて更新した。
  *
- * 実行文脈: 全メソッド session 固定 (admin セッション、`createSupabaseServerClient()` のみ)。
- * service 実行が必要なのは runCalendarSync/runCalendarMaintenance のみで #54 の担当。
+ * 実行文脈: runCalendarSync/runCalendarMaintenance のみ service 専用 (ctx.mode!=='service' は
+ * KMB-E202)。接続管理系 8 メソッド + completeGoogleCalendarOAuthCallback は session 固定
+ * (admin セッション、`createSupabaseServerClient()` 相当) — ただし calendar_event_links への
+ * 書込みは RLS で authenticated から拒否されるため、内部で `createSupabaseServiceClient()` を
+ * 都度生成して書込みにのみ使う (実装計画書「未解決点2」の判断: 型レベルでの branded type 導入は
+ * 過剰設計と判断し、関数シグネチャ (`serviceClient: SupabaseClient` 明示) + このコメントで
+ * 防御する。誤って session client を渡すと RLS 拒否で即座に検出できる)。
  */
 export interface SchedulingFacade {
   generateBlocksFromLines(
@@ -158,15 +203,34 @@ export interface SchedulingFacadeExtended extends SchedulingFacade {
 
   // -- 自動提案配置 (#53) --
   proposeBlockPlacement(input: ProposePlacementInput): Promise<Result<PlacementProposal[]>>; // 提案のみ (永続化しない)
+
+  // -- 接続管理 / 同期運用 (#54, §6.2) --
+  getCalendarConnections(): Promise<Result<CalendarConnectionView[]>>;
+  disconnectCalendar(provider: CalendarProvider): Promise<Result<void>>;
+  listSyncIssues(): Promise<Result<SyncIssueItem[]>>;
+  resolveExternalDeletion(linkId: string, action: ExternalDeletionResolution): Promise<Result<void>>;
+  reconcilePushUnknown(linkId: string): Promise<Result<{ resolved: boolean }>>;
+  resendConflictedLink(linkId: string): Promise<Result<void>>;
+  resolveOrphanedLink(linkId: string, action: OrphanedLinkResolution): Promise<Result<void>>;
+  requestSyncNow(): Promise<Result<{ reports: CalendarSyncReport[]; skipped_running: boolean }>>;
+
+  /** OAuth callback (§8.2) の内部委譲先。route はこれを呼ぶだけでビジネスロジックを持たない。 */
+  completeGoogleCalendarOAuthCallback(input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }): Promise<Result<{ account_email: string }>>;
 }
 
-/** この Issue (#53) までで実装済みのメソッドのみに絞った戻り値型 (上記コメント参照) */
+/** この Issue (#54) までで実装済みのメソッドのみに絞った戻り値型 (上記コメント参照) */
 export type SchedulingFacadeCore = Pick<
   SchedulingFacadeExtended,
   | "generateBlocksFromLines"
   | "placeBlock"
   | "recordActual"
   | "getWeeklyCapacity"
+  | "runCalendarSync"
+  | "runCalendarMaintenance"
   | "listWorkTypes"
   | "saveWorkType"
   | "deleteWorkType"
@@ -184,6 +248,15 @@ export type SchedulingFacadeCore = Pick<
   | "getDealWorkSummary"
   | "getExternalBusy"
   | "proposeBlockPlacement"
+  | "getCalendarConnections"
+  | "disconnectCalendar"
+  | "listSyncIssues"
+  | "resolveExternalDeletion"
+  | "reconcilePushUnknown"
+  | "resendConflictedLink"
+  | "resolveOrphanedLink"
+  | "requestSyncNow"
+  | "completeGoogleCalendarOAuthCallback"
 >;
 
 function errMessage(err: unknown): string {
@@ -220,8 +293,15 @@ function toWorkBlockView(row: WorkBlockJoinRow): Omit<WorkBlockView, "deal_title
     consumes_capacity: row.consumes_capacity,
     quantity: row.quantity,
     memo: row.memo,
-    // #53 時点は calendar_event_links (migration 0030) が存在しないため常に空 (#54 が実データを繋ぐ)
-    sync: [],
+    // calendar_event_links (migration 0030) の JOIN 結果をそのまま詰める (#54 で実データ化)。
+    // link_id は #54 レビュー修正で追加 (block-detail-dialog.tsx の解決ダイアログが
+    // resolveExternalDeletionAction(linkId, ...) を呼ぶために必要)。
+    sync: (row.calendar_event_links ?? []).map((l) => ({
+      link_id: l.id,
+      provider: l.provider,
+      sync_status: l.sync_status,
+      last_error_code: l.last_error_code,
+    })),
     updated_at: row.updated_at,
   };
 }
@@ -308,6 +388,8 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
         }
         const newStatus = derivePlacementStatus(current.status);
         await updateWorkBlockPlacement(blockId, parsed.data.starts_at, parsed.data.ends_at, newStatus, expectedUpdatedAt);
+        // BLOCKER 修正 (§6.1): 接続済み provider の links を pending_push で upsert する。
+        await markConnectedProvidersPendingPush(blockId);
         return { ok: true, value: undefined };
       } catch (err) {
         if (err instanceof OptimisticLockError) {
@@ -523,6 +605,11 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
           memo: parsed.data.memo,
           created_by: user?.id ?? null,
         });
+        // BLOCKER 修正 (§6.2 createBlock「placeBlock と同処理」): 配置入力ありで直接 'scheduled'
+        // 作成された場合のみ、接続済み provider の links を pending_push で upsert する。
+        if (status === "scheduled") {
+          await markConnectedProvidersPendingPush(created.id);
+        }
         return { ok: true, value: { block_id: created.id } };
       } catch (err) {
         if (err instanceof ForeignKeyViolationError) {
@@ -564,6 +651,9 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
           return { ok: false, code: "KMB-E703", detail: "配置済み (scheduled) のブロックのみ未配置に戻せます" };
         }
         await unscheduleWorkBlock(blockId, expectedUpdatedAt);
+        // BLOCKER 修正 (§6.2 unscheduleBlock「外部イベント削除は links を pending 削除マーク」):
+        // starts_at が NULL 化された後なので、pushOneLink の isDeletionMark 判定 (§8.4) に乗る。
+        await markConnectedProvidersPendingPush(blockId);
         return { ok: true, value: undefined };
       } catch (err) {
         if (err instanceof OptimisticLockError) {
@@ -585,6 +675,16 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
           return { ok: false, code: "KMB-E703", detail: "この状態からは遷移できません" };
         }
         await transitionWorkBlockStatus(blockId, parsed.data, expectedUpdatedAt);
+        // BLOCKER 修正 (§6.2 transitionBlock / §5.1 cancelled 行「外部イベント削除 + link 削除」):
+        // 'cancelled' への遷移のみ pending_push (削除マーク) が必要。'in_progress' は配置内容
+        // (時刻/タイトル) が変わらないため外部へ再送する必要がない (§8.4 は starts_at/status の
+        // 組み合わせのみで削除マークを判定するため in_progress は現状維持のまま synced 継続)。
+        // さらに current.starts_at !== null (= 配置済みだった。backlog→cancelled は starts_at が
+        // 元々 NULL のため外部イベントが存在し得ない) で絞る — cancelOpenBlocksForDeal の
+        // scheduledBlockIds と同じ判定基準 (無駄な pending_push→即削除の往復を避ける)。
+        if (parsed.data === "cancelled" && current.starts_at !== null) {
+          await markConnectedProvidersPendingPush(blockId);
+        }
         return { ok: true, value: undefined };
       } catch (err) {
         if (err instanceof OptimisticLockError) {
@@ -598,9 +698,20 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
       try {
         const current = await getWorkBlockById(blockId);
         if (!current) return { ok: false, code: "KMB-E109" };
-        // hasUndeletedExternalLink は #53 時点では常に false (calendar_event_links 不在 — 地雷2)
-        if (!assertDeletable(current.status, false)) {
-          return { ok: false, code: "KMB-E703", detail: "backlog / cancelled のブロックのみ削除できます" };
+        // hasUndeletedExternalLink は #53 時点では calendar_event_links 不在のため常に false だったが
+        // (地雷2)、#54 でテーブルが追加されたため実データで判定する (§5.1-5/§5.3-6 — cascade による
+        // 外部イベント永久残置=ゴースト予定の防止)。session client で SELECT 可 (RLS admin 許可)。
+        const { supabase } = await getSessionAndClient();
+        const linkCheckResult = await hasUndeletedExternalCalendarLink(supabase, blockId);
+        if (!linkCheckResult.ok) return linkCheckResult;
+        if (!assertDeletable(current.status, linkCheckResult.value)) {
+          return {
+            ok: false,
+            code: "KMB-E703",
+            detail: linkCheckResult.value
+              ? "外部カレンダーへの反映待ちです。同期が完了してから削除してください"
+              : "backlog / cancelled のブロックのみ削除できます",
+          };
         }
         await deleteWorkBlockRow(blockId);
         return { ok: true, value: undefined };
@@ -614,8 +725,13 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
 
     async cancelOpenBlocksForDeal(dealId) {
       try {
-        const cancelled = await cancelOpenWorkBlocksForDeal(dealId);
-        return { ok: true, value: { cancelled } };
+        const result = await cancelOpenWorkBlocksForDeal(dealId);
+        // BLOCKER 修正 (§6.2「scheduled だったブロックの links は削除マーク」): backlog 由来
+        // (元々 starts_at NULL で外部イベントが存在し得ない) は対象外、scheduled 由来のみ upsert する。
+        for (const blockId of result.scheduledBlockIds) {
+          await markConnectedProvidersPendingPush(blockId);
+        }
+        return { ok: true, value: { cancelled: result.cancelled } };
       } catch (err) {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };
       }
@@ -690,9 +806,46 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
       if (!parsed.success) {
         return { ok: false, code: "KMB-E101", detail: parsed.error.message };
       }
-      // calendar_connections (migration 0030) が存在しない #53 時点は常に未接続扱い。
-      // 「未接続 = 空配列 (エラーにしない)」(§6.2) — #54 が実データを繋ぐ。
-      return { ok: true, value: [] };
+      try {
+        // Vault 読み取り (RPC) は service client 専用のため、SELECT だけでも service client を使う
+        // (calendar_connections は admin セッションからも読めるが、この後の getValidCalendarSecret が
+        // 必ず service client を要求するため、ここで先に生成して使い回す)。
+        const serviceClient = createSupabaseServiceClient();
+        const connectionResult = await getCalendarConnection(serviceClient, "google");
+        if (!connectionResult.ok) return connectionResult;
+        const connection = connectionResult.value;
+
+        // 「未接続 = 空配列 (エラーにしない)」(§6.2)。'expired' のみ明示的に E720 を返す
+        // (過去に接続済みで再連携が必要な状態を calendar 画面へ静かに伝える設計判断 — 実装計画書の
+        // 未解決点欄には無いが §6.2 の注記「E720 は expired 時のみ」を素直に解釈した)。'disconnected'/
+        // 'error' は空配列に倒す ('error' は connections 画面のバナーで既に案内済みのため、カレンダー
+        // 表示自体は busy 帯なしで継続させる — 安全側・機能を壊さない判断)。
+        if (!connection || connection.status === "disconnected" || connection.status === "error") {
+          return { ok: true, value: [] };
+        }
+        if (connection.status === "expired") {
+          return { ok: false, code: "KMB-E720", detail: "カレンダーの再連携が必要です" };
+        }
+
+        const metaResult = zCalendarConnectionMeta.safeParse(connection.meta);
+        if (!metaResult.success) {
+          return { ok: true, value: [] }; // meta 不整合は busy 帯なしで安全側に倒す (connection 自体は壊さない)
+        }
+
+        let secret: CalendarVaultSecret;
+        try {
+          secret = await getValidCalendarSecret(serviceClient, "google", googleCalendarAdapter, resolveProviderEnv("google"));
+        } catch (err) {
+          if (err instanceof TokenExpiredError) return { ok: false, code: "KMB-E720", detail: err.message };
+          if (err instanceof TokenClientMisconfiguredError) return { ok: false, code: "KMB-E723", detail: err.message };
+          throw err;
+        }
+
+        const busy = await googleCalendarAdapter.getBusy({ start: parsed.data.from, end: parsed.data.to }, secret);
+        return { ok: true, value: busy.map((b) => ({ starts_at: b.start, ends_at: b.end })) };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
     },
 
     async proposeBlockPlacement(rawInput) {
@@ -739,12 +892,635 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
           targets,
           from: parsed.data.from,
           existingBookedBlocks: existingBooked,
-          externalBusy: [], // #53 時点は getExternalBusy が常に [] を返すため固定
+          // getExternalBusy は #54 で実データ化されたが、proposeBlockPlacement への配線
+          // (外部 busy 帯を考慮した自動配置) は本 Issue のスコープ外のため [] のまま据え置く
+          // (openIssues へ follow-up として報告)。
+          externalBusy: [],
         });
         return { ok: true, value: proposals };
       } catch (err) {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };
       }
     },
+
+    // ============================================================
+    // 接続管理 / 同期運用 (03-scheduling.md §6.2、#54)
+    // ============================================================
+
+    async runCalendarSync(ctx) {
+      if (ctx.mode !== "service") {
+        return { ok: false, code: "KMB-E202", detail: "runCalendarSync は service 実行専用です" };
+      }
+      let serviceClient: SupabaseClient;
+      try {
+        serviceClient = ctx.client ?? createSupabaseServiceClient();
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+      try {
+        // この Issue (#54) では google のみ実装 (#55 が microsoft の adapter を追加した時点で
+        // ここに provider を足すだけで済む — sync-engine.ts/token.ts は既に provider 抽象済み)。
+        const reports: CalendarSyncReport[] = [];
+        for (const provider of SUPPORTED_CALENDAR_PROVIDERS) {
+          const adapter = adapterForProvider(provider);
+          if (!adapter) continue; // #55 が microsoft の adapter を追加するまでは到達しない防御分岐
+          const pushResult = await runPush(serviceClient, provider, adapter);
+          const pullResult = await runPull(serviceClient, provider, adapter);
+          reports.push({
+            provider,
+            pulled: pullResult.pulled,
+            echoes_rejected: pullResult.echoes_rejected,
+            pushed: pushResult.pushed,
+            conflicts: pushResult.conflicts,
+            full_resync: pullResult.full_resync,
+          });
+        }
+        return { ok: true, value: reports };
+      } catch (err) {
+        // runPush/runPull は provider 単位の業務エラー (E720〜E725) を connection/link に記録し
+        // 例外を投げない設計 (sync-engine.ts のコメント参照)。ここに到達する例外は DB 読み取り
+        // 自体の失敗等のインフラ異常のみ (§6.1 表どおり Result エラーはインフラ異常のみ)。
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async runCalendarMaintenance(ctx) {
+      if (ctx.mode !== "service") {
+        return { ok: false, code: "KMB-E202", detail: "runCalendarMaintenance は service 実行専用です" };
+      }
+      let serviceClient: SupabaseClient;
+      try {
+        serviceClient = ctx.client ?? createSupabaseServiceClient();
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+      try {
+        await runCalendarMaintenanceTasks(serviceClient);
+        return { ok: true, value: undefined };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async getCalendarConnections() {
+      try {
+        const { supabase } = await getSessionAndClient();
+        const result = await listCalendarConnections(supabase);
+        if (!result.ok) return result;
+        return { ok: true, value: result.value.map(toCalendarConnectionView) };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async disconnectCalendar(provider) {
+      try {
+        const serviceClient = createSupabaseServiceClient();
+        const statusResult = await updateCalendarConnectionStatus(serviceClient, provider, "disconnected", null, null);
+        if (!statusResult.ok) return statusResult;
+
+        // Vault 削除はベストエフォート (§6.2「Vault ベストエフォート削除」) — 失敗しても
+        // disconnect 自体 (status='disconnected' + links 削除) は継続する。ログは必ず残す
+        // (エラー握り潰し禁止 — Vault に secret が残留すること自体は再接続時に上書きされるため
+        // 実害は小さいが、放置すると調査時に気づけなくなる)。
+        const vaultResult = await vaultDeleteSecret(serviceClient, CALENDAR_VAULT_SECRET_NAMES[provider]);
+        if (!vaultResult.ok) {
+          console.error(
+            `[scheduling] disconnectCalendar: Vault 削除に失敗しました (provider=${provider}): ${vaultResult.code} ${vaultResult.detail ?? ""}`,
+          );
+        }
+
+        const deleteLinksResult = await deleteCalendarEventLinksForProvider(serviceClient, provider);
+        if (!deleteLinksResult.ok) return deleteLinksResult;
+
+        return { ok: true, value: undefined };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async listSyncIssues() {
+      try {
+        const { supabase } = await getSessionAndClient();
+        const result = await listSyncIssueLinks(supabase);
+        if (!result.ok) return result;
+        return { ok: true, value: result.value.map(toSyncIssueItem) };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async resolveExternalDeletion(linkId, rawAction) {
+      const parsed = zExternalDeletionResolution.safeParse(rawAction);
+      if (!parsed.success) {
+        return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+      }
+      try {
+        const { supabase } = await getSessionAndClient();
+        const linkResult = await getCalendarEventLinkById(supabase, linkId);
+        if (!linkResult.ok) return linkResult;
+        const link = linkResult.value;
+        if (!link) return { ok: false, code: "KMB-E109" };
+        if (!canResolveExternalDeletion(link)) {
+          return { ok: false, code: "KMB-E703", detail: "この link は外部削除検知の状態ではありません" };
+        }
+
+        const serviceClient = createSupabaseServiceClient();
+
+        if (parsed.data === "repush") {
+          return await resetLinkForRepush(serviceClient, linkId);
+        }
+
+        // unschedule / cancel_block はブロック本体も動かす (§9.2 の 3 択の意味論)。
+        const block = await getWorkBlockById(link.work_block_id);
+        if (!block) return { ok: false, code: "KMB-E109" };
+
+        try {
+          if (parsed.data === "unschedule") {
+            if (!canTransitionBlock(block.status, "backlog")) {
+              return { ok: false, code: "KMB-E703", detail: "この状態では未配置に戻せません" };
+            }
+            await unscheduleWorkBlock(block.id, block.updated_at);
+          } else {
+            // 'cancel_block'
+            if (!canTransitionBlock(block.status, "cancelled")) {
+              return { ok: false, code: "KMB-E703", detail: "この状態ではキャンセルできません" };
+            }
+            await transitionWorkBlockStatus(block.id, "cancelled", block.updated_at);
+          }
+        } catch (err) {
+          if (err instanceof OptimisticLockError) {
+            return { ok: false, code: "KMB-E103", detail: "他の変更と競合しました" };
+          }
+          throw err;
+        }
+
+        return await deleteCalendarEventLink(serviceClient, linkId);
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async reconcilePushUnknown(linkId) {
+      try {
+        const { supabase } = await getSessionAndClient();
+        const linkResult = await getCalendarEventLinkById(supabase, linkId);
+        if (!linkResult.ok) return linkResult;
+        const link = linkResult.value;
+        if (!link) return { ok: false, code: "KMB-E109" };
+        if (!canReconcilePushUnknown(link)) {
+          return { ok: false, code: "KMB-E703", detail: "この link は結果不明 (KMB-E724) の状態ではありません" };
+        }
+        const adapter = adapterForProvider(link.provider);
+        if (!adapter) {
+          return { ok: false, code: "KMB-E901", detail: `未対応の provider です: ${link.provider}` };
+        }
+
+        const serviceClient = createSupabaseServiceClient();
+        const connectionResult = await getCalendarConnection(serviceClient, link.provider);
+        if (!connectionResult.ok) return connectionResult;
+        const connection = connectionResult.value;
+        if (!connection || connection.status !== "connected") {
+          return { ok: false, code: "KMB-E703", detail: "カレンダーが接続されていません" };
+        }
+        const metaResult = zCalendarConnectionMeta.safeParse(connection.meta);
+        if (!metaResult.success || !metaResult.data.app_calendar_id) {
+          return { ok: false, code: "KMB-E901", detail: "アプリ専用カレンダーの設定が不整合です" };
+        }
+        const appCalendarId = metaResult.data.app_calendar_id;
+
+        let secret: CalendarVaultSecret;
+        try {
+          secret = await getValidCalendarSecret(serviceClient, link.provider, adapter, resolveProviderEnv(link.provider));
+        } catch (err) {
+          if (err instanceof TokenExpiredError) return { ok: false, code: "KMB-E720", detail: err.message };
+          if (err instanceof TokenClientMisconfiguredError) return { ok: false, code: "KMB-E723", detail: err.message };
+          throw err;
+        }
+
+        let found;
+        try {
+          found = await adapter.findByLinkId(appCalendarId, linkId, secret);
+        } catch (err) {
+          // 照合そのものが失敗 (API 到達不能等) → conflict+E724 のまま据え置き、エラーとして報告する
+          // (§8.7「照合失敗はE723/E724を返しconflict継続」— link の状態は一切変更しない)。
+          return { ok: false, code: "KMB-E724", detail: errMessage(err) };
+        }
+
+        if (!found) {
+          // 未発見 → pending_push に戻して再送 (§8.7)
+          const result = await markLinkPendingPush(serviceClient, linkId);
+          if (!result.ok) return result;
+          return { ok: true, value: { resolved: false } };
+        }
+
+        // 発見 → 外部 id/etag を採用して synced 化。hash は現在のブロック内容から再計算する
+        // (finalizePushSuccess (sync-engine.ts) と同じ正規化関数 computeWrittenHash を使う —
+        // 別の正規化を使うと以後のエコー判定が壊れる)。
+        const block = await getWorkBlockById(link.work_block_id);
+        if (!block || block.starts_at === null || block.ends_at === null) {
+          // ブロックが見つからない/未配置化されている (競合) → 安全側で pending_push に戻す
+          const result = await markLinkPendingPush(serviceClient, linkId);
+          if (!result.ok) return result;
+          return { ok: true, value: { resolved: false } };
+        }
+        const title = block.title ?? block.work_types?.label ?? "";
+        const hash = computeWrittenHash({ startsAt: block.starts_at, endsAt: block.ends_at, title });
+        const markResult = await markLinkSynced(serviceClient, linkId, {
+          external_event_id: found.externalEventId,
+          etag_or_change_key: found.etagOrChangeKey,
+          external_updated_at: found.externalUpdatedAt,
+          external_ical_uid: found.icalUid,
+          last_written_hash: hash,
+        });
+        if (!markResult.ok) return markResult;
+        return { ok: true, value: { resolved: true } };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async resendConflictedLink(linkId) {
+      try {
+        const { supabase } = await getSessionAndClient();
+        const linkResult = await getCalendarEventLinkById(supabase, linkId);
+        if (!linkResult.ok) return linkResult;
+        const link = linkResult.value;
+        if (!link) return { ok: false, code: "KMB-E109" };
+        if (!canResendConflictedLink(link)) {
+          return { ok: false, code: "KMB-E703", detail: "この link は確定エラー (KMB-E723) の状態ではありません" };
+        }
+        const serviceClient = createSupabaseServiceClient();
+        return await resetLinkForResend(serviceClient, linkId);
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async resolveOrphanedLink(linkId, rawAction) {
+      const parsed = zOrphanedLinkResolution.safeParse(rawAction);
+      if (!parsed.success) {
+        return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+      }
+      try {
+        const { supabase } = await getSessionAndClient();
+        const linkResult = await getCalendarEventLinkById(supabase, linkId);
+        if (!linkResult.ok) return linkResult;
+        const link = linkResult.value;
+        if (!link) return { ok: false, code: "KMB-E109" };
+        if (!canResolveOrphanedLink(link)) {
+          return { ok: false, code: "KMB-E703", detail: "この link は orphaned の状態ではありません" };
+        }
+        const serviceClient = createSupabaseServiceClient();
+        if (parsed.data === "repush") {
+          return await resetLinkForRepush(serviceClient, linkId);
+        }
+        return await deleteCalendarEventLink(serviceClient, linkId);
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async requestSyncNow() {
+      try {
+        const serviceClient = createSupabaseServiceClient();
+        const reports: CalendarSyncReport[] = [];
+        let skippedRunning = false;
+        for (const provider of SUPPORTED_CALENDAR_PROVIDERS) {
+          const adapter = adapterForProvider(provider);
+          if (!adapter) continue;
+          const pushResult = await runPush(serviceClient, provider, adapter, { limit: MANUAL_SYNC_PUSH_LIMIT });
+          const pullResult = await runPull(serviceClient, provider, adapter, { maxPages: MANUAL_SYNC_PULL_PAGES });
+          if (pullResult.skipped_running) skippedRunning = true;
+          reports.push({
+            provider,
+            pulled: pullResult.pulled,
+            echoes_rejected: pullResult.echoes_rejected,
+            pushed: pushResult.pushed,
+            conflicts: pushResult.conflicts,
+            full_resync: pullResult.full_resync,
+          });
+        }
+        return { ok: true, value: { reports, skipped_running: skippedRunning } };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async completeGoogleCalendarOAuthCallback(input) {
+      const env = getEnv();
+      if (!env.GOOGLE_CALENDAR_CLIENT_ID || !env.GOOGLE_CALENDAR_CLIENT_SECRET) {
+        return { ok: false, code: "KMB-E901", detail: "GOOGLE_CALENDAR_CLIENT_ID/SECRET が未設定です" };
+      }
+      try {
+        const tokenResult = await exchangeGoogleAuthorizationCode({
+          clientId: env.GOOGLE_CALENDAR_CLIENT_ID,
+          clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
+          code: input.code,
+          codeVerifier: input.codeVerifier,
+          redirectUri: input.redirectUri,
+        });
+        if (!tokenResult.refreshToken) {
+          return {
+            ok: false,
+            code: "KMB-E720",
+            detail: "refresh_token が発行されませんでした (access_type=offline / prompt=consent を確認してください)",
+          };
+        }
+        const accountEmail = tokenResult.idToken ? decodeGoogleIdTokenEmail(tokenResult.idToken) : null;
+        if (!accountEmail) {
+          return { ok: false, code: "KMB-E720", detail: "id_token から account_email を取得できませんでした" };
+        }
+
+        const serviceClient = createSupabaseServiceClient();
+        const secret: CalendarVaultSecret = {
+          access_token: tokenResult.accessToken,
+          refresh_token: tokenResult.refreshToken,
+          expires_at: tokenResult.expiresAt,
+        };
+
+        // 既存の app_calendar_id を引き継ぐ (再接続時は calendars.get で実在検証のみ — §5.2/§8.2)
+        const existingConnectionResult = await getCalendarConnection(serviceClient, "google");
+        if (!existingConnectionResult.ok) return existingConnectionResult;
+        const existingMetaResult = existingConnectionResult.value
+          ? zCalendarConnectionMeta.safeParse(existingConnectionResult.value.meta)
+          : null;
+        const knownCalendarId = existingMetaResult?.success ? existingMetaResult.data.app_calendar_id : null;
+
+        let appCalendarId: string;
+        try {
+          appCalendarId = await googleCalendarAdapter.ensureAppCalendar(secret, knownCalendarId);
+        } catch (err) {
+          return { ok: false, code: "KMB-E901", detail: `アプリ専用カレンダーの準備に失敗しました: ${errMessage(err)}` };
+        }
+
+        const metaCandidate = {
+          account_email: accountEmail,
+          app_calendar_id: appCalendarId,
+          token_expires_at: tokenResult.expiresAt,
+          sync_window_start: null,
+          sync_window_end: null,
+        };
+        const metaParsed = zCalendarConnectionMeta.safeParse(metaCandidate);
+        if (!metaParsed.success) {
+          return { ok: false, code: "KMB-E101", detail: metaParsed.error.message };
+        }
+
+        const vaultResult = await vaultUpsertSecret(serviceClient, CALENDAR_VAULT_SECRET_NAMES.google, JSON.stringify(secret));
+        if (!vaultResult.ok) return vaultResult;
+
+        const upsertResult = await upsertCalendarConnection(serviceClient, {
+          provider: "google",
+          status: "connected",
+          vault_secret_name: CALENDAR_VAULT_SECRET_NAMES.google,
+          meta: metaParsed.data,
+        });
+        if (!upsertResult.ok) return upsertResult;
+
+        return { ok: true, value: { account_email: accountEmail } };
+      } catch (err) {
+        if (err instanceof OAuthTokenError) {
+          return { ok: false, code: "KMB-E720", detail: err.message };
+        }
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
   };
+}
+
+/** この Issue (#54) で接続 (push/pull) を実装している provider の集合。#55 が Microsoft を
+ *  実装した時点でここに追加するだけで runCalendarSync/requestSyncNow が対応する。 */
+const SUPPORTED_CALENDAR_PROVIDERS: readonly CalendarProvider[] = ["google"];
+
+/** reconcilePushUnknown 等が provider ごとの adapter を解決する。#55 まで google のみ。 */
+function adapterForProvider(provider: CalendarProvider) {
+  if (provider === "google") return googleCalendarAdapter;
+  return null;
+}
+
+/**
+ * 接続済み provider の calendar_event_links を pending_push で upsert する共通ヘルパー
+ * (§6.1 placeBlock 「接続済み provider の links を pending_push で upsert (service client。
+ * 未設定時は skip + warn)」/ §6.2 createBlock「placeBlock と同処理」/ unscheduleBlock
+ * 「外部イベント削除は links を pending 削除マーク」/ cancelOpenBlocksForDeal「scheduled だった
+ * ブロックの links は削除マーク」の共通実装。BLOCKER 修正: #54 の初期実装はこの upsert が
+ * どの facade メソッドからも呼ばれておらず、日次 runCalendarMaintenance の push 漏れ自己修復
+ * (§8.8) 頼みになっていた (C5/C6 の「5分以内反映」要件を満たさない) ため、呼び出し元 5 箇所
+ * (placeBlock/createBlock/unscheduleBlock/transitionBlock('cancelled')/cancelOpenBlocksForDeal)
+ * に配線した。
+ *
+ * ベストエフォート: 呼び出し元の DB 操作 (配置/解除/遷移本体) は既にこの関数の呼び出し前に
+ * 成功しているため、ここでの失敗は Result に反映せず console.warn のみに留める
+ * (canonical 「未設定時は skip + warn」を service client 生成失敗以外の失敗にも適用した —
+ * カレンダー同期の不調で本来成功すべき配置/解除操作まで失敗扱いにしないための安全側判断)。
+ * ログは必ず残すため無言の握り潰しではない。取りこぼしは日次 runCalendarMaintenance
+ * (§8.8 検査4: push 漏れ自己修復) が回収する。
+ */
+async function markConnectedProvidersPendingPush(blockId: string): Promise<void> {
+  let serviceClient: SupabaseClient;
+  try {
+    serviceClient = createSupabaseServiceClient();
+  } catch (err) {
+    console.warn(
+      `[scheduling] markConnectedProvidersPendingPush: service client 生成に失敗しました (block=${blockId}): ${errMessage(err)}`,
+    );
+    return;
+  }
+  for (const provider of SUPPORTED_CALENDAR_PROVIDERS) {
+    const connectionResult = await getCalendarConnection(serviceClient, provider);
+    if (!connectionResult.ok) {
+      console.warn(
+        `[scheduling] markConnectedProvidersPendingPush: connection 読み取りに失敗しました (block=${blockId}, provider=${provider}): ${connectionResult.code} ${connectionResult.detail ?? ""}`,
+      );
+      continue;
+    }
+    if (!connectionResult.value || connectionResult.value.status !== "connected") continue; // 未接続は正常系 (warn 不要)
+    const upsertResult = await upsertPendingPushLink(serviceClient, blockId, provider);
+    if (!upsertResult.ok) {
+      console.warn(
+        `[scheduling] markConnectedProvidersPendingPush: pending_push upsert に失敗しました (block=${blockId}, provider=${provider}): ${upsertResult.code} ${upsertResult.detail ?? ""}`,
+      );
+    }
+  }
+}
+
+function toCalendarConnectionView(row: CalendarConnectionRow): CalendarConnectionView {
+  const metaResult = zCalendarConnectionMeta.safeParse(row.meta);
+  const meta = metaResult.success ? metaResult.data : null;
+  if (!metaResult.success && row.status !== "disconnected") {
+    // 接続中/エラー中のはずの行の meta が契約と不一致 = データ不整合の兆候。ログだけ残し
+    // (エラー握り潰し禁止)、画面は null フィールドで安全側に degrade する (一覧取得自体は失敗させない)。
+    console.error(`[scheduling] toCalendarConnectionView: meta が zCalendarConnectionMeta と不一致です (provider=${row.provider})`);
+  }
+  return {
+    provider: row.provider,
+    status: row.status,
+    account_email: meta?.account_email ?? null,
+    app_calendar_id: meta?.app_calendar_id ?? null,
+    token_expires_at: meta?.token_expires_at ?? null,
+    last_pulled_at: row.last_pulled_at,
+    last_error_code: row.last_error_code,
+    connected_at: row.connected_at,
+  };
+}
+
+function toSyncIssueItem(row: SyncIssueLinkRow): SyncIssueItem {
+  return {
+    link_id: row.id,
+    provider: row.provider,
+    sync_status: row.sync_status,
+    last_error_code: row.last_error_code,
+    block: {
+      id: row.block_id,
+      title: row.block_title,
+      work_type_label: row.block_work_type_label,
+      starts_at: row.block_starts_at,
+      ends_at: row.block_ends_at,
+      status: row.block_status,
+    },
+    deleted_externally_at: row.deleted_externally_at,
+  };
+}
+
+/**
+ * runCalendarMaintenance (§8.8) の 5 項目。runCalendarSync とは異なり単一の Result を返さず
+ * 個々のチェックが失敗しても残りのチェックを継続する (1 つの検査の失敗で他の自己修復が止まると
+ * 被害が拡大するため — 各チェックは自身のエラーを console.error に残し、呼び出し元
+ * (facade.runCalendarMaintenance) の catch には基本的に到達しない設計)。
+ */
+async function runCalendarMaintenanceTasks(serviceClient: SupabaseClient): Promise<void> {
+  for (const provider of SUPPORTED_CALENDAR_PROVIDERS) {
+    const adapter = adapterForProvider(provider);
+    if (!adapter) continue;
+
+    const connectionResult = await getCalendarConnection(serviceClient, provider);
+    if (!connectionResult.ok) {
+      console.error(`[scheduling] runCalendarMaintenance: connection 読み取りに失敗しました (provider=${provider}): ${connectionResult.code} ${connectionResult.detail ?? ""}`);
+      continue;
+    }
+    const connection = connectionResult.value;
+    if (!connection || connection.status !== "connected") continue;
+
+    const metaResult = zCalendarConnectionMeta.safeParse(connection.meta);
+    if (!metaResult.success || !metaResult.data.app_calendar_id) continue;
+    const appCalendarId = metaResult.data.app_calendar_id;
+
+    const env = resolveProviderEnv(provider);
+
+    // 1. トークン健全性: 期限 24h 以内のもののみ refresh を実行する (getValidCalendarSecret の
+    //    5 分マージンでは日次 maintenance の間隔 (24h) をカバーできないため、ここだけ広めの
+    //    マージンで強制チェックする — §8.8)。invalid_grant/invalid_client による失効は
+    //    forceRefreshCalendarSecret (token.ts) が既に connection.status を更新済みなので
+    //    二重処理せず、この provider の残りの検査 (3/4) をスキップして次 provider へ進む。
+    let tokenHealthy = true;
+    try {
+      const vaultResult = await vaultReadSecret(serviceClient, CALENDAR_VAULT_SECRET_NAMES[provider]);
+      if (vaultResult.ok && vaultResult.value) {
+        const parsedSecret = zCalendarVaultSecret.safeParse(JSON.parse(vaultResult.value));
+        if (parsedSecret.success && new Date(parsedSecret.data.expires_at).getTime() - Date.now() < 24 * 60 * 60 * 1000) {
+          await forceRefreshCalendarSecret(serviceClient, provider, adapter, env);
+        }
+      }
+    } catch (err) {
+      if (err instanceof TokenExpiredError || err instanceof TokenClientMisconfiguredError) {
+        tokenHealthy = false;
+      } else {
+        console.error(`[scheduling] runCalendarMaintenance: トークン健全性チェックに失敗しました (provider=${provider}): ${errMessage(err)}`);
+      }
+    }
+    if (!tokenHealthy) continue;
+
+    // 2. Graph ローリングウィンドウ切り直し: この Issue は google のみのため対象外 (§8.8 表の注記どおり no-op)。
+
+    // 3. アプリ専用カレンダー実在確認 (P20)
+    try {
+      const secret = await getValidCalendarSecret(serviceClient, provider, adapter, env);
+      const exists = await adapter.calendarExists(appCalendarId, secret);
+      if (!exists) {
+        const updateResult = await updateCalendarConnectionStatus(
+          serviceClient,
+          provider,
+          "error",
+          "KMB-E723",
+          "アプリ専用カレンダーが見つかりません",
+        );
+        if (!updateResult.ok) {
+          console.error(`[scheduling] runCalendarMaintenance: connection error 更新に失敗しました (provider=${provider}): ${updateResult.code} ${updateResult.detail ?? ""}`);
+        }
+        continue; // カレンダー消失時はこの provider の push 漏れ自己修復も意味が無いためスキップ
+      }
+    } catch (err) {
+      if (!(err instanceof TokenExpiredError) && !(err instanceof TokenClientMisconfiguredError)) {
+        console.error(`[scheduling] runCalendarMaintenance: カレンダー実在確認に失敗しました (provider=${provider}): ${errMessage(err)}`);
+      }
+      continue;
+    }
+
+    // 4. push 漏れ自己修復
+    try {
+      const backfillResult = await getWorkBlocksNeedingPushBackfill(serviceClient, provider);
+      if (!backfillResult.ok) {
+        console.error(`[scheduling] runCalendarMaintenance: push 漏れ対象の取得に失敗しました (provider=${provider}): ${backfillResult.code} ${backfillResult.detail ?? ""}`);
+      } else {
+        for (const blockId of backfillResult.value) {
+          const upsertResult = await upsertPendingPushLink(serviceClient, blockId, provider);
+          if (!upsertResult.ok) {
+            console.error(`[scheduling] runCalendarMaintenance: push 漏れ自己修復の upsert に失敗しました (block=${blockId}, provider=${provider}): ${upsertResult.code} ${upsertResult.detail ?? ""}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[scheduling] runCalendarMaintenance: push 漏れ自己修復に失敗しました (provider=${provider}): ${errMessage(err)}`);
+    }
+  }
+
+  // 5. work_log 再送 (§8.8)。MAJOR 修正: canonical §8.8 表で「Phase 5」マーカーが付くのは
+  //    「滞留警告」のみであり、「work_log 再送」には無い (v1 必須の自己修復)。旧実装は誤って
+  //    両方を Phase 5 扱いにして丸ごとスキップしていた。recordActual (facade.ts) の
+  //    appendActivity 呼び出しはベストエフォート (§7.3 — 失敗しても実績確定自体は成立させる) の
+  //    ため、直近 7 日分の done ブロックへ同じ冪等キー ((work_log, work_blocks, blockId)) で
+  //    再送して自己修復する。provider ループの外 (google 接続の有無に関係ない自己修復) なので
+  //    for ループの後段に置く。
+  try {
+    // UTC 日境界で計算する (JST とのずれは最大 1 日分の safe-side の余裕になるだけで、
+    // 「直近7日」の趣旨である取りこぼし回収を損なわない)。
+    const sinceDateOnly = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const blocks = await getRecentDoneBlocksForWorkLogResend(serviceClient, sinceDateOnly);
+    for (const block of blocks) {
+      // クエリ条件 (status='done' + deal_id 非NULL) から deal_id/performed_on/actual_hours は
+      // 非NULL のはずだが (DB check work_blocks_done_complete)、型を狭めるための防御。
+      if (block.deal_id === null || block.actual_hours === null || block.performed_on === null) continue;
+      const workTypeLabel = block.work_types?.label ?? "";
+      const appended = await crmFacade.appendActivity(
+        {
+          activity_type: "work_log",
+          occurred_at: `${block.performed_on}T12:00:00+09:00`, // recordActual と同一の決定的値 (§7.3)
+          title: `作業実績: ${workTypeLabel}`,
+          body: null,
+          payload: {
+            work_block_id: block.id,
+            work_type_key: block.work_types?.key ?? "",
+            work_type_label: workTypeLabel,
+            planned_hours: block.planned_hours,
+            actual_hours: block.actual_hours,
+            performed_on: block.performed_on,
+          },
+          ref_table: "work_blocks",
+          ref_id: block.id,
+          links: [{ customer_id: null, company_id: null, deal_id: block.deal_id }],
+        },
+        { mode: "service", client: serviceClient },
+      );
+      if (!appended.ok) {
+        console.error(
+          `[scheduling] runCalendarMaintenance: work_log 再送に失敗しました (block=${block.id}): ${appended.code} ${appended.detail ?? ""}`,
+        );
+      }
+    }
+  } catch (err) {
+    console.error(`[scheduling] runCalendarMaintenance: work_log 再送タスクに失敗しました: ${errMessage(err)}`);
+  }
+
+  // 6. 滞留警告 (Phase 5 ダッシュボード統合待ち) はこの Issue のスコープ外 (§8.8 表に
+  //    「Phase 5」と明記されている唯一の項目 — openIssues 報告)。
 }

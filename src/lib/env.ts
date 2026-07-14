@@ -58,6 +58,13 @@ const envSchema = z.object({
   META_APP_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   META_APP_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 
+  // ---- 外部カレンダー同期 (Wave3 scheduling。docs/design/crm-suite/03-scheduling.md §8.2、
+  // 00-overview §5.4)。MS_CALENDAR_CLIENT_ID/SECRET は #55 (Microsoft) の担当のため、
+  // このモジュール (#54: Google のみ) では追加しない (未実装 provider の env キーを
+  // OAuth route が誤って参照しないようにするための意図的なスコープ限定)。
+  GOOGLE_CALENDAR_CLIENT_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  GOOGLE_CALENDAR_CLIENT_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+
   // ---- 電話連携 (Wave3 telephony。docs/design/crm-suite/04-telephony.md §1.3/§1.4/§4.6) ----
   // 15 秒制約下で Vault RPC 往復を避けるため env 直読み (Vault は使わない — 発注指示)。
   // 番号自体 (phone_number_e164/forward_to_e164) は settings.telephony キーが保持し、
@@ -146,6 +153,20 @@ export function isXOAuthConfigured(): boolean {
 /** Meta (Instagram) OAuth 接続に必要な env が揃っているか */
 export function isMetaOAuthConfigured(): boolean {
   return isOAuthEnabled() && Boolean(process.env.META_APP_ID) && Boolean(process.env.META_APP_SECRET);
+}
+
+/**
+ * Google カレンダー OAuth 接続に必要な env が揃っているか (isXOAuthConfigured と同型)。
+ * 未設定時は /api/oauth/google-calendar/{start,callback} が 503 (KMB-E901) で degrade し、
+ * /admin/calendar/connections が「未設定」バナー + 接続ボタン無効化を表示する
+ * (docs/design/crm-suite/03-scheduling.md §8.2 / §10.4)。
+ */
+export function isGoogleCalendarConfigured(): boolean {
+  return (
+    isOAuthEnabled() &&
+    Boolean(process.env.GOOGLE_CALENDAR_CLIENT_ID) &&
+    Boolean(process.env.GOOGLE_CALENDAR_CLIENT_SECRET)
+  );
 }
 
 /**

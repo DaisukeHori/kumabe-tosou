@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
   zUpdateWorkBlockInput,
+  type ExternalDeletionResolution,
   type UpdateWorkBlockInput,
   type WorkBlockView,
   type WorkTypeRow,
@@ -29,6 +30,7 @@ import {
   deleteBlockAction,
   placeBlockAction,
   recordActualAction,
+  resolveExternalDeletionAction,
   transitionBlockAction,
   unscheduleBlockAction,
   updateBlockAction,
@@ -184,6 +186,27 @@ export function BlockDetailDialog({
     });
   }
 
+  /**
+   * deleted_externally (外部カレンダー側で削除された) link の解決 3 択 (03-scheduling.md §10.2
+   * 「クリックで解決ダイアログ」/ §9.2 resolveExternalDeletionAction)。#54 レビュー修正で追加:
+   * 従来はカレンダー画面上のブロックをクリックしても通常の編集ダイアログが開くだけで、
+   * /admin/calendar/connections の「同期の問題」表 (sync-issues-table.tsx) に移動しない限り
+   * 解決できなかった。同じ 3 択ロジックをここでも呼べるようにする。
+   */
+  function handleResolveExternalDeletion(linkId: string, action: ExternalDeletionResolution) {
+    if (!block) return;
+    startTransition(async () => {
+      const result = await resolveExternalDeletionAction(linkId, action);
+      if (!result.ok) {
+        toast.error(result.detail ?? `解決に失敗しました (${result.code})`);
+        return;
+      }
+      const message =
+        action === "unschedule" ? "未配置に戻しました。" : action === "cancel_block" ? "キャンセルしました。" : "再作成を予約しました。";
+      afterSuccess(message);
+    });
+  }
+
   function handleRecordActual() {
     if (!block) return;
     const hours = Number(actualHours);
@@ -203,6 +226,9 @@ export function BlockDetailDialog({
   }
 
   const diff = block.actual_hours !== null ? block.actual_hours - block.planned_hours : null;
+  // deleted_externally は provider ごとに起こり得るが、解決 3 択はブロック単位の操作 (unschedule/
+  // cancel_block はブロック本体を動かす) なので最初の 1 件のみを対象にする (§10.2)。
+  const deletedExternallyLink = block.sync.find((s) => s.sync_status === "deleted_externally") ?? null;
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onOpenChange(false); }}>
@@ -223,6 +249,44 @@ export function BlockDetailDialog({
         </DialogHeader>
 
         <div className="max-h-[70vh] space-y-5 overflow-y-auto pr-1">
+          {/* ---- 外部削除検知の解決 (deleted_externally, §10.2/§9.2) ---- */}
+          {deletedExternallyLink && (
+            <div className="space-y-2 rounded-lg border-2 border-dashed border-destructive p-3">
+              <p className="text-sm font-medium text-destructive">
+                ⚠ 外部カレンダー側で削除されています。どうしますか？
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => handleResolveExternalDeletion(deletedExternallyLink.link_id, "unschedule")}
+                >
+                  未配置に戻す
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => handleResolveExternalDeletion(deletedExternallyLink.link_id, "cancel_block")}
+                >
+                  キャンセルする
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => handleResolveExternalDeletion(deletedExternallyLink.link_id, "repush")}
+                >
+                  作り直して再送
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* ---- 配置 ---- */}
           <div className="space-y-2 rounded-lg border border-border p-3">
             <p className="text-xs font-medium text-muted-foreground">配置</p>
