@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { Result } from "@/modules/platform/contracts";
+import type { Paged, Pagination, Result } from "@/modules/platform/contracts";
 import { KMB_ERRORS, type KmbErrorCode } from "@/modules/platform/errors";
 
 import type {
@@ -643,4 +643,312 @@ export async function reflectLinkResultToCalls(
     .eq("id", callId);
   if (error) return pgErrorToResult(error);
   return { ok: true, value: { skipped: false } };
+}
+
+// ============================================================
+// calls — 一覧 / 詳細 / 集計 (#59: TelephonyFacade 契約外拡張 listCalls / getCallDetail /
+// linkCallToCustomer / getTelephonySetupStatus / getCallAlertCounts の実データ源。
+// 04-telephony.md §7.2 / §8.1 / §8.4)
+// ============================================================
+
+type StartedAtCursor = { startedAt: string; id: string };
+
+function encodeStartedAtCursor(c: StartedAtCursor): string {
+  return Buffer.from(JSON.stringify(c), "utf-8").toString("base64url");
+}
+
+function decodeStartedAtCursor(raw: string | null | undefined): StartedAtCursor | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, "base64url").toString("utf-8"));
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      typeof (parsed as { startedAt?: unknown }).startedAt === "string" &&
+      typeof (parsed as { id?: unknown }).id === "string"
+    ) {
+      return parsed as StartedAtCursor;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function pageByStartedAt<Row extends { started_at: string; id: string }>(
+  rows: Row[],
+  limit: number,
+): Paged<Row> {
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+  const nextCursor =
+    hasMore && last ? encodeStartedAtCursor({ startedAt: last.started_at, id: last.id }) : null;
+  return { items, next_cursor: nextCursor };
+}
+
+export type ListCallsFilter = {
+  handling?: CallHandling;
+  needsReview?: boolean;
+  jobFailed?: boolean;
+};
+
+/**
+ * job_error_code/job_analysis は任意 (省略可) — listCallsPage 経由のみ populate する
+ * (§8.1 一覧の error_code ツールチップ/要約冒頭40字用)。getCallDetail 側の toCallListItem
+ * 呼び出しは job_status のみで足りるため、この 2 フィールドを省略しても型エラーにならない
+ * (facade.ts の toCallListItemView だけがこの 2 フィールドを読む)。
+ */
+export type CallListRow = CallRow & {
+  job_status: CallJobStatus | null;
+  job_error_code?: string | null;
+  job_analysis?: CallAnalysis | null;
+};
+
+/**
+ * /admin/calls 一覧 (04-telephony.md §7.2 listCalls / §8.1)。keyset (started_at desc, id desc)。
+ *
+ * 【地雷回避 — 計画書必須要件】1 通話に複数 call_jobs があり得る (転送録音 + 留守電フォール
+ * バック等 — §10-15)。「処理状態」列は最新 job (created_at 降順の先頭) の status を表示する
+ * 規約 (§8.1)。この集約は 2 クエリ構成で行う:
+ *   1) calls を keyset + フィルタで先にページング確定する。`jobFailed` フィルタは
+ *      call_jobs.status='failed' を持つ call_id の集合を事前に取得し `.in("id", ...)` で
+ *      絞り込む (embedded resource の inner join フィルタに頼ると同一 call が複数の
+ *      matching job を持つ場合の重複排除挙動が PostgREST バージョン依存で不安定なため、
+ *      素直な 2 段クエリに倒す)。`needsReview` (match_status='ambiguous') と `handling` は
+ *      calls 自身の列なので直接 `.eq()` で絞る。**JS 側の後絞りはしない** — post-filter だと
+ *      「keyset で ちょうど limit 件(+1)」の保証が崩れ、実際は 50 件超が存在するのに
+ *      画面が「これで全件」と誤表示する地雷になる (計画書で名指し警告)。
+ *   2) ページ内の call_id 集合に対してのみ call_jobs (call_id/status/created_at) を取得し、
+ *      call_id ごとに created_at 降順の先頭を job_status として採用する
+ *      (ページサイズ ≤50 件 × ジョブ数なので N+1 querying の懸念はない)。
+ *
+ * 【判断根拠 — openIssues 記載】`jobFailed=true` は「その通話が持つ call_jobs のうち
+ * いずれか 1 つでも failed があれば一致」とする (最新 job だけが failed の場合に限定しない)。
+ * 複数ジョブ (§10-15) のうち過去の 1 本が failed のまま残っていれば admin が気付けるべき
+ * という「見落としを作らない」安全側の解釈 (エラー握り潰し厳禁の精神を一覧フィルタにも適用)。
+ */
+export async function listCallsPage(
+  client: SupabaseClient,
+  filter: ListCallsFilter,
+  pagination: Pagination,
+): Promise<Result<Paged<CallListRow>>> {
+  let failedCallIds: string[] | null = null;
+  if (filter.jobFailed) {
+    const { data, error } = await client.from("call_jobs").select("call_id").eq("status", "failed");
+    if (error) return pgErrorToResult(error);
+    failedCallIds = [...new Set((data ?? []).map((r) => (r as { call_id: string }).call_id))];
+    if (failedCallIds.length === 0) {
+      return { ok: true, value: { items: [], next_cursor: null } };
+    }
+  }
+
+  let query = client
+    .from("calls")
+    .select("*")
+    .order("started_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(pagination.limit + 1);
+
+  if (filter.handling) {
+    query = query.eq("handling", filter.handling);
+  }
+  if (filter.needsReview) {
+    query = query.eq("match_status", "ambiguous");
+  }
+  if (failedCallIds) {
+    query = query.in("id", failedCallIds);
+  }
+
+  const cursor = decodeStartedAtCursor(pagination.cursor);
+  if (cursor) {
+    query = query.or(
+      `started_at.lt.${cursor.startedAt},and(started_at.eq.${cursor.startedAt},id.lt.${cursor.id})`,
+    );
+  }
+
+  const { data, error } = await query;
+  if (error) return pgErrorToResult(error);
+  const calls = (data ?? []) as CallRow[];
+  if (calls.length === 0) {
+    return { ok: true, value: { items: [], next_cursor: null } };
+  }
+
+  const callIds = calls.map((c) => c.id);
+  // error_code/analysis も同じクエリで併せて取得する (§8.1 一覧の error_code ツールチップ/
+  // 要約冒頭40字。job_status と同じ「call_id 昇順・created_at 降順」の先頭行 = 最新 job から
+  // 採る一貫した規約 — 追加のクエリ往復は発生しない)。
+  const { data: jobRows, error: jobError } = await client
+    .from("call_jobs")
+    .select("call_id,status,error_code,analysis,created_at")
+    .in("call_id", callIds)
+    .order("call_id", { ascending: true })
+    .order("created_at", { ascending: false });
+  if (jobError) return pgErrorToResult(jobError);
+
+  type LatestJob = { status: CallJobStatus; error_code: string | null; analysis: CallAnalysis | null };
+  const latestJobByCallId = new Map<string, LatestJob>();
+  for (const row of (jobRows ?? []) as {
+    call_id: string;
+    status: CallJobStatus;
+    error_code: string | null;
+    analysis: CallAnalysis | null;
+    created_at: string;
+  }[]) {
+    if (!latestJobByCallId.has(row.call_id)) {
+      latestJobByCallId.set(row.call_id, { status: row.status, error_code: row.error_code, analysis: row.analysis });
+    }
+  }
+
+  const rows: CallListRow[] = calls.map((c) => {
+    const latest = latestJobByCallId.get(c.id);
+    return {
+      ...c,
+      job_status: latest?.status ?? null,
+      job_error_code: latest?.error_code ?? null,
+      job_analysis: latest?.analysis ?? null,
+    };
+  });
+
+  return { ok: true, value: pageByStartedAt(rows, pagination.limit) };
+}
+
+/**
+ * call_id 単位で call_jobs 全件取得 (getCallDetail の処理状態フッタ・linkCallToCustomer の
+ * 議事録参照用 — §8.2-7/§7.2)。created_at 昇順 (時系列表示。「最新」の判定は呼び出し側が
+ * created_at を見て行う — 配列順序に依存させない)。
+ */
+export async function listCallJobsByCallId(client: SupabaseClient, callId: string): Promise<Result<CallJobRow[]>> {
+  const { data, error } = await client
+    .from("call_jobs")
+    .select("*")
+    .eq("call_id", callId)
+    .order("created_at", { ascending: true });
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as CallJobRow[] };
+}
+
+/** §7.2/§8.4 getCallAlertCounts.failed: call_jobs.status='failed' の件数。 */
+export async function countFailedCallJobs(client: SupabaseClient): Promise<Result<number>> {
+  const { count, error } = await client
+    .from("call_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "failed");
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: count ?? 0 };
+}
+
+/** §7.2/§8.4 getCallAlertCounts.needsReview: calls.match_status='ambiguous' の件数。 */
+export async function countAmbiguousCalls(client: SupabaseClient): Promise<Result<number>> {
+  const { count, error } = await client
+    .from("calls")
+    .select("id", { count: "exact", head: true })
+    .eq("match_status", "ambiguous");
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: count ?? 0 };
+}
+
+/** stale 判定の閾値 (§7.2: 非終端 call_jobs のうち created_at < now()-30分)。 */
+const STALE_CALL_JOB_THRESHOLD_MS = 30 * 60 * 1000;
+
+/**
+ * §7.2 の明示規約: 「getTelephonySetupStatus.staleJobs = getCallAlertCounts.stalled と
+ * 同一 query」— 実装を分岐させないため本関数を両メソッドから共有する。
+ */
+export async function countStaleCallJobs(client: SupabaseClient): Promise<Result<number>> {
+  const staleBefore = new Date(Date.now() - STALE_CALL_JOB_THRESHOLD_MS).toISOString();
+  const { count, error } = await client
+    .from("call_jobs")
+    .select("id", { count: "exact", head: true })
+    .in("status", [...CALL_JOB_RUNNABLE_STATUSES])
+    .lt("created_at", staleBefore);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: count ?? 0 };
+}
+
+/**
+ * linkCallToCustomer (§7.2) の calls CAS UPDATE。楽観排他は updated_at の生文字列比較
+ * (`.eq("updated_at", expectedUpdatedAt)`) — `new Date()` を経由すると精度落ちで恒久的に
+ * 不一致になる地雷 (settings/actions.ts・crm/repository.ts の CAS 実装と同じ注意書き)。
+ * crm/repository.ts の `updateRowWithCas` と同型実装だが、telephony から crm/repository を
+ * 直 import することは ESLint MODULES 境界で禁止されているため同型実装をここに複製する
+ * (契約書 §1.2「repository は各モジュール専属」規約どおり重複を許容)。
+ *
+ * customerId=null (紐づけ解除) も許容する (§5.2.2 v1.1 不変条件: manual は customer_id null 可 =
+ * 「手動介入済み・未紐づけ」)。0 行更新は「対象不存在 (KMB-E804)」と「CAS 不一致 (KMB-E103)」の
+ * 2 パターンがあり得るため、追加の存在確認で判別する (握り潰して一方に決め打ちしない)。
+ */
+export async function linkCallToCustomerRow(
+  client: SupabaseClient,
+  callId: string,
+  customerId: string | null,
+  expectedUpdatedAt: string,
+): Promise<Result<CallRow>> {
+  const { data, error } = await client
+    .from("calls")
+    .update({ customer_id: customerId, match_status: "manual" })
+    .eq("id", callId)
+    .eq("updated_at", expectedUpdatedAt)
+    .select("*")
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  if (data) return { ok: true, value: data as CallRow };
+
+  const { data: existing, error: existErr } = await client
+    .from("calls")
+    .select("id")
+    .eq("id", callId)
+    .maybeSingle();
+  if (existErr) return pgErrorToResult(existErr);
+  if (!existing) {
+    return { ok: false, code: "KMB-E804", detail: `通話が見つかりません: ${callId}` };
+  }
+  return {
+    ok: false,
+    code: "KMB-E103",
+    detail: "他の操作で更新されています。再読み込みしてやり直してください。",
+  };
+}
+
+/**
+ * メモ欄保存 (§8.2-8 / calls.memo)。楽観排他は updated_at の生文字列比較
+ * (linkCallToCustomerRow と同型 CAS パターン)。
+ *
+ * 【判断根拠 — 計画書 issue-59.md 未解決点#2 の実装時判断】canonical 04-telephony.md §7.4 の
+ * Server Actions 表には saveCallMemoAction 相当の記載が無い (§8.2-8「メモ欄 (calls.memo。
+ * textarea + 保存 — 楽観排他)」との記載漏れ)。データ損失なし・機能を壊さない安全側の解釈として
+ * 「§8.2 本文が明示要求する機能は実装する」を採用し、telephony facade/repository に本関数と
+ * facade.saveCallMemo を追加する。0 行更新は対象不存在 (KMB-E804) と CAS 不一致 (KMB-E103) の
+ * 2 パターンがあり得るため、linkCallToCustomerRow と同じ「事後 SELECT で判別」方式を踏襲する。
+ */
+export async function updateCallMemo(
+  client: SupabaseClient,
+  callId: string,
+  memo: string | null,
+  expectedUpdatedAt: string,
+): Promise<Result<CallRow>> {
+  const { data, error } = await client
+    .from("calls")
+    .update({ memo })
+    .eq("id", callId)
+    .eq("updated_at", expectedUpdatedAt)
+    .select("*")
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  if (data) return { ok: true, value: data as CallRow };
+
+  const { data: existing, error: existErr } = await client
+    .from("calls")
+    .select("id")
+    .eq("id", callId)
+    .maybeSingle();
+  if (existErr) return pgErrorToResult(existErr);
+  if (!existing) {
+    return { ok: false, code: "KMB-E804", detail: `通話が見つかりません: ${callId}` };
+  }
+  return {
+    ok: false,
+    code: "KMB-E103",
+    detail: "他の操作で更新されています。再読み込みしてやり直してください。",
+  };
 }

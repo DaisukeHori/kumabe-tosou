@@ -103,7 +103,12 @@ function isDispatchableStage(status: CallJobStatus): status is DispatchableStage
 // 共通ヘルパー (#58)
 // ============================================================
 
-const CALL_AUDIO_BUCKET = "call-audio";
+/**
+ * #59 で facade.ts (createRecordingPlaybackUrl) からも参照するため export 化 (計画書「地雷」節:
+ * facade/repository で再度リテラル "call-audio" を書くと 3 箇所目の重複になるため、この定数を
+ * 単一の真実源とする — facade→internal/worker の依存方向は既存どおりで循環にならない)。
+ */
+export const CALL_AUDIO_BUCKET = "call-audio";
 /** §6.5.1 手順3: メモリ保護 (8kHz/16bit stereo で約100分相当 — 実運用で到達しない)。 */
 const DOWNLOAD_MAX_BYTES = 200_000_000;
 

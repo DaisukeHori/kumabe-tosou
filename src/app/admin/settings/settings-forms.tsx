@@ -29,6 +29,7 @@ import {
 } from "./actions";
 import { AiSettingsTab } from "./ai-tab";
 import { SETTINGS_FORM_INITIAL_STATE, type SettingsFormState } from "./form-state";
+import { BusinessHoursForm, TelephonyForm, type TelephonySetupStatus } from "./telephony-forms";
 
 export type SettingsMetaFor<K extends SettingsKey> = {
   value: SettingsValue<K> | null;
@@ -43,19 +44,30 @@ export type SettingsTabsData = {
   ops_limits: SettingsMetaFor<"ops_limits">;
   notifications: SettingsMetaFor<"notifications">;
   work_capacity: SettingsMetaFor<"work_capacity">;
+  telephony: SettingsMetaFor<"telephony">;
+  business_hours: SettingsMetaFor<"business_hours">;
 };
 
 /**
  * "ai" は site_settings の SettingsKey ではなく ai-providers 由来のタブのため、別ユニオンで扱う。
  * #45 (07-contracts-delta §D5) で SettingsKey は 11 キーに拡張されたが、本管理画面がタブとして
- * 描画するのは従来の 5 キー + work_capacity (#53) のみ (analytics/branding 等の残りの新規キーの
- * タブ・Server Actions は他 Issue のスコープ)。SettingsKey をそのまま使うと未実装タブの型要求が
- * 漏れ伝播するため、この画面が実際に扱うキーだけの明示ユニオンに固定する。
- * ★他 Issue (#59) が telephony/business_hours タブを同時に追加する可能性があるため、
- * 既存の 5 タブ構造を壊さず work_capacity を 1 つ追加する最小差分にとどめる (実装計画書の指示)。
+ * 描画するのは従来の 5 キー + work_capacity (#53) + telephony/business_hours (#59) の計 8 キーのみ
+ * (analytics/branding/invoice_issuer 等の残りの新規キーのタブ・Server Actions は他 Issue のスコープ)。
+ * SettingsKey をそのまま使うと未実装タブの型要求が漏れ伝播するため、この画面が実際に扱うキーだけの
+ * 明示ユニオンに固定する。
  */
 type TabKey =
-  | Extract<SettingsKey, "company" | "hero" | "seo_defaults" | "ops_limits" | "notifications" | "work_capacity">
+  | Extract<
+      SettingsKey,
+      | "company"
+      | "hero"
+      | "seo_defaults"
+      | "ops_limits"
+      | "notifications"
+      | "work_capacity"
+      | "telephony"
+      | "business_hours"
+    >
   | "ai";
 
 const TAB_LABELS: Record<TabKey, string> = {
@@ -65,6 +77,8 @@ const TAB_LABELS: Record<TabKey, string> = {
   ops_limits: "運用上限",
   notifications: "通知",
   work_capacity: "週間稼働",
+  telephony: "電話",
+  business_hours: "営業時間",
   ai: "AI",
 };
 
@@ -86,7 +100,17 @@ function UpdatedAtHint({ updatedAt, isUnset }: { updatedAt: string | null; isUns
   );
 }
 
-export function SettingsTabs({ data, aiKeys }: { data: SettingsTabsData; aiKeys: AiKeyMeta[] }) {
+export function SettingsTabs({
+  data,
+  aiKeys,
+  telephonySetupStatus,
+  siteUrl,
+}: {
+  data: SettingsTabsData;
+  aiKeys: AiKeyMeta[];
+  telephonySetupStatus: TelephonySetupStatus | null;
+  siteUrl: string;
+}) {
   const [active, setActive] = useState<TabKey>("company");
   // "ai" タブは複数の独立したフォーム (キー追加/予算) を持つため単一の Cmd+S 対象を持たない
   // (キーを設定しない = そのタブでは Cmd+S が何もしない、という割り切り)。
@@ -159,6 +183,24 @@ export function SettingsTabs({ data, aiKeys }: { data: SettingsTabsData; aiKeys:
           data={data.work_capacity}
           formRef={(el) => {
             formRefs.current.work_capacity = el;
+          }}
+        />
+      </TabsContent>
+      <TabsContent value="telephony" className="mt-6">
+        <TelephonyForm
+          data={data.telephony}
+          setupStatus={telephonySetupStatus}
+          siteUrl={siteUrl}
+          formRef={(el) => {
+            formRefs.current.telephony = el;
+          }}
+        />
+      </TabsContent>
+      <TabsContent value="business_hours" className="mt-6">
+        <BusinessHoursForm
+          data={data.business_hours}
+          formRef={(el) => {
+            formRefs.current.business_hours = el;
           }}
         />
       </TabsContent>
