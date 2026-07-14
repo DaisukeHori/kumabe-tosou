@@ -41,6 +41,36 @@ vi.mock("@/modules/telephony/facade", () => ({
   runTelephonyJobBatch: (...args: unknown[]) => runTelephonyJobBatchMock(...args),
 }));
 
+/**
+ * crm-digest 専用の追加検証 (#51 受入基準: "/api/jobs/crm-digest が sales の
+ * markExpiredQuotes/getSalesDigest を実際に呼び出すよう配線されている")。他 3 ルートは
+ * crm/facade・sales/facade を import していないため無関係 (telephony ブロックと同じ分担方針)。
+ */
+const collectDigestMock = vi.fn();
+const sendDailyDigestMock = vi.fn();
+const isDigestEmptyMock = vi.fn();
+vi.mock("@/modules/crm/facade", () => ({
+  crmFacade: {
+    collectDigest: (...args: unknown[]) => collectDigestMock(...args),
+    sendDailyDigest: (...args: unknown[]) => sendDailyDigestMock(...args),
+  },
+  isDigestEmpty: (...args: unknown[]) => isDigestEmptyMock(...args),
+}));
+
+const markExpiredQuotesMock = vi.fn();
+const getSalesDigestMock = vi.fn();
+// route.ts は createSalesFacade() を常に無引数で呼ぶ (§6.2 表・§7.5 の規約 — 実装計画書
+// issue-51.md の地雷節参照) ため、スタブも引数を受け取らない。
+function createSalesFacadeStub(): { markExpiredQuotes: (...a: unknown[]) => unknown; getSalesDigest: (...a: unknown[]) => unknown } {
+  return {
+    markExpiredQuotes: (...a: unknown[]) => markExpiredQuotesMock(...a),
+    getSalesDigest: (...a: unknown[]) => getSalesDigestMock(...a),
+  };
+}
+vi.mock("@/modules/sales/facade", () => ({
+  createSalesFacade: () => createSalesFacadeStub(),
+}));
+
 import { POST as telephonyPost } from "@/app/api/jobs/telephony/route";
 import { POST as calendarSyncPost } from "@/app/api/jobs/calendar-sync/route";
 import { POST as calendarMaintenancePost } from "@/app/api/jobs/calendar-maintenance/route";
@@ -178,6 +208,130 @@ describe("/api/jobs/telephony (§7.3 AC#8): after() で telephony facade の run
       expect.stringContaining("KMB-E901"),
       "batch boom",
     );
+
+    errorSpy.mockRestore();
+  });
+});
+
+/**
+ * #51 受入基準: "/api/jobs/crm-digest が sales の markExpiredQuotes/getSalesDigest を実際に
+ * 呼び出すよう配線されている (crm フェーズの null 固定が置換されている)"。after() コールバック
+ * 内部の呼び出し順・事後マージ・isDigestEmpty ゲート・エラー握り潰し防止 (graceful degrade で
+ * ok:false を console.error に記録するのみで処理は継続する) を検証する
+ * (telephony ブロックと同型 — 他 3 ルートは crm/sales facade を import していないため無関係)。
+ */
+describe("/api/jobs/crm-digest (#51): after() で markExpiredQuotes → collectDigest → getSalesDigest 事後マージ → isDigestEmpty ゲート → sendDailyDigest", () => {
+  const ORIGINAL_JOBS_SECRET = process.env.JOBS_SECRET;
+  const baseDigest = {
+    generated_on: "2026-07-14",
+    overdue_tasks: [] as unknown[],
+    today_tasks: [] as unknown[],
+    awaiting_leads: [] as unknown[],
+    sales: null as { expiring_quotes: unknown[]; unpaid_invoices: unknown[] } | null,
+  };
+
+  beforeEach(() => {
+    afterMock.mockClear();
+    collectDigestMock.mockReset();
+    sendDailyDigestMock.mockReset();
+    isDigestEmptyMock.mockReset();
+    markExpiredQuotesMock.mockReset();
+    getSalesDigestMock.mockReset();
+    process.env.JOBS_SECRET = "correct-secret";
+  });
+
+  afterEach(() => {
+    if (ORIGINAL_JOBS_SECRET === undefined) {
+      delete process.env.JOBS_SECRET;
+    } else {
+      process.env.JOBS_SECRET = ORIGINAL_JOBS_SECRET;
+    }
+  });
+
+  async function runCallback() {
+    const res = await crmDigestPost(makeRequest({ "x-jobs-secret": "correct-secret" }));
+    expect(res.status).toBe(202);
+    const callback = afterMock.mock.calls[0][0] as () => Promise<void>;
+    await callback();
+  }
+
+  it("markExpiredQuotes/collectDigest/getSalesDigest がいずれも {mode:'service'} で呼ばれ、成功時は digest.sales に getSalesDigest の結果がマージされて sendDailyDigest に渡る", async () => {
+    markExpiredQuotesMock.mockResolvedValue({ ok: true, value: undefined });
+    collectDigestMock.mockResolvedValue({ ok: true, value: { ...baseDigest } });
+    const salesDigest = {
+      expiring_quotes: [
+        { document_id: "d-1", doc_no: "Q-1", billing_name: "顧客A", valid_until: "2026-07-20", total_jpy: 1000 },
+      ],
+      unpaid_invoices: [],
+    };
+    getSalesDigestMock.mockResolvedValue({ ok: true, value: salesDigest });
+    isDigestEmptyMock.mockReturnValue(false);
+    sendDailyDigestMock.mockResolvedValue({ ok: true, value: undefined });
+
+    await runCallback();
+
+    expect(markExpiredQuotesMock).toHaveBeenCalledWith({ mode: "service" });
+    expect(collectDigestMock).toHaveBeenCalledWith({ mode: "service" });
+    expect(getSalesDigestMock).toHaveBeenCalledWith({ mode: "service" });
+    expect(sendDailyDigestMock).toHaveBeenCalledTimes(1);
+    const [sentDigest] = sendDailyDigestMock.mock.calls[0] as [typeof baseDigest];
+    expect(sentDigest.sales).toEqual(salesDigest);
+  });
+
+  it("getSalesDigest が失敗した場合は digest.sales を null のまま維持し (graceful degrade)、crm タスク側のダイジェスト送信は継続する (握り潰さず console.error に記録)", async () => {
+    markExpiredQuotesMock.mockResolvedValue({ ok: true, value: undefined });
+    collectDigestMock.mockResolvedValue({ ok: true, value: { ...baseDigest } });
+    getSalesDigestMock.mockResolvedValue({ ok: false, code: "KMB-E901", detail: "boom" });
+    isDigestEmptyMock.mockReturnValue(false);
+    sendDailyDigestMock.mockResolvedValue({ ok: true, value: undefined });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await runCallback();
+
+    expect(sendDailyDigestMock).toHaveBeenCalledTimes(1);
+    const [sentDigest] = sendDailyDigestMock.mock.calls[0] as [typeof baseDigest];
+    expect(sentDigest.sales).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("getSalesDigest"), "KMB-E901", "boom");
+
+    errorSpy.mockRestore();
+  });
+
+  it("markExpiredQuotes が失敗しても collectDigest 以降の処理は継続する (握り潰さず console.error に記録するのみ)", async () => {
+    markExpiredQuotesMock.mockResolvedValue({ ok: false, code: "KMB-E901", detail: "expire boom" });
+    collectDigestMock.mockResolvedValue({ ok: true, value: { ...baseDigest } });
+    getSalesDigestMock.mockResolvedValue({ ok: true, value: { expiring_quotes: [], unpaid_invoices: [] } });
+    isDigestEmptyMock.mockReturnValue(true);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await runCallback();
+
+    expect(collectDigestMock).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("markExpiredQuotes"), "KMB-E901", "expire boom");
+
+    errorSpy.mockRestore();
+  });
+
+  it("isDigestEmpty が true (sales 分も含めて空) を返したら sendDailyDigest は呼ばれない (空メールを毎朝送らない)", async () => {
+    markExpiredQuotesMock.mockResolvedValue({ ok: true, value: undefined });
+    collectDigestMock.mockResolvedValue({ ok: true, value: { ...baseDigest } });
+    getSalesDigestMock.mockResolvedValue({ ok: true, value: { expiring_quotes: [], unpaid_invoices: [] } });
+    isDigestEmptyMock.mockReturnValue(true);
+
+    await runCallback();
+
+    expect(sendDailyDigestMock).not.toHaveBeenCalled();
+  });
+
+  it("collectDigest が失敗したら getSalesDigest/sendDailyDigest には到達しない (握り潰さず console.error に記録)", async () => {
+    markExpiredQuotesMock.mockResolvedValue({ ok: true, value: undefined });
+    collectDigestMock.mockResolvedValue({ ok: false, code: "KMB-E901", detail: "collect boom" });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await runCallback();
+
+    expect(getSalesDigestMock).not.toHaveBeenCalled();
+    expect(sendDailyDigestMock).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("collectDigest"), "KMB-E901", "collect boom");
 
     errorSpy.mockRestore();
   });

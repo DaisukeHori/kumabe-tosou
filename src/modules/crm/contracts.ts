@@ -495,15 +495,22 @@ export type TaskListItem = {
   updated_at: string;
 };
 
-/** 日次ダイジェスト (§7.2)。sales 章は Phase 5 配線までは null (graceful degrade) */
+/** 日次ダイジェスト (§7.2)。sales フィールドは配線 (#51) までは null 固定 (graceful degrade)。
+ *  #51 で crm-digest route (app 層) が SalesFacade.getSalesDigest の結果をそのまま代入するため、
+ *  02-sales.md §5.2 の SalesDigest (sales/contracts.ts) と完全一致する形に型を拡張した
+ *  (v1.7 追加 — 他モジュール由来の追記。DealRef の「v1.7 追加」注記と同じ流儀。実装計画書
+ *  issue-51.md「未解決点2」: 旧型は billing_name/paid_jpy 等が欠落しており §0.4「未回収が
+ *  一目で消える」業務シナリオ (誰の見積/請求かをメール本文で表示) を満たせなかったため、
+ *  情報を落とすマッピングではなく型の拡張を選択した)。sales/contracts.ts の SalesDigest 型定義が
+ *  正 (canonical) — この場所で構造だけ複製する (crm→sales の import は作らない、契約書 §2 の定石)。 */
 export type CrmDigest = {
   generated_on: string;              // zDateOnly (JST)
   overdue_tasks: TaskListItem[];
   today_tasks: TaskListItem[];
   awaiting_leads: DealListItem[];    // stage='inquiry' の全件 (取込直後含む)
   sales: {
-    expiring_quotes: Array<{ document_id: string; doc_no: string; valid_until: string; total_jpy: number }>;
-    unpaid_invoices: Array<{ document_id: string; doc_no: string; issue_date: string; balance_jpy: number }>;
+    expiring_quotes: Array<{ document_id: string; doc_no: string; billing_name: string; valid_until: string; total_jpy: number }>;
+    unpaid_invoices: Array<{ document_id: string; doc_no: string; billing_name: string; issue_date: string; total_jpy: number; paid_jpy: number; balance_jpy: number }>;
   } | null;
 };
 

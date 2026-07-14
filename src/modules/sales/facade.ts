@@ -28,6 +28,7 @@ import {
   zDocumentListFilter,
   zIssuedContentSnapshot,
   zIssuerSnapshot,
+  zPaymentInput,
   zReviseDocumentInput,
   zUpdateDraftDocumentInput,
   type CreateDocumentInput,
@@ -42,9 +43,11 @@ import {
   type IssuerSnapshot,
   type PaymentInput,
   type ReviseDocumentInput,
+  type SalesDigest,
   type TaxSummary,
   type UpdateDraftDocumentInput,
 } from "./contracts";
+import { diffIssuedSnapshots, type IssuedSnapshotDiff } from "./internal/diff";
 import { buildIssuerSnapshot } from "./internal/issuer";
 import { generateDocumentPdf } from "./internal/pdf";
 import { issuePrintToken, verifyAndConsumePrintToken } from "./internal/print-token";
@@ -54,22 +57,35 @@ import { computeDocumentTotals } from "./tax";
 import {
   appendDocumentVersion,
   applyDocumentRevision,
+  bulkExpireOverdueQuotes,
   cleanupOrphanRevisionStagings,
   createDraftDocument as repoCreateDraftDocument,
   deleteDraftDocument as repoDeleteDraftDocument,
+  deletePayment as repoDeletePayment,
   finalizeDocumentIssue,
   getDocumentById,
   getIssuedDocumentByVersion,
   getRevisionStagingById,
+  insertPayment,
   insertRevisionStaging,
   issueDocumentNumber,
   listDocumentLines,
   listDocumentsPage,
+  listExpiringQuotes,
+  listIssuedDocumentVersions,
   listPayments,
+  listPaymentsForDocuments,
+  listUnpaidInvoices,
   saveDraftDocument,
   updateDocumentStatusWithCas,
   type DocumentRow,
+  type PaymentRow,
 } from "./repository";
+
+// 版間差分ダイアログ (app 層) が computeVersionDiff (下記) の戻り値を型付けできるよう、facade からも
+// re-export する (internal/diff.ts への直 import は ESLint モジュール境界で app 層から禁止 —
+// resolvePrintView と同型のブリッジパターン。下記 computeVersionDiff の JSDoc 参照)。
+export type { IssuedSnapshotDiff, SnapshotFieldDiff, SnapshotLineDiffEntry, SnapshotTaxDiffEntry } from "./internal/diff";
 
 /**
  * sales モジュールの公開 facade (02-sales.md §6)。
@@ -161,6 +177,31 @@ export interface SalesFacadeExtended extends SalesFacade {
     input: ReviseDocumentInput,
     expectedUpdatedAt: string,
   ): Promise<Result<{ version: number; pdf_storage_path: string }>>;
+  // ---- 契約外拡張 (02-sales.md §6.2 のうち #51 実装分) ----
+  /** 入金訂正 (§6.2)。DELETE のみ (UPDATE grant なし — 訂正は削除 + recordPayment 再実行)。
+   *  appendActivity は呼ばない (§11.3: payments 変更履歴は「該当なし」— 台帳と
+   *  paid⇔issued 復帰 trigger 自体が監査痕跡のため)。 */
+  deletePayment(paymentId: string): Promise<Result<void>>;
+  /**
+   * ダッシュボード/crm-digest 向けの読み取り専用集計 (§6.2 / §5.2 SalesDigest)。
+   * 07-contracts-delta §D8「§3 の 1 の形」により、他の全メソッド (ファクトリ時点で client を固定する
+   * `resolveClientAndUser(injectedClient)` パターン) とは異なり、**呼び出し時に ctx を渡す**設計
+   * (crm/facade.ts の appendActivity(input, ctx) や settings の get(key, ctx) と同型 —
+   * 下記 resolveSalesExecutionClient のコメント参照)。ctx 省略時は session
+   * (dashboard から admin セッションで直接呼ぶケースを許容)。
+   */
+  getSalesDigest(ctx?: ExecutionContext): Promise<Result<SalesDigest>>;
+  /** バッチ処理 (§6.2)。ctx 必須 — 常に cron/webhook (crm-digest route) から service 文脈で呼ぶ設計
+   *  (dashboard からの手動実行は無い)。getSalesDigest と同じ ctx 都度渡し方式。 */
+  markExpiredQuotes(ctx: ExecutionContext): Promise<Result<void>>;
+  /**
+   * 版間差分ダイアログ (§11.1・§8.4「前の版と比較」) が使う、指定版の content_snapshot 取得。
+   * 契約にも 02-sales §6.2 の表にも明記が無い契約外拡張 (実装計画書「未解決点3」— #50 の
+   * reviseAndReissueDocument 戻り値型確定と同じ「実装者が型を確定してよい」規約)。
+   * ダイアログを開いたときに新旧 2 版分を Promise.all で遅延ロードする想定 (計画書の推奨方式)。
+   * エラー: E627 (指定版が台帳に無い) / E901 (content_snapshot が zIssuedContentSnapshot と不一致)。
+   */
+  getIssuedContentSnapshot(documentId: string, version: number): Promise<Result<IssuedContentSnapshot>>;
 }
 
 /** この Issue (#49) で実装済みのメソッドのみに絞った戻り値型 (上記コメント参照)。
@@ -190,6 +231,17 @@ export type SalesFacadeIssuance = Pick<
   | "reviseAndReissueDocument"
   | "getDocumentLinesForBlocks"
   | "createSignedPdfUrl"
+>;
+
+/** この Issue (#51) で追加実装するメソッドのみに絞った戻り値型 (SalesFacadeCore/SalesFacadeIssuance と
+ *  同型の設計 — 上記コメント参照)。`recordPayment` は契約メソッド (SalesFacade) だが #51 実装分の
+ *  ため、契約外拡張 3 つ (deletePayment/getSalesDigest/markExpiredQuotes) とまとめて 1 つの Pick に
+ *  してある。getSalesDigest/markExpiredQuotes の ctx 都度渡し設計は上記 SalesFacadeExtended の
+ *  コメント・下記 resolveSalesExecutionClient のコメント参照 (地雷: 他メソッドと同じ
+ *  resolveClientAndUser(injectedClient) にすると cron/webhook 文脈で ctx が無視され E201 になる)。 */
+export type SalesFacadePayments = Pick<
+  SalesFacadeExtended,
+  "recordPayment" | "deletePayment" | "getSalesDigest" | "markExpiredQuotes" | "getIssuedContentSnapshot"
 >;
 
 /** documents.tax_rounding (zTaxRounding と同じリテラル和 — repository.ts の inline 型と 1:1) */
@@ -299,6 +351,34 @@ async function resolveClientAndUser(
   return { ok: true, value: { client: supabase, userId: user.id } };
 }
 
+/**
+ * getSalesDigest/markExpiredQuotes 専用の client 解決 (実装計画書「地雷」節 — 最重要)。
+ * この 2 メソッドは他の全メソッドと呼び出し規約が違う: 他は `createSalesFacade(injectedClient?)`
+ * のファクトリ時点で client が固定される (`resolveClientAndUser(injectedClient)`) が、この 2 つは
+ * 07-contracts-delta §D8「§3 の 1 の形」の規約により**呼び出し時**の `ctx` 引数で都度 client を
+ * 決める (crm/facade.ts の resolveExecutionClient (facade.ts:234-248) と同型)。
+ * crm-digest route は `createSalesFacade().markExpiredQuotes({mode:'service'})` のように
+ * **ファクトリは無引数**で呼ぶ想定 (canonical §6.2 表・§7.5) — ここで誤って
+ * `resolveClientAndUser(injectedClient)` (ファクトリのクロージャ変数) を使うと、ctx で
+ * `{mode:'service'}` を渡しても無視され `getSessionAndClient()` (cookie セッション) に落ちて
+ * cron/webhook 文脈で必ず KMB-E201 になる。
+ */
+async function resolveSalesExecutionClient(
+  ctx: ExecutionContext | undefined,
+): Promise<Result<{ client: SupabaseClient; userId: string | null }>> {
+  if (ctx?.mode === "service") {
+    try {
+      const client = ctx.client ?? createSupabaseServiceClient();
+      return { ok: true, value: { client, userId: null } };
+    } catch (err) {
+      return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+    }
+  }
+  const { supabase, user } = await getSessionAndClient();
+  if (!user) return { ok: false, code: "KMB-E201" };
+  return { ok: true, value: { client: supabase, userId: user.id } };
+}
+
 /** 宛名複製 (02-sales §6.1): company 非 null → 会社名+御中+会社住所、null → 顧客名+様+顧客住所。
  *  billing_name/billing_suffix は documents の別カラムであり、文字列連結はしない (DDL §2.3.1)。 */
 function deriveBillingFields(
@@ -375,7 +455,10 @@ async function buildDraftDocumentFromDeal(
 async function recordDocumentEventActivity(
   ctx: ExecutionContext | undefined,
   doc: DocumentRow,
-  event: "accepted" | "declined" | "voided",
+  // "expired" は #51 (markExpiredQuotes) 追加分。zDocumentEventActivityPayload (crm/contracts.ts) の
+  // event enum には元から "expired" が含まれている (v1.7 D9 で先取り登録済み) — ここはこのファイル
+  // ローカルの呼び出し元限定ユニオンを広げるだけでよい。
+  event: "accepted" | "declined" | "voided" | "expired",
   title: string,
 ): Promise<void> {
   const appended = await crmFacade.appendActivity(
@@ -581,7 +664,7 @@ function checkIssuancePrerequisites(): Result<void> {
 
 export function createSalesFacade(
   injectedClient?: SupabaseClient,
-): SalesFacadeCore & SalesFacadeIssuance & SalesPrintFacade {
+): SalesFacadeCore & SalesFacadeIssuance & SalesFacadePayments & SalesPrintFacade {
   const ctx = resolveCtx(injectedClient);
 
   return {
@@ -1055,6 +1138,81 @@ export function createSalesFacade(
     },
 
     /**
+     * canonical: 02-sales.md §6.1 recordPayment (#51)。Zod → insertPayment (repository。
+     * payments_apply trigger が invoice/issued 限定・残高超過ガードを担うため facade 側で
+     * 重複検証しない — E621/E623/E625 は trigger の raise exception を pgErrorToResult が
+     * KMB コードへ変換する) → 直後に documents を再取得 (地雷: PaymentRow には document の
+     * 最新 status が含まれないため、trigger が書き換えた status='paid' を確認するには再取得が
+     * 必須) → listPayments で合算し balance_jpy を算出 → appendActivity
+     * (event: invoice_paid ? 'paid' : 'payment_recorded'。失敗は warn のみ — 主操作は成功のまま、
+     * issueDocument 等と同じ縮退パターン)。
+     * エラー: E101(Zod) / E621・E623・E625(trigger 由来) / E901。
+     */
+    async recordPayment(rawInput) {
+      try {
+        const parsed = zPaymentInput.safeParse(rawInput);
+        if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+
+        const resolved = await resolveClientAndUser(injectedClient);
+        if (!resolved.ok) return resolved;
+        const { client, userId } = resolved.value;
+
+        const inserted = await insertPayment(client, parsed.data, userId);
+        if (!inserted.ok) return inserted;
+
+        const docResult = await getDocumentById(client, parsed.data.document_id);
+        if (!docResult.ok) return docResult;
+        const doc = docResult.value;
+        if (!doc) {
+          return { ok: false, code: "KMB-E901", detail: "入金記録直後に帳票の再取得に失敗しました。" };
+        }
+        const invoicePaid = doc.status === "paid";
+
+        const paymentsResult = await listPayments(client, parsed.data.document_id);
+        if (!paymentsResult.ok) return paymentsResult;
+        const paidTotal = paymentsResult.value.reduce((sum, p) => sum + p.amount_jpy, 0);
+        const balanceJpy = doc.total_jpy - paidTotal;
+
+        const event: DocumentEventActivityPayload = {
+          document_id: parsed.data.document_id,
+          doc_type: doc.doc_type as DocType,
+          doc_no: doc.doc_no ?? "",
+          event: invoicePaid ? "paid" : "payment_recorded",
+          total_jpy: doc.total_jpy,
+          version: doc.current_version,
+        };
+        const title = invoicePaid
+          ? `入金記録: ¥${inserted.value.amount_jpy.toLocaleString("ja-JP")} (完済)`
+          : `入金記録: ¥${inserted.value.amount_jpy.toLocaleString("ja-JP")} (残高 ¥${balanceJpy.toLocaleString("ja-JP")})`;
+
+        const appended = await crmFacade.appendActivity(
+          {
+            activity_type: "document_event",
+            occurred_at: new Date().toISOString(),
+            title,
+            body: null,
+            payload: event,
+            ref_table: "payments",
+            ref_id: inserted.value.id,
+            links: [{ customer_id: null, company_id: null, deal_id: doc.deal_id }],
+          },
+          ctx,
+        );
+        if (!appended.ok) {
+          console.warn(
+            `[KMB-E901] ${event.event} の appendActivity 記録に失敗しました (document=${parsed.data.document_id}):`,
+            appended.code,
+            appended.detail,
+          );
+        }
+
+        return { ok: true, value: { payment_id: inserted.value.id, invoice_paid: invoicePaid, event } };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    /**
      * canonical: 02-sales.md §6.1 getDocumentLinesForBlocks。scheduling へ渡す用 (app 層合成)。
      * 対象: doc_type='order' の issued/accepted のみ (draft は E621、それ以外は E623)。
      * grade_key/size_key は空文字を null に正規化する (§6.1 注記)。
@@ -1182,6 +1340,7 @@ export function createSalesFacade(
           issue_date: d.issue_date,
           created_at: d.created_at,
           updated_at: d.updated_at,
+          source_document_id: d.source_document_id,
         }));
 
         return { ok: true, value: { items, next_cursor: page.value.next_cursor } };
@@ -1201,14 +1360,16 @@ export function createSalesFacade(
         const doc = docResult.value;
         if (!doc) return { ok: false, code: "KMB-E621", detail: "帳票が見つかりません。" };
 
-        const [linesResult, paymentsResult, dealRef] = await Promise.all([
+        const [linesResult, paymentsResult, dealRef, versionsResult] = await Promise.all([
           listDocumentLines(client, documentId),
           listPayments(client, documentId),
           crmFacade.getDealRef(doc.deal_id, ctx),
+          listIssuedDocumentVersions(client, documentId),
         ]);
         if (!linesResult.ok) return linesResult;
         if (!paymentsResult.ok) return paymentsResult;
         if (!dealRef.ok) return dealRef;
+        if (!versionsResult.ok) return versionsResult;
 
         const paidTotal = paymentsResult.value.reduce((sum, p) => sum + p.amount_jpy, 0);
 
@@ -1227,6 +1388,7 @@ export function createSalesFacade(
             updated_at: doc.updated_at,
             source_document_id: doc.source_document_id,
             current_version: doc.current_version,
+            transaction_date: doc.transaction_date,
             valid_until: doc.valid_until,
             billing_suffix: doc.billing_suffix as "様" | "御中",
             billing_address: doc.billing_address,
@@ -1261,8 +1423,17 @@ export function createSalesFacade(
             memo: p.memo,
             created_at: p.created_at,
           })),
-          // issued_documents (版履歴) は #50 のスコープ。空配列固定 (Issue #49 本文に明記)。
-          versions: [],
+          // issued_documents (版履歴)。content_snapshot は軽量な DocumentDetail.versions 型に含めない
+          // (版間差分ダイアログはこの一覧を使わず、開いたときに getIssuedContentSnapshot で
+          // 該当 2 版分を別途遅延ロードする — 実装計画書「成果物6」)。
+          versions: versionsResult.value.map((v) => ({
+            issued_document_id: v.issued_document_id,
+            version: v.version,
+            sha256: v.sha256,
+            issued_at: v.issued_at,
+            supersedes: v.supersedes,
+            storage_path: v.storage_path,
+          })),
           balance_jpy: doc.total_jpy - paidTotal,
           derivable_to: computeDerivableTo(doc.doc_type as DocType, doc.status as DocumentStatus),
         };
@@ -1614,6 +1785,176 @@ export function createSalesFacade(
       }
     },
 
+    // ---- 契約外拡張 (02-sales.md §6.2、#51 実装分) ----
+
+    /**
+     * canonical: 02-sales.md §6.2 deletePayment。DELETE のみ (repository の insertPayment/
+     * deletePayment 経由 — 訂正 = 削除 + recordPayment 再実行)。payments_apply trigger が
+     * 完済⇔発行済みの状態復帰を行う。appendActivity は呼ばない (§11.3 — 上記インターフェース
+     * コメント参照)。エラー: E101(Zod) / E621(対象なし、repository が判定) / E901。
+     */
+    async deletePayment(rawPaymentId) {
+      try {
+        const parsed = z.string().uuid().safeParse(rawPaymentId);
+        if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+
+        const resolved = await resolveClientAndUser(injectedClient);
+        if (!resolved.ok) return resolved;
+        const { client } = resolved.value;
+
+        return repoDeletePayment(client, parsed.data);
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    /**
+     * canonical: 02-sales.md §6.2 getSalesDigest。ctx を都度渡す設計 (上記
+     * resolveSalesExecutionClient のコメント参照 — 地雷)。JST 今日 + 7 日のカットオフで
+     * expiring_quotes/unpaid_invoices を集計する。エラー: E901 のみ。
+     */
+    async getSalesDigest(ctx) {
+      try {
+        const resolved = await resolveSalesExecutionClient(ctx);
+        if (!resolved.ok) return resolved;
+        const { client } = resolved.value;
+
+        const today = jstTodayDateOnly();
+        const cutoff = addDaysToDateOnly(today, 7);
+
+        const [expiringResult, unpaidResult] = await Promise.all([
+          listExpiringQuotes(client, cutoff),
+          listUnpaidInvoices(client),
+        ]);
+        if (!expiringResult.ok) return expiringResult;
+        if (!unpaidResult.ok) return unpaidResult;
+
+        const documentIds = unpaidResult.value.map((d) => d.document_id);
+        const paymentsResult: Result<PaymentRow[]> =
+          documentIds.length > 0 ? await listPaymentsForDocuments(client, documentIds) : { ok: true, value: [] };
+        if (!paymentsResult.ok) return paymentsResult;
+
+        const paidByDocument = new Map<string, number>();
+        for (const p of paymentsResult.value) {
+          paidByDocument.set(p.document_id, (paidByDocument.get(p.document_id) ?? 0) + p.amount_jpy);
+        }
+
+        const expiringQuotes: SalesDigest["expiring_quotes"] = [];
+        for (const q of expiringResult.value) {
+          // doc_no は status='issued' フィルタにより業務不変条件上必ず非 null (document_finalize_issue
+          // が doc_no/issue_date を同一トランザクションで設定してから status を 'issued' にする —
+          // reissueDocument の同種チェック (facade.ts 上部) と同じ理由)。null であれば台帳との
+          // 不整合であり、握り潰さず E901 で顕在化させる (地雷回避: 実装計画書「エラー握り潰し厳禁」)。
+          if (q.doc_no === null || q.valid_until === null) {
+            return {
+              ok: false,
+              code: "KMB-E901",
+              detail: `issued 状態の見積の doc_no/valid_until が null です (document_id=${q.document_id})`,
+            };
+          }
+          expiringQuotes.push({
+            document_id: q.document_id,
+            doc_no: q.doc_no,
+            billing_name: q.billing_name,
+            valid_until: q.valid_until,
+            total_jpy: q.total_jpy,
+          });
+        }
+
+        const unpaidInvoices: SalesDigest["unpaid_invoices"] = [];
+        for (const inv of unpaidResult.value) {
+          if (inv.doc_no === null || inv.issue_date === null) {
+            return {
+              ok: false,
+              code: "KMB-E901",
+              detail: `issued 状態の請求書の doc_no/issue_date が null です (document_id=${inv.document_id})`,
+            };
+          }
+          const paidJpy = paidByDocument.get(inv.document_id) ?? 0;
+          unpaidInvoices.push({
+            document_id: inv.document_id,
+            doc_no: inv.doc_no,
+            billing_name: inv.billing_name,
+            issue_date: inv.issue_date,
+            total_jpy: inv.total_jpy,
+            paid_jpy: paidJpy,
+            balance_jpy: inv.total_jpy - paidJpy,
+          });
+        }
+
+        return {
+          ok: true,
+          value: { expiring_quotes: expiringQuotes, unpaid_invoices: unpaidInvoices },
+        };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    /**
+     * canonical: 02-sales.md §6.2 markExpiredQuotes。valid_until < JST 今日の issued 見積を
+     * 一括で expired 化 (repository.bulkExpireOverdueQuotes — CAS なしバッチ更新)。各行について
+     * appendActivity('expired') を記録する (1 件失敗しても全体は失敗させない — 既存の warn-only
+     * パターンを踏襲)。status_reason は「有効期限切れ(自動判定)」固定文言
+     * (canonical に指定なし — 実装計画書「未解決点5」、実装者判断。openIssues に記録)。
+     * エラー: E901 のみ。
+     */
+    async markExpiredQuotes(ctx) {
+      try {
+        const resolved = await resolveSalesExecutionClient(ctx);
+        if (!resolved.ok) return resolved;
+        const { client } = resolved.value;
+
+        const today = jstTodayDateOnly();
+        const expired = await bulkExpireOverdueQuotes(client, today);
+        if (!expired.ok) return expired;
+
+        for (const doc of expired.value) {
+          await recordDocumentEventActivity(ctx, doc, "expired", `見積失効: ${doc.doc_no ?? doc.id}`);
+        }
+
+        return { ok: true, value: undefined };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    /**
+     * canonical: 02-sales.md §11.1 (版間差分ダイアログの入力取得)。契約外拡張 (実装計画書
+     * 「未解決点3」)。listIssuedDocumentVersions を再利用し (repository.ts の JSDoc 参照 —
+     * 1 帳票の版数は小さいため専用の単版クエリを別途持たない設計判断)、該当版の content_snapshot を
+     * zIssuedContentSnapshot で検証してから返す (issued_documents.content_snapshot は jsonb —
+     * DB 側の型保証がないため、ここで parse せず握り潰すと版間差分ダイアログが不正な値のまま
+     * 描画されてしまう — 地雷回避)。
+     */
+    async getIssuedContentSnapshot(documentId, version) {
+      try {
+        const resolved = await resolveClientAndUser(injectedClient);
+        if (!resolved.ok) return resolved;
+        const { client } = resolved.value;
+
+        const versionsResult = await listIssuedDocumentVersions(client, documentId);
+        if (!versionsResult.ok) return versionsResult;
+
+        const found = versionsResult.value.find((v) => v.version === version);
+        if (!found) {
+          return { ok: false, code: "KMB-E627", detail: "指定の版が台帳に見つかりません。" };
+        }
+
+        const parsed = zIssuedContentSnapshot.safeParse(found.content_snapshot);
+        if (!parsed.success) {
+          return {
+            ok: false,
+            code: "KMB-E901",
+            detail: `台帳の content_snapshot が契約 (zIssuedContentSnapshot) と一致しません: ${parsed.error.message}`,
+          };
+        }
+        return { ok: true, value: parsed.data };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
     // ---- /print route 専用の橋渡しメソッド (Issue #50 追加。上記コメント参照) ----
     async resolvePrintView(documentId, token) {
       try {
@@ -1805,4 +2146,18 @@ export function createSalesFacade(
       }
     },
   };
+}
+
+/**
+ * 版間差分ダイアログ (§11.1・§8.4「前の版と比較」) 専用の facade ブリッジ。`internal/diff.ts` の
+ * 純関数 `diffIssuedSnapshots` は ESLint モジュール境界により app 層から直 import できない
+ * (実装計画書「成果物5」注記 — resolvePrintView と同型のブリッジパターンを選択)。DB アクセスを
+ * 持たない純粋な計算のため `createSalesFacade()` の戻り値オブジェクトには含めず、モジュールの
+ * トップレベル関数としてそのまま公開する (Result 型に包まない — 失敗しうる I/O が無いため)。
+ */
+export function computeVersionDiff(
+  older: IssuedContentSnapshot,
+  newer: IssuedContentSnapshot,
+): IssuedSnapshotDiff {
+  return diffIssuedSnapshots(older, newer);
 }

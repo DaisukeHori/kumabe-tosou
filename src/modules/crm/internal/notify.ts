@@ -45,6 +45,33 @@ function formatLead(deal: DealListItem): string {
   return `- ${deal.title} (${deal.customer_name})`;
 }
 
+function formatExpiringQuote(q: NonNullable<CrmDigest["sales"]>["expiring_quotes"][number]): string {
+  return `- ${q.doc_no} ${q.billing_name} 様 (期限 ${q.valid_until}・¥${q.total_jpy.toLocaleString("ja-JP")})`;
+}
+
+function formatUnpaidInvoice(inv: NonNullable<CrmDigest["sales"]>["unpaid_invoices"][number]): string {
+  return `- ${inv.doc_no} ${inv.billing_name} 様 (発行 ${inv.issue_date}・残高 ¥${inv.balance_jpy.toLocaleString("ja-JP")} / 請求 ¥${inv.total_jpy.toLocaleString("ja-JP")})`;
+}
+
+/**
+ * sales セクション (§0.4「未回収が一目で消える」業務シナリオ — #51 で配線)。
+ * digest.sales は route (app 層) 側で SalesFacade.getSalesDigest が失敗したときに null のまま
+ * (graceful degrade — crm-digest配線有効化の計画書参照)。null のときはセクション自体を省略する
+ * (「(なし)」ではなく非表示 — 「取得できなかった」と「0 件だった」を UI 上区別しないと
+ * 未回収の見落としに繋がるため、あいまいな「(なし)」表示にしない)。
+ */
+function buildSalesSectionLines(sales: CrmDigest["sales"]): string[] {
+  if (!sales) return [];
+  return [
+    "",
+    `■ 期限接近の見積 (${sales.expiring_quotes.length} 件)`,
+    ...(sales.expiring_quotes.length > 0 ? sales.expiring_quotes.map(formatExpiringQuote) : ["(なし)"]),
+    "",
+    `■ 未消込の請求書 (${sales.unpaid_invoices.length} 件)`,
+    ...(sales.unpaid_invoices.length > 0 ? sales.unpaid_invoices.map(formatUnpaidInvoice) : ["(なし)"]),
+  ];
+}
+
 function buildEmailBodies(digest: CrmDigest) {
   const adminUrl = `${siteUrl()}/admin`;
   const lines = [
@@ -58,6 +85,7 @@ function buildEmailBodies(digest: CrmDigest) {
     "",
     `■ 未着手の相談 (${digest.awaiting_leads.length} 件)`,
     ...(digest.awaiting_leads.length > 0 ? digest.awaiting_leads.map(formatLead) : ["(なし)"]),
+    ...buildSalesSectionLines(digest.sales),
     "",
     `管理画面で確認: ${adminUrl}`,
   ];

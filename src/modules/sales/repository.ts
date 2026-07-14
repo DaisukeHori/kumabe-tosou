@@ -561,6 +561,113 @@ export async function deletePayment(
 }
 
 // ============================================================
+// getSalesDigest / markExpiredQuotes (#51 — 02-sales.md §6.2)
+// ============================================================
+
+export type ExpiringQuoteRow = {
+  document_id: string;
+  doc_no: string | null;
+  billing_name: string;
+  valid_until: string | null;
+  total_jpy: number;
+};
+
+/**
+ * getSalesDigest の expiring_quotes 用 (§6.2)。cutoffDateOnly 以下の valid_until を持つ
+ * issued 見積を 1 クエリで取得する (期限超過分も含める — markExpiredQuotes 未実行のダッシュボード
+ * 単独呼び出しに備える。cron 経路では直前に markExpiredQuotes が実行され既に expired 化されているため
+ * 実質「cutoff 以内」のみが返る)。valid_until が null の行は `.lte` 比較で自動的に除外される。
+ */
+export async function listExpiringQuotes(
+  client: SupabaseClient,
+  cutoffDateOnly: string,
+): Promise<Result<ExpiringQuoteRow[]>> {
+  const { data, error } = await client
+    .from("documents")
+    .select("id, doc_no, billing_name, valid_until, total_jpy")
+    .eq("doc_type", "quote")
+    .eq("status", "issued")
+    .lte("valid_until", cutoffDateOnly)
+    .order("valid_until", { ascending: true });
+  if (error) return pgErrorToResult(error);
+  return {
+    ok: true,
+    value: (data ?? []).map((d) => ({
+      document_id: d.id as string,
+      doc_no: d.doc_no as string | null,
+      billing_name: d.billing_name as string,
+      valid_until: d.valid_until as string | null,
+      total_jpy: d.total_jpy as number,
+    })),
+  };
+}
+
+export type UnpaidInvoiceRow = {
+  document_id: string;
+  doc_no: string | null;
+  billing_name: string;
+  issue_date: string | null;
+  total_jpy: number;
+};
+
+/** getSalesDigest の unpaid_invoices 用 (§6.2)。issued の請求書を 1 クエリで取得する
+ *  (paid_jpy/balance_jpy は facade 側が listPaymentsForDocuments の結果を JS 集計して算出する
+ *  — N+1 回避、listDocuments の dealTitle 解決と同じ設計原則)。 */
+export async function listUnpaidInvoices(
+  client: SupabaseClient,
+): Promise<Result<UnpaidInvoiceRow[]>> {
+  const { data, error } = await client
+    .from("documents")
+    .select("id, doc_no, billing_name, issue_date, total_jpy")
+    .eq("doc_type", "invoice")
+    .eq("status", "issued")
+    .order("issue_date", { ascending: true });
+  if (error) return pgErrorToResult(error);
+  return {
+    ok: true,
+    value: (data ?? []).map((d) => ({
+      document_id: d.id as string,
+      doc_no: d.doc_no as string | null,
+      billing_name: d.billing_name as string,
+      issue_date: d.issue_date as string | null,
+      total_jpy: d.total_jpy as number,
+    })),
+  };
+}
+
+/** listUnpaidInvoices の document_id 群に対する payments 一括取得 (`.in` 句 1 クエリ)。
+ *  facade 側が document_id ごとに amount_jpy を合算する。 */
+export async function listPaymentsForDocuments(
+  client: SupabaseClient,
+  documentIds: string[],
+): Promise<Result<PaymentRow[]>> {
+  const { data, error } = await client.from("payments").select("*").in("document_id", documentIds);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as PaymentRow[] };
+}
+
+/**
+ * markExpiredQuotes (§6.2) の一括 UPDATE。バッチジョブのため個別楽観排他 (CAS) は使わない
+ * (updateDocumentStatusWithCas とは別関数 — 実装計画書「地雷」流用禁止の指示どおり)。
+ * status/status_reason は §4.2 の凍結 trigger 対象外列のため session client でも通る。
+ * `.select('*')` で更新された全行を回収し、facade がその行ごとに appendActivity を呼ぶ。
+ */
+export async function bulkExpireOverdueQuotes(
+  client: SupabaseClient,
+  todayDateOnly: string,
+): Promise<Result<DocumentRow[]>> {
+  const { data, error } = await client
+    .from("documents")
+    .update({ status: "expired", status_reason: "有効期限切れ(自動判定)" })
+    .eq("doc_type", "quote")
+    .eq("status", "issued")
+    .lt("valid_until", todayDateOnly)
+    .select("*");
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as DocumentRow[] };
+}
+
+// ============================================================
 // print_tokens (印刷トークンのワンタイム消費 — migration 0027、02-sales §7.3)
 // service 専用テーブル (RLS ポリシーなし + revoke — 呼び出し側は必ず service client を渡すこと)
 // ============================================================
@@ -907,4 +1014,43 @@ export async function getIssuedDocumentByVersion(
     .maybeSingle();
   if (error) return pgErrorToResult(error);
   return { ok: true, value: (data as IssuedDocumentVersionRow | null) ?? null };
+}
+
+/** getDocumentDetail (#51) の版履歴テーブル用 + 版間差分ダイアログ (§11.1) の content_snapshot 取得を
+ *  兼ねる 1 本の repository 関数 (実装計画書「成果物6」— getIssuedContentSnapshot はこの結果から
+ *  該当版を絞り込んで使う。1 帳票あたりの版数は実運用上小さい (再出力/訂正発行の都度 +1) ため、
+ *  診断/差分の都度クエリを分けずにこの一覧を再利用しても N+1 の懸念はない)。
+ *  version 降順 (最新版が先頭 — 版履歴テーブル・既定「最新 vs 直前」の比較に自然な順序)。 */
+export type IssuedDocumentVersionListRow = {
+  issued_document_id: string;
+  version: number;
+  sha256: string;
+  issued_at: string;
+  supersedes: string | null;
+  storage_path: string;
+  content_snapshot: unknown;
+};
+
+export async function listIssuedDocumentVersions(
+  client: SupabaseClient,
+  documentId: string,
+): Promise<Result<IssuedDocumentVersionListRow[]>> {
+  const { data, error } = await client
+    .from("issued_documents")
+    .select("id, version, sha256, issued_at, supersedes, storage_path, content_snapshot")
+    .eq("document_id", documentId)
+    .order("version", { ascending: false });
+  if (error) return pgErrorToResult(error);
+  return {
+    ok: true,
+    value: (data ?? []).map((r) => ({
+      issued_document_id: r.id as string,
+      version: r.version as number,
+      sha256: r.sha256 as string,
+      issued_at: r.issued_at as string,
+      supersedes: r.supersedes as string | null,
+      storage_path: r.storage_path as string,
+      content_snapshot: r.content_snapshot as unknown,
+    })),
+  };
 }
