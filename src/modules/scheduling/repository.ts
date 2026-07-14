@@ -1017,6 +1017,34 @@ export async function updateCalendarConnectionAfterPull(
   return { ok: true, value: undefined };
 }
 
+/**
+ * Graph ローリングウィンドウ切り直し (§8.8)。日次 runCalendarMaintenance から呼ばれる。
+ * meta (sync_window_start/end 更新済み) を保存し、deltaLink (sync_token) / sync_page_cursor を
+ * 破棄して次回 runPull がフル再同期に入るようにする (410=KMB-E722 の経路と同型 — token=null で
+ * fullResyncTriggered になる runPullLoop の既存分岐に自然に乗る)。clearSafetyValveError=true の
+ * ときのみ last_error_code をクリアする (KMB-E725 発火が理由で切り直した場合のみ — §8.8「完了時に
+ * E725をクリア」。ウィンドウ経年劣化のみが理由の場合は他のエラーコードを誤って握り潰さないよう
+ * このフィールド自体に触れない)。
+ */
+export async function rollCalendarSyncWindow(
+  serviceClient: SupabaseClient,
+  provider: CalendarProvider,
+  input: { meta: CalendarConnectionMeta; clearSafetyValveError: boolean },
+): Promise<Result<void>> {
+  const updatePayload: Record<string, unknown> = {
+    meta: input.meta,
+    sync_token: null,
+    sync_page_cursor: null,
+  };
+  if (input.clearSafetyValveError) {
+    updatePayload.last_error_code = null;
+    updatePayload.last_error_detail = null;
+  }
+  const { error } = await serviceClient.from("calendar_connections").update(updatePayload).eq("provider", provider);
+  if (error) return pgErrorToCalendarResult(error);
+  return { ok: true, value: undefined };
+}
+
 /** push 完走時に connection.last_pushed_at を進める (last_pulled_at と対称の記録項目)。 */
 export async function touchCalendarConnectionAfterPush(
   serviceClient: SupabaseClient,

@@ -61,6 +61,7 @@ import { computeWeeklyCapacity, isJstMonday, resolveWeekRangeJst } from "./inter
 import { computeWrittenHash } from "./internal/echo";
 import { decodeGoogleIdTokenEmail, exchangeGoogleAuthorizationCode, googleCalendarAdapter } from "./internal/google-api";
 import { MANUAL_SYNC_PULL_PAGES, MANUAL_SYNC_PUSH_LIMIT } from "./internal/lease";
+import { exchangeMsAuthorizationCode, fetchMsAccountEmail, msCalendarAdapter } from "./internal/ms-api";
 import { OAuthTokenError } from "./internal/provider";
 import { resolveProviderEnv, runPull, runPush } from "./internal/sync-engine";
 import {
@@ -109,6 +110,7 @@ import {
   listWorkTypes as listWorkTypesRows,
   markLinkPendingPush,
   recordWorkBlockActual,
+  rollCalendarSyncWindow,
   transitionWorkBlockStatus,
   unscheduleWorkBlock,
   updateCalendarConnectionStatus,
@@ -144,8 +146,14 @@ import {
  * `toWorkBlockView` の `sync` フィールドも calendar_event_links の実 JOIN データを詰めるよう
  * repository.ts (WORK_BLOCK_JOIN_COLUMNS) と合わせて更新した。
  *
+ * ---- #55 (Microsoft) での追加分 ----
+ * SUPPORTED_CALENDAR_PROVIDERS/adapterForProvider に "microsoft" を追加し、
+ * completeGoogleCalendarOAuthCallback と同型の `completeMsCalendarOAuthCallback` を追加した。
+ * runCalendarSync/runCalendarMaintenance/requestSyncNow/reconcilePushUnknown 等の provider ループは
+ * #54 の時点で provider 非依存に書かれていたため無改修で microsoft に対応する。
+ *
  * 実行文脈: runCalendarSync/runCalendarMaintenance のみ service 専用 (ctx.mode!=='service' は
- * KMB-E202)。接続管理系 8 メソッド + completeGoogleCalendarOAuthCallback は session 固定
+ * KMB-E202)。接続管理系 8 メソッド + completeGoogleCalendarOAuthCallback/completeMsCalendarOAuthCallback は session 固定
  * (admin セッション、`createSupabaseServerClient()` 相当) — ただし calendar_event_links への
  * 書込みは RLS で authenticated から拒否されるため、内部で `createSupabaseServiceClient()` を
  * 都度生成して書込みにのみ使う (実装計画書「未解決点2」の判断: 型レベルでの branded type 導入は
@@ -220,6 +228,13 @@ export interface SchedulingFacadeExtended extends SchedulingFacade {
     codeVerifier: string;
     redirectUri: string;
   }): Promise<Result<{ account_email: string }>>;
+
+  /** completeGoogleCalendarOAuthCallback の Microsoft 版 (#55、同型パターン)。 */
+  completeMsCalendarOAuthCallback(input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }): Promise<Result<{ account_email: string }>>;
 }
 
 /** この Issue (#54) までで実装済みのメソッドのみに絞った戻り値型 (上記コメント参照) */
@@ -257,6 +272,7 @@ export type SchedulingFacadeCore = Pick<
   | "resolveOrphanedLink"
   | "requestSyncNow"
   | "completeGoogleCalendarOAuthCallback"
+  | "completeMsCalendarOAuthCallback"
 >;
 
 function errMessage(err: unknown): string {
@@ -811,38 +827,54 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
         // (calendar_connections は admin セッションからも読めるが、この後の getValidCalendarSecret が
         // 必ず service client を要求するため、ここで先に生成して使い回す)。
         const serviceClient = createSupabaseServiceClient();
-        const connectionResult = await getCalendarConnection(serviceClient, "google");
-        if (!connectionResult.ok) return connectionResult;
-        const connection = connectionResult.value;
 
-        // 「未接続 = 空配列 (エラーにしない)」(§6.2)。'expired' のみ明示的に E720 を返す
-        // (過去に接続済みで再連携が必要な状態を calendar 画面へ静かに伝える設計判断 — 実装計画書の
-        // 未解決点欄には無いが §6.2 の注記「E720 は expired 時のみ」を素直に解釈した)。'disconnected'/
-        // 'error' は空配列に倒す ('error' は connections 画面のバナーで既に案内済みのため、カレンダー
-        // 表示自体は busy 帯なしで継続させる — 安全側・機能を壊さない判断)。
-        if (!connection || connection.status === "disconnected" || connection.status === "error") {
-          return { ok: true, value: [] };
-        }
-        if (connection.status === "expired") {
-          return { ok: false, code: "KMB-E720", detail: "カレンダーの再連携が必要です" };
-        }
+        // 【BLOCKER 修正】旧実装は provider="google" 決め打ちで、#55 で追加した msCalendarAdapter が
+        // 一切呼ばれていなかった (P15「Google だけ/Microsoft だけ/両方接続」の後者2ケースで busy 帯が
+        // 常に空になる実データ欠落)。runCalendarSync/requestSyncNow と同じ provider ループパターンを
+        // 踏襲し、接続済み provider 全ての busy 帯をマージして返す。
+        const busyIntervals: BusyInterval[] = [];
+        for (const provider of SUPPORTED_CALENDAR_PROVIDERS) {
+          const adapter = adapterForProvider(provider);
+          if (!adapter) continue;
 
-        const metaResult = zCalendarConnectionMeta.safeParse(connection.meta);
-        if (!metaResult.success) {
-          return { ok: true, value: [] }; // meta 不整合は busy 帯なしで安全側に倒す (connection 自体は壊さない)
-        }
+          const connectionResult = await getCalendarConnection(serviceClient, provider);
+          if (!connectionResult.ok) return connectionResult;
+          const connection = connectionResult.value;
 
-        let secret: CalendarVaultSecret;
-        try {
-          secret = await getValidCalendarSecret(serviceClient, "google", googleCalendarAdapter, resolveProviderEnv("google"));
-        } catch (err) {
-          if (err instanceof TokenExpiredError) return { ok: false, code: "KMB-E720", detail: err.message };
-          if (err instanceof TokenClientMisconfiguredError) return { ok: false, code: "KMB-E723", detail: err.message };
-          throw err;
-        }
+          // 「未接続 = 空配列 (エラーにしない)」(§6.2)。'expired' のみ明示的に E720 を返す
+          // (過去に接続済みで再連携が必要な状態を calendar 画面へ静かに伝える設計判断 — 実装計画書の
+          // 未解決点欄には無いが §6.2 の注記「E720 は expired 時のみ」を素直に解釈した)。'disconnected'/
+          // 'error' は当該 provider を skip するだけに倒す ('error' は connections 画面のバナーで既に
+          // 案内済みのため、カレンダー表示自体は他 provider の busy 帯を含めて継続させる — 安全側・
+          // 機能を壊さない判断)。'expired' はループを打ち切って即座に E720 を返す (元の単一 provider
+          // 実装と同じ fail-fast — busy 帯を欠いたまま自動配置が二重予約するより、再連携が必要な
+          // ことを明示的に呼び出し元へ伝える方が安全側)。
+          if (!connection || connection.status === "disconnected" || connection.status === "error") {
+            continue;
+          }
+          if (connection.status === "expired") {
+            return { ok: false, code: "KMB-E720", detail: `カレンダーの再連携が必要です (${provider})` };
+          }
 
-        const busy = await googleCalendarAdapter.getBusy({ start: parsed.data.from, end: parsed.data.to }, secret);
-        return { ok: true, value: busy.map((b) => ({ starts_at: b.start, ends_at: b.end })) };
+          const metaResult = zCalendarConnectionMeta.safeParse(connection.meta);
+          if (!metaResult.success) {
+            // meta 不整合はこの provider だけ busy 帯なしで安全側に倒す (他 provider の収集は継続)
+            continue;
+          }
+
+          let secret: CalendarVaultSecret;
+          try {
+            secret = await getValidCalendarSecret(serviceClient, provider, adapter, resolveProviderEnv(provider));
+          } catch (err) {
+            if (err instanceof TokenExpiredError) return { ok: false, code: "KMB-E720", detail: err.message };
+            if (err instanceof TokenClientMisconfiguredError) return { ok: false, code: "KMB-E723", detail: err.message };
+            throw err;
+          }
+
+          const busy = await adapter.getBusy({ start: parsed.data.from, end: parsed.data.to }, secret);
+          busyIntervals.push(...busy.map((b) => ({ starts_at: b.start, ends_at: b.end })));
+        }
+        return { ok: true, value: busyIntervals };
       } catch (err) {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };
       }
@@ -1285,16 +1317,106 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };
       }
     },
+
+    async completeMsCalendarOAuthCallback(input) {
+      // completeGoogleCalendarOAuthCallback (#54) と同型パターン。差分:
+      //  - account_email は id_token デコードではなく GET /me (fetchMsAccountEmail) を叩く (§8.2 手順3)
+      //  - meta.sync_window_start/end を今日−30日〜+180日で初期化する (§8.2「Microsoft は同型」注記。
+      //    Graph delta の calendarView は時間窓必須 — sync-engine.ts の resolveSyncWindow が読む)
+      const env = getEnv();
+      if (!env.MS_CALENDAR_CLIENT_ID || !env.MS_CALENDAR_CLIENT_SECRET) {
+        return { ok: false, code: "KMB-E901", detail: "MS_CALENDAR_CLIENT_ID/SECRET が未設定です" };
+      }
+      try {
+        const tokenResult = await exchangeMsAuthorizationCode({
+          clientId: env.MS_CALENDAR_CLIENT_ID,
+          clientSecret: env.MS_CALENDAR_CLIENT_SECRET,
+          code: input.code,
+          codeVerifier: input.codeVerifier,
+          redirectUri: input.redirectUri,
+        });
+        if (!tokenResult.refreshToken) {
+          return {
+            ok: false,
+            code: "KMB-E720",
+            detail: "refresh_token が発行されませんでした (offline_access スコープを確認してください)",
+          };
+        }
+        const accountEmail = await fetchMsAccountEmail(tokenResult.accessToken);
+        if (!accountEmail) {
+          return { ok: false, code: "KMB-E720", detail: "GET /me から account_email (mail/userPrincipalName) を取得できませんでした" };
+        }
+
+        const serviceClient = createSupabaseServiceClient();
+        const secret: CalendarVaultSecret = {
+          access_token: tokenResult.accessToken,
+          refresh_token: tokenResult.refreshToken,
+          expires_at: tokenResult.expiresAt,
+        };
+
+        // 既存の app_calendar_id を引き継ぐ (再接続時は calendars.get で実在検証のみ — §5.2/§8.2)
+        const existingConnectionResult = await getCalendarConnection(serviceClient, "microsoft");
+        if (!existingConnectionResult.ok) return existingConnectionResult;
+        const existingMetaResult = existingConnectionResult.value
+          ? zCalendarConnectionMeta.safeParse(existingConnectionResult.value.meta)
+          : null;
+        const knownCalendarId = existingMetaResult?.success ? existingMetaResult.data.app_calendar_id : null;
+
+        let appCalendarId: string;
+        try {
+          appCalendarId = await msCalendarAdapter.ensureAppCalendar(secret, knownCalendarId);
+        } catch (err) {
+          return { ok: false, code: "KMB-E901", detail: `アプリ専用カレンダーの準備に失敗しました: ${errMessage(err)}` };
+        }
+
+        // Graph delta (calendarView/delta) の時間窓初期化 (§8.2「今日−30日〜+180日」)。
+        // UTC 日境界での概算 (JST とのずれは最大1日分の安全側余裕になるだけ — runCalendarMaintenance
+        // の work_log 再送と同じ既存規約を踏襲)。
+        const nowMs = Date.now();
+        const syncWindowStart = new Date(nowMs - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const syncWindowEnd = new Date(nowMs + 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+        const metaCandidate = {
+          account_email: accountEmail,
+          app_calendar_id: appCalendarId,
+          token_expires_at: tokenResult.expiresAt,
+          sync_window_start: syncWindowStart,
+          sync_window_end: syncWindowEnd,
+        };
+        const metaParsed = zCalendarConnectionMeta.safeParse(metaCandidate);
+        if (!metaParsed.success) {
+          return { ok: false, code: "KMB-E101", detail: metaParsed.error.message };
+        }
+
+        const vaultResult = await vaultUpsertSecret(serviceClient, CALENDAR_VAULT_SECRET_NAMES.microsoft, JSON.stringify(secret));
+        if (!vaultResult.ok) return vaultResult;
+
+        const upsertResult = await upsertCalendarConnection(serviceClient, {
+          provider: "microsoft",
+          status: "connected",
+          vault_secret_name: CALENDAR_VAULT_SECRET_NAMES.microsoft,
+          meta: metaParsed.data,
+        });
+        if (!upsertResult.ok) return upsertResult;
+
+        return { ok: true, value: { account_email: accountEmail } };
+      } catch (err) {
+        if (err instanceof OAuthTokenError) {
+          return { ok: false, code: "KMB-E720", detail: err.message };
+        }
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
   };
 }
 
-/** この Issue (#54) で接続 (push/pull) を実装している provider の集合。#55 が Microsoft を
- *  実装した時点でここに追加するだけで runCalendarSync/requestSyncNow が対応する。 */
-const SUPPORTED_CALENDAR_PROVIDERS: readonly CalendarProvider[] = ["google"];
+/** 接続 (push/pull) を実装している provider の集合 (#54: google / #55: microsoft)。 */
+const SUPPORTED_CALENDAR_PROVIDERS: readonly CalendarProvider[] = ["google", "microsoft"];
 
-/** reconcilePushUnknown 等が provider ごとの adapter を解決する。#55 まで google のみ。 */
+/** reconcilePushUnknown 等が provider ごとの adapter を解決する。 */
 function adapterForProvider(provider: CalendarProvider) {
   if (provider === "google") return googleCalendarAdapter;
+  if (provider === "microsoft") return msCalendarAdapter;
   return null;
 }
 
@@ -1430,7 +1552,47 @@ async function runCalendarMaintenanceTasks(serviceClient: SupabaseClient): Promi
     }
     if (!tokenHealthy) continue;
 
-    // 2. Graph ローリングウィンドウ切り直し: この Issue は google のみのため対象外 (§8.8 表の注記どおり no-op)。
+    // 2. Graph ローリングウィンドウ切り直し (§8.8)。Google は窓を使わない (resolveSyncWindow が
+    //    provider==="microsoft" のみ) ため microsoft 限定で処理する。
+    //    条件: `sync_window_end − 今日 < 90日` (窓の経年劣化) または `last_error_code==='KMB-E725'`
+    //    (安全弁発動の復旧 — §8.5)。旧実装はこの節がコメントのみの no-op で、E725 発火後に
+    //    last_error_code をクリアする経路が一切無く (updateCalendarConnectionAfterPull は
+    //    lastError===null のとき当該フィールドに触れない)、Microsoft 同期が事実上恒久停止する
+    //    MAJOR バグだった。sync_token=null (deltaLink 破棄) は 410=KMB-E722 と同じ「次回 runPull で
+    //    fullResyncTriggered」経路に自然に乗せるだけで、ここでフル再同期そのものを実行する必要は
+    //    無い (§8.5 runPullLoop の既存分岐を再利用)。
+    if (provider === "microsoft") {
+      try {
+        const syncWindowEnd = metaResult.data.sync_window_end;
+        const daysUntilWindowEnd = syncWindowEnd
+          ? (new Date(`${syncWindowEnd}T00:00:00Z`).getTime() - Date.now()) / (24 * 60 * 60 * 1000)
+          : Number.NEGATIVE_INFINITY; // 窓未初期化 (異常系) は即座に切り直し対象として扱う (安全側)
+        const safetyValveTriggered = connection.last_error_code === "KMB-E725";
+        if (daysUntilWindowEnd < 90 || safetyValveTriggered) {
+          const nowMs = Date.now();
+          const newMeta = {
+            ...metaResult.data,
+            sync_window_start: new Date(nowMs - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+            sync_window_end: new Date(nowMs + 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          };
+          // クリアは E725 (安全弁) が発火理由のときのみ (§8.8「完了時にE725をクリア」)。実際のフル
+          // 再同期の完了を待たずここでクリアするが、sync_token=null により次回 runPull が確実に
+          // フル再同期へ入るため「クリアしたのに直らない」放置にはならない — その再同期が再び
+          // 安全弁を踏めば runPullLoop が last_error_code='KMB-E725' を新たに書き戻すため、
+          // 握り潰しにはならない (安全側)。
+          const rollResult = await rollCalendarSyncWindow(serviceClient, provider, {
+            meta: newMeta,
+            clearSafetyValveError: safetyValveTriggered,
+          });
+          if (!rollResult.ok) {
+            console.error(`[scheduling] runCalendarMaintenance: Graph ローリングウィンドウ切り直しに失敗しました (provider=${provider}): ${rollResult.code} ${rollResult.detail ?? ""}`);
+          }
+        }
+      } catch (err) {
+        // 他タスク (1/3/4) と同じ流儀: このチェックの失敗で残りのタスクを止めない (§8.8)。
+        console.error(`[scheduling] runCalendarMaintenance: Graph ローリングウィンドウ切り直しに失敗しました (provider=${provider}): ${errMessage(err)}`);
+      }
+    }
 
     // 3. アプリ専用カレンダー実在確認 (P20)
     try {

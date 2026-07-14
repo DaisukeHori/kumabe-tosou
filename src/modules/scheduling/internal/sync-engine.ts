@@ -2,8 +2,10 @@
 // canonical: docs/design/crm-suite/03-scheduling.md §8.4/§8.5 (手順を一字一句遵守すること —
 // この節が受入基準 C5〜C8 の実装源泉)。
 //
-// この Issue (#54) では provider='google' のみ実装する。runPush/runPull は provider 引数を
-// 受け取り adapter (CalendarProviderAdapter) を差し替えるだけで #55 (Microsoft) が使える形。
+// #54 (Google) は provider 引数を受け取り adapter (CalendarProviderAdapter) を差し替えるだけの
+// provider 非依存設計で実装済み。#55 (Microsoft) はこのファイルへ google-api.ts に無い Graph 固有の
+// 挙動 (時間窓 resolveSyncWindow / Graph 安全弁 isGraphSafetyValveApplicable) だけを最小分岐で
+// 追加している — google 側の分岐 (isGraphSafetyValveApplicable=false / window=null) は無変更。
 //
 // 【最重要地雷、優先度順】
 // 1. エコー棄却の破綻: echo.ts の時刻正規化漏れ → push 直後の pull で「変更あり」と誤認 →
@@ -27,7 +29,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getEnv } from "@/lib/env";
 
-import type { CalendarProvider } from "../contracts";
+import type { CalendarConnectionMeta, CalendarProvider } from "../contracts";
 import { zCalendarConnectionMeta } from "../contracts";
 import * as repo from "../repository";
 import type { CalendarConnectionRow, CalendarEventLinkRow, PendingPushLinkRow } from "../repository";
@@ -45,8 +47,7 @@ function errMessage(err: unknown): string {
 }
 
 /**
- * provider ごとの OAuth クライアント資格情報を env から解決する。この Issue では google のみ
- * (MS_CALENDAR_CLIENT_ID/SECRET は #55 が env.ts に追加した時点でここへ分岐を足す)。
+ * provider ごとの OAuth クライアント資格情報を env から解決する。
  * facade.ts (getExternalBusy/reconcilePushUnknown 等、runPush/runPull を経由しない箇所) も
  * 同じ解決ロジックを必要とするため export する (#54 UI 実装分)。
  */
@@ -55,7 +56,27 @@ export function resolveProviderEnv(provider: CalendarProvider): ProviderEnv {
   if (provider === "google") {
     return { clientId: env.GOOGLE_CALENDAR_CLIENT_ID ?? "", clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET ?? "" };
   }
-  throw new Error(`未対応の provider です (env 未解決、#55 で拡張予定): ${provider}`);
+  // provider === "microsoft" (#55)。CalendarProvider は "google" | "microsoft" の 2 値のみ
+  // (zCalendarProvider) なので網羅的。
+  return { clientId: env.MS_CALENDAR_CLIENT_ID ?? "", clientSecret: env.MS_CALENDAR_CLIENT_SECRET ?? "" };
+}
+
+/**
+ * pull の増分同期の起点となる時間窓を provider ごとに解決する (§8.1)。
+ * Google は syncToken 単独で全量を賄えるため窓を使わない (timeMin/timeMax は syncToken と
+ * 併用不可 — google-api.ts pullChanges のコメント参照)。Microsoft (Graph) の
+ * calendarView/delta は時間窓が必須 (§1.4) なため、接続時に初期化した
+ * meta.sync_window_start/end (今日−30日〜+180日 — §8.2) を採用する。
+ * 未初期化 (旧データ・OAuth 未完了等の防御) の場合は null を返し、ms-api.ts 側が
+ * 「初回同期には時間窓が必要」の例外で安全に停止する (握り潰さない)。
+ */
+function resolveSyncWindow(provider: CalendarProvider, meta: CalendarConnectionMeta): { start: string; end: string } | null {
+  if (provider !== "microsoft") return null;
+  if (!meta.sync_window_start || !meta.sync_window_end) return null;
+  return {
+    start: `${meta.sync_window_start}T00:00:00Z`,
+    end: `${meta.sync_window_end}T00:00:00Z`,
+  };
 }
 
 function isSameJstDay(isoA: string, b: Date): boolean {
@@ -575,6 +596,7 @@ async function runPullLoop(
   adapter: CalendarProviderAdapter,
   connection: CalendarConnectionRow,
   appCalendarId: string,
+  window: { start: string; end: string } | null,
   initialSecret: CalendarVaultSecret,
   maxPages: number,
 ): Promise<RunPullResult> {
@@ -594,16 +616,28 @@ async function runPullLoop(
   let roundCompleted = false;
   let lastError: { code: string; detail: string } | null = null;
 
+  // Graph 安全弁 (P22/§8.5)。「同一 skiptoken が2回連続」or「ページ上限に達してもラウンド未完了」
+  // を無限ページングの兆候とみなし KMB-E725 で中断する。Google の syncToken 方式にはこの種の
+  // 既知バグ報告がない (§8.1 注記「Google 実装は E725 を発火させない」) ため、provider==="microsoft"
+  // のみに限定するガードで Google 側の挙動を一切変えない (上位指示の「最小限の分岐追加」)。
+  const isGraphSafetyValveApplicable = provider === "microsoft";
+  let previousPageCursor: string | null = null;
+  let pagesConsumed = 0;
+  let graphSafetyValveTriggered = false;
+
   for (let page = 0; page < maxPages; page++) {
     let pullPage;
     try {
-      pullPage = await adapter.pullChanges(appCalendarId, token, cursor, null, secret);
+      pullPage = await adapter.pullChanges(appCalendarId, token, cursor, window, secret);
     } catch (err) {
       if (err instanceof GoneError) {
         // 410 → KMB-E722: token/cursor を NULL 化しフル再同期を即時開始 (links は保持)
         token = null;
         cursor = null;
         fullResyncTriggered = true;
+        // ページ系列が仕切り直しになるため、直前ラウンドの nextPageCursor との比較 (Graph 安全弁) も
+        // リセットする — 旧系列の cursor と新系列の cursor がたまたま一致して誤検知しないように。
+        previousPageCursor = null;
         if (!snapshotLinkIds) snapshotLinkIds = await loadResyncSnapshot(serviceClient, provider);
         lastError = { code: "KMB-E722", detail: "sync token expired (410)。フル再同期を実行しました" };
         continue;
@@ -621,6 +655,15 @@ async function runPullLoop(
       console.error(`[scheduling] runPull: pullChanges に失敗しました (provider=${provider}): ${errMessage(err)}`);
       break;
     }
+
+    pagesConsumed++;
+
+    if (isGraphSafetyValveApplicable && pullPage.nextPageCursor !== null && pullPage.nextPageCursor === previousPageCursor) {
+      // 同一 skiptoken (nextLink) が2回連続で返った → サーバ側の無限ページングバグの疑い (P22)
+      graphSafetyValveTriggered = true;
+      break;
+    }
+    previousPageCursor = pullPage.nextPageCursor;
 
     for (const change of pullPage.changes) {
       observedExternalEventIds.add(change.externalEventId);
@@ -643,6 +686,29 @@ async function runPullLoop(
     // のみ付くため通常はここに到達しない防御分岐)
     roundCompleted = true;
     break;
+  }
+
+  // P22 後段判定: Graph で maxPages を使い切ってもラウンドが完了しなかった場合を「20 ページ超過」
+  // として安全弁を発動する。Google の「途中終了 → sync_page_cursor 保存 → 次起床で継続」という
+  // 通常の部分同期と明確に区別する (§8.5 本文が Graph に限定してこの扱いを指示している —
+  // Google はこの分岐に達しても isGraphSafetyValveApplicable=false のため何も起きない)。
+  if (isGraphSafetyValveApplicable && !roundCompleted && !graphSafetyValveTriggered && pagesConsumed >= maxPages) {
+    graphSafetyValveTriggered = true;
+  }
+
+  if (graphSafetyValveTriggered) {
+    // cursor と sync_token (deltaLink) を両方破棄 + 中断 (§8.5)。runPull 先頭の同一 JST 日内
+    // スキップにより毎 5 分の無駄打ちは防げるため、この時点ではデータ損失や無限ループそのものは
+    // 発生しない (安全側)。復旧 (実際に同期が再開すること) は日次 maintenance の窓切り直し
+    // (facade.ts runCalendarMaintenanceTasks task2 — last_error_code='KMB-E725' を発火条件として
+    // 窓を切り直し、sync_token=null により次回 runPull を fullResyncTriggered 経路へ乗せ、
+    // last_error_code をクリアする) が担う。
+    token = null;
+    cursor = null;
+    lastError = {
+      code: "KMB-E725",
+      detail: "Graph delta ページングで無限ループの疑いを検知したため中断しました (skiptoken 再来 or ページ上限超過)",
+    };
   }
 
   let fullResyncCompleted = false;
@@ -694,10 +760,12 @@ export async function runPull(
     return { pulled: 0, echoes_rejected: 0, full_resync: false, skipped_running: false };
   }
   const appCalendarId = metaResult.data.app_calendar_id;
+  const window = resolveSyncWindow(provider, metaResult.data);
 
   // KMB-E725 安全弁のバックオフ: 同一 JST 日内は当該 provider の pull を skip (§8.5)。
-  // Google 実装 (google-api.ts) は E725 を発火させない (Graph 専用の安全弁 — §8.1 注記) が、
-  // #55 が発火させた場合にこの skip 経路がそのまま機能するよう用意しておく。
+  // Google は E725 を発火させない (runPullLoop の isGraphSafetyValveApplicable ガード —
+  // provider==="microsoft" 限定) が、この skip 判定自体は provider 非依存のまま置いておいて安全
+  // (google 側は last_error_code='KMB-E725' に到達しないため実質 no-op)。
   if (connection.last_error_code === "KMB-E725" && isSameJstDay(connection.updated_at, new Date())) {
     return { pulled: 0, echoes_rejected: 0, full_resync: false, skipped_running: false };
   }
@@ -721,7 +789,7 @@ export async function runPull(
       }
       throw err;
     }
-    return await runPullLoop(serviceClient, provider, adapter, connection, appCalendarId, secret, options?.maxPages ?? PULL_MAX_PAGES);
+    return await runPullLoop(serviceClient, provider, adapter, connection, appCalendarId, window, secret, options?.maxPages ?? PULL_MAX_PAGES);
   } finally {
     const releaseResult = await repo.releaseCalendarSyncLease(serviceClient, provider);
     if (!releaseResult.ok) {
