@@ -85,6 +85,7 @@ import {
   resetLinkForResend,
   UniqueViolationError,
   cancelOpenWorkBlocksForDeal,
+  countWorkBlocksBySourceDocument,
   deleteCalendarEventLink,
   deleteWorkBlockRow,
   deleteWorkTemplate as deleteWorkTemplateRow,
@@ -202,6 +203,14 @@ export interface SchedulingFacadeExtended extends SchedulingFacade {
   transitionBlock(blockId: string, to: BlockTransition, expectedUpdatedAt: string): Promise<Result<void>>;
   deleteBlock(blockId: string): Promise<Result<void>>;
   cancelOpenBlocksForDeal(dealId: string): Promise<Result<{ cancelled: number }>>;
+  /**
+   * countBlocksBySourceDocument (#61 契約外拡張。07-contracts-delta §D8 の 8 メソッドには
+   * 含まれない新規の契約外拡張だが、末尾の規約置換文 (v1.2)「各 facade は、自モジュールの
+   * admin UI または app 層 route が必要とする CRUD 拡張メソッドを追加してよい」に適合する
+   * — 実装計画書 issue-61.md 成果物3参照)。documents/actions.ts の generateBlocksAction が
+   * 同一帳票への再生成 (二重実行) を検知するために使う。
+   */
+  countBlocksBySourceDocument(sourceDocumentId: string): Promise<Result<{ count: number }>>;
 
   // -- 読み取り (カレンダー/一覧/集計) (#53) --
   getCalendarRange(query: CalendarRangeQuery): Promise<Result<WorkBlockView[]>>;
@@ -258,6 +267,7 @@ export type SchedulingFacadeCore = Pick<
   | "transitionBlock"
   | "deleteBlock"
   | "cancelOpenBlocksForDeal"
+  | "countBlocksBySourceDocument"
   | "getCalendarRange"
   | "getBacklogBlocks"
   | "getDealWorkSummary"
@@ -748,6 +758,15 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
           await markConnectedProvidersPendingPush(blockId);
         }
         return { ok: true, value: { cancelled: result.cancelled } };
+      } catch (err) {
+        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
+      }
+    },
+
+    async countBlocksBySourceDocument(sourceDocumentId) {
+      try {
+        const count = await countWorkBlocksBySourceDocument(sourceDocumentId);
+        return { ok: true, value: { count } };
       } catch (err) {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };
       }

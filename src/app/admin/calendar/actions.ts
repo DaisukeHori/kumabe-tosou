@@ -218,6 +218,57 @@ export async function cancelOpenBlocksForDealAction(dealId: string): Promise<Res
   return result;
 }
 
+// ---- app 層合成: ブロック配置→deal ステージ提案 / 失注→ブロック一括キャンセル提案 (#61) ----
+
+/**
+ * ブロック初回配置成功後の「製作中に進めますか?」提案 (00-overview §6.2 行2、03-scheduling §5.4
+ * 行2)。`stage==='ordered'` のときのみ提案する (それ以外は既に in_production や他ステージであり
+ * 提案が無意味なため `propose:false` で情報なしを返す — これはエラーではなく正常系の分岐)。
+ *
+ * 適用 (実際に stage を書き換える処理) は新規 Action を作らず、既存 `updateDealStageAction(dealId,
+ * "in_production", expectedUpdatedAt)` (`@/app/admin/deals/actions`) をそのまま UI 側から呼ぶ
+ * (実装計画書「成果物4」— 本 Action は「提案するだけ」の薄い層に留める)。`updateDealStageAction`
+ * 呼び出し時の E602 (不正遷移) / E103 (楽観排他競合) はエラー化せず、UI 側の toast で情報表示に
+ * 留める設計 (帳票イベント自体・ブロック配置自体は既に成立済みのため、ここでロールバックしない —
+ * §7.1-2 の issueDocumentAction dealStageSkippedReason と同じ考え方)。
+ */
+export async function proposeInProductionAction(
+  dealId: string,
+): Promise<Result<{ propose: boolean; dealUpdatedAt: string | null }>> {
+  const admin = await ensureAdmin();
+  if (!admin.ok) return admin;
+
+  const dealRef = await crmFacade.getDealRef(dealId);
+  if (!dealRef.ok) return dealRef;
+
+  if (dealRef.value.stage !== "ordered") {
+    return { ok: true, value: { propose: false, dealUpdatedAt: null } };
+  }
+  return { ok: true, value: { propose: true, dealUpdatedAt: dealRef.value.updated_at } };
+}
+
+/**
+ * 失注確定成功後の「未着手の作業ブロックを取り消しますか?」提案の事前件数取得 (00-overview §6.2
+ * 行2、01-crm §7.3 行5、03-scheduling §5.4 行1)。backlog/scheduled のみを対象とする
+ * (in_progress/done は着手済みのため対象外 — 受入基準どおり)。
+ *
+ * 実際の一括キャンセルは新規 Action を作らず、既に #53 で実装・export 済みの
+ * `cancelOpenBlocksForDealAction` (本ファイル上部) をそのまま UI 側から呼ぶ (実装計画書「乖離 B」:
+ * issue 本文は deals/actions.ts への `proposeCancelBlocksAction` 新設を指示しているが、それは
+ * 既存実装との二重実装になるため行わない — 本 Action は事前カウントのみを担う薄い層)。
+ */
+export async function getOpenBlockCountForDealAction(dealId: string): Promise<Result<{ count: number }>> {
+  const admin = await ensureAdmin();
+  if (!admin.ok) return admin;
+
+  const summary = await schedulingFacade.getDealWorkSummary(dealId);
+  if (!summary.ok) return summary;
+
+  const openStatuses = new Set<string>(["backlog", "scheduled"]);
+  const count = summary.value.blocks.filter((b) => openStatuses.has(b.status)).length;
+  return { ok: true, value: { count } };
+}
+
 // ---- 読み取り (カレンダー/一覧/集計) — クライアントからのナビゲーション再取得用 ----
 
 export async function getCalendarRangeAction(query: CalendarRangeQuery): Promise<Result<WorkBlockView[]>> {

@@ -46,6 +46,10 @@ import {
  * supabase/migrations/*.sql の check 制約 (enum/status) と contracts.ts の z.enum が
  * 一致することを比較する。文字数上限・regex 等の値制約は Zod のみが正のためここでは扱わない
  * (module-contracts.md §3 / cms-ai-pipeline.md §2.2 共通規約 2)。
+ *
+ * #61 (issue-61.md): 本 Issue は既存 facade の app 層合成のみで新規テーブル/enum/DDL を
+ * 一切追加しないため、本ファイルへの新規 parity テスト追加は対象外 (受入基準「contracts-ddl-parity
+ * テスト PASS (新規 DDL なしのため対象外である旨をテストコメントに明記)」を満たすための記録)。
  */
 
 const MIGRATIONS_DIR = path.resolve(__dirname, "../supabase/migrations");
