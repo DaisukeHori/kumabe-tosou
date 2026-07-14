@@ -33,6 +33,7 @@ import {
   isoPlusMinutes,
   isoToJstParts,
   jstWeekday,
+  minutesToHHMM,
   mondayOfWeekJst,
   monthGridDays,
   monthRangeIso,
@@ -106,6 +107,8 @@ export function CalendarBoard({
   // 以降は Dialog が閉じるたび (キャンセル/作成成功いずれも) null に戻す (下記 onOpenChange)。
   // ツールバーの汎用ボタンで再オープンしたときに前回の案件が残り続けるレビュー指摘の修正。
   const [createDealSeed, setCreateDealSeed] = useState(initialCreateDeal);
+  // 週グリッドの空白ドラッグ作成 (#95) の初期値。「ブロックを作る」ボタン経路は null のまま従来動作
+  const [createInitial, setCreateInitial] = useState<{ date: DateOnly; time: string; hours: number } | null>(null);
   const [proposals, setProposals] = useState<PlacementProposal[]>([]);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -474,6 +477,10 @@ export function CalendarBoard({
               }}
               onOpenDetail={(id) => setDetailBlockId(id)}
               onPlaceBlock={handlePlace}
+              onCreateRange={(date, startMinutes, durationMinutes) => {
+                setCreateInitial({ date, time: minutesToHHMM(startMinutes), hours: durationMinutes / 60 });
+                setCreateOpen(true);
+              }}
             />
           </div>
         </div>
@@ -501,11 +508,15 @@ export function CalendarBoard({
         onOpenChange={(next) => {
           setCreateOpen(next);
           // 閉じたら seed を使い切ったものとして破棄する (一度きりの初期値、レビュー指摘の修正)。
-          if (!next) setCreateDealSeed(null);
+          if (!next) {
+            setCreateDealSeed(null);
+            setCreateInitial(null);
+          }
         }}
         workTypes={workTypes}
-        onCreated={() => void refreshAll()}
         initialDeal={createDealSeed}
+        initialPlacement={createInitial}
+        onCreated={() => void refreshAll()}
       />
     </div>
   );
