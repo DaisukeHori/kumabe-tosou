@@ -25,6 +25,7 @@ import {
   updateNotificationsAction,
   updateOpsLimitsAction,
   updateSeoDefaultsAction,
+  updateWorkCapacityAction,
 } from "./actions";
 import { AiSettingsTab } from "./ai-tab";
 import { SETTINGS_FORM_INITIAL_STATE, type SettingsFormState } from "./form-state";
@@ -41,16 +42,21 @@ export type SettingsTabsData = {
   seo_defaults: SettingsMetaFor<"seo_defaults">;
   ops_limits: SettingsMetaFor<"ops_limits">;
   notifications: SettingsMetaFor<"notifications">;
+  work_capacity: SettingsMetaFor<"work_capacity">;
 };
 
 /**
  * "ai" は site_settings の SettingsKey ではなく ai-providers 由来のタブのため、別ユニオンで扱う。
  * #45 (07-contracts-delta §D5) で SettingsKey は 11 キーに拡張されたが、本管理画面がタブとして
- * 描画するのは従来の 5 キーのみ (analytics/branding 等の新規 6 キーのタブ・Server Actions は
- * #46/#47 のスコープ)。SettingsKey をそのまま使うと未実装タブの型要求が漏れ伝播するため、
- * この画面が実際に扱うキーだけの明示ユニオンに固定する。
+ * 描画するのは従来の 5 キー + work_capacity (#53) のみ (analytics/branding 等の残りの新規キーの
+ * タブ・Server Actions は他 Issue のスコープ)。SettingsKey をそのまま使うと未実装タブの型要求が
+ * 漏れ伝播するため、この画面が実際に扱うキーだけの明示ユニオンに固定する。
+ * ★他 Issue (#59) が telephony/business_hours タブを同時に追加する可能性があるため、
+ * 既存の 5 タブ構造を壊さず work_capacity を 1 つ追加する最小差分にとどめる (実装計画書の指示)。
  */
-type TabKey = Extract<SettingsKey, "company" | "hero" | "seo_defaults" | "ops_limits" | "notifications"> | "ai";
+type TabKey =
+  | Extract<SettingsKey, "company" | "hero" | "seo_defaults" | "ops_limits" | "notifications" | "work_capacity">
+  | "ai";
 
 const TAB_LABELS: Record<TabKey, string> = {
   company: "会社情報",
@@ -58,6 +64,7 @@ const TAB_LABELS: Record<TabKey, string> = {
   seo_defaults: "SEO既定値",
   ops_limits: "運用上限",
   notifications: "通知",
+  work_capacity: "週間稼働",
   ai: "AI",
 };
 
@@ -144,6 +151,14 @@ export function SettingsTabs({ data, aiKeys }: { data: SettingsTabsData; aiKeys:
           data={data.notifications}
           formRef={(el) => {
             formRefs.current.notifications = el;
+          }}
+        />
+      </TabsContent>
+      <TabsContent value="work_capacity" className="mt-6">
+        <WorkCapacityForm
+          data={data.work_capacity}
+          formRef={(el) => {
+            formRefs.current.work_capacity = el;
           }}
         />
       </TabsContent>
@@ -351,6 +366,46 @@ function OpsLimitsForm({
             required
           />
           <FieldDescription>当月の推定コスト合算がこの件数相当を超えたら配信をブロックします (KMB-E505)。</FieldDescription>
+        </Field>
+      </FieldGroup>
+      <FieldError errors={state.error ? [{ message: state.error }] : undefined} className="mt-3" />
+      <Button type="submit" disabled={isPending} className="mt-6">
+        {isPending ? "保存中..." : "保存 (Cmd+S)"}
+      </Button>
+    </form>
+  );
+}
+
+/** 「週間稼働」タブ (03-scheduling.md §3.4)。getWeeklyCapacity の分母 (weekly_hours) を編集する。 */
+function WorkCapacityForm({
+  data,
+  formRef,
+}: {
+  data: SettingsMetaFor<"work_capacity">;
+  formRef: (el: HTMLFormElement | null) => void;
+}) {
+  const [state, action, isPending] = useActionState(updateWorkCapacityAction, SETTINGS_FORM_INITIAL_STATE);
+  useFormFeedback(state, "週間稼働");
+  const v = data.value;
+
+  return (
+    <form ref={formRef} action={action} className="max-w-xl">
+      <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
+      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
+      <FieldGroup className="mt-4">
+        <Field>
+          <FieldLabel htmlFor="work-capacity-weekly-hours">週の稼働時間 (h)</FieldLabel>
+          <Input
+            id="work-capacity-weekly-hours"
+            name="weekly_hours"
+            type="number"
+            min={0}
+            max={168}
+            step={0.5}
+            defaultValue={v?.weekly_hours ?? 40}
+            required
+          />
+          <FieldDescription>カレンダーの「今週あと N 時間」の分母になります。</FieldDescription>
         </Field>
       </FieldGroup>
       <FieldError errors={state.error ? [{ message: state.error }] : undefined} className="mt-3" />
