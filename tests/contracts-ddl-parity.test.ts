@@ -25,7 +25,7 @@ import {
   zTaskOrigin,
   zTaskStatus,
 } from "@/modules/crm/contracts";
-import { DOC_NO_PREFIX, zDocType, zDocumentStatus, zPaymentInput } from "@/modules/sales/contracts";
+import { DOC_NO_PREFIX, zDocType, zDocumentEmailStatus, zDocumentStatus, zPaymentInput } from "@/modules/sales/contracts";
 import {
   zCalendarConnectionStatus,
   zCalendarProvider,
@@ -361,6 +361,13 @@ describe("contracts-ddl-parity (DB 接続不要の静的検証)", () => {
 
   it("issued_documents.sha256 の check が hex 64 桁の正規表現であること (§13.2 — findCheck の in 句パーサでは正規表現 check を抽出できないため、リテラル文字列の存在確認に留める。実装計画書「未解決点3」の簡易案どおり)", () => {
     expect(sql).toContain("check (sha256 ~ '^[0-9a-f]{64}$')");
+  });
+
+  // ---- sales (#101: migration 20260714000036_sales_document_emails.sql) ----
+  it("document_emails.status ↔ sales の zDocumentEmailStatus (帳票メール送付の送信台帳)", () => {
+    const expected = [...zDocumentEmailStatus.options].sort();
+    const actual = findCheck(checks, "document_emails", "status").sort();
+    expect(actual).toEqual(expected);
   });
 
   // ---- scheduling (#52: migration 20260711000029_scheduling_core.sql) ----

@@ -59,6 +59,10 @@ const updateDocumentStatusWithCasMock = vi.fn();
 // getIssuedContentSnapshot が使う repository 関数。個別 mock しないと importOriginal の実体が
 // 呼ばれ、この test file のセッション client (`{}` — .from を持たない) で TypeError になる。
 const listIssuedDocumentVersionsMock = vi.fn();
+// #101 追加: getDocumentDetail の送信履歴取得 (listDocumentEmails)。同じ理由で個別 mock しないと
+// importOriginal の実体が呼ばれ TypeError になる。全 describe 共通のデフォルト (空配列) を
+// 下の beforeEach に設定する (他の #49/#50/#51 系テストは getDocumentDetail を経由しないため無害)。
+const listDocumentEmailsMock = vi.fn();
 // #51 追加: recordPayment/deletePayment/getSalesDigest/markExpiredQuotes が呼ぶ repository 関数
 // (同じ理由で個別 mock しないと importOriginal の実体が呼ばれ TypeError になる)。
 const insertPaymentMock = vi.fn();
@@ -78,6 +82,7 @@ vi.mock("@/modules/sales/repository", async (importOriginal) => {
     listDocumentLines: (...args: unknown[]) => listDocumentLinesMock(...args),
     listDocumentsPage: (...args: unknown[]) => listDocumentsPageMock(...args),
     listIssuedDocumentVersions: (...args: unknown[]) => listIssuedDocumentVersionsMock(...args),
+    listDocumentEmails: (...args: unknown[]) => listDocumentEmailsMock(...args),
     listPayments: (...args: unknown[]) => listPaymentsMock(...args),
     saveDraftDocument: (...args: unknown[]) => saveDraftDocumentMock(...args),
     updateDocumentStatusWithCas: (...args: unknown[]) => updateDocumentStatusWithCasMock(...args),
@@ -162,6 +167,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getSessionAndClientMock.mockResolvedValue({ supabase: {}, user: { id: "user-1" } });
   settingsGetMock.mockResolvedValue({ ok: true, value: { tax_rounding: "floor" } });
+  listDocumentEmailsMock.mockResolvedValue({ ok: true, value: [] });
 });
 
 // ============================================================
@@ -1034,6 +1040,98 @@ describe("createSalesFacade().getDocumentDetail — versions (#51: listIssuedDoc
       expect(result.value.versions[0]).not.toHaveProperty("content_snapshot");
       expect(result.value.derivable_to).toEqual(["order", "invoice"]);
       expect(result.value.balance_jpy).toBe(result.value.document.total_jpy);
+    }
+  });
+
+  it("#101: emails は listDocumentEmails の結果を返し、version は issued_document_id を versions と突き合わせて補完する", async () => {
+    getDocumentByIdMock.mockResolvedValue({
+      ok: true,
+      value: documentRow({ doc_type: "invoice", status: "issued" }),
+    });
+    listDocumentLinesMock.mockResolvedValue({ ok: true, value: [] });
+    listPaymentsMock.mockResolvedValue({ ok: true, value: [] });
+    getDealRefMock.mockResolvedValue({ ok: true, value: dealRef() });
+    listIssuedDocumentVersionsMock.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          issued_document_id: "v-1",
+          version: 1,
+          sha256: "a".repeat(64),
+          issued_at: "2026-07-01T00:00:00Z",
+          supersedes: null,
+          storage_path: "documents/x/v1.pdf",
+          content_snapshot: { dummy: true },
+        },
+      ],
+    });
+    listDocumentEmailsMock.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          id: "email-1",
+          document_id: DOC_ID,
+          issued_document_id: "v-1",
+          to_email: "customer@example.com",
+          cc_email: null,
+          subject: "件名",
+          body: "本文",
+          status: "sent",
+          error_detail: null,
+          provider_message_id: "msg-1",
+          sent_at: "2026-07-03T00:00:00Z",
+          created_by: "user-1",
+          created_at: "2026-07-03T00:00:00Z",
+        },
+        {
+          id: "email-2",
+          document_id: DOC_ID,
+          issued_document_id: "v-unknown", // versions に無い issued_document_id (整合性崩れ) → v0 に degrade
+          to_email: "bad@example.com",
+          cc_email: null,
+          subject: "件名2",
+          body: "本文2",
+          status: "failed",
+          error_detail: "RESEND_API_KEY 未設定です",
+          provider_message_id: null,
+          sent_at: "2026-07-04T00:00:00Z",
+          created_by: "user-1",
+          created_at: "2026-07-04T00:00:00Z",
+        },
+      ],
+    });
+
+    const facade = createSalesFacade();
+    const result = await facade.getDocumentDetail(DOC_ID);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.emails).toEqual([
+        {
+          id: "email-1",
+          to_email: "customer@example.com",
+          cc_email: null,
+          subject: "件名",
+          body: "本文",
+          status: "sent",
+          error_detail: null,
+          provider_message_id: "msg-1",
+          version: 1,
+          sent_at: "2026-07-03T00:00:00Z",
+        },
+        {
+          id: "email-2",
+          to_email: "bad@example.com",
+          cc_email: null,
+          subject: "件名2",
+          body: "本文2",
+          status: "failed",
+          error_detail: "RESEND_API_KEY 未設定です",
+          provider_message_id: null,
+          version: 0,
+          sent_at: "2026-07-04T00:00:00Z",
+        },
+      ]);
     }
   });
 

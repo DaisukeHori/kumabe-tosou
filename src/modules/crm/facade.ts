@@ -30,6 +30,7 @@ import {
   zTaskUpdateInput,
   zTimelinePagination,
   zTimelineTarget,
+  type ActivityPayload,
   type AppendActivityInput,
   type CompanyInput,
   type CompanyListItem,
@@ -724,11 +725,20 @@ export const crmFacade: CrmFacadeExtended = {
     try {
       const parsed = zAppendActivityInput.safeParse(rawInput);
       if (!parsed.success) return { ok: false, code: "KMB-E101", detail: parsed.error.message };
-      if (parsed.data.activity_type === "email") {
-        return { ok: false, code: "KMB-E604", detail: "メール連携は未対応です" };
-      }
+
       const payloadParsed = parseActivityPayload(parsed.data.activity_type, parsed.data.payload);
       if (!payloadParsed.success) return { ok: false, code: "KMB-E604", detail: payloadParsed.error };
+
+      // J7 Phase 2 段階解禁 (#101): 'email' は outbound (帳票のメール送付 — sales.sendDocumentByEmail)
+      // のみ挿入を許可する。inbound (受信取込) は受信基盤が無く、挿入しても孤児データになるため
+      // 引き続き KMB-E604 で拒否する。二段階 parse (上記) 済みの payload で判定する
+      // (旧実装は activity_type だけで一律拒否していた — 01-crm.md §12「'email' activity」是正)。
+      if (
+        parsed.data.activity_type === "email" &&
+        (payloadParsed.data as ActivityPayload<"email">).direction === "inbound"
+      ) {
+        return { ok: false, code: "KMB-E604", detail: "メールの受信取込は未対応です (送信のみ対応)。" };
+      }
 
       const resolved = await resolveExecutionClient(ctx);
       if (!resolved.ok) return resolved;

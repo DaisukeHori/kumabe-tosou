@@ -259,6 +259,16 @@ export const KMB_ERRORS = {
     message: "PDF を作成中です。しばらくしてからもう一度お試しください。",
     recovery: "数秒〜十数秒後に再試行 (グローバル同時実行 1)",
   },
+  "KMB-E644": {
+    category: "6xx 帳票メール送付",
+    message: "メールの送信に失敗しました。",
+    recovery: "detail を確認。RESEND_API_KEY 未設定なら env 設定が先。送信失敗は台帳に記録済みのため再送してください",
+  },
+  "KMB-E645": {
+    category: "6xx 帳票メール送付",
+    message: "送信先メールアドレスが不正です。",
+    recovery: "宛先を確認して入力し直してください",
+  },
 
   "KMB-E701": {
     category: "7xx 作業・カレンダー",

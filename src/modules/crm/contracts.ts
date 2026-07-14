@@ -106,10 +106,19 @@ export const zCallActivityPayload = z.object({
   summary: z.string().max(2000).nullable(),     // 議事録要約 (全文は call_jobs 側)
 }).strict();
 
-/** Phase 2 予約 (裁定 J7)。v1 では appendActivity が挿入を拒否する (KMB-E604) */
+/** J7 Phase 2 の段階的解禁 (issue #101): outbound (帳票のメール送付) のみ appendActivity が受け入れる。
+ *  inbound (受信取込) は受信基盤が無く挿入すると孤児データになるため、引き続き KMB-E604 で拒否する
+ *  (拒否判定は crm/facade.ts appendActivity — payload.direction 基準)。
+ *  to/document_id/doc_no/version/provider_message_id は sales の帳票送付 (#101) が使う項目。
+ *  将来の inbound (受信取込) とも構造互換になるよう nullable で持つ。 */
 export const zEmailActivityPayload = z.object({
   direction: z.enum(["inbound", "outbound"]),
   subject: z.string().max(200),
+  to: z.string().email().max(120).nullable(),
+  document_id: z.string().uuid().nullable(),
+  doc_no: zDocumentNo.nullable(),
+  version: z.number().int().min(1).nullable(),
+  provider_message_id: z.string().max(200).nullable(),
 }).strict();
 
 export const zFormSubmissionActivityPayload = z.object({
@@ -177,7 +186,7 @@ export const zSystemActivityPayload = z.object({
 export const ACTIVITY_PAYLOAD_SCHEMAS = {
   note: zNoteActivityPayload,
   call: zCallActivityPayload,
-  email: zEmailActivityPayload,                 // Phase 2 予約 (v1 挿入禁止)
+  email: zEmailActivityPayload,                 // J7 Phase 2 段階解禁 (outbound のみ挿入可。inbound は KMB-E604 — #101)
   form_submission: zFormSubmissionActivityPayload,
   simulator_estimate: zSimulatorEstimateActivityPayload,
   document_event: zDocumentEventActivityPayload,

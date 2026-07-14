@@ -12,12 +12,14 @@ import {
   zDocType,
   zPaymentInput,
   zReviseDocumentInput,
+  zSendDocumentEmailInput,
   zUpdateDraftDocumentInput,
   type CreateDocumentInput,
   type DocType,
   type IssuedContentSnapshot,
   type PaymentInput,
   type ReviseDocumentInput,
+  type SendDocumentEmailInput,
   type UpdateDraftDocumentInput,
 } from "@/modules/sales/contracts";
 import { crmFacade } from "@/modules/crm/facade";
@@ -461,6 +463,29 @@ export async function createPdfUrlAction(
   if (!versionParsed.success) return { ok: false, code: "KMB-E101", detail: versionParsed.error.message };
 
   return createSalesFacade().createSignedPdfUrl(idParsed.data, versionParsed.data);
+}
+
+// ============================================================
+// 帳票メール送付 (issue #101 — 02-sales.md §18)
+// ============================================================
+
+export async function sendDocumentEmailAction(
+  documentId: string,
+  input: SendDocumentEmailInput,
+): Promise<Result<{ document_email_id: string; sent_at: string }>> {
+  const admin = await requireAdminResult();
+  if (!admin.ok) return admin;
+
+  const idParsed = z.string().uuid().safeParse(documentId);
+  if (!idParsed.success) return { ok: false, code: "KMB-E101", detail: idParsed.error.message };
+  const inputParsed = zSendDocumentEmailInput.safeParse(input);
+  if (!inputParsed.success) return { ok: false, code: "KMB-E101", detail: inputParsed.error.message };
+
+  const result = await createSalesFacade().sendDocumentByEmail(idParsed.data, inputParsed.data);
+  if (!result.ok) return result;
+
+  revalidateDocumentPaths(idParsed.data);
+  return result;
 }
 
 // ============================================================

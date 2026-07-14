@@ -39,8 +39,29 @@ describe("ACTIVITY_PAYLOAD_SCHEMAS (9 type の正常 parse)", () => {
     expect(result.success).toBe(true);
   });
 
-  it("email: Phase 2 予約スキーマとして正しく parse できる (v1 挿入拒否は appendActivity 実装 (#43) の責務。ここでは契約としての parse 可能性のみ確認)", () => {
-    const result = zEmailActivityPayload.safeParse({ direction: "outbound", subject: "件名" });
+  it("email: J7 Phase 2 拡張スキーマ (#101) として正しく parse できる (outbound/inbound いずれの受入判定も appendActivity 実装の責務。ここでは契約としての parse 可能性のみ確認)", () => {
+    const result = zEmailActivityPayload.safeParse({
+      direction: "outbound",
+      subject: "件名",
+      to: "customer@example.com",
+      document_id: "550e8400-e29b-41d4-a716-446655440000",
+      doc_no: "I-2026-0001",
+      version: 1,
+      provider_message_id: "msg-1",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("email: nullable フィールド (to/document_id/doc_no/version/provider_message_id) は全て null で parse できる (将来の inbound とも構造互換)", () => {
+    const result = zEmailActivityPayload.safeParse({
+      direction: "inbound",
+      subject: "件名",
+      to: null,
+      document_id: null,
+      doc_no: null,
+      version: null,
+      provider_message_id: null,
+    });
     expect(result.success).toBe(true);
   });
 
@@ -151,6 +172,25 @@ describe("ACTIVITY_PAYLOAD_SCHEMAS (.strict() — 必須欠落・未知キー拒
       has_recording: true,
       summary: null,
       unexpected_field: "boom",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("email: 必須欠落 (#101 拡張フィールドの一部なし) を拒否する", () => {
+    const result = zEmailActivityPayload.safeParse({ direction: "outbound", subject: "件名" });
+    expect(result.success).toBe(false);
+  });
+
+  it("email: 未知キーを拒否する (.strict())", () => {
+    const result = zEmailActivityPayload.safeParse({
+      direction: "outbound",
+      subject: "件名",
+      to: null,
+      document_id: null,
+      doc_no: null,
+      version: null,
+      provider_message_id: null,
+      extra: "boom",
     });
     expect(result.success).toBe(false);
   });
