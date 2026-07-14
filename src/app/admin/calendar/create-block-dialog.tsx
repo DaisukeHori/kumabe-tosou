@@ -29,11 +29,15 @@ export function CreateBlockDialog({
   onOpenChange,
   workTypes,
   onCreated,
+  initialDeal = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workTypes: WorkTypeRow[];
   onCreated: () => void;
+  /** `?create_deal_id=` からの深いリンク seed (Issue #96 設計 §D)。open 時リセットの
+   *  useEffect で dealId/dealLabel の初期値として使う。 */
+  initialDeal?: { id: string; label: string } | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +54,8 @@ export function CreateBlockDialog({
   useEffect(() => {
     if (!open) return;
     setError(null);
-    setDealId(null);
-    setDealLabel(null);
+    setDealId(initialDeal?.id ?? null);
+    setDealLabel(initialDeal?.label ?? null);
     setWorkTypeId(workTypes[0]?.id ?? "");
     setTitle("");
     setPlannedHours("1");
@@ -59,7 +63,7 @@ export function CreateBlockDialog({
     setPlaceNow(false);
     setPlaceDate(todayJstDateOnly());
     setPlaceTime("09:00");
-  }, [open, workTypes]);
+  }, [open, workTypes, initialDeal]);
 
   function handleSubmit() {
     const hours = Number(plannedHours);

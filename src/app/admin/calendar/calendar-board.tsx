@@ -68,12 +68,16 @@ export function CalendarBoard({
   initialBacklog,
   initialCapacity,
   workTypes,
+  initialCreateDeal = null,
 }: {
   initialWeekStart: DateOnly;
   initialBlocks: WorkBlockView[];
   initialBacklog: Paged<WorkBlockView>;
   initialCapacity: WeeklyCapacity | null;
   workTypes: WorkTypeRow[];
+  /** `?create_deal_id=` の解決結果 (Issue #96 設計 §D)。非 null なら「ブロックを作る」ダイアログを
+   *  該当案件セット済みで初期オープンする。 */
+  initialCreateDeal?: { id: string; label: string } | null;
 }) {
   const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
@@ -92,7 +96,10 @@ export function CalendarBoard({
   const [trayFocusIndex, setTrayFocusIndex] = useState(0);
 
   const [detailBlockId, setDetailBlockId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  // 初期 state 設定のみで自動オープンを実装する (#61 の教訓を踏襲: useEffect での後追いオープンは
+  // 他 Dialog のアンマウント地雷を踏みやすい — calendar-board.tsx はこれまでも #53/#54/#55/#61 が
+  // 重ねて触った衝突多発ファイル。Issue #96 設計 §リスク4)。
+  const [createOpen, setCreateOpen] = useState(initialCreateDeal !== null);
   const [proposals, setProposals] = useState<PlacementProposal[]>([]);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -472,7 +479,13 @@ export function CalendarBoard({
         workTypes={workTypes}
         onChanged={() => void refreshAll()}
       />
-      <CreateBlockDialog open={createOpen} onOpenChange={setCreateOpen} workTypes={workTypes} onCreated={() => void refreshAll()} />
+      <CreateBlockDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        workTypes={workTypes}
+        onCreated={() => void refreshAll()}
+        initialDeal={initialCreateDeal}
+      />
     </div>
   );
 }

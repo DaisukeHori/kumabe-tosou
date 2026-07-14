@@ -59,7 +59,10 @@ export function DealHeaderActions({ deal }: { deal: DealDetail }) {
       toast.error(result.detail ?? "受注にできませんでした。");
       return;
     }
-    toast.success("受注にしました。");
+    // Issue #96 §G: 受注書発行への導線をここで提示する (documents/new の deal_id 事前選択と接続)。
+    toast.success("受注にしました。", {
+      action: { label: "受注書を作成", onClick: () => router.push(`/admin/documents/new?deal_id=${deal.id}`) },
+    });
     router.refresh();
   }
 

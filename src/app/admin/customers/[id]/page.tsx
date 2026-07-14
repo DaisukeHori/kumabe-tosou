@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 
-import { Surface } from "@/app/admin/_ui";
+import { PageHeader, Surface } from "@/app/admin/_ui";
 import { ActivityTimeline } from "@/app/admin/_ui/activity-timeline";
 import { MiniTaskList } from "@/app/admin/_ui/mini-task-list";
 import { crmFacade } from "@/modules/crm/facade";
@@ -9,6 +10,10 @@ import { crmFacade } from "@/modules/crm/facade";
 import { CustomerProfileCard } from "./CustomerProfileCard";
 
 export const dynamic = "force-dynamic";
+// 静的タイトルに固定 (地雷回避: generateMetadata 内で cookie 依存クライアントを使わない —
+// documents/[id]/page.tsx:14-17 / deals/[id]/page.tsx の裁定を踏襲。Issue #96 §G:
+// カード再構成は別 Issue、本 Issue では metadata + PageHeader(backHref) の追加のみ)。
+export const metadata: Metadata = { title: "顧客詳細" };
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -35,6 +40,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader title={customer.name} backHref="/admin/customers" />
+
       {isMerged && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
           この顧客は統合済みです。

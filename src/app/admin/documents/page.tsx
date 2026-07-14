@@ -1,9 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/app/admin/_ui";
+import { crmFacade } from "@/modules/crm/facade";
 import { createSalesFacade } from "@/modules/sales/facade";
 import { zDocType, zDocumentStatus, type DocumentListFilter } from "@/modules/sales/contracts";
 
@@ -27,9 +29,9 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
 export default async function AdminDocumentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; status?: string; q?: string; cursor?: string }>;
+  searchParams: Promise<{ type?: string; status?: string; q?: string; cursor?: string; deal_id?: string }>;
 }) {
-  const { type, status, q, cursor } = await searchParams;
+  const { type, status, q, cursor, deal_id } = await searchParams;
 
   const docType = zDocType.options.includes((type ?? "") as (typeof zDocType.options)[number])
     ? (type as (typeof zDocType.options)[number])
@@ -37,22 +39,29 @@ export default async function AdminDocumentsPage({
   const docStatus = zDocumentStatus.options.includes((status ?? "") as (typeof zDocumentStatus.options)[number])
     ? (status as (typeof zDocumentStatus.options)[number])
     : null;
+  const dealIdParsed = z.string().uuid().safeParse(deal_id);
+  const dealIdFilter = dealIdParsed.success ? dealIdParsed.data : null;
   const filter: DocumentListFilter = {
     doc_type: docType,
     status: docStatus,
-    deal_id: null,
+    deal_id: dealIdFilter,
     q: q?.trim() || null,
   };
 
-  const result = await createSalesFacade().listDocuments(filter, { cursor: cursor ?? null, limit: 50 });
+  const [result, dealRef] = await Promise.all([
+    createSalesFacade().listDocuments(filter, { cursor: cursor ?? null, limit: 50 }),
+    dealIdFilter ? crmFacade.getDealRef(dealIdFilter) : Promise.resolve(null),
+  ]);
 
-  function filterHref(next: { type?: string; status?: string }) {
+  function filterHref(next: { type?: string; status?: string; deal_id?: string | null }) {
     const params = new URLSearchParams();
     const t = next.type !== undefined ? next.type : (type ?? "");
     const s = next.status !== undefined ? next.status : (status ?? "");
+    const d = next.deal_id !== undefined ? next.deal_id : (dealIdFilter ?? "");
     if (t) params.set("type", t);
     if (s) params.set("status", s);
     if (q) params.set("q", q);
+    if (d) params.set("deal_id", d);
     const qs = params.toString();
     return `/admin/documents${qs ? `?${qs}` : ""}`;
   }
@@ -87,6 +96,16 @@ export default async function AdminDocumentsPage({
           </Link>
         ))}
       </div>
+
+      {dealIdFilter && (
+        <div className="flex flex-wrap gap-2">
+          <Link href={filterHref({ deal_id: null })}>
+            <Badge variant="secondary" className="cursor-pointer gap-1 px-3 py-1">
+              案件: {dealRef?.ok ? dealRef.value.title : dealIdFilter} ×
+            </Badge>
+          </Link>
+        </div>
+      )}
 
       {!result.ok && (
         <p className="text-sm text-destructive">
