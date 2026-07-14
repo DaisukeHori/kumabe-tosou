@@ -133,6 +133,7 @@ function UpdatedAtHint({
 
 export function SettingsTabs({
   data,
+  initialTab,
   aiKeys,
   telephonySetupStatus,
   siteUrl,
@@ -141,6 +142,9 @@ export function SettingsTabs({
   mediaNextCursor,
 }: {
   data: SettingsTabsData;
+  /** /admin/settings?tab= の生の値 (未検証)。TAB_LABELS のキーであれば初期タブとして採用し、
+   *  それ以外 (未指定・未知値) は従来どおり "company" にフォールバックする (#92)。 */
+  initialTab?: string;
   aiKeys: AiKeyMeta[];
   telephonySetupStatus: TelephonySetupStatus | null;
   siteUrl: string;
@@ -150,7 +154,9 @@ export function SettingsTabs({
   mediaCatalog: PickerMediaItem[];
   mediaNextCursor: string | null;
 }) {
-  const [active, setActive] = useState<TabKey>("company");
+  const [active, setActive] = useState<TabKey>(() =>
+    initialTab && initialTab in TAB_LABELS ? (initialTab as TabKey) : "company",
+  );
   // "ai" タブは複数の独立したフォーム (キー追加/予算) を持つため単一の Cmd+S 対象を持たない
   // (キーを設定しない = そのタブでは Cmd+S が何もしない、という割り切り)。
   const formRefs = useRef<Partial<Record<SettingsKey, HTMLFormElement | null>>>({});
@@ -168,7 +174,18 @@ export function SettingsTabs({
   }, [active]);
 
   return (
-    <Tabs value={active} onValueChange={(v) => setActive(v as TabKey)}>
+    <Tabs
+      value={active}
+      onValueChange={(v) => {
+        const next = v as TabKey;
+        setActive(next);
+        // router.replace は force-dynamic な本ページの Server Component を再実行させ、
+        // settings 14 件の再フェッチと入力中フォーム値の消失を招くため使わない。
+        // native History API で URL の ?tab= のみを浅く同期する (Next.js 15.5 でサポート済み)。
+        const url = next === "company" ? "/admin/settings" : `/admin/settings?tab=${next}`;
+        window.history.replaceState(null, "", url);
+      }}
+    >
       <TabsList variant="line">
         {(Object.keys(TAB_LABELS) as TabKey[]).map((key) => (
           <TabsTrigger key={key} value={key}>

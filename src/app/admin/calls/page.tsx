@@ -91,7 +91,7 @@ export default async function AdminCallsPage({
       {showDegradeBanner && (
         <Surface className="border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
           電話連携は未設定です。
-          <Link href="/admin/settings" className="ml-1 underline underline-offset-4">
+          <Link href="/admin/settings?tab=telephony" className="ml-1 underline underline-offset-4">
             設定手順を見る →
           </Link>
         </Surface>

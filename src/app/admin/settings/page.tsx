@@ -37,7 +37,12 @@ async function resolveSealPreviewUrl(storagePath: string | null): Promise<string
   }
 }
 
-export default async function AdminSettingsPage() {
+export default async function AdminSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const params = await searchParams;
   const [
     company,
     hero,
@@ -106,6 +111,7 @@ export default async function AdminSettingsPage() {
       <Surface className="p-6">
         <SettingsTabs
           data={data}
+          initialTab={params.tab}
           aiKeys={aiKeys.ok ? aiKeys.value : []}
           telephonySetupStatus={setupStatus.ok ? setupStatus.value : null}
           siteUrl={getEnv().NEXT_PUBLIC_SITE_URL}
