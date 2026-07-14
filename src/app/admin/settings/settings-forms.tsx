@@ -29,6 +29,7 @@ import {
 } from "./actions";
 import { AiSettingsTab } from "./ai-tab";
 import { SETTINGS_FORM_INITIAL_STATE, type SettingsFormState } from "./form-state";
+import { InvoiceIssuerForm } from "./invoice-issuer-forms";
 import { BusinessHoursForm, TelephonyForm, type TelephonySetupStatus } from "./telephony-forms";
 
 export type SettingsMetaFor<K extends SettingsKey> = {
@@ -46,15 +47,16 @@ export type SettingsTabsData = {
   work_capacity: SettingsMetaFor<"work_capacity">;
   telephony: SettingsMetaFor<"telephony">;
   business_hours: SettingsMetaFor<"business_hours">;
+  invoice_issuer: SettingsMetaFor<"invoice_issuer">;
 };
 
 /**
  * "ai" は site_settings の SettingsKey ではなく ai-providers 由来のタブのため、別ユニオンで扱う。
  * #45 (07-contracts-delta §D5) で SettingsKey は 11 キーに拡張されたが、本管理画面がタブとして
- * 描画するのは従来の 5 キー + work_capacity (#53) + telephony/business_hours (#59) の計 8 キーのみ
- * (analytics/branding/invoice_issuer 等の残りの新規キーのタブ・Server Actions は他 Issue のスコープ)。
- * SettingsKey をそのまま使うと未実装タブの型要求が漏れ伝播するため、この画面が実際に扱うキーだけの
- * 明示ユニオンに固定する。
+ * 描画するのは従来の 5 キー + work_capacity (#53) + telephony/business_hours (#59) +
+ * invoice_issuer (#51) の計 9 キーのみ (analytics/branding 等の残りの新規キーのタブ・
+ * Server Actions は他 Issue のスコープ)。SettingsKey をそのまま使うと未実装タブの型要求が
+ * 漏れ伝播するため、この画面が実際に扱うキーだけの明示ユニオンに固定する。
  */
 type TabKey =
   | Extract<
@@ -67,6 +69,7 @@ type TabKey =
       | "work_capacity"
       | "telephony"
       | "business_hours"
+      | "invoice_issuer"
     >
   | "ai";
 
@@ -79,6 +82,7 @@ const TAB_LABELS: Record<TabKey, string> = {
   work_capacity: "週間稼働",
   telephony: "電話",
   business_hours: "営業時間",
+  invoice_issuer: "請求書発行者",
   ai: "AI",
 };
 
@@ -105,11 +109,14 @@ export function SettingsTabs({
   aiKeys,
   telephonySetupStatus,
   siteUrl,
+  sealPreviewUrl,
 }: {
   data: SettingsTabsData;
   aiKeys: AiKeyMeta[];
   telephonySetupStatus: TelephonySetupStatus | null;
   siteUrl: string;
+  /** 角印画像の署名 URL (TTL 5 分)。page.tsx が Server Component 内で解決済み。null = 未設定/解決失敗。 */
+  sealPreviewUrl: string | null;
 }) {
   const [active, setActive] = useState<TabKey>("company");
   // "ai" タブは複数の独立したフォーム (キー追加/予算) を持つため単一の Cmd+S 対象を持たない
@@ -201,6 +208,15 @@ export function SettingsTabs({
           data={data.business_hours}
           formRef={(el) => {
             formRefs.current.business_hours = el;
+          }}
+        />
+      </TabsContent>
+      <TabsContent value="invoice_issuer" className="mt-6">
+        <InvoiceIssuerForm
+          data={data.invoice_issuer}
+          sealPreviewUrl={sealPreviewUrl}
+          formRef={(el) => {
+            formRefs.current.invoice_issuer = el;
           }}
         />
       </TabsContent>

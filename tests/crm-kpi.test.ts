@@ -86,4 +86,69 @@ describe("isDigestEmpty (§7.2 手順b: 全リスト空なら送信スキップ)
       }),
     ).toBe(false);
   });
+
+  // #51: sales 配線有効化に伴う後方互換 + sales 考慮ケース (地雷回避: crm タスクは 0 件だが
+  // sales の未消込請求はある朝にダイジェストがスキップされる静かな機能不全を防ぐ)。
+  it("sales: null (route が getSalesDigest 失敗時に graceful degrade で渡す形) は他が空なら true のまま", () => {
+    expect(
+      isDigestEmpty({ overdue_tasks: [], today_tasks: [], awaiting_leads: [], sales: null }),
+    ).toBe(true);
+  });
+
+  it("sales: {expiring_quotes:[], unpaid_invoices:[]} (sales 側も 0 件) は他が空なら true のまま", () => {
+    expect(
+      isDigestEmpty({
+        overdue_tasks: [],
+        today_tasks: [],
+        awaiting_leads: [],
+        sales: { expiring_quotes: [], unpaid_invoices: [] },
+      }),
+    ).toBe(true);
+  });
+
+  it("crm 側 3 リストが全て空でも sales.expiring_quotes に 1 件あれば false (地雷: 未回収見落とし防止)", () => {
+    expect(
+      isDigestEmpty({
+        overdue_tasks: [],
+        today_tasks: [],
+        awaiting_leads: [],
+        sales: {
+          expiring_quotes: [
+            { document_id: "d-1", doc_no: "Q-1", billing_name: "顧客A", valid_until: "2026-07-20", total_jpy: 1000 },
+          ],
+          unpaid_invoices: [],
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it("crm 側 3 リストが全て空でも sales.unpaid_invoices に 1 件あれば false (地雷: 未回収見落とし防止)", () => {
+    expect(
+      isDigestEmpty({
+        overdue_tasks: [],
+        today_tasks: [],
+        awaiting_leads: [],
+        sales: {
+          expiring_quotes: [],
+          unpaid_invoices: [
+            {
+              document_id: "d-2",
+              doc_no: "I-1",
+              billing_name: "顧客B",
+              issue_date: "2026-07-01",
+              total_jpy: 11000,
+              paid_jpy: 0,
+              balance_jpy: 11000,
+            },
+          ],
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it("sales 引数を渡さない旧来の呼び出し (tests/crm-kpi.test.ts の既存呼び出し形) は sales 未指定=空扱いのまま後方互換を保つ", () => {
+    // 上記「3 リストすべて空なら true」テストと同一の呼び出し形が型エラーにならず、
+    // 結果も変わらないことの明示的な再確認 (isDigestEmpty のシグネチャ拡張の後方互換保証)。
+    expect(isDigestEmpty({ overdue_tasks: [], today_tasks: [], awaiting_leads: [] })).toBe(true);
+  });
 });

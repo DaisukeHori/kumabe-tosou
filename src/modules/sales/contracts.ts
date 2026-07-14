@@ -256,12 +256,19 @@ export type DocumentListItem = {
   issue_date: string | null;
   created_at: string;
   updated_at: string;               // 楽観排他用 生文字列
+  // #51 追加: 系譜パンくず (§8.4「派生元 → 本書類 → 派生先」) を listDocuments({deal_id}) 1 回の
+  // 呼び出しで組み立てるための項目 (読み取りビュー型 — Zod 化しない既存規約 §4.9 のまま拡張)。
+  source_document_id: string | null;
 };
 
 export type DocumentDetail = {
   document: DocumentListItem & {
     source_document_id: string | null;
     current_version: number;
+    // #51 追加: 取引年月日 (updateDraftDocument/reviseAndReissueDocument が必須で受け取る項目 —
+    // 従来この型に無かったため、admin 編集画面が毎回 null 初期化 → 保存のたびに既存値を無言で
+    // 上書き消去するデータ損失バグを構造的に踏んでいた。地雷回避のため追加。
+    transaction_date: string | null;
     valid_until: string | null;
     billing_suffix: "様" | "御中";
     billing_address: string | null;
