@@ -5,10 +5,21 @@ import { Fragment, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/app/admin/_ui";
-import type { CustomerDetail } from "@/modules/crm/contracts";
+import type { CustomerAddressBlock, CustomerDetail } from "@/modules/crm/contracts";
 
 import { CustomerDetailActions } from "./CustomerDetailActions";
 import { CustomerEditSheet } from "./CustomerEditSheet";
+
+/** 請求先/配送先ブロックの表示行 (null ブロックは呼び出し側で行ごと非表示)。郵便番号は "xxx-xxxx" 整形。 */
+function addressBlockLines(block: CustomerAddressBlock): string {
+  const lines: string[] = [];
+  if (block.name) lines.push(block.suffix ? `${block.name} ${block.suffix}` : block.name);
+  const postal = block.postal_code ? `〒${block.postal_code.slice(0, 3)}-${block.postal_code.slice(3)}` : "";
+  if (block.address) lines.push(postal ? `${postal} ${block.address}` : block.address);
+  else if (postal) lines.push(postal);
+  if (block.tel_e164) lines.push(block.tel_e164);
+  return lines.join("\n");
+}
 
 const LIFECYCLE_LABEL: Record<CustomerDetail["lifecycle"], string> = {
   lead: "見込み",
@@ -53,6 +64,18 @@ export function CustomerProfileCard({ customer }: { customer: CustomerDetail }) 
         <dd>{customer.tel_e164 ?? "—"}</dd>
         <dt className="text-muted-foreground">住所</dt>
         <dd>{customer.address ?? "—"}</dd>
+        {customer.billing_info && (
+          <>
+            <dt className="text-muted-foreground">請求先</dt>
+            <dd className="whitespace-pre-wrap break-words">{addressBlockLines(customer.billing_info)}</dd>
+          </>
+        )}
+        {customer.shipping_info && (
+          <>
+            <dt className="text-muted-foreground">配送先</dt>
+            <dd className="whitespace-pre-wrap break-words">{addressBlockLines(customer.shipping_info)}</dd>
+          </>
+        )}
         {customer.custom_fields.map((f) => (
           <Fragment key={f.label}>
             <dt className="text-muted-foreground">{f.label}</dt>

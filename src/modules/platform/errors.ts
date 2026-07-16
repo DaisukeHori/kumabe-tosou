@@ -202,6 +202,16 @@ export const KMB_ERRORS = {
     message: "案件の再開が不正です。",
     recovery: "再開は終端 (入金済み/失注) からのみ・戻し先は非終端ステージのみ・理由入力が必須です",
   },
+  "KMB-E610": {
+    category: "6xx CRM",
+    message: "郵便番号は7桁の数字で入力してください。",
+    recovery: "ハイフンなし7桁で入力。宛先を消す場合は全欄を空にして保存",
+  },
+  "KMB-E611": {
+    category: "6xx CRM",
+    message: "住所を自動入力できませんでした。",
+    recovery: "住所を手入力して続行 (保存は検索と無関係に可能)",
+  },
 
   "KMB-E620": {
     category: "6xx 受注・帳票",

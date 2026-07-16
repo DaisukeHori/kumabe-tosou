@@ -1,6 +1,10 @@
 # module-contracts.md v2.8 追加差分 (07-contracts-delta)
 
-- 版: v1.9 (2026-07-14: issue #101 帳票メール送付 — D1 sales 行に document_emails を追加、§4.10
+- 版: v1.10 (2026-07-16: Issue #113 顧客の請求先/配送先 — §4.10 の跨モジュール射影 CustomerRef/DealRef に
+  請求先 (billing) / 配送先 (shipping) ブロックを additive 追加。read view 型 CustomerRefAddressBlock を新設
+  (crm zCustomerAddressBlock と構造同型・zod は再 import しない)。00-overview §3.3 に KMB-E610/E611 を追加登録。
+  crm facade の toCustomerRef / buildDealRef が行の billing_info/shipping_info をそのまま写す additive 拡張で
+  既存呼び出しは不変)。旧: v1.9 (2026-07-14: issue #101 帳票メール送付 — D1 sales 行に document_emails を追加、§4.10
   zEmailActivityPayload を to/document_id/doc_no/version/provider_message_id 追加で拡張し J7 Phase 2 を
   outbound のみ段階解禁 (inbound は引き続き KMB-E604)。00-overview §3.3 に KMB-E644/E645 を追加登録)。
   旧: v1.8 (2026-07-11: 最終整合 — D1 sales 行の所有テーブルに print_tokens / pdf_render_lock / document_revision_stagings (02-sales v1.1 §2.3.2 新設) と bucket branding-assets (D5 v1.2) を追記、§7.5 の「refusal→E403」を KMB-E821 一本化 (04-telephony v1.1 §9) に是正)。旧: v1.7 (2026-07-11: 02-sales v1.1 レビュー反映と対 — D8 CrmFacade に **getDealRefs (batch)** 追加 + DealRef/CustomerRef に **address** 追加 (Δs4 完結: listDocuments 50 件/頁の N+1 解消と billing_address 複製の源)、§4.10 zDocumentEventActivityPayload.event に **'payment_recorded'** 追加 (Δs5 — 'paid' は完済到達に限定)、§4.11 DocumentTotals コメントの tax.ts パス訂正 + D8 createDraftQuoteFromEstimate の「仮単価 = セル price_max」を 06 §5.4 T1 参照に訂正 (Δs6))。旧: v1.6 (2026-07-11: 04-telephony v1.1 レビュー反映と対 — §4.13 webhook 契約の route 共通則注記 (契約キー pick + 欠落 null 補完)・D8 CrmFacade.relinkActivity 追加 (通話の付け替え/解除で activity_links を張り替える経路 — 01-crm へ実装意味論の反映要)・§7.5 の created:true ガード廃止 (createTask は常に実行 — DB 冪等が担う))。旧: v1.5 (2026-07-11: 01-crm v1.1 レビュー反映と対 — D8/§7.9 の冪等 index を非部分一意へ是正 (PostgREST on_conflict 制約)・appendActivity の created:false 時 links 補完・createTask title 安定性の前提条件・zDealInput コメントの noop 縮退注記)。旧: v1.4 (2026-07-11: D7 4.12 grade_key/size_key の空文字禁止 min(1) — 03-scheduling v1.1 レビュー反映と対)。旧: v1.3 (2026-07-11: D5 の site_settings RLS を 00-overview §3.1.2c (0021) と統一 — site_settings_public_select 改名 + admin_select 併設)。旧: v1.2 (2026-07-11: レビュー指摘反映 — site_settings anon 可読キーの許可リスト化・角印 private 化 (D5)、matchCustomerByPhone の E601 是正・read メソッド昇格・SettingsFacade.get ctx (D8)、§7.5 順序是正 (activity 先行→createTask)、zDealInput.stage 作成 3 値制限、型 alias 網羅、normalizeJpPhoneToE164 完全仕様 ほか。詳細は末尾更新履歴)
@@ -576,6 +580,16 @@ export type IntakeFromSimulatorInput = z.infer<typeof zIntakeFromSimulatorInput>
 /** 跨モジュール read の最小射影 (v1.2 — D8 getCustomerRef/getDealRef の戻り値。
  *  読み取りビュー型のため Zod 化しない (既存 §4.9 規約)。詳細ビュー (CustomerDetail/DealDetail) は
  *  01-crm §6.2 の契約外拡張のまま自モジュール専用 — 他モジュールは本射影のみ参照する */
+/** 請求先/配送先ブロックの跨モジュール射影 (v1.8 追加 — Issue #113)。crm の zCustomerAddressBlock
+ *  (01-crm §5.2) と構造同型だが、他モジュールは crm の zod スキーマを再 import しないため read view
+ *  として独立定義する (§D8 型 import 規約 — 依存方向に反しない構造的同型は独立定義してよい)。 */
+export type CustomerRefAddressBlock = {
+  postal_code: string | null;
+  address: string | null;
+  tel_e164: string | null;
+  name: string | null;
+  suffix: "様" | "御中" | null;
+};
 export type CustomerRef = {
   customer_id: string;   // merged_into 終端解決済みの現行 id (旧 id で呼んでも解決後を返す)
   name: string;
@@ -584,13 +598,22 @@ export type CustomerRef = {
   tel_e164: string | null;
   email: string | null;
   address: string | null; // v1.7 追加 — 02-sales の billing_address 複製の源 (customers.address)
+  billing: CustomerRefAddressBlock | null;  // v1.8 追加 (Issue #113) — 帳票 billing_* 複製の源 (02-sales §6.1)
+  shipping: CustomerRefAddressBlock | null; // v1.8 追加 (Issue #113) — 帳票 site_* 複製の源 (02-sales §6.1)
 };
 export type DealRef = {
   deal_id: string;
   title: string;
   stage: DealStage;
   updated_at: string;    // 楽観排他用の生文字列 (02-sales 7.1-2 のステージ提案適用が使用)
-  customer: { customer_id: string; name: string; kind: "person" | "company_contact"; address: string | null }; // address は v1.7 追加
+  customer: {
+    customer_id: string;
+    name: string;
+    kind: "person" | "company_contact";
+    address: string | null; // address は v1.7 追加
+    billing: CustomerRef["billing"];   // v1.8 追加 (Issue #113)
+    shipping: CustomerRef["shipping"]; // v1.8 追加 (Issue #113)
+  };
   company: { company_id: string; name: string; address: string | null } | null; // 宛名複製: company 非 null → '御中' / null → '様'。address は v1.7 追加 (billing_address 複製 — 02-sales §6.1)
 };
 ```
@@ -1237,6 +1260,7 @@ payload:  ACTIVITY_PAYLOAD_SCHEMAS[activity_type] で二段階 parse (KMB-E604)
 
 | 版 | 日付 | 内容 |
 |---|---|---|
+| v1.10 | 2026-07-16 | Issue #113 顧客の請求先/配送先: §4.10 の跨モジュール射影に read view 型 **CustomerRefAddressBlock** ({postal_code, address, tel_e164, name, suffix}) を新設し、**CustomerRef に billing/shipping** (`CustomerRefAddressBlock \| null`)・**DealRef.customer に billing/shipping** を additive 追加 (crm facade の toCustomerRef / buildDealRef が行の billing_info/shipping_info をそのまま写す。既存呼び出し・既存射影は不変)。帳票の billing_* / site_* 複製の源 (02-sales §6.1)。crm zCustomerAddressBlock (01-crm §5.2) と構造同型だが zod は再 import せず独立定義 (§D8 型 import 規約) / 00-overview §3.3 に **KMB-E610 (郵便番号形式不正/空ブロック) / KMB-E611 (住所自動補完の失敗 — degrade)** を新規登録 |
 | v1.9 | 2026-07-14 | issue #101 帳票メール送付 (PDF 添付方式): D1 sales 行の所有テーブルに **document_emails** を追加 (migration 20260714000036) / §4.10 `zEmailActivityPayload` に **to/document_id/doc_no/version/provider_message_id** を追加し J7 Phase 2 を **outbound のみ** 段階解禁 (inbound は引き続き KMB-E604 — crm/facade.ts appendActivity が payload.direction で判定) / 00-overview §3.3 に **KMB-E644 (送信失敗) / KMB-E645 (宛先不正)** を新規登録 |
 | v1.8 | 2026-07-11 | 最終整合 (final-check 波及反映): D1 sales 行の所有テーブルに **print_tokens / pdf_render_lock / document_revision_stagings** を追記 (02-sales v1.1 §2.3.2 が新設した service 専用補助 3 テーブル — 申し送り漏れの是正) + Storage bucket に **branding-assets** を追記 (D5 v1.2 の角印 private 化で 0028 が作成) / §7.5 analyzing の「refusal→E403」を **refusal・max_tokens 打ち切り・parse 失敗いずれも KMB-E821** に是正 (04-telephony v1.1 §9 の一本化と同期) |
 | v1.7 | 2026-07-11 | 02-sales v1.1 レビュー反映と対 (裁定 #22〜#24): D8 CrmFacade に **getDealRefs(dealIds) (batch)** を追加 + CustomerRef/DealRef に **address** を追加 (Δs4 完結 — listDocuments 50 件/頁の N+1 解消・billing_address 複製の源) / §4.10 zDocumentEventActivityPayload.event に **'payment_recorded'** を追加し 'paid' を完済到達に限定 (Δs5。§7.9 の実レコード ref 例示にも追記) / §4.11 DocumentTotals コメントの tax.ts パスを `sales/tax.ts` (モジュール直下) に訂正 + D8 createDraftQuoteFromEstimate コメントの「仮単価 = セル price_max」を 06-simulator §5.4 T1 参照に訂正 (Δs6) |
