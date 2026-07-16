@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { z } from "zod";
 
 import { PageHeader } from "@/app/admin/_ui";
+import { buttonVariants } from "@/components/ui/button";
 import { crmFacade } from "@/modules/crm/facade";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
 
 import { CalendarBoard } from "./calendar-board";
-import { CalendarSecondaryTabs } from "./_ui/secondary-tabs";
 import { addDaysJst, mondayOfWeekJst, todayJstDateOnly, weekRangeIso } from "./_ui/jst-time";
 
 export const metadata: Metadata = { title: "カレンダー" };
@@ -59,8 +60,12 @@ export default async function AdminCalendarPage({
       <PageHeader
         title="カレンダー"
         description="↑↓: トレイの行移動 / ←→: 選択札の日移動 / Shift+↑↓: 30分移動 / Enter: 詳細 / Esc: 閉じる / Cmd(Ctrl)+S: 保存 / T: 今日 / W・M: 週/月切替"
+        actions={
+          <Link href="/admin/calendar/connections" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            ⚙ カレンダー設定
+          </Link>
+        }
       />
-      <CalendarSecondaryTabs />
       {!rangeResult.ok && (
         <p className="text-sm text-destructive">カレンダーの取得に失敗しました ({rangeResult.code})。再読み込みしてください。</p>
       )}

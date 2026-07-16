@@ -441,11 +441,11 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
   const today = todayJstDateOnly();
 
   return (
-    <div className="overflow-hidden rounded-xl border border-admin-card-border bg-card shadow-md">
-      <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-border bg-admin-canvas-deep/60 text-xs">
+    <div className="overflow-hidden rounded-surface border border-border bg-card shadow-surface">
+      <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-border bg-muted text-xs">
         <div />
         {Array.from({ length: 7 }, (_, i) => addDaysJst(weekStart, i)).map((d) => (
-          <div key={d} className={cn("border-l border-border px-1 py-1.5 text-center font-medium", d === today && "text-soul")}>
+          <div key={d} className={cn("border-l border-border px-1 py-1.5 text-center font-medium", d === today && "text-primary")}>
             {formatDateOnlyLabel(d)}
           </div>
         ))}
@@ -508,7 +508,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
                       title={hasDeletedExternally ? "外部カレンダー側で削除されています。クリックして解決してください。" : undefined}
                       className={cn(
                         "absolute inset-x-0.5 z-10 overflow-hidden rounded-md border px-1 py-0.5 text-left text-[11px] leading-tight shadow-sm",
-                        seg.block.id === selectedBlockId ? "border-l-4 border-l-soul" : "border-transparent",
+                        seg.block.id === selectedBlockId ? "border-l-4 border-l-primary" : "border-transparent",
                         !seg.block.consumes_capacity && "opacity-60",
                         hasDeletedExternally && "border-2 border-dashed border-destructive",
                       )}
@@ -566,14 +566,14 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
                 ))}
               {dragState?.preview && !dragState.canceled && dragState.preview.dayOffset === dayOffset && (
                 <div
-                  className="pointer-events-none absolute inset-x-0.5 z-20 overflow-hidden rounded-md border-2 border-dashed border-soul bg-soul/20"
+                  className="pointer-events-none absolute inset-x-0.5 z-20 overflow-hidden rounded-md border-2 border-dashed border-primary bg-primary/20"
                   style={{
                     top: (dragState.preview.startMinutes / ROW_MINUTES) * ROW_HEIGHT_PX,
                     height: Math.max(ROW_HEIGHT_PX, (dragState.preview.durationMinutes / ROW_MINUTES) * ROW_HEIGHT_PX),
                   }}
                 >
                   {dragState.drag.kind === "create" && (
-                    <span className="block truncate px-1 py-0.5 text-[10px] font-medium text-soul">
+                    <span className="block truncate px-1 py-0.5 text-[10px] font-medium text-primary">
                       {minutesToHHMM(dragState.preview.startMinutes)}〜
                       {minutesToHHMM(dragState.preview.startMinutes + dragState.preview.durationMinutes)}
                     </span>

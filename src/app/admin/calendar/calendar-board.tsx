@@ -430,7 +430,7 @@ export function CalendarBoard({
       </div>
 
       {proposals.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-soul/40 bg-soul/5 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
           <span className="text-sm">自動配置の提案: {proposals.length} 件</span>
           <Button type="button" size="sm" disabled={isBusy} onClick={handleApplyProposals}>
             確定
@@ -545,7 +545,7 @@ function BacklogTray({
 }) {
   return (
     <div className={className}>
-      <div className="rounded-xl border border-admin-card-border bg-card p-3 shadow-md">
+      <div className="rounded-surface border border-border bg-card p-3 shadow-surface">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-medium">未配置 ({backlog.length})</p>
           <Button type="button" size="sm" variant="outline" onClick={onAutoPlace} disabled={backlog.length === 0}>
@@ -575,7 +575,7 @@ function BacklogTray({
                 }}
                 onMouseEnter={() => onFocusIndexChange(index)}
                 className={`cursor-grab rounded-md border px-2 py-1.5 text-xs ${
-                  index === focusIndex ? "border-l-4 border-l-soul bg-soul/5" : "border-l-4 border-l-transparent hover:bg-muted/60"
+                  index === focusIndex ? "border-l-4 border-l-primary bg-primary/5" : "border-l-4 border-l-transparent hover:bg-muted/60"
                 }`}
               >
                 <div className="flex items-center gap-1.5">
@@ -624,8 +624,8 @@ function MonthView({
   }, [blocks]);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-admin-card-border bg-card shadow-md">
-      <div className="grid grid-cols-7 border-b border-border bg-admin-canvas-deep/60 text-center text-xs font-medium">
+    <div className="overflow-hidden rounded-surface border border-border bg-card shadow-surface">
+      <div className="grid grid-cols-7 border-b border-border bg-muted text-center text-xs font-medium">
         {["月", "火", "水", "木", "金", "土", "日"].map((label) => (
           <div key={label} className="border-l border-border py-1.5 first:border-l-0">
             {label}
@@ -644,7 +644,7 @@ function MonthView({
               onClick={() => onSelectDay(day)}
               className={`min-h-20 border-b border-l border-border p-1.5 text-left text-xs [&:nth-child(7n+1)]:border-l-0 ${
                 isSameJstMonth(day, monthAnchor) ? "" : "text-muted-foreground/50"
-              } ${isToday ? "bg-soul/5" : ""}`}
+              } ${isToday ? "bg-primary/5" : ""}`}
             >
               <div className={`font-medium ${jstWeekday(day) === 0 ? "text-destructive" : ""}`}>{Number(day.slice(8, 10))}</div>
               <div className="mt-1 flex flex-wrap gap-0.5">

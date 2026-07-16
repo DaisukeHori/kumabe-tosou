@@ -28,8 +28,10 @@ const STATUS_LABEL: Record<EventLinkSyncStatus, string> = {
   deleted_externally: "外部で削除",
 };
 
-function statusBadgeVariant(status: EventLinkSyncStatus): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "synced") return "default";
+function statusBadgeVariant(
+  status: EventLinkSyncStatus,
+): "success" | "secondary" | "destructive" | "outline" {
+  if (status === "synced") return "success";
   if (status === "deleted_externally" || status === "conflict") return "destructive";
   return "outline";
 }
