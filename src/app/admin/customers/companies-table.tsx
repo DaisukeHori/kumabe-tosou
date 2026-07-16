@@ -19,7 +19,7 @@ export function CompaniesTable({ items }: { items: CompanyListItem[] }) {
   }, [items.length]);
 
   if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">該当する会社がありません。</p>;
+    return <p className="text-label text-muted-foreground">該当する会社がありません。</p>;
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -56,16 +56,16 @@ export function CompaniesTable({ items }: { items: CompanyListItem[] }) {
               aria-selected={index === focusedIndex}
               onClick={() => setOpenId(item.id)}
               onMouseEnter={() => setFocusedIndex(index)}
-              className={`grid cursor-pointer items-center gap-4 px-4 py-3 text-sm transition-colors ${GRID_COLS} ${dataTableRowClassName(index === focusedIndex)}`}
+              className={`grid cursor-pointer items-center gap-4 px-4 py-3 text-table transition-colors ${GRID_COLS} ${dataTableRowClassName(index === focusedIndex)}`}
             >
               <div className="min-w-0">
-                <div className="truncate font-medium">{item.name}</div>
-                {item.name_kana && <div className="truncate text-xs text-muted-foreground">{item.name_kana}</div>}
+                <div className="truncate font-medium text-foreground">{item.name}</div>
+                {item.name_kana && <div className="truncate text-meta text-admin-text-meta">{item.name_kana}</div>}
               </div>
-              <div className="truncate text-xs text-muted-foreground">{item.tel_e164 ?? "—"}</div>
-              <div className="truncate text-xs text-muted-foreground">{item.address ?? "—"}</div>
-              <div className="text-xs text-muted-foreground">{item.customer_count}</div>
-              <div className="text-xs whitespace-nowrap text-muted-foreground">
+              <div className="truncate text-meta text-muted-foreground">{item.tel_e164 ?? "—"}</div>
+              <div className="truncate text-meta text-muted-foreground">{item.address ?? "—"}</div>
+              <div className="text-meta text-muted-foreground">{item.customer_count}</div>
+              <div className="text-meta whitespace-nowrap text-muted-foreground">
                 {new Date(item.updated_at).toLocaleDateString("ja-JP")}
               </div>
             </div>

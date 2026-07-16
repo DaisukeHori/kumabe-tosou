@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PillToggle } from "@/app/admin/_ui";
 import type { CustomerLifecycle } from "@/modules/crm/contracts";
 
 export type LifecycleFilterValue = CustomerLifecycle | "all" | "active";
@@ -66,18 +65,22 @@ export function CustomersSearchBar({
           debounceRef.current = setTimeout(() => router.replace(buildHref(next, lifecycle)), 300);
         }}
         placeholder="名前・かな・メール・電話で検索 ( / )"
-        className="max-w-sm"
+        className="max-w-sm text-control"
         aria-label="顧客検索"
       />
-      <div className="flex flex-wrap gap-2">
-        {filters.map((f) => (
-          <Link key={f.value} href={buildHref(value, f.value)}>
-            <Badge variant={lifecycle === f.value ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-              {f.label}
-            </Badge>
-          </Link>
-        ))}
-      </div>
+      {/* lifecycle フィルタは顧客一覧クエリにのみ効く。会社タブでは listCompanies へ渡らない
+          死にフィルタのため非表示にする (#121 カバレッジ監査 追補・ユーザー承認済み)。 */}
+      {tab === "customers" && (
+        <PillToggle
+          ariaLabel="状態で絞り込み"
+          items={filters.map((f) => ({
+            key: f.value,
+            label: f.label,
+            href: buildHref(value, f.value),
+            active: lifecycle === f.value,
+          }))}
+        />
+      )}
     </div>
   );
 }

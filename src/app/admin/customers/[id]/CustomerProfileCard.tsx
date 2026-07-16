@@ -26,6 +26,12 @@ const LIFECYCLE_LABEL: Record<CustomerDetail["lifecycle"], string> = {
   customer: "取引中",
   archived: "アーカイブ",
 };
+// [#121 R3b] customers-table.tsx と同じ R0 ステータス 5 系統への対応で色を統一する。
+function lifecycleBadgeVariant(lifecycle: CustomerDetail["lifecycle"]): "success" | "info" | "neutral" {
+  if (lifecycle === "customer") return "success";
+  if (lifecycle === "archived") return "neutral";
+  return "info";
+}
 const KIND_LABEL: Record<CustomerDetail["kind"], string> = {
   person: "個人",
   company_contact: "法人担当者",
@@ -43,52 +49,54 @@ export function CustomerProfileCard({ customer }: { customer: CustomerDetail }) 
     <Surface className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold">{customer.name}</h2>
-          {customer.name_kana && <p className="text-sm text-muted-foreground">{customer.name_kana}</p>}
+          <h2 className="text-section text-foreground">{customer.name}</h2>
+          {customer.name_kana && <p className="text-meta text-admin-text-meta">{customer.name_kana}</p>}
         </div>
         <div className="flex shrink-0 gap-1.5">
-          <Badge variant={customer.lifecycle === "customer" ? "default" : "secondary"}>
+          <Badge variant={lifecycleBadgeVariant(customer.lifecycle)}>
             {LIFECYCLE_LABEL[customer.lifecycle]}
           </Badge>
         </div>
       </div>
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-        <dt className="text-muted-foreground">種別</dt>
-        <dd>{KIND_LABEL[customer.kind]}</dd>
-        <dt className="text-muted-foreground">会社</dt>
-        <dd>{customer.company_name ?? "—"}</dd>
-        <dt className="text-muted-foreground">メール</dt>
-        <dd>{customer.email ?? "—"}</dd>
-        <dt className="text-muted-foreground">電話番号</dt>
-        <dd>{customer.tel_e164 ?? "—"}</dd>
-        <dt className="text-muted-foreground">住所</dt>
-        <dd>{customer.address ?? "—"}</dd>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-label">
+        <dt className="text-admin-text-label">種別</dt>
+        <dd className="text-foreground">{KIND_LABEL[customer.kind]}</dd>
+        <dt className="text-admin-text-label">会社</dt>
+        <dd className="text-foreground">{customer.company_name ?? "—"}</dd>
+        <dt className="text-admin-text-label">メール</dt>
+        <dd className="text-foreground">{customer.email ?? "—"}</dd>
+        <dt className="text-admin-text-label">電話番号</dt>
+        <dd className="text-foreground">{customer.tel_e164 ?? "—"}</dd>
+        <dt className="text-admin-text-label">住所</dt>
+        <dd className="text-foreground">{customer.address ?? "—"}</dd>
         {customer.billing_info && (
           <>
-            <dt className="text-muted-foreground">請求先</dt>
-            <dd className="whitespace-pre-wrap break-words">{addressBlockLines(customer.billing_info)}</dd>
+            <dt className="text-admin-text-label">請求先</dt>
+            <dd className="whitespace-pre-wrap break-words text-foreground">{addressBlockLines(customer.billing_info)}</dd>
           </>
         )}
         {customer.shipping_info && (
           <>
-            <dt className="text-muted-foreground">配送先</dt>
-            <dd className="whitespace-pre-wrap break-words">{addressBlockLines(customer.shipping_info)}</dd>
+            <dt className="text-admin-text-label">配送先</dt>
+            <dd className="whitespace-pre-wrap break-words text-foreground">{addressBlockLines(customer.shipping_info)}</dd>
           </>
         )}
         {customer.custom_fields.map((f) => (
           <Fragment key={f.label}>
-            <dt className="text-muted-foreground">{f.label}</dt>
-            <dd className="break-words">{f.value}</dd>
+            <dt className="text-admin-text-label">{f.label}</dt>
+            <dd className="break-words text-foreground">{f.value}</dd>
           </Fragment>
         ))}
-        <dt className="text-muted-foreground">流入元</dt>
-        <dd>{customer.source}</dd>
-        <dt className="text-muted-foreground">登録日</dt>
-        <dd>{new Date(customer.created_at).toLocaleDateString("ja-JP")}</dd>
+        <dt className="text-admin-text-label">流入元</dt>
+        <dd className="text-foreground">{customer.source}</dd>
+        <dt className="text-admin-text-label">登録日</dt>
+        <dd className="text-foreground">{new Date(customer.created_at).toLocaleDateString("ja-JP")}</dd>
       </dl>
 
-      {customer.notes && <p className="whitespace-pre-wrap rounded-lg bg-muted/40 p-2.5 text-sm">{customer.notes}</p>}
+      {customer.notes && (
+        <p className="whitespace-pre-wrap rounded-lg bg-muted p-3 text-label text-foreground">{customer.notes}</p>
+      )}
 
       {!isMerged && (
         <div className="flex gap-2">
