@@ -136,12 +136,13 @@ export function TasksKanban({ initialTasks }: { initialTasks: TaskListItem[] }) 
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{task.title}</p>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-                        {task.due_on && (
-                          <span className={cn(task.overdue && "font-medium text-destructive")}>
-                            期日: {task.due_on}
-                          </span>
-                        )}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-admin-text-meta">
+                        {task.due_on &&
+                          (task.overdue ? (
+                            <Badge variant="urgent">期日: {task.due_on}</Badge>
+                          ) : (
+                            <span>期日: {task.due_on}</span>
+                          ))}
                         <Badge variant="outline">{ORIGIN_LABEL[task.origin]}</Badge>
                       </div>
                       {(task.deal || task.customer) && (

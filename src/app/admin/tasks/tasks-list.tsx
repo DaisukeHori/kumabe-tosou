@@ -90,7 +90,7 @@ export function TasksList({ tasks: initialTasks }: { tasks: TaskListItem[] }) {
     <>
       <div className="flex flex-col gap-2">
         {tasks.map((task) => (
-          <Surface key={task.id} className="flex items-center gap-2.5 p-3">
+          <Surface key={task.id} className="flex items-center gap-3 px-4 py-3">
             {task.status === "open" && (
               <Checkbox
                 checked={false}
@@ -107,13 +107,15 @@ export function TasksList({ tasks: initialTasks }: { tasks: TaskListItem[] }) {
                   {ORIGIN_LABEL[task.origin]}
                 </Badge>
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                {task.due_on && (
-                  <span className={cn(task.overdue && "font-medium text-destructive")}>
-                    期日: {task.due_on}
-                    {task.overdue && " (超過)"}
-                  </span>
-                )}
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-admin-text-meta">
+                {task.due_on &&
+                  (task.overdue ? (
+                    <Badge variant="urgent">
+                      期日: {task.due_on} (超過)
+                    </Badge>
+                  ) : (
+                    <span>期日: {task.due_on}</span>
+                  ))}
                 {task.deal && (
                   <Link href={`/admin/deals/${task.deal.id}`} className="underline underline-offset-4">
                     {task.deal.title}

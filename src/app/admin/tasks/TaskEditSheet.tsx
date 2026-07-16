@@ -70,7 +70,7 @@ export function TaskEditSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+      <SheetContent className="w-full max-w-[90%] overflow-y-auto shadow-sheet sm:max-w-[420px]">
         <SheetHeader>
           <SheetTitle>やることを編集</SheetTitle>
           <SheetDescription>Cmd+S で保存、Esc で閉じます。</SheetDescription>

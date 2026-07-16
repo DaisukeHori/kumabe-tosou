@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
-import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/app/admin/_ui";
+import { Button } from "@/components/ui/button";
+import { PageHeader, PillToggle, type PillItem } from "@/app/admin/_ui";
+import { cn } from "@/lib/utils";
 import { crmFacade } from "@/modules/crm/facade";
 import type { TaskStatus } from "@/modules/crm/contracts";
 
@@ -45,11 +46,9 @@ export default async function AdminTasksPage({
           title="やること"
           description="←→ で列移動、↑↓ でカード移動、Shift+←/→ で期日移動、Enter で編集です。"
           actions={
-            <Link href="/admin/tasks">
-              <Badge variant="outline" className="cursor-pointer px-3 py-1">
-                リスト表示
-              </Badge>
-            </Link>
+            <Button variant="outline" size="sm" render={<Link href="/admin/tasks" />}>
+              リスト表示
+            </Button>
           }
         />
 
@@ -64,7 +63,7 @@ export default async function AdminTasksPage({
           <>
             <TasksKanban initialTasks={result.value.items} />
             {result.value.next_cursor && (
-              <p className="text-xs text-muted-foreground">100件を超えています — 一覧表示で確認してください。</p>
+              <p className="text-meta text-admin-text-meta">100件を超えています — 一覧表示で確認してください。</p>
             )}
           </>
         )}
@@ -74,33 +73,30 @@ export default async function AdminTasksPage({
 
   const result = await crmFacade.listTasks({ status, scope: "all" }, { cursor: cursor ?? null, limit: 50 });
 
+  const filterItems: PillItem[] = STATUS_FILTERS.map((f) => ({
+    key: f.value,
+    label: f.label,
+    href: f.value === "open" ? "/admin/tasks" : `/admin/tasks?status=${f.value}`,
+    active: status === f.value,
+  }));
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="やること"
-        description="Space で完了トグル、↑↓ で移動、Enter で詳細です。"
+        description="やることをメモして、チェックで完了にできます。案件・顧客に紐づけると、その詳細画面にも表示されます。"
         actions={
           status === "open" ? (
-            <Link href="/admin/tasks?view=kanban">
-              <Badge variant="default" className="cursor-pointer px-3 py-1">
-                カンバン表示
-              </Badge>
-            </Link>
+            <Button variant="outline" size="sm" render={<Link href="/admin/tasks?view=kanban" />}>
+              カンバン表示
+            </Button>
           ) : undefined
         }
       />
 
       <TasksQuickAdd />
 
-      <div className="flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((f) => (
-          <Link key={f.value} href={f.value === "open" ? "/admin/tasks" : `/admin/tasks?status=${f.value}`}>
-            <Badge variant={status === f.value ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-              {f.label}
-            </Badge>
-          </Link>
-        ))}
-      </div>
+      <PillToggle items={filterItems} ariaLabel="ステータスで絞り込み" />
 
       {!result.ok && (
         <p className="text-sm text-destructive">
@@ -113,14 +109,19 @@ export default async function AdminTasksPage({
           {groupOpenTasks(result.value.items).map((group) => (
             <div key={group.key} className="flex flex-col gap-2">
               <h3
-                className={`text-sm font-medium ${group.key === "overdue" ? "text-destructive" : "text-foreground"}`}
+                className={cn(
+                  "text-table font-bold",
+                  group.key === "overdue" ? "text-destructive" : "text-admin-text-label",
+                )}
               >
                 {group.label} ({group.tasks.length})
               </h3>
               <TasksList tasks={group.tasks} />
             </div>
           ))}
-          {result.value.items.length === 0 && <p className="text-sm text-muted-foreground">未完了のやることはありません。</p>}
+          {result.value.items.length === 0 && (
+            <p className="text-sm text-muted-foreground">未完了のやることはありません。</p>
+          )}
         </div>
       )}
 
