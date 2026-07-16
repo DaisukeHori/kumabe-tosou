@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
-import { PageHeader, Surface } from "@/app/admin/_ui";
+import { NoticePanel, PageHeader, Surface } from "@/app/admin/_ui";
 import { ActivityTimeline } from "@/app/admin/_ui/activity-timeline";
 import { MiniTaskList } from "@/app/admin/_ui/mini-task-list";
 import { crmFacade } from "@/modules/crm/facade";
@@ -22,10 +22,11 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   if (!customerResult.ok) {
     if (customerResult.code === "KMB-E603") notFound();
     return (
-      <div className="p-6">
-        <p className="text-sm text-destructive">
+      <div className="flex flex-col gap-6">
+        <PageHeader title="顧客詳細" backHref="/admin/customers" />
+        <NoticePanel tone="danger">
           取得に失敗しました ({customerResult.code}): {customerResult.detail}
-        </p>
+        </NoticePanel>
       </div>
     );
   }
@@ -43,17 +44,14 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       <PageHeader title={customer.name} backHref="/admin/customers" />
 
       {isMerged && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+        <NoticePanel tone="warning">
           この顧客は統合済みです。
           {customer.merged_into_customer_id && (
-            <Link
-              href={`/admin/customers/${customer.merged_into_customer_id}`}
-              className="ml-2 underline underline-offset-4"
-            >
+            <Link href={`/admin/customers/${customer.merged_into_customer_id}`} className="ml-2">
               統合先を開く →
             </Link>
           )}
-        </div>
+        </NoticePanel>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -61,25 +59,25 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <CustomerProfileCard customer={customer} />
 
           <Surface className="flex flex-col gap-2 p-4">
-            <h3 className="text-sm font-medium">進行中の案件</h3>
+            <h3 className="text-label font-bold text-foreground">進行中の案件</h3>
             {!dealsResult.ok && (
-              <p className="text-sm text-destructive">
+              <p className="text-label text-destructive">
                 取得に失敗しました ({dealsResult.code}): {dealsResult.detail}
               </p>
             )}
             {dealsResult.ok && dealsResult.value.items.length === 0 && (
-              <p className="text-sm text-muted-foreground">進行中の案件はありません。</p>
+              <p className="text-label text-muted-foreground">進行中の案件はありません。</p>
             )}
             {dealsResult.ok && dealsResult.value.items.length > 0 && (
-              <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+              <ul className="flex flex-col divide-y divide-admin-divider rounded-lg border border-border">
                 {dealsResult.value.items.map((deal) => (
                   <li key={deal.id}>
                     <Link
                       href={`/admin/deals/${deal.id}`}
-                      className="flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-muted/60"
+                      className="flex items-center justify-between gap-2 px-3 py-2 text-label hover:bg-muted"
                     >
                       <span className="truncate">{deal.title}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
+                      <span className="shrink-0 text-meta text-muted-foreground">
                         {deal.amount_jpy !== null ? `¥${new Intl.NumberFormat("ja-JP").format(deal.amount_jpy)}` : "—"}
                       </span>
                     </Link>
@@ -89,16 +87,16 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             )}
             <Link
               href={`/admin/deals/new?customer_id=${customer.id}`}
-              className="text-sm underline underline-offset-4"
+              className="text-label text-primary underline-offset-4 hover:underline"
             >
               新規案件を作成 →
             </Link>
           </Surface>
 
           <Surface className="flex flex-col gap-2 p-4">
-            <h3 className="text-sm font-medium">やること</h3>
+            <h3 className="text-label font-bold text-foreground">やること</h3>
             {!tasksResult.ok && (
-              <p className="text-sm text-destructive">
+              <p className="text-label text-destructive">
                 取得に失敗しました ({tasksResult.code}): {tasksResult.detail}
               </p>
             )}
@@ -107,9 +105,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         </div>
 
         <div className="flex flex-col gap-4">
-          <h3 className="text-sm font-medium">タイムライン</h3>
+          <h3 className="text-label font-bold text-foreground">タイムライン</h3>
           {!timelineResult.ok && (
-            <p className="text-sm text-destructive">
+            <p className="text-label text-destructive">
               取得に失敗しました ({timelineResult.code}): {timelineResult.detail}
             </p>
           )}

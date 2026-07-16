@@ -15,10 +15,12 @@ const LIFECYCLE_LABEL: Record<CustomerListItem["lifecycle"], string> = {
   archived: "アーカイブ",
 };
 
-function lifecycleBadgeVariant(lifecycle: CustomerListItem["lifecycle"]): "default" | "secondary" | "outline" {
-  if (lifecycle === "customer") return "default";
-  if (lifecycle === "archived") return "outline";
-  return "secondary";
+// [#121 R3b] lifecycle を R0 ステータス 5 系統へ載せ替え (取引中=success/見込み=info/
+// アーカイブ=neutral)。CustomerProfileCard と同じ対応で色を統一する。
+function lifecycleBadgeVariant(lifecycle: CustomerListItem["lifecycle"]): "success" | "info" | "neutral" {
+  if (lifecycle === "customer") return "success";
+  if (lifecycle === "archived") return "neutral";
+  return "info";
 }
 
 /** 顧客一覧 (01-crm.md §8.2)。キーボード: ↑↓ 行移動 / Enter 詳細 / Esc 選択解除。 */
@@ -31,7 +33,7 @@ export function CustomersTable({ items }: { items: CustomerListItem[] }) {
   }, [items.length]);
 
   if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">該当する顧客がいません。</p>;
+    return <p className="text-label text-muted-foreground">該当する顧客がいません。</p>;
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -70,21 +72,21 @@ export function CustomersTable({ items }: { items: CustomerListItem[] }) {
             aria-selected={index === focusedIndex}
             onClick={() => router.push(`/admin/customers/${item.id}`)}
             onMouseEnter={() => setFocusedIndex(index)}
-            className={`grid cursor-pointer items-center gap-4 px-4 py-3 text-sm transition-colors ${GRID_COLS} ${dataTableRowClassName(index === focusedIndex)}`}
+            className={`grid cursor-pointer items-center gap-4 px-4 py-3 text-table transition-colors ${GRID_COLS} ${dataTableRowClassName(index === focusedIndex)}`}
           >
             <div className="min-w-0">
-              <div className="truncate font-medium">{item.name}</div>
-              {item.name_kana && <div className="truncate text-xs text-muted-foreground">{item.name_kana}</div>}
+              <div className="truncate font-medium text-foreground">{item.name}</div>
+              {item.name_kana && <div className="truncate text-meta text-admin-text-meta">{item.name_kana}</div>}
             </div>
-            <div className="min-w-0 text-xs text-muted-foreground">
+            <div className="min-w-0 text-meta text-muted-foreground">
               {item.email && <div className="truncate">{item.email}</div>}
               {item.tel_e164 && <div className="truncate">{item.tel_e164}</div>}
               {!item.email && !item.tel_e164 && "—"}
             </div>
-            <div className="truncate text-xs text-muted-foreground">{item.company_name ?? "—"}</div>
+            <div className="truncate text-meta text-muted-foreground">{item.company_name ?? "—"}</div>
             <Badge variant={lifecycleBadgeVariant(item.lifecycle)}>{LIFECYCLE_LABEL[item.lifecycle]}</Badge>
-            <div className="text-xs text-muted-foreground">{item.open_deal_count}</div>
-            <div className="text-xs whitespace-nowrap text-muted-foreground">
+            <div className="text-meta text-muted-foreground">{item.open_deal_count}</div>
+            <div className="text-meta whitespace-nowrap text-muted-foreground">
               {new Date(item.created_at).toLocaleDateString("ja-JP")}
             </div>
           </div>

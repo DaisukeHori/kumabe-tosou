@@ -85,15 +85,16 @@ export function CompanySheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+      {/* [#121 R3b] CustomerEditSheet と同じ右スライド 420px + --shadow-sheet に統一。 */}
+      <SheetContent className="w-[420px] max-w-[90%] overflow-y-auto shadow-sheet data-[side=right]:sm:max-w-[90%]">
         <SheetHeader>
           <SheetTitle>{data?.company.name ?? "会社"}</SheetTitle>
           <SheetDescription>会社プロフィール・所属顧客一覧・タイムライン (Esc で閉じます)</SheetDescription>
         </SheetHeader>
 
         <div className="flex flex-col gap-6 px-4 pb-4">
-          {isLoading && <p className="text-sm text-muted-foreground">読み込み中...</p>}
-          {error && <p className="text-sm text-destructive">取得に失敗しました: {error}</p>}
+          {isLoading && <p className="text-label text-muted-foreground">読み込み中...</p>}
+          {error && <p className="text-label text-destructive">取得に失敗しました: {error}</p>}
 
           {data && form && (
             <>
@@ -135,11 +136,11 @@ export function CompanySheet({
                   </div>
                 </FieldGroup>
               ) : (
-                <div className="flex flex-col gap-1 text-sm">
+                <div className="flex flex-col gap-1 text-label">
                   <p className="text-muted-foreground">
                     {data.company.tel_e164 ?? "電話番号なし"} / {data.company.address ?? "住所なし"}
                   </p>
-                  {data.company.notes && <p className="whitespace-pre-wrap">{data.company.notes}</p>}
+                  {data.company.notes && <p className="whitespace-pre-wrap text-foreground">{data.company.notes}</p>}
                   <div>
                     <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                       編集
@@ -149,19 +150,19 @@ export function CompanySheet({
               )}
 
               <div>
-                <h3 className="mb-2 text-sm font-medium">所属顧客 ({data.customers.length}{data.customersNextCursor ? "+" : ""})</h3>
+                <h3 className="mb-2 text-label font-bold text-foreground">所属顧客 ({data.customers.length}{data.customersNextCursor ? "+" : ""})</h3>
                 {data.customers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">所属する顧客がいません。</p>
+                  <p className="text-label text-muted-foreground">所属する顧客がいません。</p>
                 ) : (
-                  <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+                  <ul className="flex flex-col divide-y divide-admin-divider rounded-lg border border-border">
                     {data.customers.map((c) => (
                       <li key={c.id}>
                         <Link
                           href={`/admin/customers/${c.id}`}
-                          className="flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/60"
+                          className="flex items-center justify-between px-3 py-2 text-label hover:bg-muted"
                         >
                           <span className="truncate">{c.name}</span>
-                          <span className="shrink-0 text-xs text-muted-foreground">{c.open_deal_count} 件進行中</span>
+                          <span className="shrink-0 text-meta text-muted-foreground">{c.open_deal_count} 件進行中</span>
                         </Link>
                       </li>
                     ))}
@@ -170,7 +171,7 @@ export function CompanySheet({
               </div>
 
               <div>
-                <h3 className="mb-2 text-sm font-medium">タイムライン</h3>
+                <h3 className="mb-2 text-label font-bold text-foreground">タイムライン</h3>
                 <ActivityTimeline
                   target={{ company_id: data.company.id }}
                   initialItems={data.timeline}

@@ -133,15 +133,15 @@ export function CustomersKanban({ initialColumns }: { initialColumns: CustomerKa
                     router.push(`/admin/customers/${customer.id}`);
                   }}
                 >
-                  <p className="truncate text-sm font-medium">{customer.name}</p>
+                  <p className="truncate text-label font-medium">{customer.name}</p>
                   {customer.name_kana && (
-                    <p className="truncate text-[11px] text-muted-foreground">{customer.name_kana}</p>
+                    <p className="truncate text-meta text-muted-foreground">{customer.name_kana}</p>
                   )}
                   {customer.company_name && (
-                    <p className="mt-0.5 truncate text-muted-foreground">{customer.company_name}</p>
+                    <p className="mt-0.5 truncate text-meta text-muted-foreground">{customer.company_name}</p>
                   )}
                   <div className="mt-1 flex items-center justify-between gap-1">
-                    <span className="truncate text-muted-foreground">
+                    <span className="truncate text-meta text-muted-foreground">
                       {customer.email ?? customer.tel_e164 ?? "—"}
                     </span>
                     <Badge variant="outline" className="shrink-0">
@@ -166,11 +166,11 @@ export function CustomersKanban({ initialColumns }: { initialColumns: CustomerKa
         {(archivedColumn?.customers ?? []).map((customer) => (
           <Surface
             key={customer.id}
-            className="cursor-pointer p-2.5 text-xs"
+            className="cursor-pointer p-2.5 text-meta"
             onClick={() => router.push(`/admin/customers/${customer.id}`)}
           >
-            <p className="truncate text-sm font-medium">{customer.name}</p>
-            <p className="mt-0.5 truncate text-muted-foreground">{customer.company_name ?? "—"}</p>
+            <p className="truncate text-label font-medium">{customer.name}</p>
+            <p className="mt-0.5 truncate text-meta text-muted-foreground">{customer.company_name ?? "—"}</p>
           </Surface>
         ))}
       </KanbanCollapsedColumn>

@@ -30,7 +30,7 @@ import {
 /** zCustomerCustomFields (crm/contracts.ts) の max(50) と同期する上限値。 */
 export const CUSTOM_FIELDS_MAX = 50;
 
-const NATIVE_SELECT_CLASS = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
+const NATIVE_SELECT_CLASS = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-control";
 
 const EMPTY_ADDRESS_BLOCK: AddressBlockFormInput = {
   postal_code: null,
@@ -368,13 +368,15 @@ export function CustomerEditSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+      {/* [#121 R3b] 右スライド 420px (mock 準拠) + --shadow-sheet。data-[side=right]:sm:max-w-[90%]
+          は Sheet 既定の sm:max-w-sm (=384px) を上書きして 420px を確保するため。 */}
+      <SheetContent className="w-[420px] max-w-[90%] overflow-y-auto shadow-sheet data-[side=right]:sm:max-w-[90%]">
         <SheetHeader>
           <SheetTitle>顧客を編集</SheetTitle>
           <SheetDescription>Cmd+S で保存、Esc で閉じます。</SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 px-4 pb-4">
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-label text-destructive">{error}</p>}
           <FieldGroup>
             <Field>
               <FieldLabel>種別</FieldLabel>

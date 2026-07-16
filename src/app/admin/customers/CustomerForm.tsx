@@ -19,6 +19,7 @@ import {
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Surface } from "@/app/admin/_ui";
 import { EntityPicker, type EntityPickerItem } from "@/app/admin/_ui/entity-picker";
 import { searchCompaniesAction } from "@/app/admin/_ui/entity-search-actions";
 import { useSaveShortcut } from "@/app/admin/_ui/use-save-shortcut";
@@ -194,12 +195,16 @@ export function CustomerForm() {
   return (
     <div className="max-w-2xl space-y-6">
       {serverError && (
-        <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <div
+          role="alert"
+          className="rounded-lg border border-status-danger-border bg-status-urgent-bg px-4 py-3 text-label text-status-urgent-fg"
+        >
           {serverError}
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+      <Surface className="p-5">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
         <FieldGroup>
           <Field>
             <FieldLabel>種別</FieldLabel>
@@ -263,7 +268,7 @@ export function CustomerForm() {
               <FieldLabel htmlFor="customer-source">流入元</FieldLabel>
               <select
                 id="customer-source"
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-control"
                 {...register("source")}
               >
                 {SOURCE_OPTIONS.map((o) => (
@@ -304,7 +309,7 @@ export function CustomerForm() {
             <FieldLabel htmlFor="customer-lifecycle">状態</FieldLabel>
             <select
               id="customer-lifecycle"
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-control"
               {...register("lifecycle")}
             >
               {LIFECYCLE_OPTIONS.map((o) => (
@@ -324,7 +329,8 @@ export function CustomerForm() {
         <Button type="submit" disabled={isPending}>
           {isPending ? "作成中..." : "作成する (Cmd/Ctrl+S)"}
         </Button>
-      </form>
+        </form>
+      </Surface>
 
       <CreateCompanyDialog
         open={createCompanyOpen}
@@ -344,9 +350,9 @@ export function CustomerForm() {
               email/電話が一致する既存の顧客が見つかりました。既存を開くか、それでも新規作成してください。
             </DialogDescription>
           </DialogHeader>
-          <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+          <ul className="flex flex-col divide-y divide-admin-divider rounded-lg border border-border">
             {duplicateCandidates?.map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+              <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2 text-label">
                 <span className="truncate">{c.name}</span>
                 <span className="flex shrink-0 gap-1.5">
                   <Button type="button" size="sm" variant="outline" onClick={() => router.push(`/admin/customers/${c.id}`)}>

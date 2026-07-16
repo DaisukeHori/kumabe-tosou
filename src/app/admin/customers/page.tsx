@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/app/admin/_ui";
+import { NoticePanel, PageHeader } from "@/app/admin/_ui";
 import { crmFacade } from "@/modules/crm/facade";
 
 import { CompaniesTable } from "./companies-table";
@@ -80,13 +80,13 @@ export default async function AdminCustomersPage({
             {tab === "customers" &&
               (isKanbanView ? (
                 <Link href="/admin/customers">
-                  <Badge variant="outline" className="cursor-pointer px-3 py-1">
+                  <Badge variant="outline" className="cursor-pointer">
                     テーブル表示
                   </Badge>
                 </Link>
               ) : (
                 <Link href="/admin/customers?view=kanban">
-                  <Badge variant="default" className="cursor-pointer px-3 py-1">
+                  <Badge variant="default" className="cursor-pointer">
                     カンバン表示
                   </Badge>
                 </Link>
@@ -98,12 +98,12 @@ export default async function AdminCustomersPage({
 
       <div className="flex gap-2">
         <Link href={tabHref("customers")}>
-          <Badge variant={tab === "customers" ? "default" : "outline"} className="cursor-pointer px-3 py-1">
+          <Badge variant={tab === "customers" ? "default" : "outline"} className="cursor-pointer">
             顧客
           </Badge>
         </Link>
         <Link href={tabHref("companies")}>
-          <Badge variant={tab === "companies" ? "default" : "outline"} className="cursor-pointer px-3 py-1">
+          <Badge variant={tab === "companies" ? "default" : "outline"} className="cursor-pointer">
             会社
           </Badge>
         </Link>
@@ -116,9 +116,9 @@ export default async function AdminCustomersPage({
       {isKanbanView && kanbanResult && (
         <>
           {!kanbanResult.ok && (
-            <p className="text-sm text-destructive">
+            <NoticePanel tone="danger">
               取得に失敗しました ({kanbanResult.code}): {kanbanResult.detail}
-            </p>
+            </NoticePanel>
           )}
           {kanbanResult.ok && <CustomersKanban initialColumns={kanbanResult.value} />}
         </>
@@ -127,9 +127,9 @@ export default async function AdminCustomersPage({
       {tab === "customers" && !isKanbanView && customersResult && (
         <>
           {!customersResult.ok && (
-            <p className="text-sm text-destructive">
+            <NoticePanel tone="danger">
               一覧の取得に失敗しました ({customersResult.code}): {customersResult.detail}
-            </p>
+            </NoticePanel>
           )}
           {customersResult.ok && (
             <>
@@ -141,7 +141,7 @@ export default async function AdminCustomersPage({
                     ...(lifecycle !== "active" ? { lifecycle } : {}),
                     cursor: customersResult.value.next_cursor,
                   }).toString()}`}
-                  className="text-sm underline underline-offset-4"
+                  className="text-label text-primary underline-offset-4 hover:underline"
                 >
                   次の50件へ →
                 </Link>
@@ -154,9 +154,9 @@ export default async function AdminCustomersPage({
       {tab === "companies" && companiesResult && (
         <>
           {!companiesResult.ok && (
-            <p className="text-sm text-destructive">
+            <NoticePanel tone="danger">
               一覧の取得に失敗しました ({companiesResult.code}): {companiesResult.detail}
-            </p>
+            </NoticePanel>
           )}
           {companiesResult.ok && (
             <>
@@ -168,7 +168,7 @@ export default async function AdminCustomersPage({
                     tab: "companies",
                     cursor: companiesResult.value.next_cursor,
                   }).toString()}`}
-                  className="text-sm underline underline-offset-4"
+                  className="text-label text-primary underline-offset-4 hover:underline"
                 >
                   次の50件へ →
                 </Link>
