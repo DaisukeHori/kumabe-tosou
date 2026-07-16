@@ -147,9 +147,12 @@ export function DealsKanban({
 
   return (
     <div className="flex flex-col gap-4">
-      <Surface className="flex items-center justify-between px-4 py-3">
-        <span className="text-sm text-muted-foreground">見込み合計 (加重)</span>
-        <span className="text-lg font-semibold">¥{jpy.format(weightedPipelineJpy)}</span>
+      <Surface className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+        <span className="text-label text-muted-foreground">
+          見込み合計 (加重)
+          <span className="ml-2 text-meta text-admin-text-faint">= 各案件の金額 × 確度の合計</span>
+        </span>
+        <span className="text-xl font-bold">¥{jpy.format(weightedPipelineJpy)}</span>
       </Surface>
 
       <KanbanBoard ariaLabel="案件カンバン" onKeyDown={handleKeyDown}>
@@ -175,15 +178,18 @@ export function DealsKanban({
                     router.push(`/admin/deals/${deal.id}`);
                   }}
                 >
-                  <p className="truncate text-sm font-medium">{deal.title}</p>
-                  <p className="mt-0.5 truncate text-muted-foreground">{deal.customer_name}</p>
-                  <div className="mt-1 flex items-center justify-between">
-                    <span>{deal.amount_jpy !== null ? `¥${jpy.format(deal.amount_jpy)}` : "—"}</span>
+                  <p className="truncate text-label font-bold">{deal.title}</p>
+                  <p className="mt-0.5 truncate text-meta text-admin-text-meta">{deal.customer_name}</p>
+                  <div className="mt-1.5 flex items-center justify-between text-meta">
+                    <span className="text-foreground">
+                      {deal.amount_jpy !== null ? `¥${jpy.format(deal.amount_jpy)}` : "—"}
+                    </span>
                     {deal.expected_close_on && (
                       <span
                         className={cn(
-                          "text-[11px]",
-                          deal.expected_close_on < jstTodayDateOnly() ? "font-medium text-destructive" : "text-muted-foreground",
+                          deal.expected_close_on < jstTodayDateOnly()
+                            ? "font-bold text-destructive"
+                            : "text-admin-text-meta",
                         )}
                       >
                         {deal.expected_close_on}
@@ -214,11 +220,11 @@ export function DealsKanban({
             {(column?.deals ?? []).map((deal) => (
               <Surface
                 key={deal.id}
-                className="cursor-pointer p-2.5 text-xs"
+                className="cursor-pointer p-2.5"
                 onClick={() => router.push(`/admin/deals/${deal.id}`)}
               >
-                <p className="truncate text-sm font-medium">{deal.title}</p>
-                <p className="mt-0.5 truncate text-muted-foreground">{deal.customer_name}</p>
+                <p className="truncate text-label font-bold">{deal.title}</p>
+                <p className="mt-0.5 truncate text-meta text-admin-text-meta">{deal.customer_name}</p>
               </Surface>
             ))}
           </KanbanCollapsedColumn>

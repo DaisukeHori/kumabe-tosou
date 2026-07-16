@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { crmFacade } from "@/modules/crm/facade";
 import type { EntityPickerItem } from "@/app/admin/_ui/entity-picker";
 
@@ -24,8 +25,13 @@ export default async function NewDealPage({
   }
 
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-xl font-semibold">案件を新規作成</h1>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="新しい案件"
+        backHref="/admin/deals"
+        backLabel="← 案件一覧へ"
+        description="わかるところだけ入れれば OK。金額や納期はあとから変えられます。"
+      />
       <DealForm initialCustomer={initialCustomer} />
     </div>
   );

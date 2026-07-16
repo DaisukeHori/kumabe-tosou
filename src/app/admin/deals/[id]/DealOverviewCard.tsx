@@ -125,7 +125,7 @@ export function DealOverviewCard({ deal }: { deal: DealDetail }) {
 
   return (
     <Surface className="flex flex-col gap-3 p-4">
-      <h3 className="text-sm font-medium">基本情報</h3>
+      <h3 className="text-label font-bold text-admin-text-label">基本情報</h3>
 
       <p className="text-sm">
         <Link href={`/admin/customers/${deal.customer_id}`} className="underline underline-offset-4">
@@ -139,7 +139,9 @@ export function DealOverviewCard({ deal }: { deal: DealDetail }) {
         <dd>{deal.source}</dd>
       </dl>
 
-      {deal.notes && <p className="whitespace-pre-wrap rounded-lg bg-muted/40 p-2.5 text-sm">{deal.notes}</p>}
+      {deal.notes && (
+        <p className="whitespace-pre-wrap rounded-lg bg-muted p-2.5 text-sm text-admin-text-label">{deal.notes}</p>
+      )}
 
       <div>
         <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>

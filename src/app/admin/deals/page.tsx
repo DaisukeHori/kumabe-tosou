@@ -1,9 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/app/admin/_ui";
+import { PageHeader, PillToggle } from "@/app/admin/_ui";
 import { crmFacade } from "@/modules/crm/facade";
 import { DEAL_STAGE_REGISTRY, zDealListFilter, zDealStage, type DealListFilter } from "@/modules/crm/contracts";
 
@@ -18,6 +17,14 @@ const STAGE_FILTERS: { value: DealListFilter["stage"]; label: string }[] = [
   { value: "all", label: "すべて" },
   ...zDealStage.options.map((s) => ({ value: s, label: DEAL_STAGE_REGISTRY[s].label })),
 ];
+
+/** カンバン⇄表 の表示切替ピル。URL は現行の /admin/deals と ?view=table をそのまま維持する。 */
+function viewToggleItems(isTableView: boolean) {
+  return [
+    { key: "kanban", label: "カンバン", href: "/admin/deals", active: !isTableView },
+    { key: "table", label: "表", href: "/admin/deals?view=table", active: isTableView },
+  ];
+}
 
 export default async function AdminDealsPage({
   searchParams,
@@ -57,11 +64,7 @@ export default async function AdminDealsPage({
           description="←→ で列移動、↑↓ でカード移動、Shift+←/→ でステージ移動、Enter で詳細です。"
           actions={
             <>
-              <Link href="/admin/deals?view=table">
-                <Badge variant="outline" className="cursor-pointer px-3 py-1">
-                  テーブル表示
-                </Badge>
-              </Link>
+              <PillToggle ariaLabel="表示切替" items={viewToggleItems(false)} />
               <Button render={<Link href="/admin/deals/new" />}>新規案件</Button>
             </>
           }
@@ -88,25 +91,22 @@ export default async function AdminDealsPage({
         description="↑↓ で移動、Enter で詳細です。"
         actions={
           <>
-            <Link href="/admin/deals">
-              <Badge variant="default" className="cursor-pointer px-3 py-1">
-                カンバン表示
-              </Badge>
-            </Link>
+            <PillToggle ariaLabel="表示切替" items={viewToggleItems(true)} />
             <Button render={<Link href="/admin/deals/new" />}>新規案件</Button>
           </>
         }
       />
 
-      <div className="flex flex-wrap gap-2">
-        {STAGE_FILTERS.map((f) => (
-          <Link key={f.value} href={`/admin/deals?view=table&stage=${f.value}`}>
-            <Badge variant={stage === f.value ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-              {f.label}
-            </Badge>
-          </Link>
-        ))}
-      </div>
+      <PillToggle
+        ariaLabel="ステージで絞り込み"
+        className="flex w-full"
+        items={STAGE_FILTERS.map((f) => ({
+          key: String(f.value),
+          label: f.label,
+          href: `/admin/deals?view=table&stage=${f.value}`,
+          active: stage === f.value,
+        }))}
+      />
 
       {!dealsResult.ok && (
         <p className="text-sm text-destructive">

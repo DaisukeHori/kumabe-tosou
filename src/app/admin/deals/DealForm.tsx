@@ -11,6 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Surface } from "@/app/admin/_ui";
 import { EntityPicker, type EntityPickerItem } from "@/app/admin/_ui/entity-picker";
 import { searchCustomersAction } from "@/app/admin/_ui/entity-search-actions";
 import { useSaveShortcut } from "@/app/admin/_ui/use-save-shortcut";
@@ -82,8 +83,9 @@ export function DealForm({ initialCustomer }: { initialCustomer: EntityPickerIte
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
-        <FieldGroup>
+      <Surface className="p-5 sm:p-6">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+          <FieldGroup>
           <Field data-invalid={!!errors.title}>
             <FieldLabel htmlFor="deal-title">案件名</FieldLabel>
             <Input id="deal-title" aria-invalid={!!errors.title} {...register("title")} />
@@ -148,12 +150,13 @@ export function DealForm({ initialCustomer }: { initialCustomer: EntityPickerIte
             <FieldLabel htmlFor="deal-notes">メモ</FieldLabel>
             <Textarea id="deal-notes" {...register("notes", { setValueAs: (v: string) => (v === "" ? null : v) })} />
           </Field>
-        </FieldGroup>
+          </FieldGroup>
 
-        <Button type="submit" disabled={isPending}>
-          {isPending ? "作成中..." : "作成する (Cmd/Ctrl+S)"}
-        </Button>
-      </form>
+          <Button type="submit" disabled={isPending}>
+            {isPending ? "作成中..." : "作成する (Cmd/Ctrl+S)"}
+          </Button>
+        </form>
+      </Surface>
 
       <QuickCreateCustomerDialog
         open={quickCreateOpen}

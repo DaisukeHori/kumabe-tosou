@@ -56,7 +56,7 @@ export function LostReasonDialog({
         }
       }}
     >
-      <DialogContent>
+      <DialogContent className="sm:max-w-[560px] shadow-modal">
         <DialogHeader>
           <DialogTitle>「{dealTitle}」を失注にする</DialogTitle>
           <DialogDescription>失注理由を入力してください (必須)。</DialogDescription>
@@ -72,7 +72,7 @@ export function LostReasonDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             キャンセル (Esc)
           </Button>
-          <Button type="button" variant="destructive" disabled={isSaving} onClick={() => void handleConfirm()}>
+          <Button type="button" variant="destructive-outline" disabled={isSaving} onClick={() => void handleConfirm()}>
             {isSaving ? "処理中..." : "失注にする"}
           </Button>
         </DialogFooter>

@@ -55,7 +55,7 @@ export function CancelBlocksDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[560px] shadow-modal">
         <DialogHeader>
           <DialogTitle>未着手の作業ブロックを取り消しますか?</DialogTitle>
           <DialogDescription>
@@ -66,7 +66,7 @@ export function CancelBlocksDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             そのままにする
           </Button>
-          <Button type="button" variant="destructive" disabled={isPending} onClick={() => void handleConfirm()}>
+          <Button type="button" variant="destructive-outline" disabled={isPending} onClick={() => void handleConfirm()}>
             取り消す
           </Button>
         </DialogFooter>

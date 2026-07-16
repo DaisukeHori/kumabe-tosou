@@ -100,7 +100,7 @@ export function QuickCreateCustomerDialog({
         if (!next) reset();
       }}
     >
-      <DialogContent>
+      <DialogContent className="sm:max-w-[560px] shadow-modal">
         <DialogHeader>
           <DialogTitle>新しい顧客を作る</DialogTitle>
           <DialogDescription>名前とメールか電話番号のどちらかを入力してください。</DialogDescription>
