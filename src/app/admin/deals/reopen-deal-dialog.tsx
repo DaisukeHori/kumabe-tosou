@@ -83,6 +83,7 @@ export function ReopenDealDialog({
       }}
     >
       <DialogContent
+        className="sm:max-w-[560px] shadow-modal"
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
             e.preventDefault();

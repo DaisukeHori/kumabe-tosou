@@ -45,7 +45,7 @@ export function DealWorkSummaryCard({
 
   return (
     <Surface className="flex flex-col gap-3 p-4">
-      <h3 className="text-sm font-medium">作業ブロック</h3>
+      <h3 className="text-label font-bold text-admin-text-label">作業ブロック</h3>
 
       {!workSummaryResult.ok && (
         <p className="text-sm text-destructive">

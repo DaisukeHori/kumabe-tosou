@@ -59,14 +59,14 @@ export function DealsTable({ items }: { items: DealListItem[] }) {
             className={`grid cursor-pointer items-center gap-4 px-4 py-3 text-sm transition-colors ${GRID_COLS} ${dataTableRowClassName(index === focusedIndex)}`}
           >
             <div className="min-w-0 truncate font-medium">{item.title}</div>
-            <div className="min-w-0 truncate text-xs text-muted-foreground">{item.customer_name}</div>
-            <div className="text-xs text-muted-foreground">
+            <div className="min-w-0 truncate text-meta text-admin-text-meta">{item.customer_name}</div>
+            <div className="text-meta text-admin-text-meta">
               {item.amount_jpy !== null ? `¥${jpy.format(item.amount_jpy)}` : "—"}
             </div>
-            <Badge variant={DEAL_STAGE_REGISTRY[item.stage].isLost ? "destructive" : DEAL_STAGE_REGISTRY[item.stage].isWon ? "default" : "outline"}>
+            <Badge variant={DEAL_STAGE_REGISTRY[item.stage].isLost ? "urgent" : DEAL_STAGE_REGISTRY[item.stage].isWon ? "success" : "neutral"}>
               {DEAL_STAGE_REGISTRY[item.stage].label}
             </Badge>
-            <div className="text-xs whitespace-nowrap text-muted-foreground">{item.expected_close_on ?? "—"}</div>
+            <div className="text-meta whitespace-nowrap text-admin-text-meta">{item.expected_close_on ?? "—"}</div>
           </div>
         ))}
       </div>

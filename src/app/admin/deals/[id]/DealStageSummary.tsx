@@ -40,11 +40,11 @@ export function DealStageSummary({ deal }: { deal: DealDetail }) {
 
       <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
         <div>
-          <dt className="text-xs text-muted-foreground">金額</dt>
+          <dt className="text-meta text-admin-text-meta">金額</dt>
           <dd className="font-medium">{deal.amount_jpy !== null ? `¥${jpy.format(deal.amount_jpy)}` : "—"}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">見込み</dt>
+          <dt className="text-meta text-admin-text-meta">見込み</dt>
           <dd className="font-medium">
             {probability}%
             {deal.amount_jpy !== null && (
@@ -53,7 +53,7 @@ export function DealStageSummary({ deal }: { deal: DealDetail }) {
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">見込み完了日</dt>
+          <dt className="text-meta text-admin-text-meta">見込み完了日</dt>
           <dd className={cn("font-medium", isOverdue && "text-destructive")}>
             {deal.expected_close_on ?? "—"}
             {isOverdue && " (超過)"}
