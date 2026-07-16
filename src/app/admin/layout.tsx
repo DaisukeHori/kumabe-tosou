@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Noto_Sans_JP } from "next/font/google";
 import { headers } from "next/headers";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -6,6 +7,16 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { AdminNav } from "./admin-nav";
 import { logoutAction } from "./actions";
+
+/**
+ * [#117 R0] admin 限定の Noto Sans JP。globals.css の `.admin-theme` が
+ * `font-family: var(--font-noto-sans-jp)` で参照する。公開サイトの
+ * --font-disp / --font-body には一切触れない (admin レイアウト配下だけに付与)。
+ */
+const notoSansJP = Noto_Sans_JP({
+  variable: "--font-noto-sans-jp",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: { default: "隈部塗装 CMS", template: "%s | 隈部塗装 CMS" },
@@ -32,7 +43,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (isLoginPage) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/40 p-6">
+      <div
+        className={`admin-theme ${notoSansJP.variable} flex min-h-screen items-center justify-center bg-muted/40 p-6`}
+      >
         {children}
         <Toaster />
       </div>
@@ -46,9 +59,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     // admin-shell: 公開サイトのクリーム背景 (--primer) とは別の、CMS ツールらしい
-    // ニュートラルなグレー背景 (--admin-canvas, globals.css で admin 専用に定義)。
-    // 公開サイト側のトークン/見た目には一切影響しない。
-    <div className="flex min-h-screen bg-admin-canvas">
+    // 暖色クリーム背景 (--admin-canvas, globals.css で admin 専用に定義)。
+    // [#117 R0] .admin-theme スコープ + Noto Sans JP フォント変数をルート要素に付与し、
+    // shadcn 標準変数を admin 配下だけ新配色へ上書きする (公開サイトには影響しない)。
+    <div className={`admin-theme ${notoSansJP.variable} flex min-h-screen bg-admin-canvas`}>
       <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-background p-4">
         <div className="mb-6 px-2">
           <p className="font-heading text-sm font-semibold">隈部塗装 CMS</p>

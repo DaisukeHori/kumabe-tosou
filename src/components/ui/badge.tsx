@@ -19,6 +19,13 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // [#117 R0] admin リデザインのステータス 5 系統。globals.css の
+        // --color-status-* を参照する。公開サイトでは未使用 (既存 variant は不変)。
+        success: "border-transparent bg-status-success-bg text-status-success-fg",
+        info: "border-transparent bg-status-info-bg text-status-info-fg",
+        warning: "border-transparent bg-status-warning-bg text-status-warning-fg",
+        neutral: "border-transparent bg-status-neutral-bg text-status-neutral-fg",
+        urgent: "border-transparent bg-status-urgent-bg text-status-urgent-fg",
       },
     },
     defaultVariants: {

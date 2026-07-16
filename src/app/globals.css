@@ -184,30 +184,120 @@
 }
 
 /* =============================================================
-   ADMIN (/admin/**) 専用トークン — 「クリーンな CMS ダッシュボード」用
+   ADMIN (/admin/**) 専用トークン + .admin-theme スコープ
+   [#117 R0 管理画面リデザイン基盤]
    公開サイト (src/app/(site)/**) の --background / --primer 等はここでは
-   一切変更しない。admin レイアウトの content 領域のみで使用するスコープ。
+   一切変更しない。admin レイアウト (admin/layout.tsx) のルート要素に付与する
+   .admin-theme スコープ内でのみ shadcn 標準変数を上書きし、src/components/ui/*
+   を無改修で新配色へ追従させる。
    ============================================================= */
 :root {
-  /* content 領域の背景。公開サイトのクリーム (--primer) より一段
-     ニュートラルな薄いグレーにして「アプリらしさ」を出す。
-     以前の #f6f6f5 は白カード (--card: #fff) との差が小さすぎてカードが
-     浮いて見えず「背景と同じ色合いで見づらい」との指摘 (2026-07-09) を受け、
-     はっきり一段濃いグレーに調整 (before: #f6f6f5 → after: #dcdcd9)。 */
-  --admin-canvas: #dcdcd9;
-  /* カード/サーフェス上でのさらに一段沈んだ面 (テーブルヘッダ等)。
-     admin-canvas との相対関係を保ったまま同じ幅で濃くする (before: #ececea → after: #c9c9c5)。 */
-  --admin-canvas-deep: #c9c9c5;
-  /* カードの境界線・影をくっきりさせるための admin 専用トークン。
-     全体共通の --border (oklch(0.922) — 薄いグレー、公開サイトのボタン等でも
-     使われる) は変更せず、admin のカード外枠にだけ使う濃いめのグレーを別途用意する。 */
-  --admin-card-border: #c4c4c0;
+  /* content 領域の背景 (bg-admin-canvas)。#117 でモック値 (暖色クリーム) に確定。
+     2026-07-09 に濃くした #dcdcd9 は、枠線 (--admin-card-border) とシャドウ
+     (--shadow-surface) をセットで刷新することで「境界が見えない」問題を再発させずに
+     #f2f0ec へ置換する (ユーザー承認済み 2026-07-16)。 */
+  --admin-canvas: #f2f0ec;
+  /* テーブルヘッダ等の一段沈んだ面 (bg-admin-canvas-deep)。--muted と同値。 */
+  --admin-canvas-deep: #faf9f6;
+  /* カード外枠 (--border と同値)。 */
+  --admin-card-border: #e3dfd9;
 }
 
 @theme inline {
   --color-admin-canvas: var(--admin-canvas);
   --color-admin-canvas-deep: var(--admin-canvas-deep);
   --color-admin-card-border: var(--admin-card-border);
+}
+
+/* [#117 R0] admin リデザインのデザイントークン (light 固定の定数)。
+   status セマンティック 5 系統 / admin テキスト階層 / divider / well /
+   primary hover / radius-surface / shadow / 8 段階タイポスケール。
+   plain @theme で :root へ実 CSS 変数を発行しつつ Tailwind ユーティリティ
+   (bg-status-*, text-page-title, rounded-surface, shadow-surface 等) を生成する。
+   公開サイトでは未使用のため見た目に影響しない。--primary と --color-status-urgent-*
+   は同値だが将来分離のため別トークンとして定義する。 */
+@theme {
+  /* ステータス 5 系統 */
+  --color-status-success-bg: #e2efe6;
+  --color-status-success-fg: #256b43;
+  --color-status-success-border: #b5d4c1;
+  --color-status-info-bg: #e3ecf6;
+  --color-status-info-fg: #2b5e97;
+  --color-status-warning-bg: #f6ecd9;
+  --color-status-warning-fg: #8a5c0a;
+  --color-status-warning-border: #e9c9a8;
+  --color-status-warning-panel: #fdf6f0;
+  --color-status-neutral-bg: #eceae6;
+  --color-status-neutral-fg: #6f6a63;
+  --color-status-urgent-bg: #f7e5e2;
+  --color-status-urgent-fg: #9c2f26;
+  --color-status-danger-border: #e9b8b2;
+
+  /* admin テキスト階層 / 罫線 / well / primary hover */
+  --color-admin-text-label: #57534c;
+  --color-admin-text-meta: #8a857d;
+  --color-admin-text-faint: #a39d94;
+  --color-admin-divider: #f1efe9;
+  --color-admin-primary-hover: #7d251e;
+  --color-admin-well: #eceae5;
+
+  /* radius (カード 12px) / shadow */
+  --radius-surface: 0.75rem;
+  --shadow-surface: 0 1px 2px rgb(30 28 25 / 0.05);
+  --shadow-modal: 0 12px 40px rgb(28 26 23 / 0.25);
+  --shadow-sheet: -8px 0 30px rgb(28 26 23 / 0.2);
+
+  /* タイポスケール (8 段階)。--text-*--font-weight は Tailwind v4 の
+     コンパニオン変数で、text-page-title 等が font-size と font-weight を同時に付与する。 */
+  --text-page-title: 22px;
+  --text-page-title--font-weight: 800;
+  --text-section: 16px;
+  --text-section--font-weight: 800;
+  --text-body: 14.5px;
+  --text-control: 14px;
+  --text-label: 13.5px;
+  --text-table: 13px;
+  --text-meta: 12.5px;
+  --text-badge: 12px;
+  --text-badge--font-weight: 700;
+}
+
+/* [#117 R0] admin-theme スコープ: shadcn 標準 CSS 変数を admin 配下だけ上書き。
+   admin/layout.tsx のルート要素 (login 分岐含む) に .admin-theme を付与する。
+   公開サイト ((site)/**) には .admin-theme が無いため一切影響しない。
+   ダークモードは当面 light 固定 — .admin-theme は .dark 配下でも自要素で light 値を
+   宣言するため admin 内は light に留まる (.dark .admin-theme の本対応は将来課題)。 */
+.admin-theme {
+  --background: #f2f0ec;
+  --foreground: #26241f;
+  --card: #ffffff;
+  --card-foreground: #26241f;
+  --primary: #9c2f26;
+  --primary-foreground: #ffffff;
+  --secondary: #faf9f6;
+  --secondary-foreground: #26241f;
+  --muted: #faf9f6;
+  --muted-foreground: #6f6a63;
+  --accent: #faf9f6;
+  --accent-foreground: #26241f;
+  --destructive: #9c2f26;
+  --border: #e3dfd9;
+  --input: #d6d1ca;
+  --ring: #9c2f26;
+  --sidebar: #f2f0ec;
+  --sidebar-accent: #26241f;
+  --sidebar-accent-foreground: #ffffff;
+  --radius: 0.625rem;
+
+  font-family: var(--font-noto-sans-jp), "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: var(--text-body);
+  color: var(--foreground);
+}
+
+/* admin の見出しは公開サイトの Shippori Antique (--font-disp、base 層で h1-h4 に適用)
+   ではなく Noto Sans JP を使う (モック準拠)。非レイヤー宣言で base 層に勝たせる。 */
+.admin-theme :is(h1, h2, h3, h4) {
+  font-family: var(--font-noto-sans-jp), "Hiragino Kaku Gothic ProN", sans-serif;
 }
 
 @layer base {
