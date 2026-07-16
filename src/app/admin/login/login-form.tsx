@@ -15,10 +15,22 @@ export function LoginForm({ next }: { next: string }) {
   const [state, formAction, isPending] = useActionState(loginAction, INITIAL_STATE);
 
   return (
-    <Card className="w-full max-w-sm">
+    // [#118 R1] モックの login 画面トーン (中央カード 360px / R0 トークン)。
+    // フォームのロジック (useActionState / next hidden / key リマウント) は不変。
+    <Card className="w-full max-w-[360px] shadow-surface">
       <CardHeader>
-        <CardTitle>隈部塗装 CMS</CardTitle>
-        <CardDescription>管理者アカウントでログインしてください。</CardDescription>
+        <div className="flex items-center gap-2.5">
+          <div
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-base font-extrabold text-sidebar-accent-foreground"
+            aria-hidden="true"
+          >
+            隈
+          </div>
+          <div className="leading-tight">
+            <CardTitle className="text-[15px] font-extrabold">隈部塗装 しごと管理</CardTitle>
+            <CardDescription className="text-xs text-admin-text-meta">管理者ログイン</CardDescription>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <form action={formAction}>
@@ -61,10 +73,13 @@ export function LoginForm({ next }: { next: string }) {
               <FieldError errors={state.error ? [{ message: state.error }] : undefined} />
             </Field>
           </FieldGroup>
-          <Button type="submit" disabled={isPending} className="mt-6 w-full">
+          <Button type="submit" disabled={isPending} className="mt-6 w-full font-bold">
             {isPending ? "ログイン中..." : "ログイン"}
           </Button>
         </form>
+        <p className="mt-4 text-xs text-admin-text-meta">
+          パスワードを忘れた場合は管理担当者に連絡してください。
+        </p>
       </CardContent>
     </Card>
   );

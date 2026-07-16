@@ -7,7 +7,10 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { ADMIN_NAV_GROUPS, type AdminNavItem } from "./nav-items";
 
-const COLLAPSED_STORAGE_KEY = "kumabe-admin-nav-collapsed:v1";
+// #118 (R1) でグループ id を業務フェーズ別へ再編したため v1 → v2 へバンプする。
+// 旧 v1 の値 (顧客管理/営業・予定… の id) は新構造に存在せず、そのまま読むと
+// 折りたたみ状態がちぐはぐに見えるため、キーを分離して旧値を無視する。
+const COLLAPSED_STORAGE_KEY = "kumabe-admin-nav-collapsed:v2";
 
 /**
  * 左サイドナビ (Client Component)。#94 でグループ折りたたみ化 (6 セクション)。
@@ -150,8 +153,8 @@ export function AdminNav() {
               aria-controls={panelId}
               onClick={() => toggleGroup(group.id)}
               className={
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted " +
-                (isCollapsed && hasActiveItem ? "font-semibold text-foreground" : "text-muted-foreground")
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-left text-[11px] font-semibold tracking-wider transition-colors hover:bg-black/5 " +
+                (isCollapsed && hasActiveItem ? "text-foreground" : "text-admin-text-faint")
               }
             >
               {isCollapsed ? (
@@ -162,7 +165,9 @@ export function AdminNav() {
               {isCollapsed && hasActiveItem && (
                 <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
               )}
-              <span className="truncate">{group.label}</span>
+              <span className="truncate">
+                {group.phaseNo ? `${group.phaseNo} ${group.label}` : group.label}
+              </span>
             </button>
             {!isCollapsed && (
               <div id={panelId} className="flex flex-col gap-0.5">
@@ -182,26 +187,40 @@ function NavLink({
   item,
   pathname,
   indent = false,
+  badgeCount = null,
 }: {
   item: AdminNavItem;
   pathname: string;
   indent?: boolean;
+  /**
+   * 項目右端に表示する未対応件数バッジ。R1 では「枠だけ用意」で常に null =
+   * 非表示 (数値なし)。実件数の供給は R6c で行う (設計書 §3.1 / #118 非スコープ)。
+   */
+  badgeCount?: number | null;
 }) {
   const isActive = isItemActive(item, pathname);
+  const showBadge = typeof badgeCount === "number" && badgeCount > 0;
   return (
     <Link
       href={item.href}
       data-nav-row=""
       aria-current={isActive ? "page" : undefined}
       className={
-        "rounded-lg px-3 py-2 text-sm transition-colors " +
+        "flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors " +
         (indent ? "pl-5 " : "") +
+        // active はダーク塗り (--sidebar-accent #26241f + 白文字)。非 active hover は
+        // モックに hover 定義が無いため実装側で hover:bg-black/5 を採用 (設計書 §2.5)。
         (isActive
-          ? "bg-primary text-primary-foreground"
-          : "text-foreground/80 hover:bg-muted hover:text-foreground")
+          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+          : "text-foreground/80 hover:bg-black/5 hover:text-foreground")
       }
     >
-      {item.label}
+      <span className="truncate">{item.label}</span>
+      {showBadge && (
+        <span className="ml-auto shrink-0 rounded-full bg-primary px-2 py-px text-[11px] leading-none font-bold text-primary-foreground">
+          {badgeCount}
+        </span>
+      )}
     </Link>
   );
 }

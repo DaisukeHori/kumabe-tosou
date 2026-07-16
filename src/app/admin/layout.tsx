@@ -44,7 +44,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (isLoginPage) {
     return (
       <div
-        className={`admin-theme ${notoSansJP.variable} flex min-h-screen items-center justify-center bg-muted/40 p-6`}
+        className={`admin-theme ${notoSansJP.variable} flex min-h-screen items-center justify-center bg-admin-canvas p-6`}
       >
         {children}
         <Toaster />
@@ -63,24 +63,41 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     // [#117 R0] .admin-theme スコープ + Noto Sans JP フォント変数をルート要素に付与し、
     // shadcn 標準変数を admin 配下だけ新配色へ上書きする (公開サイトには影響しない)。
     <div className={`admin-theme ${notoSansJP.variable} flex min-h-screen bg-admin-canvas`}>
-      <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-background p-4">
-        <div className="mb-6 px-2">
-          <p className="font-heading text-sm font-semibold">隈部塗装 CMS</p>
+      {/* [#118 R1] サイドバー: モック準拠で白面 (bg-card) + ロゴバッジ。幅は w-60 据え置き。 */}
+      <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-card p-3">
+        <div className="flex items-center gap-2.5 px-3 pt-1 pb-4">
+          <div
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-sm font-extrabold text-sidebar-accent-foreground"
+            aria-hidden="true"
+          >
+            隈
+          </div>
+          <div className="leading-tight">
+            <p className="text-sm font-extrabold">隈部塗装</p>
+            <p className="text-[11px] text-admin-text-meta">しごと管理</p>
+          </div>
         </div>
         <AdminNav />
-        <div className="mt-6 border-t border-border pt-4">
-          <p className="truncate px-2 text-xs text-muted-foreground">{user?.email}</p>
-          <form action={logoutAction} className="mt-2">
+        <div className="mt-4 border-t border-admin-divider px-3 pt-3">
+          <p className="truncate text-xs text-admin-text-meta">{user?.email}</p>
+          <form action={logoutAction} className="mt-1.5">
             <button
               type="submit"
-              className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-muted-foreground underline-offset-2 hover:underline"
+              className="rounded-md text-xs text-admin-text-meta underline-offset-2 hover:underline"
             >
               ログアウト
             </button>
           </form>
         </div>
       </aside>
-      <main className="flex-1 overflow-x-hidden p-6 sm:p-8">{children}</main>
+      {/* [#118 R1] main 幅はモック (max-width:1040px; padding:28px 36px 60px) の翻訳を
+          ここ 1 箇所で定義する (65rem=1040px, px-9=36px, pt-7=28px, pb-15=60px)。
+          flex-grow は付けない — auto マージン (mx-auto) と flex-grow を併用すると
+          仕様上グロー係数が 0 扱いになり main が min-content へ縮む。basis auto の
+          w-full を残余幅内で shrink させ、max-w で 1040px に丸め mx-auto で中央寄せする。 */}
+      <main className="mx-auto w-full max-w-[65rem] overflow-x-hidden px-9 pt-7 pb-15">
+        {children}
+      </main>
       <Toaster />
     </div>
   );
