@@ -18,8 +18,10 @@ const STATUS_LABEL: Record<CalendarConnectionStatus, string> = {
   error: "エラー",
 };
 
-function statusBadgeVariant(status: CalendarConnectionStatus): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "connected") return "default";
+function statusBadgeVariant(
+  status: CalendarConnectionStatus,
+): "success" | "secondary" | "destructive" | "outline" {
+  if (status === "connected") return "success";
   if (status === "expired" || status === "error") return "destructive";
   return "outline";
 }
@@ -163,7 +165,7 @@ function ProviderCard({
       </dl>
       {config.staticNote && <p className="mt-2 text-xs text-muted-foreground">{config.staticNote}</p>}
       {!enabled && (
-        <p className="mt-2 text-xs text-amber-600">
+        <p className="mt-2 text-xs text-status-warning-fg">
           OAuth 未設定です (OAUTH_ENABLED / {config.provider === "google" ? "GOOGLE_CALENDAR_CLIENT_ID" : "MS_CALENDAR_CLIENT_ID"} 等の env を設定してください)。
         </p>
       )}

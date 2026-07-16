@@ -4,7 +4,7 @@ import { PageHeader, Surface } from "@/app/admin/_ui";
 import { createPricingFacade } from "@/modules/pricing/facade";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
 
-import { CalendarSecondaryTabs } from "../_ui/secondary-tabs";
+import { CalendarSettingsTabs } from "../_ui/secondary-tabs";
 import { TemplateEditor } from "./template-editor";
 
 export const metadata: Metadata = { title: "工数テンプレート | カレンダー" };
@@ -35,8 +35,10 @@ export default async function AdminCalendarTemplatesPage() {
       <PageHeader
         title="工数テンプレート"
         description="グレード×サイズから作業ブロックのセットを自動生成するための標準工数テンプレートです。"
+        backHref="/admin/calendar"
+        backLabel="← 予定表へ"
       />
-      <CalendarSecondaryTabs />
+      <CalendarSettingsTabs />
       {!templatesResult.ok && (
         <p className="text-sm text-destructive">一覧の取得に失敗しました ({templatesResult.code})。再読み込みしてください。</p>
       )}

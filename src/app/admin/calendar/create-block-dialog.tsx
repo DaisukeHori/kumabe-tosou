@@ -121,7 +121,7 @@ export function CreateBlockDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onOpenChange(false); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[560px] shadow-modal">
         <DialogHeader>
           <DialogTitle>作業ブロックを作る</DialogTitle>
         </DialogHeader>

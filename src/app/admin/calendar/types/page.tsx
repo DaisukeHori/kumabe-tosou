@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { PageHeader, Surface } from "@/app/admin/_ui";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
 
-import { CalendarSecondaryTabs } from "../_ui/secondary-tabs";
+import { CalendarSettingsTabs } from "../_ui/secondary-tabs";
 import { TypeEditor } from "./type-editor";
 
 export const metadata: Metadata = { title: "作業種別 | カレンダー" };
@@ -21,8 +21,13 @@ export default async function AdminCalendarTypesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="作業種別" description="研磨・下地・塗装などの作業種別マスタ。色とキャパ消費有無を設定します。" />
-      <CalendarSecondaryTabs />
+      <PageHeader
+        title="作業種別"
+        description="研磨・下地・塗装などの作業種別マスタ。色とキャパ消費有無を設定します。"
+        backHref="/admin/calendar"
+        backLabel="← 予定表へ"
+      />
+      <CalendarSettingsTabs />
       {!result.ok && (
         <p className="text-sm text-destructive">一覧の取得に失敗しました ({result.code})。再読み込みしてください。</p>
       )}

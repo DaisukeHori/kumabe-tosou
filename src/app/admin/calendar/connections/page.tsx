@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
-import { PageHeader } from "@/app/admin/_ui";
+import { NoticePanel, PageHeader } from "@/app/admin/_ui";
 import { isGoogleCalendarConfigured, isMsCalendarConfigured } from "@/lib/env";
 import { KMB_ERRORS, type KmbErrorCode } from "@/modules/platform/errors";
 import type { CalendarProvider } from "@/modules/scheduling/contracts";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
 
-import { CalendarSecondaryTabs } from "../_ui/secondary-tabs";
+import { CalendarSettingsTabs } from "../_ui/secondary-tabs";
 import { CalendarConnectionCards } from "./connection-cards";
 import { SyncIssuesTable } from "./sync-issues-table";
 
@@ -53,24 +53,27 @@ export default async function AdminCalendarConnectionsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="外部連携" description="Google / Microsoft カレンダーとの双方向同期の接続状態・同期の問題を管理します。" />
-      <CalendarSecondaryTabs />
+      <PageHeader
+        title="外部連携"
+        description="Google / Microsoft カレンダーとの双方向同期の接続状態・同期の問題を管理します。"
+        backHref="/admin/calendar"
+        backLabel="← 予定表へ"
+      />
+      <CalendarSettingsTabs />
 
       {params.cal_connected && (
-        <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <NoticePanel tone="success">
           {isCalendarProvider(params.cal_connected) ? PROVIDER_LABEL[params.cal_connected] : params.cal_connected}
           に接続しました。
-        </div>
+        </NoticePanel>
       )}
       {params.cal_error === "disabled" && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          外部カレンダー連携が設定されていません (env 未設定)。
-        </div>
+        <NoticePanel tone="danger">外部カレンダー連携が設定されていません (env 未設定)。</NoticePanel>
       )}
       {params.cal_error && params.cal_error !== "disabled" && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+        <NoticePanel tone="danger">
           接続でエラーが発生しました: {errorInfo?.message ?? "不明なエラー"} ({params.cal_error})
-        </div>
+        </NoticePanel>
       )}
 
       {!connectionsResult.ok && (
