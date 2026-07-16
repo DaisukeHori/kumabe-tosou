@@ -17,6 +17,15 @@ const buttonVariants = cva(
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+        // [#117 R0] admin リデザイン用の追加 variant。公開サイトでは未使用のため
+        // 既存 variant の挙動は不変 (default/outline 等はトークン追従のみ)。
+        // status セマンティックトークン (globals.css) を参照する。
+        success:
+          "bg-status-success-fg text-white hover:bg-status-success-fg/90 focus-visible:ring-status-success-fg/30",
+        "success-outline":
+          "border-status-success-border bg-card text-status-success-fg hover:bg-status-success-bg focus-visible:ring-status-success-fg/30",
+        "destructive-outline":
+          "border-destructive bg-card text-destructive hover:bg-status-urgent-bg focus-visible:border-destructive/40 focus-visible:ring-destructive/20",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
