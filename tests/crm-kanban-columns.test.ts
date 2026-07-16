@@ -58,6 +58,8 @@ function customerRow(overrides: Partial<CustomerRow>): CustomerRow {
     created_at: "2026-07-11T00:00:00.000Z",
     updated_at: "2026-07-11T00:00:00.000Z",
     custom_fields: [],
+    billing_info: null,
+    shipping_info: null,
     ...overrides,
   };
 }

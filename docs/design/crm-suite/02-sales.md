@@ -1,6 +1,6 @@
 # 隈部塗装 CRM スイート — sales モジュール設計書 (02-sales)
 
-- 版: v1.2 (2026-07-11: 07 §D5 v1.2 (角印 private 化) への追随 — seal_media_id 廃止 → seal_storage_path、migration 0028 を branding-assets バケット作成に内容置換 (media 参照 3 点セット置換の廃止)、§10.6 を署名 URL 解決に是正、§6.1 getDocumentLinesForBlocks の空文字→null 正規化注記。詳細は更新履歴)。旧: v1.1 (2026-07-11: レビュー指摘反映 — 取引年月日の分離 (transaction_date)・訂正発行の原子化 (staging→PDF→単一 RPC)・/print ワンタイム消費 (print_tokens)・PDF 生成のグローバル直列化 (pdf_render_lock)・revoke の authenticated 完全化・draft 保存の RPC 化・deal 'paid' 適用の確認化・入金済み invoice の void ガード (trigger)・Storage 不変 trigger・CrmFacade 読み取り契約 Δs4・payment_recorded イベント Δs5・WYSIWYG 主張の限定・シミュレーター変換の canonical 分担明記 (06 §5.4) ほか。詳細は更新履歴)
+- 版: v1.3 (2026-07-16: **顧客の請求先/配送先の帳票連携 (Issue #113)** — §5.2 previewBillingFields/previewShippingDefaults (named export)、§6.1 deriveBillingFields の billing_info 優先フィールド単位フォールバック + composePostalAddress + site_* 補完、§7.1 getDealShippingDefaultsAction、§8.3 NewDocumentForm の site_address 欄・prefill。跨モジュール射影は 07-delta v1.10・顧客側は 01-crm v1.4。canonical 契約は無変更。詳細は更新履歴)。旧: v1.2 (2026-07-11: 07 §D5 v1.2 (角印 private 化) への追随 — seal_media_id 廃止 → seal_storage_path、migration 0028 を branding-assets バケット作成に内容置換 (media 参照 3 点セット置換の廃止)、§10.6 を署名 URL 解決に是正、§6.1 getDocumentLinesForBlocks の空文字→null 正規化注記。詳細は更新履歴)。旧: v1.1 (2026-07-11: レビュー指摘反映 — 取引年月日の分離 (transaction_date)・訂正発行の原子化 (staging→PDF→単一 RPC)・/print ワンタイム消費 (print_tokens)・PDF 生成のグローバル直列化 (pdf_render_lock)・revoke の authenticated 完全化・draft 保存の RPC 化・deal 'paid' 適用の確認化・入金済み invoice の void ガード (trigger)・Storage 不変 trigger・CrmFacade 読み取り契約 Δs4・payment_recorded イベント Δs5・WYSIWYG 主張の限定・シミュレーター変換の canonical 分担明記 (06 §5.4) ほか。詳細は更新履歴)
 - 旧版: v1.0 (2026-07-11: 初版 — 設計裁定 J5/J9/J10 準拠)
 - 作成: Fable 5 (設計サブエージェント、model=opus 系)
 - 位置づけ: **sales モジュール (販売管理・帳票) の親設計**。所有テーブル (documents / document_lines / payments / issued_documents。document_sequences は所有のみで DDL は M0) の DDL・状態機械・帳票様式・印刷出力・電帳法保存・画面仕様の正。
@@ -1360,6 +1360,17 @@ export const zPrintTokenExtras = z.object({
 }).strict();
 ```
 
+**契約外拡張 named export — 宛名/現場の複製プレビュー (v1.2/#113。sales/facade.ts から公開)**:
+`previewBillingFields` / `previewShippingDefaults` は帳票新規作成 UI (documents/actions.ts `getDealShippingDefaultsAction` — §8.3) が発行前の初期値プレビューに使う純粋関数。**DB アクセスを伴わないため SalesFacade インターフェース (07 §D8) には載せず named export とする** (非同期 Result 契約に馴染まない — 07 v1.1 裁定 #12 の「app 層合成」と同型判断)。`deriveBillingFields` / `composePostalAddress` (§6.1) を app 層へ渡す薄いラッパで、他モジュールからの import は禁止 (呼び出し元は sales 自身の app 層 route)。
+
+```ts
+// sales/facade.ts (named export — 契約外拡張)
+export function previewBillingFields(deal: DealRef):
+  { billing_name: string; billing_suffix: "様" | "御中"; billing_address: string | null };
+export function previewShippingDefaults(deal: DealRef):
+  { site_name: string | null; site_address: string | null };
+```
+
 ### 5.3 税計算仕様 (`sales/tax.ts` — 純関数、単体テスト必須。裁定 J5 / ブリーフ D4)
 
 ```ts
@@ -1422,7 +1433,18 @@ export function computeDocumentTotals(
 
 #### createDraftDocument(input: CreateDocumentInput): Promise<Result<{ document_id: string }>>
 
-deal を `CrmFacade.getDealRef(deal_id)` (契約メソッド — 07 §D8 v1.2 の最小射影 DealRef。Δs4 §17) で参照し宛名を複製 (DealRef.company 非 null → `company.name` + '御中' + company.address、null → `customer.name` + '様' + customer.address)。不在 = E603。01-crm §6.2 の契約外拡張 getDeal / getCustomer は他モジュール呼出禁止のため使わない (v1.1)。tax_rounding は settings 'invoice_issuer' から複製 (未設定時は既定 'floor')。lines を保存し totals を計算。
+deal を `CrmFacade.getDealRef(deal_id)` (契約メソッド — 07 §D8 v1.2 の最小射影 DealRef。Δs4 §17) で参照し宛名/現場を複製。不在 = E603。01-crm §6.2 の契約外拡張 getDeal / getCustomer は他モジュール呼出禁止のため使わない (v1.1)。tax_rounding は settings 'invoice_issuer' から複製 (未設定時は既定 'floor')。lines を保存し totals を計算。
+
+**宛名複製規則 (`deriveBillingFields` — v1.2/#113 改訂)**: 顧客の `customer.billing` (billing_info の射影 — 07 §D8 v1.10) を最優先し、フィールドが null のときのみ従来規則 (`company` 非 null → `company.name` + '御中' + `company.address`、null → `customer.name` + '様' + `customer.address`) に**フィールド単位**でフォールバックする。
+- `billing_name` = `billing.name ?? fallback.billing_name`
+- `billing_suffix` = `billing.suffix ?? fallback.billing_suffix` (billing_info.suffix で法人案件の個人宛名の敬称ミスマッチを解消)
+- `billing_address` = `composePostalAddress(billing) ?? fallback.billing_address`
+- `composePostalAddress(b)`: `b.address` が null なら null (postal 単独は不採用)。非 null なら `b.postal_code` があれば `〒{formatPostalCode7(postal)} {address}` (最大 10 + 190 = 200 = documents 側 Zod 上限)、無ければ `address`
+
+`customer.billing` 自体が null の顧客では**従来 fallback とバイト単位で同一の結果**になる (後方互換 — 既存テストが回帰を検知)。**設計上の既知トレードオフ**: 上記はフィールド単位フォールバックのため billing_name は billing_info 由来・billing_address は deal 由来という異ソース混在が起こり得る。これは merge RPC の「ブロック単位 coalesce」原則 (01-crm §6.4) とは異なる意図的な選択で、宛先を少しずつ埋める利便性を優先 (発行前に必ず draft 編集を経るため実害は限定的)。billing_name/billing_suffix は documents の別カラムであり文字列連結しない (DDL §2.3.1)。
+
+**現場 (site) 複製規則 (v1.2/#113)**: `customer.shipping` (shipping_info の射影) からフィールド単位で補完。`site_name = params.site_name ?? shipping.name ?? null` / `site_address = params.site_address ?? composePostalAddress(shipping) ?? null` (明示指定 params が優先 — 帳票側で自由に上書き可)。shipping には suffix が無いため宛名複製とは別経路。
+
 エラー: E101 (Zod) / E603 (deal 不在 — crm 帯のコードをそのまま透過) / E901 (DB)。
 
 #### createDraftQuoteFromEstimate(input: { deal_id; estimate: SimEstimateSnapshot }): Promise<Result<{ document_id: string }>>
@@ -1552,6 +1574,7 @@ E644(Resend 未設定・送信失敗) / E901。
 | recordPaymentAction | zPaymentInput | recordPayment → invoice_paid=true なら deal 'paid' 提案適用 | |
 | deletePaymentAction | payment_id | deletePayment | |
 | createPdfUrlAction | id + version | createSignedPdfUrl | プレビュー/ダウンロード |
+| getDealShippingDefaultsAction (v1.2/#113) | `dealId: string` (uuid — Zod 単独) | `CrmFacade.getDealRef` → `previewShippingDefaults` + `previewBillingFields` を app 層合成 | 新規作成フォームの site_* 初期値 + 宛名プレビュー (§8.3)。返却型 `DealShippingDefaults`。DB 書込なし・revalidate なし |
 
 **7.1-2 deal ステージ提案の適用 (app 層合成 — 00-overview §2.3/§6.2)**: issueDocumentAction は facade 成功後、同 Action 内で (1) CrmFacade で deal を read → (2) §4.6 の提案遷移 (quote_sent / ordered / delivered / invoiced — いずれも**非終端**) を `CrmFacade.updateDealStage(dealId, to, dealUpdatedAt)` で**自動適用** → (3) 成功: トーストに「案件を『◯◯』にしました (元に戻す)」の undo 操作 (undo = 直前ステージへの後退。非終端間の後退は 01-crm §4.2 で自由) / E602 (不正遷移) または E103: スキップしてトースト情報表示 + 乖離バッジ (エラーにしない — 帳票操作自体は成立)。
 **'paid' (終端) は自動適用しない (v1.1)**: 01-crm §4.2 で paid は「遷移一切不可の終端」(KMB-E602) であり、自動適用 + undo 方式では undo (paid→invoiced) が構造的に必ず失敗し、入金訂正 (§2.4 パターン 8) 後に案件が誤った終端に恒久固定される (管理画面から回復不能)。recordPaymentAction は invoice_paid=true のとき**確認ダイアログ**「案件を『入金済み』にしますか？ この操作は取り消せません (入金記録に訂正の可能性がある場合は後から適用できます)」を出し、確認時のみ updateDealStage(paid) を実行する (トーストに undo は付けない)。見送った場合はダッシュボードの乖離バッジが再誘導する。
@@ -1663,6 +1686,13 @@ route 実装: token 検証・消費後、repository (service client) で documen
 - 下段: **税集計プレビュー** (小計 / 税率区分別 対象額・消費税 / 合計 — `sales/tax.ts` をクライアント import してリアルタイム計算。保存時にサーバ再計算で確定) + 保存 (Cmd+S) + 「印刷プレビュー」(createPrintPreviewUrlAction → /print を新タブ。トークンは 1 回限り §7.3 — 開き直しはボタン再押下。頁番号・改ページの確認は新タブで Cmd+P — §10.8 v1.1) + **「発行」** (確認ダイアログ: 「番号を採番し PDF を確定保存します。発行後は内容を変更できません」) + 削除
 - 発行成功: 詳細表示に切替 + トースト「Q-2026-0012 を発行しました / 案件を『見積送付』にしました (元に戻す)」
 - キーボード: Cmd+S 保存 / Cmd+Enter 行追加 / Alt+↑↓ 行移動 / Esc ダイアログ閉じ / Tab は明細セルを論理順に横断
+
+**新規作成フォーム (`/admin/documents/new` — `NewDocumentForm`。案件・種別・最初の明細を入力して draft を作成)**:
+- **現場住所 (`site_address`) Input を追加 (v1.2/#113)** — 現場名 (`site_name`) と対にする (maxLength 200)。作成時は空でも可 (発行前に §8.3 draft 編集で確定)
+- props に `initialShippingDefaults: DealShippingDefaults | null` を追加 (`{ site_name, site_address, billing_preview: { name, suffix, address } }`)。従来の `initialDeal` 経由の遷移では `new/page.tsx` (Server Component) が `getDealShippingDefaultsAction(deal_id)` を呼んで同値を props で渡す
+- **案件選択の変更時**に `getDealShippingDefaultsAction` (§7.1 / documents/actions.ts) を呼び、`site_name`/`site_address` が**未編集 (touched フラグ false) の場合のみ**初期値を流し込む (ユーザーが手入力した値は上書きしない)
+- **宛名プレビュー**: `billing_preview` を muted テキスト 1 行で表示 (実際の billing_* 複製は createDraftDocument が §6.1 `deriveBillingFields` で確定するため、ここは発行前の目安表示)
+- 上書き保証: 作成後の draft は `zUpdateDraftDocumentInput` で自由に変更・クリア可 (追加実装不要)。作成フォームで初期値を意図的に空にして送ると facade フォールバック (§6.1) が再充填する (エッジケース — help text に明記)
 
 ### 8.4 帳票詳細 (issued 以降) — 同ルートの状態分岐 (WorkForm の mode パターン。新規コンポーネント乱造禁止)
 
@@ -2172,4 +2202,5 @@ src/modules/sales/internal/pdf.ts               … §7.4 (紙面には関与し
 |---|---|---|
 | v1.0 | 2026-07-11 | 初版。裁定 J5/J9/J10 準拠 — スナップショット派生の 4 書類×7 状態機械・書類×税率 1 回丸め税計算 (tax.ts 純関数)・発行系 RPC 3 本 (finalize_issue / append_version / apply_revision 全文)・電帳法 append-only 台帳 + 方式 A PDF (A4 縦 3 系統・margin boxes + counter(pages)・適格/区分記載分岐・角印合成・改ページ規則)・入金消込 trigger・版間差分・シミュレーター見積原案変換・契約差分 Δs1〜Δs3 申請 |
 | v1.1 | 2026-07-11 | レビュー指摘反映 (触れた章: §0.4/§1.1/§1.2/§2.1〜2.6/§3.2〜3.4/§4.2〜4.6/§5.2〜5.4/§6.1〜6.2/§7.1〜7.4/§8.3〜8.5/§9/§10/§11.1/§12/§13/§14.3/§15/§16/§17/§18/§19)。**BLOCKER**: ①取引年月日を issue_date から分離 (documents.transaction_date 新設 — インボイス記載事項 2。派生引継ぎ・S3 別欄印字・台帳 coalesce) ②訂正発行の原子化 (document_revision_stagings + staging 描画 PDF → apply_revision 単一 RPC で documents/明細/台帳/version を同時確定 — 乖離状態の廃止、§4.5-4 バッジ削除) ③/print トークンのワンタイム消費 (print_tokens 新設 — HMAC + 消費の 2 段。doc_no は payload へ移動し PrintTokenPayload と hmac 入力の不一致解消) ④PDF 生成のグローバル直列化 (pdf_render_lock lease — 多インスタンスで J5 の同時実行 1 を保証) ⑤deal 'paid' 自動適用の廃止 → 確認ダイアログ (01-crm §4.2 終端で undo 不能のため)。**MAJOR**: revoke を anon+authenticated に完全化 (列 grant / payments 不変の実効化)・draft 保存の RPC 化 (document_save_draft)・apply_revision の position を ordinality 採番に (契約に position なし)・CrmFacade の deal read を契約メソッド getDealRef / getDealRefs (batch) に統一 (Δs4 — 07 v1.2 統合 + v1.7 batch/address)・createPricingFacade 前例引用の訂正 (client 注入は新設)・settings は get のみ + E901→E626 変換・入金あり invoice の void を trigger ガード (TOCTOU)・WYSIWYG 主張を print メディアに限定・シミュレーター変換の canonical 分担明記 (06 §5.4)・一括振込パターン収載 (構造分離は §18 将来拡張 — v1 は分割記録+memo)。**MINOR**: 0021/0022 誤記訂正・§4.3-C 手順明記・zReviseDocumentInput refine・発行時 CAS チェーン明記・0 円 invoice 発行拒否・roundByMode 負値定義・payment_recorded イベント分離 (Δs5)・tax.ts パス訂正 (Δs6)。他書波及は §17 末尾 |
+| v1.3 | 2026-07-16 | **顧客の請求先/配送先の帳票連携 (Issue #113)** (触れた章: §5.2/§6.1/§7.1/§8.3)。**§5.2**: 契約外拡張 named export `previewBillingFields` / `previewShippingDefaults` (DealRef → 宛名/現場の初期値プレビュー。DB 非依存のため SalesFacade 契約には載せず named export — 07 v1.1 裁定 #12 と同型) を明記。**§6.1**: createDraftDocument の宛名複製規則を改訂 — `deriveBillingFields` は `customer.billing` (07 §D8 v1.10 の billing 射影) を最優先し、フィールド null 時のみ従来規則 (company→御中 / customer→様) へ**フィールド単位フォールバック**。`composePostalAddress` (address null なら不採用 / postal あれば `〒{formatted} {address}`、最大 200 = documents 側 Zod 上限) を追加。site_* は `customer.shipping` からフィールド単位補完 (suffix なし)。billing_info null の顧客は従来 fallback とバイト単位同一 (後方互換)。**§7.1**: `getDealShippingDefaultsAction` (getDealRef → previewShippingDefaults/previewBillingFields の app 層合成。DB 書込なし) を追加。**§8.3**: 新規作成フォーム `NewDocumentForm` に site_address Input・`initialShippingDefaults` prop・案件変更時の未編集 site_* prefill・宛名 muted プレビューを追加。canonical 契約 (07 §D8 SalesFacade シグネチャ) 無変更。跨モジュール射影の billing/shipping は 07-contracts-delta v1.10、顧客側の入力/DB は 01-crm §5.2/§2.2 (v1.4) |
 | v1.2 | 2026-07-11 | **07 §D5 v1.2 (角印 private 化 — BLOCKER) への追随** (触れた章: §1.1/§2.2/§2.3.3/§2.4 #17/§3.3/§5.2/§8.6/§10.3/§10.6/§13.1/§14.2/§14.3)。①zIssuerSnapshot の `seal_media_id: zMediaId` を **`seal_storage_path`** に置換 (zMediaId import 削除) ②migration 0028 を**内容置換**: 旧「seal_media_id の media 参照 3 点セット置換」→ **private Storage bucket 'branding-assets' の作成** (media は anon 全行 SELECT + public バケットのため社印が匿名取得可能だった。3 点セットを置換する migration は favicon 分 0035 のみに) ③§10.6 の「media の公開 URL を `<img>`」を **server 側署名 URL 解決**に是正 ④§8.6 角印画像を MediaPicker → branding-assets 直接アップロードに変更 ⑤受入 T11 を「バケット private + 署名 URL のみ」検証に差し替え・§14.2-1 の 0015/0017 diff 手順削除。あわせて **§6.1 getDocumentLinesForBlocks に grade_key/size_key の空文字→null 正規化注記** (07 §4.12 zGenerateBlocksInput min(1) 整合 — final-check V17)。※0028 の内容置換により 05-site-settings §2.5 の 0028↔0035 逆時系列運用規則 (裁定 #21) は前提消滅 — 05 v1.2 で整理 |

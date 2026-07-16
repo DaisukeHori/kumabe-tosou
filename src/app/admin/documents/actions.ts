@@ -6,7 +6,13 @@ import { z } from "zod";
 import type { Result } from "@/modules/platform/contracts";
 import { getErrorInfo } from "@/modules/platform/errors";
 import { platformFacade } from "@/modules/platform/facade";
-import { computeVersionDiff, createSalesFacade, type IssuedSnapshotDiff } from "@/modules/sales/facade";
+import {
+  computeVersionDiff,
+  createSalesFacade,
+  previewBillingFields,
+  previewShippingDefaults,
+  type IssuedSnapshotDiff,
+} from "@/modules/sales/facade";
 import {
   zCreateDocumentInput,
   zDocType,
@@ -295,6 +301,49 @@ export async function generateBlocksAction(
   return {
     ok: true,
     value: { status: "done", block_ids: generated.value.block_ids, skipped: generated.value.skipped },
+  };
+}
+
+// ============================================================
+// 帳票新規作成フォームの site_* 初期値 + 宛名プレビュー (§5.3 — 顧客の請求先/配送先)
+// ============================================================
+
+/** getDealShippingDefaultsAction の返却型 (明示 TS 型 — §5.3)。 */
+export type DealShippingDefaults = {
+  site_name: string | null;
+  site_address: string | null;
+  billing_preview: { name: string; suffix: "様" | "御中"; address: string | null };
+};
+
+/**
+ * 案件の配送先 (shipping_info) から site_name/site_address の初期値を、請求先 (billing_info) から
+ * 宛名プレビューを導出する (01-crm.md §7.1 / 02-sales.md §8.3)。NewDocumentForm が案件選択の変更時に
+ * 呼び、未編集の site_* フィールドへ流し込む。純粋関数 (previewShippingDefaults/previewBillingFields)
+ * を app 層で合成するだけで DB 書き込みは伴わない (作成は createDraftDocumentAction が行う)。
+ */
+export async function getDealShippingDefaultsAction(dealId: string): Promise<Result<DealShippingDefaults>> {
+  const admin = await requireAdminResult();
+  if (!admin.ok) return admin;
+
+  const idParsed = z.string().uuid().safeParse(dealId);
+  if (!idParsed.success) return { ok: false, code: "KMB-E101", detail: idParsed.error.message };
+
+  const dealRef = await crmFacade.getDealRef(idParsed.data);
+  if (!dealRef.ok) return dealRef;
+
+  const billing = previewBillingFields(dealRef.value);
+  const shipping = previewShippingDefaults(dealRef.value);
+  return {
+    ok: true,
+    value: {
+      site_name: shipping.site_name,
+      site_address: shipping.site_address,
+      billing_preview: {
+        name: billing.billing_name,
+        suffix: billing.billing_suffix,
+        address: billing.billing_address,
+      },
+    },
   };
 }
 

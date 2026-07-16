@@ -51,6 +51,8 @@ function baseFormInput(customFields: { label: string; value: string }[]) {
     notes: null,
     lifecycle: "lead" as const,
     custom_fields: customFields,
+    billing_info: null,
+    shipping_info: null,
   };
 }
 
@@ -163,6 +165,99 @@ describe("updateCustomerAction", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("KMB-E201");
+    expect(updateCustomerMock).not.toHaveBeenCalled();
+  });
+
+  // ---- 請求先/配送先 (billing_info / shipping_info) の検証エラー変換 (生 JSON 露出の回帰) ----
+
+  function emptyBlock() {
+    return { postal_code: null, address: null, tel_raw: null, name: null, suffix: null } as {
+      postal_code: string | null;
+      address: string | null;
+      tel_raw: string | null;
+      name: string | null;
+      suffix: "様" | "御中" | null;
+    };
+  }
+
+  it("billing_info の名前が 81 字のとき請求先ラベル付き日本語メッセージを返す (生 JSON 非露出)", async () => {
+    const input = { ...baseFormInput([]), billing_info: { ...emptyBlock(), name: "あ".repeat(81) } };
+    const result = await updateCustomerAction(CUSTOMER_ID, input, EXPECTED_UPDATED_AT);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("KMB-E101");
+      expect(result.detail).toBe("請求先の名前は80文字以内で入力してください。");
+      expect(result.detail).not.toMatch(/too_big|origin|maximum|"code"/);
+    }
+    expect(updateCustomerMock).not.toHaveBeenCalled();
+  });
+
+  it("billing_info の郵便番号が不正 (5 桁) のとき請求先の郵便番号エラー (KMB-E610) へ変換する", async () => {
+    const input = { ...baseFormInput([]), billing_info: { ...emptyBlock(), name: "太郎", postal_code: "12345" } };
+    const result = await updateCustomerAction(CUSTOMER_ID, input, EXPECTED_UPDATED_AT);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("KMB-E101");
+      expect(result.detail).toBe("請求先の郵便番号は7桁の数字で入力してください (KMB-E610)。");
+      expect(result.detail).not.toMatch(/invalid_string|regex|"code"/);
+    }
+    expect(updateCustomerMock).not.toHaveBeenCalled();
+  });
+
+  it("shipping_info の住所が 191 字のとき配送先ラベル付き日本語メッセージを返す", async () => {
+    const input = { ...baseFormInput([]), shipping_info: { ...emptyBlock(), address: "あ".repeat(191) } };
+    const result = await updateCustomerAction(CUSTOMER_ID, input, EXPECTED_UPDATED_AT);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("KMB-E101");
+      expect(result.detail).toBe("配送先の住所は190文字以内で入力してください。");
+      expect(result.detail).not.toMatch(/too_big|origin|maximum|"code"/);
+    }
+    expect(updateCustomerMock).not.toHaveBeenCalled();
+  });
+
+  it("有効な billing_info / shipping_info は facade へ委譲される", async () => {
+    updateCustomerMock.mockResolvedValue({ ok: true, value: undefined });
+    const input = {
+      ...baseFormInput([]),
+      billing_info: { ...emptyBlock(), name: "請求太郎", postal_code: "860-0801", address: "熊本市", suffix: "御中" as const },
+      shipping_info: { ...emptyBlock(), name: "現場A", address: "工事現場" },
+    };
+    const result = await updateCustomerAction(CUSTOMER_ID, input, EXPECTED_UPDATED_AT);
+
+    expect(result.ok).toBe(true);
+    expect(updateCustomerMock).toHaveBeenCalledTimes(1);
+    // postal は 7 桁へ正規化されて facade に渡ること
+    const passed = updateCustomerMock.mock.calls[0]?.[1] as { billing_info: { postal_code: string } };
+    expect(passed.billing_info.postal_code).toBe("8600801");
+  });
+
+  // ---- 3 本の tel_raw 失敗はブロック別ラベルで区別する ----
+
+  it("基本連絡先の電話番号が不正なとき基本ラベルの文言を返す", async () => {
+    const input = { ...baseFormInput([]), tel_raw: "abc" };
+    const result = await updateCustomerAction(CUSTOMER_ID, input, EXPECTED_UPDATED_AT);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.detail).toBe("基本連絡先の電話番号の形式が正しくありません。");
+    expect(updateCustomerMock).not.toHaveBeenCalled();
+  });
+
+  it("請求先の電話番号が不正なとき請求先ラベルの文言を返す", async () => {
+    const input = { ...baseFormInput([]), billing_info: { ...emptyBlock(), name: "太郎", tel_raw: "abc" } };
+    const result = await updateCustomerAction(CUSTOMER_ID, input, EXPECTED_UPDATED_AT);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.detail).toBe("請求先の電話番号の形式が正しくありません。");
+    expect(updateCustomerMock).not.toHaveBeenCalled();
+  });
+
+  it("配送先の電話番号が不正なとき配送先ラベルの文言を返す", async () => {
+    const input = { ...baseFormInput([]), shipping_info: { ...emptyBlock(), name: "現場", tel_raw: "abc" } };
+    const result = await updateCustomerAction(CUSTOMER_ID, input, EXPECTED_UPDATED_AT);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.detail).toBe("配送先の電話番号の形式が正しくありません。");
     expect(updateCustomerMock).not.toHaveBeenCalled();
   });
 });

@@ -74,6 +74,25 @@ export function CustomerDetailActions({ customer }: { customer: CustomerDetail }
         notes: customer.notes,
         lifecycle: "archived",
         custom_fields: customer.custom_fields,
+        // 請求先/配送先は read-modify-write で保持する (tel_e164 → tel_raw のフォーム形へ写す)。
+        billing_info: customer.billing_info
+          ? {
+              postal_code: customer.billing_info.postal_code,
+              address: customer.billing_info.address,
+              tel_raw: customer.billing_info.tel_e164,
+              name: customer.billing_info.name,
+              suffix: customer.billing_info.suffix,
+            }
+          : null,
+        shipping_info: customer.shipping_info
+          ? {
+              postal_code: customer.shipping_info.postal_code,
+              address: customer.shipping_info.address,
+              tel_raw: customer.shipping_info.tel_e164,
+              name: customer.shipping_info.name,
+              suffix: customer.shipping_info.suffix,
+            }
+          : null,
       },
       customer.updated_at,
     );

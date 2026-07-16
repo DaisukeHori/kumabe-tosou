@@ -151,6 +151,8 @@ async function resolveIntakeCustomer(
             notes: current.value.notes,
             lifecycle: "lead",
             custom_fields: current.value.custom_fields,
+            billing_info: current.value.billing_info,
+            shipping_info: current.value.shipping_info,
           },
           current.value.updated_at,
         );

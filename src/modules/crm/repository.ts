@@ -300,6 +300,19 @@ export type CustomerRow = {
   created_at: string;
   updated_at: string;
   custom_fields: { label: string; value: string }[]; // #98 追加
+  // v1.4 追加 (請求先/配送先ブロック — crm/contracts.ts CustomerAddressBlock と構造同型。
+  // 形式・上限は Zod のみが正、DDL check は jsonb_typeof='object' の構造整合のみ)。NULL = 未設定
+  billing_info: AddressBlockValue | null;
+  shipping_info: AddressBlockValue | null;
+};
+
+/** customers.billing_info / shipping_info の行形状 (CustomerAddressBlock と構造同型)。 */
+export type AddressBlockValue = {
+  postal_code: string | null;
+  address: string | null;
+  tel_e164: string | null;
+  name: string | null;
+  suffix: "様" | "御中" | null;
 };
 
 export type CustomerWriteInput = {
@@ -349,6 +362,8 @@ export type CustomerUpdatePatch = {
   notes: string | null;
   lifecycle: CustomerLifecycle;
   custom_fields: { label: string; value: string }[]; // #98 追加
+  billing_info: AddressBlockValue | null;  // v1.4 追加
+  shipping_info: AddressBlockValue | null; // v1.4 追加
 };
 
 export async function updateCustomerWithCas(

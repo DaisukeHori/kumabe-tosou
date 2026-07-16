@@ -8,6 +8,7 @@ import { getSessionAndClient } from "@/lib/supabase/session";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type { ExecutionContext, Paged, Pagination, Result, TaxCategory } from "@/modules/platform/contracts";
 import { zPagination } from "@/modules/platform/contracts";
+import { formatPostalCode7 } from "@/modules/platform/text";
 
 import { crmFacade } from "@/modules/crm/facade";
 // sales→crm は crmFacade 経由の 3 メソッド (getDealRef/getDealRefs/appendActivity) + 型 import のみ許可
@@ -16,7 +17,7 @@ import { crmFacade } from "@/modules/crm/facade";
 // 分担を crm 側に残す)。DocumentEventActivityPayload は issueDocument/reissueDocument/
 // reviseAndReissueDocument (#50 実装分) が appendActivity へ渡す payload の型として使う
 // (recordPayment のみ #51 で未実装のまま — SalesFacade 契約の型宣言としては残す)。
-import type { DealRef, DocumentEventActivityPayload, SimEstimateSnapshot } from "@/modules/crm/contracts";
+import type { CustomerRef, DealRef, DocumentEventActivityPayload, SimEstimateSnapshot } from "@/modules/crm/contracts";
 
 import { settingsFacade } from "@/modules/settings/facade";
 
@@ -404,15 +405,55 @@ async function resolveSalesExecutionClient(
   return { ok: true, value: { client: supabase, userId: user.id } };
 }
 
-/** 宛名複製 (02-sales §6.1): company 非 null → 会社名+御中+会社住所、null → 顧客名+様+顧客住所。
- *  billing_name/billing_suffix は documents の別カラムであり、文字列連結はしない (DDL §2.3.1)。 */
+/** 〒合成 (02-sales §6.1): address が null なら postal 単独では採用しない (postal だけの宛先は無意味)。
+ *  最大長 = 10 ("〒123-4567 ") + 190 (address 上限) = 200 = documents 側 Zod 上限。 */
+function composePostalAddress(b: CustomerRef["billing"]): string | null {
+  if (b === null || b.address === null) return null;
+  return b.postal_code !== null ? `〒${formatPostalCode7(b.postal_code)} ${b.address}` : b.address;
+}
+
+/**
+ * 宛名複製 (02-sales §6.1): 顧客の billing_info を最優先し、フィールドが null のときのみ従来規則
+ * (company 非 null → 会社名+御中+会社住所、null → 顧客名+様+顧客住所) にフィールド単位で
+ * フォールバックする。billing_info 自体が null の顧客では従来 fallback とバイト単位で同一の結果になる
+ * (後方互換 — 既存テストが回帰を検知)。billing_name/billing_suffix は documents の別カラムであり
+ * 文字列連結はしない (DDL §2.3.1)。
+ */
 function deriveBillingFields(
   deal: DealRef,
 ): { billing_name: string; billing_suffix: "様" | "御中"; billing_address: string | null } {
-  if (deal.company !== null) {
-    return { billing_name: deal.company.name, billing_suffix: "御中", billing_address: deal.company.address };
-  }
-  return { billing_name: deal.customer.name, billing_suffix: "様", billing_address: deal.customer.address };
+  const fallback = deal.company !== null
+    ? { billing_name: deal.company.name, billing_suffix: "御中" as const, billing_address: deal.company.address }
+    : { billing_name: deal.customer.name, billing_suffix: "様" as const, billing_address: deal.customer.address };
+  const b = deal.customer.billing;
+  if (b === null) return fallback;
+  return {
+    billing_name: b.name ?? fallback.billing_name,
+    billing_suffix: b.suffix ?? fallback.billing_suffix,
+    billing_address: composePostalAddress(b) ?? fallback.billing_address,
+  };
+}
+
+/**
+ * 帳票新規作成 UI (documents/actions.ts getDealShippingDefaultsAction) 用の宛名プレビュー。
+ * DB アクセスを伴わない純粋関数のため SalesFacade インターフェースには載せず named export とする
+ * (02-sales §5.2 契約外拡張)。deriveBillingFields をそのまま公開する。
+ */
+export function previewBillingFields(deal: DealRef) {
+  return deriveBillingFields(deal);
+}
+
+/**
+ * 帳票新規作成 UI の site_name/site_address 初期値プレビュー (02-sales §5.2 契約外拡張)。
+ * buildDraftDocumentFromDeal の site 補完ロジック (shipping_info からのフィールド単位複製) と同じ規則を
+ * 純粋関数として公開する — postal 合成規則 (composePostalAddress) を sales に閉じたまま app 層へ渡すため。
+ */
+export function previewShippingDefaults(deal: DealRef): { site_name: string | null; site_address: string | null } {
+  const s = deal.customer.shipping;
+  return {
+    site_name: s?.name ?? null,
+    site_address: composePostalAddress(s ?? null),
+  };
 }
 
 /**
@@ -451,6 +492,10 @@ async function buildDraftDocumentFromDeal(
   const taxRounding = await resolveTaxRounding(ctx);
   const totals = computeDocumentTotals(params.lines, taxRounding);
 
+  // site 系は shipping_info からフィールド単位で補完する (shipping には suffix が無いため宛名複製とは
+  // 別経路。明示指定 params が優先 — 帳票側で自由に上書き可能)。
+  const s = dealRef.value.customer.shipping;
+
   const created = await repoCreateDraftDocument(client, {
     doc_type: params.doc_type,
     deal_id: params.deal_id,
@@ -458,8 +503,8 @@ async function buildDraftDocumentFromDeal(
     billing_name: billing.billing_name,
     billing_suffix: billing.billing_suffix,
     billing_address: billing.billing_address,
-    site_name: params.site_name,
-    site_address: params.site_address,
+    site_name: params.site_name ?? s?.name ?? null,
+    site_address: params.site_address ?? composePostalAddress(s ?? null) ?? null,
     notes: params.notes,
     issue_date: params.issue_date,
     transaction_date: null,

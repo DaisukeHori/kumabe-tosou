@@ -282,6 +282,8 @@ function toCustomerRef(row: CustomerRow): CustomerRef {
     tel_e164: row.tel_e164,
     email: row.email,
     address: row.address,
+    billing: row.billing_info,   // v1.8 追加 (additive — 行の jsonb をそのまま写す)
+    shipping: row.shipping_info, // v1.8 追加
   };
 }
 
@@ -320,6 +322,8 @@ async function buildDealRef(client: SupabaseClient, deal: DealRow): Promise<Resu
         name: customer.value.name,
         kind: customer.value.kind,
         address: customer.value.address,
+        billing: customer.value.billing_info,   // v1.8 追加
+        shipping: customer.value.shipping_info,  // v1.8 追加
       },
       company,
     },
@@ -728,6 +732,8 @@ export const crmFacade: CrmFacadeExtended = {
               notes: customer.value.notes,
               lifecycle: "customer",
               custom_fields: customer.value.custom_fields,
+              billing_info: customer.value.billing_info,
+              shipping_info: customer.value.shipping_info,
             },
             customer.value.updated_at,
           );
@@ -1106,6 +1112,8 @@ export const crmFacade: CrmFacadeExtended = {
         merged_into_customer_id: c.merged_into_customer_id,
         created_by: c.created_by,
         custom_fields: c.custom_fields, // #98 追加
+        billing_info: c.billing_info,   // v1.4 追加
+        shipping_info: c.shipping_info, // v1.4 追加
       };
       return { ok: true, value: detail };
     } catch (err) {

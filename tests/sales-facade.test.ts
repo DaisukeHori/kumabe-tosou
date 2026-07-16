@@ -157,7 +157,7 @@ function dealRef(overrides: Record<string, unknown> = {}) {
     title: "サンプル案件",
     stage: "quoted",
     updated_at: "2026-07-01T00:00:00Z",
-    customer: { customer_id: "c-1", name: "田中太郎", kind: "person", address: "顧客住所" },
+    customer: { customer_id: "c-1", name: "田中太郎", kind: "person", address: "顧客住所", billing: null, shipping: null },
     company: null,
     ...overrides,
   };
@@ -212,7 +212,7 @@ describe("createSalesFacade().createDraftDocument — 宛名複製 (company 有�
   it("company が null: billing_name=顧客名 (連結しない)・billing_suffix='様'・billing_address=顧客住所", async () => {
     getDealRefMock.mockResolvedValue({
       ok: true,
-      value: dealRef({ company: null, customer: { customer_id: "c-1", name: "田中太郎", kind: "person", address: "顧客住所4-5-6" } }),
+      value: dealRef({ company: null, customer: { customer_id: "c-1", name: "田中太郎", kind: "person", address: "顧客住所4-5-6", billing: null, shipping: null } }),
     });
     repoCreateDraftDocumentMock.mockResolvedValue({ ok: true, value: { id: "doc-new2", updated_at: "t" } });
 

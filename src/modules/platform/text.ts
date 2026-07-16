@@ -67,3 +67,20 @@ export function normalizeJpPhoneToE164(input: string): string | null {
 
   return null;
 }
+
+/**
+ * 郵便番号入力の正規化 (canonical: docs/design/crm-suite/01-crm.md §5.2 — 顧客の請求先/配送先)。
+ * 手順: ① NFKC 正規化 (全角数字・全角ハイフンを半角へ) → ② 数字以外を除去 → ③ ちょうど 7 桁なら
+ * その 7 桁文字列を返し、それ以外 (6 桁以下・8 桁以上・数字が無い) は null を返す。
+ * "860-0801" / "８６００８０１" / "〒860-0801" いずれも "8600801" になる。zPostalCode7 (crm/contracts.ts)
+ * に渡す前段の正規化として使う (Zod は正規化後の 7 桁数字のみを唯一の正とする)。
+ */
+export function normalizePostalCode7(input: string): string | null {
+  const digits = input.normalize("NFKC").replace(/[^0-9]/g, "");
+  return /^\d{7}$/.test(digits) ? digits : null;
+}
+
+/** 表示整形: "8600801" → "860-0801" (7 桁前提。それ以外はそのまま返す)。 */
+export function formatPostalCode7(pc: string): string {
+  return /^\d{7}$/.test(pc) ? `${pc.slice(0, 3)}-${pc.slice(3)}` : pc;
+}

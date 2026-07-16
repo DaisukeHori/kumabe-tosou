@@ -262,6 +262,15 @@ export type IntakeFromSimulatorInput = z.infer<typeof zIntakeFromSimulatorInput>
 /** 跨モジュール read の最小射影 (v1.2 — D8 getCustomerRef/getDealRef の戻り値。
  *  読み取りビュー型のため Zod 化しない (既存 §4.9 規約)。詳細ビュー (CustomerDetail/DealDetail) は
  *  01-crm §6.2 の契約外拡張のまま自モジュール専用 — 他モジュールは本射影のみ参照する */
+/** 請求先/配送先ブロックの跨モジュール射影 (v1.8 — 07-contracts-delta §D8)。CustomerAddressBlock と
+ *  構造同型だが、他モジュールは crm の zod スキーマを再 import しないため read view として明示する。 */
+export type CustomerRefAddressBlock = {
+  postal_code: string | null;
+  address: string | null;
+  tel_e164: string | null;
+  name: string | null;
+  suffix: "様" | "御中" | null;
+};
 export type CustomerRef = {
   customer_id: string;   // merged_into 終端解決済みの現行 id (旧 id で呼んでも解決後を返す)
   name: string;
@@ -270,13 +279,22 @@ export type CustomerRef = {
   tel_e164: string | null;
   email: string | null;
   address: string | null; // v1.7 追加 — 02-sales の billing_address 複製の源 (customers.address)
+  billing: CustomerRefAddressBlock | null;  // v1.8 追加 — 帳票 billing_* 複製の源 (02-sales §6.1)
+  shipping: CustomerRefAddressBlock | null; // v1.8 追加 — 帳票 site_* 複製の源 (02-sales §6.1)
 };
 export type DealRef = {
   deal_id: string;
   title: string;
   stage: DealStage;
   updated_at: string;    // 楽観排他用の生文字列 (02-sales 7.1-2 のステージ提案適用が使用)
-  customer: { customer_id: string; name: string; kind: "person" | "company_contact"; address: string | null }; // address は v1.7 追加
+  customer: {
+    customer_id: string;
+    name: string;
+    kind: "person" | "company_contact";
+    address: string | null; // address は v1.7 追加
+    billing: CustomerRef["billing"];   // v1.8 追加
+    shipping: CustomerRef["shipping"]; // v1.8 追加
+  };
   company: { company_id: string; name: string; address: string | null } | null; // 宛名複製: company 非 null → '御中' / null → '様'。address は v1.7 追加 (billing_address 複製 — 02-sales §6.1)
 };
 
@@ -296,6 +314,27 @@ export const zCustomerCustomFields = z.array(zCustomerCustomField).max(50)
   .refine(fs => new Set(fs.map(f => f.label)).size === fs.length, "項目名が重複しています");
 export type CustomerCustomField = z.infer<typeof zCustomerCustomField>;
 
+/** 郵便番号 (日本 7 桁・ハイフンなし) */
+export const zPostalCode7 = z.string().regex(/^\d{7}$/, "郵便番号は 7 桁の数字で入力してください (KMB-E610)");
+
+/** 請求先/配送先ブロック (契約外拡張 — 01-crm.md §5.2)。
+ *  suffix: billing_info.name が company_contact の個人名等、deal.company の有無から自動導出する
+ *  敬称と一致しないケースを明示上書きするためのフィールド。null = 従来どおり deal.company の
+ *  有無から導出 (後方互換)。shipping_info では未使用 (帳票の site_* に敬称は印字しないため) だが、
+ *  ブロック構造をbilling/shippingで共通化する既定方針を優先し同一スキーマとする —
+ *  UI上は配送先セクションにsuffix入力欄を出さない。 */
+export const zCustomerAddressBlock = z.object({
+  postal_code: zPostalCode7.nullable(),
+  address: z.string().max(190).nullable(),
+  tel_e164: zTelE164.nullable(),
+  name: zShortText(80).nullable(),
+  suffix: z.enum(["様", "御中"]).nullable(),
+}).strict().refine(
+  (b) => b.postal_code !== null || b.address !== null || b.tel_e164 !== null || b.name !== null || b.suffix !== null,
+  "空の宛先ブロックは null で送ってください (KMB-E610)",
+);
+export type CustomerAddressBlock = z.infer<typeof zCustomerAddressBlock>;
+
 /** 顧客更新 (楽観排他の expectedUpdatedAt は facade 引数で別渡し) */
 export const zCustomerUpdateInput = z.object({
   kind: z.enum(["person", "company_contact"]),
@@ -311,6 +350,10 @@ export const zCustomerUpdateInput = z.object({
   // (custom_fields を送らない旧編集 Sheet) が既存値を [] へ silent wipe してしまう。必須なら
   // stale クライアントは KMB-E101 で保存失敗 → 再読み込みで解消 (データ喪失より安全)
   custom_fields: zCustomerCustomFields,
+  // 請求先/配送先 (契約外拡張 — 01-crm.md §5.2)。custom_fields と同じ「必須・default なし」規約
+  // (stale クライアントの silent wipe 防止)。NULL = 未設定
+  billing_info: zCustomerAddressBlock.nullable(),
+  shipping_info: zCustomerAddressBlock.nullable(),
 }).strict();
 export type CustomerUpdateInput = z.infer<typeof zCustomerUpdateInput>;
 
@@ -458,6 +501,8 @@ export type CustomerDetail = CustomerListItem & {
   merged_into_customer_id: string | null;
   created_by: string | null;
   custom_fields: CustomerCustomField[]; // #98 追加 (顧客カスタム項目。追加順で表示)
+  billing_info: CustomerAddressBlock | null;  // v1.4 追加 (請求先ブロック)
+  shipping_info: CustomerAddressBlock | null; // v1.4 追加 (配送先ブロック)
 };
 
 /** 顧客カンバン 1 列 (#99 — 01-crm.md §5.3 契約外拡張)。lifecycle は全遷移許可 (§4.1) のため
