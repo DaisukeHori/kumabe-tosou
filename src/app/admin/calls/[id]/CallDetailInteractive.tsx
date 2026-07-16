@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Surface } from "@/app/admin/_ui";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -176,14 +177,12 @@ function TranscriptAndSummaryTabs({ jobs }: { jobs: CallDetail["jobs"] }) {
           <div className="flex flex-col gap-3 text-sm">
             <p className="whitespace-pre-wrap">{primaryJob.analysis.minutes.summary}</p>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+              <Badge variant="neutral">
                 {CALLER_INTENT_LABEL[primaryJob.analysis.minutes.caller_intent] ??
                   primaryJob.analysis.minutes.caller_intent}
-              </span>
+              </Badge>
               {primaryJob.analysis.minutes.callback_required && (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-                  折り返し要
-                </span>
+                <Badge variant="warning">折り返し要</Badge>
               )}
             </div>
             {primaryJob.analysis.minutes.key_points.length > 0 && (

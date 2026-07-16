@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
-import { PageHeader, Surface } from "@/app/admin/_ui";
+import { NoticePanel, PageHeader, PillToggle, type PillItem } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import type { CallHandling } from "@/modules/telephony/contracts";
 import { telephonyFacade } from "@/modules/telephony/facade";
@@ -76,6 +76,28 @@ export default async function AdminCallsPage({
   // 恐れがあるため、明示バナーで案内する (§8.1)。
   const showDegradeBanner = setupStatus !== null && !setupStatus.envConfigured;
 
+  const handlingPills: PillItem[] = HANDLING_FILTERS.map((f) => ({
+    key: String(f.value),
+    label: f.label,
+    href: buildFilterHref({ handling: f.value, needsReview, jobFailed }),
+    active: handling === f.value,
+  }));
+
+  const modePills: PillItem[] = [
+    {
+      key: "needsReview",
+      label: "要確認のみ",
+      href: buildFilterHref({ handling, needsReview: !needsReview, jobFailed }),
+      active: needsReview,
+    },
+    {
+      key: "jobFailed",
+      label: "処理失敗のみ",
+      href: buildFilterHref({ handling, needsReview, jobFailed: !jobFailed }),
+      active: jobFailed,
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -83,38 +105,23 @@ export default async function AdminCallsPage({
         description="↑↓ で移動、Enter で詳細、Esc で選択解除、r で失敗ジョブの再実行 (一覧は保存対象が無いため Cmd+S は N/A)。"
         actions={
           setupStatus && setupStatus.staleJobs > 0 ? (
-            <Badge variant="destructive">処理の滞留 {setupStatus.staleJobs} 件</Badge>
+            <Badge variant="urgent">処理の滞留 {setupStatus.staleJobs} 件</Badge>
           ) : undefined
         }
       />
 
       {showDegradeBanner && (
-        <Surface className="border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-          電話連携は未設定です。
-          <Link href="/admin/settings?tab=telephony" className="ml-1 underline underline-offset-4">
+        <NoticePanel tone="warning" title="電話連携は未設定です">
+          着信を留守電として受けるには設定が必要です。
+          <Link href="/admin/settings?tab=telephony" className="ml-1">
             設定手順を見る →
           </Link>
-        </Surface>
+        </NoticePanel>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {HANDLING_FILTERS.map((f) => (
-          <Link key={f.value} href={buildFilterHref({ handling: f.value, needsReview, jobFailed })}>
-            <Badge variant={handling === f.value ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-              {f.label}
-            </Badge>
-          </Link>
-        ))}
-        <Link href={buildFilterHref({ handling, needsReview: !needsReview, jobFailed })}>
-          <Badge variant={needsReview ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-            要確認のみ
-          </Badge>
-        </Link>
-        <Link href={buildFilterHref({ handling, needsReview, jobFailed: !jobFailed })}>
-          <Badge variant={jobFailed ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-            処理失敗のみ
-          </Badge>
-        </Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <PillToggle items={handlingPills} ariaLabel="種別で絞り込み" />
+        <PillToggle items={modePills} ariaLabel="対応状況で絞り込み" />
       </div>
 
       {!listResult.ok && (

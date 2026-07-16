@@ -1,12 +1,16 @@
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import { getErrorInfo, KMB_ERRORS, type KmbErrorCode } from "@/modules/platform/errors";
 import type { CallHandling, CallJobStatus } from "@/modules/telephony/contracts";
 
+type StatusVariant = "success" | "info" | "warning" | "neutral" | "urgent";
+
 /**
  * /admin/calls 一覧・詳細で共有する 2 種のバッジ (04-telephony.md §8.1)。
- * 色構成は既存 ContentStatusBadge (src/app/admin/_ui/status-badge.tsx) の
- * Tailwind クラス (border-transparent bg-*-100 text-*-800 dark:bg-*-500/15 dark:text-*-300) を踏襲する。
+ *
+ * [#120 R3a] 以前の Tailwind 直値カラー (emerald/sky/indigo/violet/red) を廃止し、
+ * R0 で追加した Badge のステータス variant (globals.css の --color-status-* を参照:
+ * success/info/warning/neutral/urgent) へ載せ替えた。意味付けは可能な限り従前の
+ * 色相を保つ (転送=成功/緑, 留守電=情報/青, 不在着信=注意/黄, 失敗=緊急/赤)。
  */
 
 const HANDLING_LABEL: Record<CallHandling, string> = {
@@ -16,25 +20,24 @@ const HANDLING_LABEL: Record<CallHandling, string> = {
   missed: "不在着信",
 };
 
-const HANDLING_CLASS: Record<CallHandling, string> = {
-  forwarded: "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  voicemail: "border-transparent bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
-  after_hours_voicemail:
-    "border-transparent bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300",
-  missed: "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+const HANDLING_VARIANT: Record<CallHandling, StatusVariant> = {
+  forwarded: "success",
+  voicemail: "info",
+  after_hours_voicemail: "neutral",
+  missed: "warning",
 };
 
 /** handling は dial_result 到達まで null (未確定 — 04-telephony.md §6.1)。 */
 export function CallHandlingBadge({ handling }: { handling: CallHandling | null }) {
   if (handling === null) {
     return (
-      <Badge variant="outline" className="whitespace-nowrap font-medium text-muted-foreground">
+      <Badge variant="neutral" className="whitespace-nowrap">
         処理中
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className={cn("whitespace-nowrap font-medium", HANDLING_CLASS[handling])}>
+    <Badge variant={HANDLING_VARIANT[handling]} className="whitespace-nowrap">
       {HANDLING_LABEL[handling]}
     </Badge>
   );
@@ -50,14 +53,14 @@ const JOB_STATUS_LABEL: Record<CallJobStatus, string> = {
   failed: "失敗",
 };
 
-const JOB_STATUS_CLASS: Record<CallJobStatus, string> = {
-  pending: "border-transparent bg-muted text-muted-foreground",
-  downloading: "border-transparent bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
-  transcribing: "border-transparent bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
-  analyzing: "border-transparent bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300",
-  linking: "border-transparent bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300",
-  done: "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  failed: "border-transparent bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300",
+const JOB_STATUS_VARIANT: Record<CallJobStatus, StatusVariant> = {
+  pending: "neutral",
+  downloading: "info",
+  transcribing: "info",
+  analyzing: "info",
+  linking: "info",
+  done: "success",
+  failed: "urgent",
 };
 
 function isKmbErrorCode(code: string): code is KmbErrorCode {
@@ -79,7 +82,7 @@ export function JobStatusBadge({
 }) {
   if (status === null) {
     return (
-      <Badge variant="outline" className="whitespace-nowrap font-medium text-muted-foreground">
+      <Badge variant="neutral" className="whitespace-nowrap">
         録音なし
       </Badge>
     );
@@ -89,11 +92,7 @@ export function JobStatusBadge({
       ? `${errorCode}: ${isKmbErrorCode(errorCode) ? getErrorInfo(errorCode).message : "詳細不明のエラー"}`
       : undefined;
   return (
-    <Badge
-      variant="outline"
-      title={title}
-      className={cn("whitespace-nowrap font-medium", JOB_STATUS_CLASS[status])}
-    >
+    <Badge variant={JOB_STATUS_VARIANT[status]} title={title} className="whitespace-nowrap">
       {JOB_STATUS_LABEL[status]}
     </Badge>
   );

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { Surface } from "@/app/admin/_ui";
+import { NoticePanel, Surface } from "@/app/admin/_ui";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -216,15 +216,11 @@ export function CustomerLinkSection({
   return (
     <Surface className="flex flex-col gap-3 p-4">
       <h3 className="text-sm font-medium text-foreground">顧客紐づけ</h3>
-      <p
-        className={
-          banner.tone === "warn"
-            ? "rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
-            : "text-sm text-muted-foreground"
-        }
-      >
-        {banner.text}
-      </p>
+      {banner.tone === "warn" ? (
+        <NoticePanel tone="warning">{banner.text}</NoticePanel>
+      ) : (
+        <p className="text-sm text-muted-foreground">{banner.text}</p>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={openSearch} disabled={isPending}>
           顧客を検索して紐づける
