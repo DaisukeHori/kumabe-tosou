@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCallAlertBadge, formatRemainingHoursBadge } from "@/app/admin/dashboard-kpi-format";
+import {
+  buildDashboardActions,
+  formatCallAlertBadge,
+  formatRemainingHoursBadge,
+  type DashboardActionInput,
+} from "@/app/admin/dashboard-kpi-format";
 
 /**
  * canonical: 実装計画書 issue-61.md 成果物7/11 (00-overview §9.3)。
@@ -77,5 +82,80 @@ describe("formatCallAlertBadge (通話の滞留カード)", () => {
       label: "失敗 1 / 要確認 2 / 滞留 3",
       hasAlert: true,
     });
+  });
+});
+
+describe("buildDashboardActions (今日の仕事アクションカード)", () => {
+  const empty: DashboardActionInput = {
+    newInquiries: null,
+    awaitingLeadCount: null,
+    callAlerts: null,
+    overdueTaskCount: null,
+    unpaidCount: null,
+    unpaidTotalJpy: null,
+    placeholders: null,
+  };
+
+  it("全て null/0 のときはカードを1枚も作らない (平常時の空状態)", () => {
+    expect(buildDashboardActions(empty)).toEqual([]);
+    expect(
+      buildDashboardActions({
+        newInquiries: 0,
+        awaitingLeadCount: 0,
+        callAlerts: { failed: 0, needsReview: 0, stalled: 0 },
+        overdueTaskCount: 0,
+        unpaidCount: 0,
+        unpaidTotalJpy: 0,
+        placeholders: 0,
+      }),
+    ).toEqual([]);
+  });
+
+  it("問い合わせ>0 で problems 1件、href は ?status=new を維持", () => {
+    const [item, ...rest] = buildDashboardActions({ ...empty, newInquiries: 2 });
+    expect(rest).toEqual([]);
+    expect(item).toMatchObject({ key: "inquiries", tone: "urgent", href: "/admin/inquiries?status=new" });
+    expect(item.title).toContain("2件");
+  });
+
+  it("各カードは既存 KPI 導線と同一 href を保つ", () => {
+    const all = buildDashboardActions({
+      newInquiries: 1,
+      awaitingLeadCount: 1,
+      callAlerts: { failed: 1, needsReview: 0, stalled: 0 },
+      overdueTaskCount: 1,
+      unpaidCount: 1,
+      unpaidTotalJpy: 86900,
+      placeholders: 3,
+    });
+    expect(all.map((a) => a.key)).toEqual([
+      "inquiries",
+      "awaiting-lead",
+      "calls",
+      "overdue-tasks",
+      "unpaid",
+      "placeholders",
+    ]);
+    expect(all.map((a) => a.href)).toEqual([
+      "/admin/inquiries?status=new",
+      "/admin/deals",
+      "/admin/calls",
+      "/admin/tasks",
+      "/admin/documents?type=invoice&status=issued",
+      "/admin/media?filter=placeholder",
+    ]);
+  });
+
+  it("未消込請求カードは合計金額を千区切りで併記する", () => {
+    const [item] = buildDashboardActions({ ...empty, unpaidCount: 1, unpaidTotalJpy: 86900 });
+    expect(item.key).toBe("unpaid");
+    expect(item.description).toContain("¥86,900");
+  });
+
+  it("通話は failed/needsReview/stalled のいずれかが>0のときのみカード化する", () => {
+    expect(buildDashboardActions({ ...empty, callAlerts: { failed: 0, needsReview: 0, stalled: 0 } })).toEqual([]);
+    const [item] = buildDashboardActions({ ...empty, callAlerts: { failed: 0, needsReview: 1, stalled: 0 } });
+    expect(item.key).toBe("calls");
+    expect(item.description).toBe("失敗 0 / 要確認 1 / 滞留 0");
   });
 });
