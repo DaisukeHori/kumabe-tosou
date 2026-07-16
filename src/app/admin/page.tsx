@@ -1,26 +1,24 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader } from "@/app/admin/_ui";
-import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/app/admin/_ui";
 import { inquiryFacade } from "@/modules/inquiry/facade";
 import { mediaFacade } from "@/modules/media/facade";
 import { crmFacade } from "@/modules/crm/facade";
-import type { CrmDashboardKpi } from "@/modules/crm/contracts";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
 import type { WeeklyCapacity } from "@/modules/scheduling/contracts";
 import { createSalesFacade } from "@/modules/sales/facade";
-import type { SalesDigest } from "@/modules/sales/contracts";
 import { telephonyFacade } from "@/modules/telephony/facade";
 
 import { mondayOfWeekJst, todayJstDateOnly } from "@/app/admin/calendar/_ui/jst-time";
 import {
+  buildDashboardActions,
   formatCallAlertBadge,
   formatRemainingHoursBadge,
   type CallAlertCounts,
 } from "@/app/admin/dashboard-kpi-format";
+import { ActionCard, ActionEmptyState, KpiSection, KpiTile } from "@/app/admin/dashboard-cards";
 
-export const metadata: Metadata = { title: "ダッシュボード" };
+export const metadata: Metadata = { title: "今日の仕事" };
 export const dynamic = "force-dynamic";
 
 async function loadDashboardData() {
@@ -72,203 +70,161 @@ export default async function AdminDashboardPage() {
     callAlertsError,
   } = await loadDashboardData();
 
-  return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="ダッシュボード" description="未処理の問い合わせ・仮素材の残数・配信状況の概況です。" />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Link href="/admin/inquiries?status=new">
-          <Card className="transition-colors hover:bg-muted/40">
-            <CardHeader>
-              <CardDescription>未処理の問い合わせ</CardDescription>
-              <CardTitle className="text-2xl">
-                {newInquiries === null ? "—" : newInquiries}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Badge variant={newInquiries ? "default" : "secondary"}>status = new</Badge>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Card>
-          <CardHeader>
-            <CardDescription>review 待ち (事例/記事/声)</CardDescription>
-            <CardTitle className="text-2xl">—</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant="outline">content モジュール実装待ち</Badge>
-          </CardContent>
-        </Card>
-
-        <Link href="/admin/media?filter=placeholder">
-          <Card className="transition-colors hover:bg-muted/40">
-            <CardHeader>
-              <CardDescription>仮素材 (is_placeholder) 残数</CardDescription>
-              <CardTitle className="text-2xl">
-                {placeholders === null ? "—" : placeholders}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Badge variant={placeholders ? "default" : "secondary"}>要差し替え</Badge>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Card>
-          <CardHeader>
-            <CardDescription>配信 (X / Instagram / note)</CardDescription>
-            <CardTitle className="text-2xl">—</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant="secondary">未接続</Badge>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* crm KPI 4 枚 (01-crm.md §8.6)。既存カード群の改変を避け、独立したグリッド行として追記
-          (他モジュールが並行してこのファイルにカードを追加する可能性があるため — #44 計画書注記)。 */}
-      <CrmKpiSection kpi={crmKpi} error={crmKpiError} />
-
-      {/* sales/scheduling/telephony KPI 3 枚 (実装計画書 issue-61.md 成果物7、00-overview §9.3)。
-          crm 4 枚と同じ理由で独立した第 3 のグリッド行として追記し、既存 2 セクションは一切改変しない。 */}
-      <SchedulingSalesTelephonyKpiSection
-        capacity={capacity}
-        capacityError={capacityError}
-        salesDigest={salesDigest}
-        salesDigestError={salesDigestError}
-        callAlerts={callAlerts}
-        callAlertsError={callAlertsError}
-      />
-    </div>
-  );
-}
-
-function CrmKpiSection({ kpi, error }: { kpi: CrmDashboardKpi | null; error: string | null }) {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <Link href="/admin/deals">
-        <Card className="transition-colors hover:bg-muted/40">
-          <CardHeader>
-            <CardDescription>未対応の相談</CardDescription>
-            <CardTitle className="text-2xl">{kpi ? kpi.awaiting_lead_count : "—"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant={kpi && kpi.awaiting_lead_count > 0 ? "default" : "secondary"}>stage = 相談</Badge>
-          </CardContent>
-        </Card>
-      </Link>
-
-      <Link href="/admin/deals">
-        <Card className="transition-colors hover:bg-muted/40">
-          <CardHeader>
-            <CardDescription>見込み合計 (加重)</CardDescription>
-            <CardTitle className="text-2xl">{kpi ? `¥${jpy.format(kpi.weighted_pipeline_jpy)}` : "—"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant="outline">Σ floor(金額×確度)</Badge>
-          </CardContent>
-        </Card>
-      </Link>
-
-      <Link href="/admin/tasks">
-        <Card className="transition-colors hover:bg-muted/40">
-          <CardHeader>
-            <CardDescription>期限切れのやること</CardDescription>
-            <CardTitle className="text-2xl">{kpi ? kpi.overdue_task_count : "—"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant={kpi && kpi.overdue_task_count > 0 ? "destructive" : "secondary"}>要対応</Badge>
-          </CardContent>
-        </Card>
-      </Link>
-
-      <Link href="/admin/tasks">
-        <Card className="transition-colors hover:bg-muted/40">
-          <CardHeader>
-            <CardDescription>今週のやること</CardDescription>
-            <CardTitle className="text-2xl">{kpi ? kpi.week_open_task_count : "—"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant="outline">今週期日</Badge>
-          </CardContent>
-        </Card>
-      </Link>
-
-      {error && (
-        <p className="sm:col-span-2 lg:col-span-4 text-sm text-destructive">
-          CRM KPI の取得に失敗しました: {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function SchedulingSalesTelephonyKpiSection({
-  capacity,
-  capacityError,
-  salesDigest,
-  salesDigestError,
-  callAlerts,
-  callAlertsError,
-}: {
-  capacity: WeeklyCapacity | null;
-  capacityError: string | null;
-  salesDigest: SalesDigest | null;
-  salesDigestError: string | null;
-  callAlerts: CallAlertCounts | null;
-  callAlertsError: string | null;
-}) {
-  const remaining = formatRemainingHoursBadge(capacity);
-  const callAlertBadge = formatCallAlertBadge(callAlerts);
   const unpaidCount = salesDigest ? salesDigest.unpaid_invoices.length : null;
   const unpaidTotalJpy = salesDigest ? salesDigest.unpaid_invoices.reduce((sum, d) => sum + d.balance_jpy, 0) : null;
 
+  const actions = buildDashboardActions({
+    newInquiries,
+    awaitingLeadCount: crmKpi ? crmKpi.awaiting_lead_count : null,
+    callAlerts,
+    overdueTaskCount: crmKpi ? crmKpi.overdue_task_count : null,
+    unpaidCount,
+    unpaidTotalJpy,
+    placeholders,
+  });
+
+  const description =
+    actions.length > 0
+      ? `今すぐ対応したいことが ${actions.length}件 あります。上から順に片づけましょう。`
+      : "今すぐ対応が必要なことはありません。下の数字で全体の状況を確認できます。";
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <Link href="/admin/calendar">
-        <Card className="transition-colors hover:bg-muted/40">
-          <CardHeader>
-            <CardDescription>今週のキャパ残</CardDescription>
-            <CardTitle className={`text-2xl ${remaining.negative ? "text-destructive" : ""}`}>
-              {remaining.label}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant={remaining.negative ? "destructive" : "outline"}>
-              {capacity ? `週 ${capacity.weekly_hours}h / 予定 ${capacity.booked_hours}h` : capacityError ?? "取得失敗"}
-            </Badge>
-          </CardContent>
-        </Card>
-      </Link>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="今日の仕事" description={description} />
 
-      <Link href="/admin/documents?type=invoice&status=issued">
-        <Card className="transition-colors hover:bg-muted/40">
-          <CardHeader>
-            <CardDescription>未消込の請求</CardDescription>
-            <CardTitle className="text-2xl">{unpaidCount === null ? "—" : `${unpaidCount}件`}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant={unpaidCount ? "default" : "secondary"}>
-              {unpaidTotalJpy === null ? (salesDigestError ?? "取得失敗") : `¥${jpy.format(unpaidTotalJpy)}`}
-            </Badge>
-          </CardContent>
-        </Card>
-      </Link>
+      {/* 優先度付きアクションカード: 既存 facade データから「今やること」を導出 (buildDashboardActions)。
+          件数 0 のカードは出さないが、対応する KPI/導線は下段グリッドに常設される。 */}
+      <div className="flex flex-col gap-2.5">
+        {actions.length > 0 ? (
+          actions.map((item, i) => <ActionCard key={item.key} item={item} index={i + 1} />)
+        ) : (
+          <ActionEmptyState />
+        )}
+      </div>
 
-      <Link href="/admin/calls">
-        <Card className="transition-colors hover:bg-muted/40">
-          <CardHeader>
-            <CardDescription>通話の滞留</CardDescription>
-            <CardTitle className="text-2xl">{callAlerts === null ? "—" : callAlertBadge.label}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant={callAlertBadge.hasAlert ? "destructive" : "secondary"}>
-              {callAlerts === null ? callAlertsError ?? "取得失敗" : callAlertBadge.hasAlert ? "要対応" : "平常"}
-            </Badge>
-          </CardContent>
-        </Card>
-      </Link>
+      {/* 現行ダッシュボードの全 KPI/導線を維持 (ユーザー方針: 既存機能は落とさない)。
+          問い合わせ・仮素材・review 待ち・配信の 4 枚。 */}
+      <KpiSection title="受付とホームページ">
+        <KpiTile
+          label="未処理の問い合わせ"
+          value={newInquiries === null ? "—" : newInquiries}
+          href="/admin/inquiries?status=new"
+          badge={{ text: "status = new", variant: newInquiries ? "warning" : "neutral" }}
+        />
+        <KpiTile
+          label="review 待ち (事例/記事/声)"
+          value="—"
+          badge={{ text: "content モジュール実装待ち", variant: "outline" }}
+        />
+        <KpiTile
+          label="仮素材 (is_placeholder) 残数"
+          value={placeholders === null ? "—" : placeholders}
+          href="/admin/media?filter=placeholder"
+          badge={{ text: "要差し替え", variant: placeholders ? "warning" : "neutral" }}
+        />
+        <KpiTile
+          label="配信 (X / Instagram / note)"
+          value="—"
+          badge={{ text: "未接続", variant: "neutral" }}
+        />
+      </KpiSection>
+
+      {/* crm KPI 4 枚 (01-crm.md §8.6)。導線・数値・degrade 表示を現行から保持。 */}
+      <KpiSection title="商談とやること">
+        <KpiTile
+          label="未対応の相談"
+          value={crmKpi ? crmKpi.awaiting_lead_count : "—"}
+          href="/admin/deals"
+          badge={{
+            text: "stage = 相談",
+            variant: crmKpi && crmKpi.awaiting_lead_count > 0 ? "warning" : "neutral",
+          }}
+        />
+        <KpiTile
+          label="見込み合計 (加重)"
+          value={crmKpi ? `¥${jpy.format(crmKpi.weighted_pipeline_jpy)}` : "—"}
+          href="/admin/deals"
+          badge={{ text: "Σ floor(金額×確度)", variant: "outline" }}
+        />
+        <KpiTile
+          label="期限切れのやること"
+          value={crmKpi ? crmKpi.overdue_task_count : "—"}
+          href="/admin/tasks"
+          badge={{
+            text: "要対応",
+            variant: crmKpi && crmKpi.overdue_task_count > 0 ? "urgent" : "neutral",
+          }}
+        />
+        <KpiTile
+          label="今週のやること"
+          value={crmKpi ? crmKpi.week_open_task_count : "—"}
+          href="/admin/tasks"
+          badge={{ text: "今週期日", variant: "outline" }}
+        />
+        {crmKpiError && (
+          <p className="text-sm text-destructive sm:col-span-2 lg:col-span-4">
+            CRM KPI の取得に失敗しました: {crmKpiError}
+          </p>
+        )}
+      </KpiSection>
+
+      {/* scheduling/sales/telephony KPI 3 枚。キャパ残・未消込請求・通話滞留の導線を保持。 */}
+      <KpiSection title="予定・請求・通話">
+        <CapacityTile capacity={capacity} capacityError={capacityError} />
+        <KpiTile
+          label="未消込の請求"
+          value={unpaidCount === null ? "—" : `${unpaidCount}件`}
+          href="/admin/documents?type=invoice&status=issued"
+          badge={{
+            text: unpaidTotalJpy === null ? (salesDigestError ?? "取得失敗") : `¥${jpy.format(unpaidTotalJpy)}`,
+            variant: unpaidCount ? "warning" : "neutral",
+          }}
+        />
+        <CallAlertTile callAlerts={callAlerts} callAlertsError={callAlertsError} />
+      </KpiSection>
     </div>
+  );
+}
+
+function CapacityTile({
+  capacity,
+  capacityError,
+}: {
+  capacity: WeeklyCapacity | null;
+  capacityError: string | null;
+}) {
+  const remaining = formatRemainingHoursBadge(capacity);
+  return (
+    <KpiTile
+      label="今週のキャパ残"
+      value={remaining.label}
+      urgentValue={remaining.negative}
+      href="/admin/calendar"
+      badge={{
+        text: capacity ? `週 ${capacity.weekly_hours}h / 予定 ${capacity.booked_hours}h` : (capacityError ?? "取得失敗"),
+        variant: remaining.negative ? "urgent" : "outline",
+      }}
+    />
+  );
+}
+
+function CallAlertTile({
+  callAlerts,
+  callAlertsError,
+}: {
+  callAlerts: CallAlertCounts | null;
+  callAlertsError: string | null;
+}) {
+  const badge = formatCallAlertBadge(callAlerts);
+  return (
+    <KpiTile
+      label="通話の滞留"
+      value={callAlerts === null ? "—" : badge.label}
+      href="/admin/calls"
+      badge={{
+        text: callAlerts === null ? (callAlertsError ?? "取得失敗") : badge.hasAlert ? "要対応" : "平常",
+        variant: badge.hasAlert ? "urgent" : "neutral",
+      }}
+    />
   );
 }
