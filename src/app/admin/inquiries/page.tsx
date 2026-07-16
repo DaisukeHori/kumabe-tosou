@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
-import { PageHeader } from "@/app/admin/_ui";
-import { Badge } from "@/components/ui/badge";
+import { PageHeader, PillToggle, type PillItem } from "@/app/admin/_ui";
 import { inquiryFacade } from "@/modules/inquiry/facade";
 import type { InquiryStatus } from "@/modules/inquiry/contracts";
 
@@ -34,6 +33,13 @@ export default async function AdminInquiriesPage({
   const items = result.ok ? result.value.items : [];
   const nextCursor = result.ok ? result.value.next_cursor : null;
 
+  const filterPills: PillItem[] = STATUS_FILTERS.map((f) => ({
+    key: String(f.value),
+    label: f.label,
+    href: f.value === "all" ? "/admin/inquiries" : `/admin/inquiries?status=${f.value}`,
+    active: status === f.value,
+  }));
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -41,15 +47,7 @@ export default async function AdminInquiriesPage({
         description="↑↓ で移動、Enter で詳細、Cmd+S で保存、Esc で閉じます。"
       />
 
-      <div className="flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((f) => (
-          <Link key={f.value} href={f.value === "all" ? "/admin/inquiries" : `/admin/inquiries?status=${f.value}`}>
-            <Badge variant={status === f.value ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-              {f.label}
-            </Badge>
-          </Link>
-        ))}
-      </div>
+      <PillToggle items={filterPills} ariaLabel="状態で絞り込み" />
 
       {!result.ok && (
         <p className="text-sm text-destructive">一覧の取得に失敗しました: {result.detail ?? result.code}</p>

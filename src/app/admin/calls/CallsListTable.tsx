@@ -127,10 +127,7 @@ export function CallsListTable({ items }: { items: CallListItemView[] }) {
               <JobStatusBadge status={item.job_status} errorCode={item.job_error_code} />
               <div className="min-w-0 truncate text-xs text-muted-foreground">{item.summary_preview ?? "-"}</div>
               {item.match_status === "ambiguous" ? (
-                <Badge
-                  variant="outline"
-                  className="whitespace-nowrap font-medium border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
-                >
+                <Badge variant="warning" className="whitespace-nowrap">
                   要確認
                 </Badge>
               ) : (
