@@ -17,6 +17,7 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { NoticePanel } from "@/app/admin/_ui";
 import type { DocumentDetail } from "@/modules/sales/contracts";
 
 import { sendDocumentEmailAction } from "../actions";
@@ -131,19 +132,17 @@ export function SendEmailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[560px] shadow-modal">
         <DialogHeader>
           <DialogTitle>メールで送付</DialogTitle>
           <DialogDescription>現行版 (v{detail.document.current_version}) の PDF を添付して送信します。</DialogDescription>
         </DialogHeader>
 
         {defaultRecipient === null && (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
-            <p>顧客にメールアドレスが未登録です。宛先を直接入力するか、</p>
-            <Link href={`/admin/customers/${customerId}`} className="underline underline-offset-4">
-              顧客情報を編集する
-            </Link>
-          </div>
+          <NoticePanel tone="warning">
+            顧客にメールアドレスが未登録です。宛先を直接入力するか、
+            <Link href={`/admin/customers/${customerId}`}>顧客情報を編集する</Link>
+          </NoticePanel>
         )}
 
         <FieldGroup>

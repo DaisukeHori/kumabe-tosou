@@ -97,7 +97,7 @@ export function VersionDiffDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl" onKeyDown={handleKeyDown}>
+      <DialogContent className="max-w-3xl shadow-modal" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>
             版間差分 {olderEntry ? `v${olderEntry.version}` : "—"} → {newerEntry ? `v${newerEntry.version}` : "—"}
@@ -117,10 +117,10 @@ export function VersionDiffDialog({
               </p>
             ) : (
               <>
-                <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm tabular-nums">
                   合計 {formatJpy(diff.totalDiff.old)} → {formatJpy(diff.totalDiff.new)}
                   {diff.totalDiff.changed && (
-                    <span className={cn("ml-2 font-medium", diff.totalDiff.new >= diff.totalDiff.old ? "text-emerald-600" : "text-destructive")}>
+                    <span className={cn("ml-2 font-medium", diff.totalDiff.new >= diff.totalDiff.old ? "text-status-success-fg" : "text-destructive")}>
                       ({diff.totalDiff.new - diff.totalDiff.old >= 0 ? "+" : ""}
                       {formatJpy(diff.totalDiff.new - diff.totalDiff.old)})
                     </span>
@@ -129,12 +129,12 @@ export function VersionDiffDialog({
 
                 {diff.headerDiffs.length > 0 && (
                   <div>
-                    <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">ヘッダ変更</h3>
+                    <h3 className="mb-1.5 text-meta font-bold text-admin-text-label">ヘッダ変更</h3>
                     <ul className="flex flex-col gap-1">
                       {diff.headerDiffs.map((h) => (
                         <li
                           key={h.field}
-                          className="rounded-md border border-amber-300 bg-amber-100/60 px-2 py-1 text-xs dark:border-amber-500/40 dark:bg-amber-500/10"
+                          className="rounded-md border border-status-warning-border bg-status-warning-bg px-2 py-1 text-xs text-status-warning-fg"
                         >
                           <span className="font-medium">{HEADER_FIELD_LABEL[h.field] ?? h.field}</span>: {h.old || "(空)"} → {h.new || "(空)"}
                         </li>
@@ -145,7 +145,7 @@ export function VersionDiffDialog({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">旧版 (v{olderEntry?.version})</h3>
+                    <h3 className="mb-1.5 text-meta font-bold text-admin-text-label">旧版 (v{olderEntry?.version})</h3>
                     <ul className="flex flex-col gap-1 text-xs">
                       {oldColumn.map((l, i) => (
                         <li
@@ -161,15 +161,14 @@ export function VersionDiffDialog({
                     </ul>
                   </div>
                   <div>
-                    <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">新版 (v{newerEntry?.version})</h3>
+                    <h3 className="mb-1.5 text-meta font-bold text-admin-text-label">新版 (v{newerEntry?.version})</h3>
                     <ul className="flex flex-col gap-1 text-xs">
                       {newColumn.map((l, i) => (
                         <li
                           key={`new-${i}`}
                           className={cn(
                             "rounded-md px-2 py-1",
-                            l.status === "added" &&
-                              "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
+                            l.status === "added" && "bg-status-success-bg text-status-success-fg",
                           )}
                         >
                           {l.text}
@@ -181,12 +180,12 @@ export function VersionDiffDialog({
 
                 {diff.taxSummaryDiffs.some((t) => t.changed) && (
                   <div>
-                    <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">税率区分別の変更</h3>
+                    <h3 className="mb-1.5 text-meta font-bold text-admin-text-label">税率区分別の変更</h3>
                     <ul className="flex flex-col gap-1 text-xs">
                       {diff.taxSummaryDiffs
                         .filter((t) => t.changed)
                         .map((t) => (
-                          <li key={t.tax_category} className="rounded-md bg-amber-100/60 px-2 py-1 dark:bg-amber-500/10">
+                          <li key={t.tax_category} className="rounded-md bg-status-warning-bg px-2 py-1 text-status-warning-fg">
                             {t.tax_category}: 対象額 {t.old_taxable_jpy ?? "—"} → {t.new_taxable_jpy ?? "—"} / 消費税{" "}
                             {t.old_tax_jpy ?? "—"} → {t.new_tax_jpy ?? "—"}
                           </li>

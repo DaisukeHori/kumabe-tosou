@@ -27,16 +27,12 @@ export function SimulatorReferencePanel({
   const outOfRange = currentTotalJpy < estimate.total_min || currentTotalJpy > estimate.total_max;
 
   return (
-    <Surface className="flex flex-col gap-2 border-l-4 border-l-soul/60 p-4">
+    <Surface className="flex flex-col gap-2 border-l-4 border-l-primary/60 p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium">シミュレーター入力 (参考)</h2>
-        {outOfRange && (
-          <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300">
-            概算レンジ外
-          </Badge>
-        )}
+        <h2 className="text-label font-bold text-admin-text-label">シミュレーター入力 (参考)</h2>
+        {outOfRange && <Badge variant="warning">概算レンジ外</Badge>}
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-meta text-admin-text-meta sm:grid-cols-4">
         <div>
           <dt>グレード</dt>
           <dd className="text-foreground">{estimate.grade_label}</dd>
@@ -56,11 +52,11 @@ export function SimulatorReferencePanel({
           </div>
         )}
       </dl>
-      <p className="text-xs">
-        概算レンジ: <span className="font-medium">税込 {formatJpy(estimate.total_min)}〜{formatJpy(estimate.total_max)}</span>
-        {" / "}現在の下書き合計: <span className="font-medium">{formatJpy(currentTotalJpy)} (税込)</span>
+      <p className="text-meta">
+        概算レンジ: <span className="font-medium tabular-nums">税込 {formatJpy(estimate.total_min)}〜{formatJpy(estimate.total_max)}</span>
+        {" / "}現在の下書き合計: <span className="font-medium tabular-nums">{formatJpy(currentTotalJpy)} (税込)</span>
       </p>
-      {price_note && <p className="text-xs text-muted-foreground">{price_note}</p>}
+      {price_note && <p className="text-meta text-admin-text-meta">{price_note}</p>}
     </Surface>
   );
 }
