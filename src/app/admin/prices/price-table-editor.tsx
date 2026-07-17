@@ -199,8 +199,8 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
   return (
     <div className="space-y-10">
       {/* ---- グレード ---- */}
-      <section className="space-y-3 rounded-xl border border-admin-card-border bg-card p-4 shadow-md">
-        <h2 className="text-base font-semibold">グレード</h2>
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+        <h2 className="font-heading text-section text-foreground">グレード</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
@@ -308,8 +308,8 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
       </section>
 
       {/* ---- サイズ帯 ---- */}
-      <section className="space-y-3 rounded-xl border border-admin-card-border bg-card p-4 shadow-md">
-        <h2 className="text-base font-semibold">サイズ帯</h2>
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+        <h2 className="font-heading text-section text-foreground">サイズ帯</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
@@ -421,8 +421,8 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
       </section>
 
       {/* ---- 価格行列 (グレード × サイズ) ---- */}
-      <section className="space-y-3 rounded-xl border border-admin-card-border bg-card p-4 shadow-md">
-        <h2 className="text-base font-semibold">価格行列 (1点あたりの下限〜上限・円)</h2>
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+        <h2 className="font-heading text-section text-foreground">価格行列 (1点あたりの下限〜上限・円)</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
@@ -476,8 +476,8 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
       </section>
 
       {/* ---- 数量値引き ---- */}
-      <section className="space-y-3 rounded-xl border border-admin-card-border bg-card p-4 shadow-md">
-        <h2 className="text-base font-semibold">数量値引き (自動適用)</h2>
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+        <h2 className="font-heading text-section text-foreground">数量値引き (自動適用)</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[480px] text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
@@ -559,8 +559,8 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
       </section>
 
       {/* ---- オプション ---- */}
-      <section className="space-y-3 rounded-xl border border-admin-card-border bg-card p-4 shadow-md">
-        <h2 className="text-base font-semibold">オプション</h2>
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+        <h2 className="font-heading text-section text-foreground">オプション</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
@@ -689,8 +689,8 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
       </section>
 
       {/* ---- 保存前プレビュー (設計書 §5.2: 変更前後の見積り例 3 パターン並記) ---- */}
-      <section className="space-y-3 rounded-xl border border-admin-card-border bg-card p-4 shadow-md">
-        <h2 className="text-base font-semibold">保存前プレビュー — 変更前後の見積り例</h2>
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+        <h2 className="font-heading text-section text-foreground">保存前プレビュー — 変更前後の見積り例</h2>
         {previewRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             プレビュー対象のグレード/サイズ帯が見つかりません。
@@ -732,7 +732,7 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
           {isPending ? "保存中…" : "保存する"}
         </Button>
         {message ? (
-          <p className={message.type === "error" ? "text-sm text-destructive" : "text-sm text-green-700"}>
+          <p className={message.type === "error" ? "text-sm text-destructive" : "text-sm text-status-success-fg"}>
             {message.text}
           </p>
         ) : null}
