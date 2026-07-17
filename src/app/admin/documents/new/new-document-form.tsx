@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { EntityPicker, type EntityPickerItem } from "@/app/admin/_ui/entity-picker";
 import { searchDealsAction } from "@/app/admin/_ui/entity-search-actions";
 import { useSaveShortcut } from "@/app/admin/_ui/use-save-shortcut";
 import { zDocType, type DocType } from "@/modules/sales/contracts";
 
-import { TAX_CATEGORY_LABEL } from "../_shared";
+import { DOC_TYPE_LABEL, TAX_CATEGORY_LABEL } from "../_shared";
 import { createDraftDocumentAction, getDealShippingDefaultsAction, type DealShippingDefaults } from "../actions";
 
 const NATIVE_SELECT_CLASS = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
@@ -139,7 +140,7 @@ export function NewDocumentForm({
           <FieldLabel>案件</FieldLabel>
           <EntityPicker value={deal} onChange={(item) => void handleDealChange(item)} search={searchDealsAction} placeholder="案件を検索" />
           {billingPreview && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-meta text-admin-text-meta">
               宛名: {billingPreview.name} {billingPreview.suffix}
               {billingPreview.address ? ` / ${billingPreview.address}` : ""}
             </p>
@@ -147,19 +148,28 @@ export function NewDocumentForm({
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="doc-type">種別</FieldLabel>
-          <select
-            id="doc-type"
-            className={NATIVE_SELECT_CLASS}
-            value={docType}
-            onChange={(e) => setDocType(e.target.value as DocType)}
-          >
-            {zDocType.options.map((t) => (
-              <option key={t} value={t}>
-                {{ quote: "見積", order: "受注", delivery: "納品", invoice: "請求" }[t]}
-              </option>
-            ))}
-          </select>
+          <FieldLabel id="new-doc-type-label">種別</FieldLabel>
+          <div role="group" aria-labelledby="new-doc-type-label" className="inline-flex flex-wrap items-center gap-1.5">
+            {zDocType.options.map((t) => {
+              const active = docType === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setDocType(t)}
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-3 py-1 text-table font-medium transition-colors",
+                    active
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-input bg-card text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  {DOC_TYPE_LABEL[t]}
+                </button>
+              );
+            })}
+          </div>
         </Field>
 
         <Field>

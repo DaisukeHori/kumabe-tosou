@@ -41,6 +41,8 @@ export function PaymentDialog({
   dealId,
   dealUpdatedAt,
   balanceJpy,
+  docNo,
+  targetName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -50,6 +52,10 @@ export function PaymentDialog({
    *  updateDealStageAction 呼び出しに使う。 */
   dealUpdatedAt: string;
   balanceJpy: number;
+  /** 入金対象の書類番号 (任意)。一覧起動時など、開いた時点でどの書類に記録するか目視確認するための表示。 */
+  docNo?: string | null;
+  /** 入金対象の請求先/宛名 (任意)。docNo と併せて対象書類を識別するための表示。 */
+  targetName?: string;
 }) {
   const router = useRouter();
   const [paidOn, setPaidOn] = useState<string | null>(jstToday());
@@ -128,10 +134,17 @@ export function PaymentDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[560px] shadow-modal">
           <DialogHeader>
             <DialogTitle>入金を記録</DialogTitle>
             <DialogDescription>残高 {formatJpy(balanceJpy)} に対する入金を記録します。</DialogDescription>
+            {(docNo != null || (targetName != null && targetName !== "")) && (
+              <p className="text-sm text-muted-foreground" data-payment-target>
+                対象:{" "}
+                <span className="font-medium text-foreground">{docNo ?? "（番号未確定）"}</span>
+                {targetName ? <span className="text-foreground"> — {targetName}</span> : null}
+              </p>
+            )}
           </DialogHeader>
           <FieldGroup>
             <Field>
@@ -179,7 +192,7 @@ export function PaymentDialog({
       </Dialog>
 
       <Dialog open={paidConfirmOpen} onOpenChange={setPaidConfirmOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[560px] shadow-modal">
           <DialogHeader>
             <DialogTitle>案件を『入金済み』にしますか</DialogTitle>
             <DialogDescription>

@@ -235,13 +235,15 @@ export function DocumentDetailView({
 
   return (
     <div className="flex flex-col gap-6">
-      <Surface className="flex flex-col gap-2 p-6">
+      <Surface className="flex flex-col gap-3 p-6">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-lg font-semibold">{doc.doc_no ?? DOC_TYPE_LABEL[doc.doc_type]}</h1>
+          <h1 className="font-heading text-xl font-semibold text-foreground">
+            {doc.doc_no ?? DOC_TYPE_LABEL[doc.doc_type]}
+          </h1>
           <DocumentStatusBadge status={doc.status} />
-          <Badge variant="outline">{DOC_TYPE_LABEL[doc.doc_type]}</Badge>
+          <Badge variant="neutral">{DOC_TYPE_LABEL[doc.doc_type]}</Badge>
         </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-table text-admin-text-meta">
           <span>
             宛名: <span className="text-foreground">{doc.billing_name}{doc.billing_suffix}</span>
           </span>
@@ -252,18 +254,18 @@ export function DocumentDetailView({
             </Link>
           </span>
           <span>
-            金額: <span className="text-foreground">{formatJpy(doc.total_jpy)}</span>
+            金額: <span className="font-medium tabular-nums text-foreground">{formatJpy(doc.total_jpy)}</span>
           </span>
           <span>発行日: <span className="text-foreground">{doc.issue_date ?? "—"}</span></span>
           {doc.doc_type === "invoice" && (
             <span>
-              残高: <span className="text-foreground font-medium">{formatJpy(detail.balance_jpy)}</span>
+              残高: <span className="font-medium tabular-nums text-foreground">{formatJpy(detail.balance_jpy)}</span>
             </span>
           )}
         </div>
 
         {(lineage.ancestors.length > 0 || lineage.descendants.length > 0) && (
-          <nav aria-label="系譜" className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <nav aria-label="系譜" className="flex flex-wrap items-center gap-1.5 text-meta text-admin-text-meta">
             {lineage.ancestors.map((a) => (
               <span key={a.id} className="flex items-center gap-1.5">
                 <Link href={`/admin/documents/${a.id}`} className="underline underline-offset-4">
@@ -287,7 +289,7 @@ export function DocumentDetailView({
 
       <div className="flex flex-wrap gap-2">
         {canAccept(doc.doc_type, doc.status) && (
-          <Button type="button" disabled={isPending} onClick={() => void handleAccept()}>
+          <Button type="button" variant="success" disabled={isPending} onClick={() => void handleAccept()}>
             承諾にする
           </Button>
         )}
@@ -328,7 +330,7 @@ export function DocumentDetailView({
           </Button>
         )}
         {canVoid(doc.doc_type, doc.status) && (
-          <Button type="button" variant="destructive" onClick={() => setVoidOpen(true)}>
+          <Button type="button" variant="destructive-outline" onClick={() => setVoidOpen(true)}>
             取消
           </Button>
         )}
@@ -338,7 +340,7 @@ export function DocumentDetailView({
 
       <Surface className="p-6">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium">版履歴</h2>
+          <h2 className="text-label font-bold text-admin-text-label">版履歴</h2>
           {detail.versions.length >= 2 && (
             <Button type="button" variant="outline" size="sm" onClick={() => setDiffOpen(true)}>
               前の版と比較
@@ -353,7 +355,7 @@ export function DocumentDetailView({
             aria-label="版履歴"
             tabIndex={0}
             onKeyDown={handleVersionsKeyDown}
-            className="flex flex-col divide-y divide-border outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+            className="flex flex-col divide-y divide-admin-divider outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
           >
             {detail.versions.map((v, index) => (
               <div
@@ -362,11 +364,11 @@ export function DocumentDetailView({
                 aria-selected={index === focusedVersionIndex}
                 onClick={() => void handleOpenPdf(v.version)}
                 onMouseEnter={() => setFocusedVersionIndex(index)}
-                className={`grid cursor-pointer grid-cols-[auto_1fr_auto_auto] items-center gap-3 px-2 py-2 text-xs ${index === focusedVersionIndex ? "bg-soul/5" : ""}`}
+                className={`grid cursor-pointer grid-cols-[auto_1fr_auto_auto] items-center gap-3 rounded-md px-2 py-2 text-meta transition-colors ${index === focusedVersionIndex ? "bg-primary/5" : "hover:bg-muted"}`}
               >
-                <span className="font-medium">v{v.version}</span>
-                <span className="text-muted-foreground">{new Date(v.issued_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</span>
-                <span className="text-muted-foreground">{v.sha256.slice(0, 8)}</span>
+                <span className="font-medium text-foreground">v{v.version}</span>
+                <span className="text-admin-text-meta">{new Date(v.issued_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</span>
+                <span className="font-mono text-admin-text-meta">{v.sha256.slice(0, 8)}</span>
                 <span className="underline underline-offset-4">PDF</span>
               </div>
             ))}
@@ -375,20 +377,20 @@ export function DocumentDetailView({
       </Surface>
 
       <Surface className="p-6">
-        <h2 className="mb-3 text-sm font-medium">送信履歴</h2>
+        <h2 className="mb-3 text-label font-bold text-admin-text-label">送信履歴</h2>
         {detail.emails.length === 0 && <p className="text-sm text-muted-foreground">送信履歴がありません。</p>}
         {detail.emails.length > 0 && (
-          <div className="flex flex-col divide-y divide-border">
+          <div className="flex flex-col divide-y divide-admin-divider">
             {detail.emails.map((e) => (
-              <div key={e.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 px-2 py-2 text-xs">
-                <span className="text-muted-foreground">
+              <div key={e.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 px-2 py-2 text-meta">
+                <span className="text-admin-text-meta">
                   {new Date(e.sent_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
                 </span>
-                <span className="truncate">
+                <span className="truncate text-foreground">
                   {e.to_email} — {e.subject}
                 </span>
-                <span className="font-medium">v{e.version}</span>
-                <Badge variant={e.status === "failed" ? "destructive" : "outline"}>
+                <span className="font-medium text-foreground">v{e.version}</span>
+                <Badge variant={e.status === "failed" ? "urgent" : "success"}>
                   {e.status === "failed" ? "失敗" : "送信済み"}
                 </Badge>
               </div>
@@ -399,7 +401,7 @@ export function DocumentDetailView({
 
       {doc.doc_type === "invoice" && (
         <Surface className="p-6">
-          <h2 className="mb-3 text-sm font-medium">入金履歴</h2>
+          <h2 className="mb-3 text-label font-bold text-admin-text-label">入金履歴</h2>
           {detail.payments.length === 0 && <p className="text-sm text-muted-foreground">入金記録がありません。</p>}
           {detail.payments.length > 0 && (
             <div
@@ -407,7 +409,7 @@ export function DocumentDetailView({
               aria-label="入金履歴"
               tabIndex={0}
               onKeyDown={handlePaymentsKeyDown}
-              className="flex flex-col divide-y divide-border outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+              className="flex flex-col divide-y divide-admin-divider outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
             >
               {detail.payments.map((p, index) => (
                 <div
@@ -415,12 +417,12 @@ export function DocumentDetailView({
                   role="option"
                   aria-selected={index === focusedPaymentIndex}
                   onMouseEnter={() => setFocusedPaymentIndex(index)}
-                  className={`grid grid-cols-[auto_auto_auto_1fr_auto] items-center gap-3 px-2 py-2 text-xs ${index === focusedPaymentIndex ? "bg-soul/5" : ""}`}
+                  className={`grid grid-cols-[auto_auto_auto_1fr_auto] items-center gap-3 rounded-md px-2 py-2 text-meta transition-colors ${index === focusedPaymentIndex ? "bg-primary/5" : ""}`}
                 >
-                  <span>{p.paid_on}</span>
-                  <span className="font-medium">{formatJpy(p.amount_jpy)}</span>
-                  <span className="text-muted-foreground">{{ bank_transfer: "振込", cash: "現金", other: "その他" }[p.method]}</span>
-                  <span className="truncate text-muted-foreground">{p.memo ?? ""}</span>
+                  <span className="text-foreground">{p.paid_on}</span>
+                  <span className="font-medium tabular-nums text-foreground">{formatJpy(p.amount_jpy)}</span>
+                  <span className="text-admin-text-meta">{{ bank_transfer: "振込", cash: "現金", other: "その他" }[p.method]}</span>
+                  <span className="truncate text-admin-text-meta">{p.memo ?? ""}</span>
                   <Button type="button" variant="ghost" size="sm" onClick={() => void handleDeletePayment(p.id)}>
                     削除
                   </Button>
@@ -432,7 +434,7 @@ export function DocumentDetailView({
       )}
 
       <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[560px] shadow-modal">
           <DialogHeader>
             <DialogTitle>見積を辞退にしますか</DialogTitle>
             <DialogDescription>理由は任意です。</DialogDescription>
@@ -450,7 +452,7 @@ export function DocumentDetailView({
       </Dialog>
 
       <Dialog open={voidOpen} onOpenChange={setVoidOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[560px] shadow-modal">
           <DialogHeader>
             <DialogTitle>取消しますか</DialogTitle>
             <DialogDescription>取消理由は必須です。この操作は元に戻せません。</DialogDescription>
@@ -460,7 +462,7 @@ export function DocumentDetailView({
             <Button type="button" variant="outline" onClick={() => setVoidOpen(false)}>
               キャンセル
             </Button>
-            <Button type="button" variant="destructive" disabled={isPending} onClick={() => void handleVoid()}>
+            <Button type="button" variant="destructive-outline" disabled={isPending} onClick={() => void handleVoid()}>
               取消する
             </Button>
           </DialogFooter>
@@ -474,6 +476,8 @@ export function DocumentDetailView({
         dealId={dealId}
         dealUpdatedAt={dealUpdatedAt}
         balanceJpy={detail.balance_jpy}
+        docNo={doc.doc_no}
+        targetName={doc.billing_name}
       />
 
       <RevisionDialog open={revisionOpen} onOpenChange={setRevisionOpen} detail={detail} />

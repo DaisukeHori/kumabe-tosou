@@ -338,7 +338,7 @@ export function DocumentEditor({
 
       <Surface className="p-6">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium">明細</h2>
+          <h2 className="text-label font-bold text-admin-text-label">明細</h2>
           <div className="flex gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>定型行を挿入</DropdownMenuTrigger>
@@ -363,7 +363,7 @@ export function DocumentEditor({
         )}
 
         <div className="overflow-x-auto">
-          <div className="grid min-w-[860px] grid-cols-[2fr_0.7fr_0.6fr_1fr_1fr_1.1fr_1fr_auto] gap-2 border-b border-border pb-2 text-xs font-medium text-muted-foreground">
+          <div className="grid min-w-[860px] grid-cols-[2fr_0.7fr_0.6fr_1fr_1fr_1.1fr_1fr_auto] gap-2 border-b border-admin-divider pb-2 text-meta font-medium text-admin-text-meta">
             <span>品名</span>
             <span>数量</span>
             <span>単位</span>
@@ -378,7 +378,7 @@ export function DocumentEditor({
             <div
               key={line._key}
               onKeyDown={(e) => handleRowKeyDown(e, index)}
-              className="grid min-w-[860px] grid-cols-[2fr_0.7fr_0.6fr_1fr_1fr_1.1fr_1fr_auto] items-center gap-2 border-b border-border py-1.5"
+              className="grid min-w-[860px] grid-cols-[2fr_0.7fr_0.6fr_1fr_1fr_1.1fr_1fr_auto] items-center gap-2 border-b border-admin-divider py-1.5"
             >
               <Input
                 ref={(el) => {
@@ -412,7 +412,7 @@ export function DocumentEditor({
                   onChange={(e) => updateLine(index, { amount_jpy: e.target.value, _manual: true })}
                 />
                 {line._manual && (
-                  <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+                  <Badge variant="neutral" className="shrink-0 px-1.5 py-0 text-[10px]">
                     手動
                   </Badge>
                 )}
@@ -461,18 +461,18 @@ export function DocumentEditor({
 
       <Surface className="flex flex-col gap-1 p-6 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">小計</span>
-          <span>{formatJpy(totals.subtotal_jpy)}</span>
+          <span className="text-admin-text-meta">小計</span>
+          <span className="tabular-nums">{formatJpy(totals.subtotal_jpy)}</span>
         </div>
         {totals.tax_summary.map((t) => (
-          <div key={t.tax_category} className="flex justify-between text-muted-foreground">
+          <div key={t.tax_category} className="flex justify-between text-admin-text-meta">
             <span>{TAX_CATEGORY_LABEL[t.tax_category]} 対象額 {formatJpy(t.taxable_jpy)}</span>
-            <span>消費税 {formatJpy(t.tax_jpy)}</span>
+            <span className="tabular-nums">消費税 {formatJpy(t.tax_jpy)}</span>
           </div>
         ))}
-        <div className="mt-1 flex justify-between border-t border-border pt-1 text-base font-semibold">
+        <div className="mt-1 flex justify-between border-t border-admin-divider pt-1 text-base font-semibold">
           <span>合計</span>
-          <span>{formatJpy(totals.total_jpy)}</span>
+          <span className="tabular-nums">{formatJpy(totals.total_jpy)}</span>
         </div>
       </Surface>
 
@@ -488,13 +488,13 @@ export function DocumentEditor({
         <Button type="button" onClick={() => setIssueConfirmOpen(true)}>
           発行
         </Button>
-        <Button type="button" variant="destructive" onClick={() => setDeleteConfirmOpen(true)}>
+        <Button type="button" variant="destructive-outline" onClick={() => setDeleteConfirmOpen(true)}>
           削除
         </Button>
       </div>
 
       <Dialog open={issueConfirmOpen} onOpenChange={setIssueConfirmOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[560px] shadow-modal">
           <DialogHeader>
             <DialogTitle>{DOC_TYPE_LABEL[doc.doc_type]}を発行しますか</DialogTitle>
             <DialogDescription>番号を採番し PDF を確定保存します。発行後は内容を変更できません。</DialogDescription>
@@ -511,7 +511,7 @@ export function DocumentEditor({
       </Dialog>
 
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[560px] shadow-modal">
           <DialogHeader>
             <DialogTitle>下書きを削除しますか</DialogTitle>
             <DialogDescription>この操作は元に戻せません。</DialogDescription>
@@ -520,7 +520,7 @@ export function DocumentEditor({
             <Button type="button" variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
               キャンセル
             </Button>
-            <Button type="button" variant="destructive" disabled={isDeleting} onClick={() => void handleDelete()}>
+            <Button type="button" variant="destructive-outline" disabled={isDeleting} onClick={() => void handleDelete()}>
               {isDeleting ? "削除中..." : "削除する"}
             </Button>
           </DialogFooter>

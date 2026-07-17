@@ -72,7 +72,7 @@ export function GenerateBlocksButton({
       </Button>
 
       <Dialog open={confirm !== null} onOpenChange={(open) => !open && setConfirm(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[560px] shadow-modal">
           <DialogHeader>
             <DialogTitle>すでに作業ブロックがあります</DialogTitle>
             <DialogDescription>

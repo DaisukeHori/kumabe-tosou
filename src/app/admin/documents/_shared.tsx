@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import type { TaxCategory } from "@/modules/platform/contracts";
 import type { DocType, DocumentStatus } from "@/modules/sales/contracts";
 
@@ -25,21 +24,26 @@ export const DOCUMENT_STATUS_LABEL: Record<DocumentStatus, string> = {
   voided: "取消",
 };
 
-// §8.2: draft=灰, issued=青, accepted=緑, paid=緑, declined/expired=黄, voided=赤
-const DOCUMENT_STATUS_CLASS: Record<DocumentStatus, string> = {
-  draft: "border-transparent bg-muted text-muted-foreground",
-  issued: "border-transparent bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
-  accepted: "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  paid: "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  declined: "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
-  expired: "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
-  voided: "border-transparent bg-destructive/15 text-destructive",
+// §8.2: draft=灰, issued=青, accepted=緑, paid=緑, declined/expired=黄, voided=赤。
+// [R4a] 直書き emerald/sky/amber を廃し、R0 の Badge ステータス variant
+// (globals.css の --color-status-*) へ載せ替える (deals の DEAL_STAGE と同じ語彙)。
+const DOCUMENT_STATUS_VARIANT: Record<
+  DocumentStatus,
+  "neutral" | "info" | "success" | "warning" | "urgent"
+> = {
+  draft: "neutral",
+  issued: "info",
+  accepted: "success",
+  paid: "success",
+  declined: "warning",
+  expired: "warning",
+  voided: "urgent",
 };
 
 export function DocumentStatusBadge({ status }: { status: DocumentStatus | string }) {
   const key = (status in DOCUMENT_STATUS_LABEL ? status : "draft") as DocumentStatus;
   return (
-    <Badge variant="outline" className={cn("whitespace-nowrap font-medium", DOCUMENT_STATUS_CLASS[key])}>
+    <Badge variant={DOCUMENT_STATUS_VARIANT[key]} className="whitespace-nowrap">
       {DOCUMENT_STATUS_LABEL[key] ?? status}
     </Badge>
   );

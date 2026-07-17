@@ -168,7 +168,7 @@ export function RevisionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl shadow-modal">
         <DialogHeader>
           <DialogTitle>訂正発行</DialogTitle>
           <DialogDescription>内容を修正して新しい版として再発行します (書類番号は維持)。</DialogDescription>
@@ -227,7 +227,7 @@ export function RevisionDialog({
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-xs font-medium text-muted-foreground">明細</h3>
+              <h3 className="text-meta font-bold text-admin-text-label">明細</h3>
               <Button type="button" variant="outline" size="sm" onClick={() => addLine()}>
                 行を追加 (Cmd+Enter)
               </Button>
@@ -289,7 +289,7 @@ export function RevisionDialog({
             </div>
           </div>
 
-          <p className="text-sm font-medium">合計 {formatJpy(totals.total_jpy)}</p>
+          <p className="text-sm font-medium tabular-nums">合計 {formatJpy(totals.total_jpy)}</p>
         </div>
 
         <FieldError errors={error ? [{ message: error }] : undefined} />

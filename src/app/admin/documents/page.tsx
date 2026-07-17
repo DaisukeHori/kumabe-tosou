@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/app/admin/_ui";
+import { PageHeader, PillToggle } from "@/app/admin/_ui";
 import { crmFacade } from "@/modules/crm/facade";
 import { createSalesFacade } from "@/modules/sales/facade";
 import { zDocType, zDocumentStatus, type DocumentListFilter } from "@/modules/sales/contracts";
@@ -75,33 +75,34 @@ export default async function AdminDocumentsPage({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {TYPE_FILTERS.map((f) => (
-            <Link key={f.value || "all"} href={filterHref({ type: f.value })}>
-              <Badge variant={(type ?? "") === f.value ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-                {f.label}
-              </Badge>
-            </Link>
-          ))}
-        </div>
+        <PillToggle
+          ariaLabel="種別で絞り込み"
+          items={TYPE_FILTERS.map((f) => ({
+            key: f.value || "all",
+            label: f.label,
+            href: filterHref({ type: f.value }),
+            active: (type ?? "") === f.value,
+          }))}
+        />
         <DocumentsSearch initialQuery={q ?? ""} type={type ?? ""} status={status ?? ""} />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((f) => (
-          <Link key={f.value || "all"} href={filterHref({ status: f.value })}>
-            <Badge variant={(status ?? "") === f.value ? "default" : "outline"} className="cursor-pointer px-2.5 py-0.5 text-xs">
-              {f.label}
-            </Badge>
-          </Link>
-        ))}
-      </div>
+      <PillToggle
+        ariaLabel="状態で絞り込み"
+        items={STATUS_FILTERS.map((f) => ({
+          key: f.value || "all",
+          label: f.label,
+          href: filterHref({ status: f.value }),
+          active: (status ?? "") === f.value,
+        }))}
+      />
 
       {dealIdFilter && (
         <div className="flex flex-wrap gap-2">
-          <Link href={filterHref({ deal_id: null })}>
-            <Badge variant="secondary" className="cursor-pointer gap-1 px-3 py-1">
-              案件: {dealRef?.ok ? dealRef.value.title : dealIdFilter} ×
+          <Link href={filterHref({ deal_id: null })} aria-label="案件の絞り込みを解除">
+            <Badge variant="neutral" className="cursor-pointer gap-1 px-3 py-1">
+              案件: {dealRef?.ok ? dealRef.value.title : dealIdFilter}
+              <span aria-hidden>×</span>
             </Badge>
           </Link>
         </div>
