@@ -3,7 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
 
-import { Surface } from "@/app/admin/_ui";
+import { NoticePanel, Surface } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -25,10 +25,13 @@ const AUTH_STATUS_LABEL: Record<ChannelAuthStatus, string> = {
   error: "エラー",
 };
 
-function authStatusBadgeVariant(status: ChannelAuthStatus): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "connected") return "default";
-  if (status === "expired" || status === "error") return "destructive";
-  return "outline";
+// [#127 R6a] 接続状態を R0 status Badge variant へ意味写像する
+// (接続済=success / 失効=warning / エラー=urgent / 未接続=neutral)。
+function authStatusBadgeVariant(status: ChannelAuthStatus): "success" | "warning" | "urgent" | "neutral" {
+  if (status === "connected") return "success";
+  if (status === "error") return "urgent";
+  if (status === "expired") return "warning";
+  return "neutral";
 }
 
 function findAccount(accounts: ChannelAccountView[], channel: string): ChannelAccountView | null {
@@ -60,7 +63,7 @@ export function ChannelConnectionCards({
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{x?.account_label ?? "未接続"}</p>
           {!xEnabled && (
-            <p className="mt-2 text-xs text-amber-600">
+            <p className="mt-2 text-xs text-status-warning-fg">
               OAuth 未設定です (OAUTH_ENABLED / X_CLIENT_ID 等の env を設定してください)。
             </p>
           )}
@@ -84,7 +87,7 @@ export function ChannelConnectionCards({
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{instagram?.account_label ?? "未接続"}</p>
           {!metaEnabled && (
-            <p className="mt-2 text-xs text-amber-600">
+            <p className="mt-2 text-xs text-status-warning-fg">
               OAuth 未設定です (OAUTH_ENABLED / META_APP_ID 等の env を設定してください)。
             </p>
           )}
@@ -171,14 +174,11 @@ function NoteAccountCard({ note }: { note: ChannelAccountView | null }) {
         </Button>
       </form>
 
-      <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-        <p className="font-semibold">下書き自動作成のリスク (常時表示)</p>
-        <p className="mt-1">
-          非公式 API を使用しています。note 側の仕様変更・規約運用により、予告なくアカウント停止
-          (売上金没収を含む) のリスクがあります。下書き作成のみ (公開は行いません) のため
-          相対的にリスクは低いですが、ゼロではありません。ご了承のうえご利用ください。
-        </p>
-      </div>
+      <NoticePanel tone="warning" title="下書き自動作成のリスク (常時表示)" className="mt-4 text-xs">
+        非公式 API を使用しています。note 側の仕様変更・規約運用により、予告なくアカウント停止
+        (売上金没収を含む) のリスクがあります。下書き作成のみ (公開は行いません) のため
+        相対的にリスクは低いですが、ゼロではありません。ご了承のうえご利用ください。
+      </NoticePanel>
 
       <form action={cookieAction} className="mt-4">
         <Field>

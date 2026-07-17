@@ -3,6 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
 
+import { NoticePanel, Surface } from "@/app/admin/_ui";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -25,14 +26,14 @@ export function MetaPageSelector({ pages }: { pages: { id: string; name: string 
 
   if (pages.length === 0) {
     return (
-      <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+      <NoticePanel tone="warning">
         Facebook ページが見つかりませんでした。Instagram プロアカウントと Facebook ページの紐付けを確認してください。
-      </div>
+      </NoticePanel>
     );
   }
 
   return (
-    <div className="rounded-xl border bg-background p-4">
+    <Surface className="p-4">
       <h2 className="font-heading text-sm font-semibold">Instagram: ページを選択</h2>
       <p className="mt-1 text-xs text-muted-foreground">
         紐付ける Facebook ページを選択してください (契約書 §7.4)。
@@ -57,6 +58,6 @@ export function MetaPageSelector({ pages }: { pages: { id: string; name: string 
         </Button>
       </form>
       {state.error && <p className="mt-2 text-sm text-destructive">{state.error}</p>}
-    </div>
+    </Surface>
   );
 }

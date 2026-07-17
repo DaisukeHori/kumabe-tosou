@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 
-import { Surface } from "@/app/admin/_ui";
+import { PillToggle, Surface, type PillItem } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,11 +50,16 @@ const CHANNEL_LABELS: Record<string, string> = {
   instagram: "Instagram",
 };
 
-function statusBadgeVariant(status: ChannelPostStatus): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "published") return "default";
-  if (status === "failed" || status === "manual_required") return "destructive";
-  if (status === "cancelled") return "outline";
-  return "secondary";
+// [#127 R6a] 配信状態を R0 status Badge variant へ意味写像する
+// (配信済=success / 失敗=urgent / 要人間照合=warning / キャンセル=neutral / 予約・配信中=info)。
+function statusBadgeVariant(
+  status: ChannelPostStatus,
+): "success" | "urgent" | "warning" | "neutral" | "info" {
+  if (status === "published") return "success";
+  if (status === "failed") return "urgent";
+  if (status === "manual_required") return "warning";
+  if (status === "cancelled") return "neutral";
+  return "info";
 }
 
 export const CHANNEL_POST_STATUS_FILTERS: { value: ChannelPostStatus | "all"; label: string }[] = [
@@ -69,17 +73,13 @@ export const CHANNEL_POST_STATUS_FILTERS: { value: ChannelPostStatus | "all"; la
 ];
 
 export function ChannelPostsStatusFilter({ current }: { current: ChannelPostStatus | "all" }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {CHANNEL_POST_STATUS_FILTERS.map((f) => (
-        <Link key={f.value} href={f.value === "all" ? "/admin/channels" : `/admin/channels?status=${f.value}`}>
-          <Badge variant={current === f.value ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-            {f.label}
-          </Badge>
-        </Link>
-      ))}
-    </div>
-  );
+  const items: PillItem[] = CHANNEL_POST_STATUS_FILTERS.map((f) => ({
+    key: f.value,
+    label: f.label,
+    href: f.value === "all" ? "/admin/channels" : `/admin/channels?status=${f.value}`,
+    active: current === f.value,
+  }));
+  return <PillToggle items={items} ariaLabel="配信状態で絞り込み" />;
 }
 
 export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
