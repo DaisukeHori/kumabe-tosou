@@ -15,7 +15,7 @@ export function DiffView({ oldText, newText, oldLabel, newLabel }: { oldText: st
   const shown = onlyChanged ? onlyChangedChunks(chunks) : chunks;
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
           {oldLabel} → {newLabel}
@@ -32,14 +32,20 @@ export function DiffView({ oldText, newText, oldLabel, newLabel }: { oldText: st
             {chunk.parts.map((part, partIndex) => {
               if (part.added) {
                 return (
-                  <span key={partIndex} className="bg-green-100 text-green-900 underline decoration-green-500 dark:bg-green-950 dark:text-green-200">
+                  <span
+                    key={partIndex}
+                    className="bg-status-success-bg text-status-success-fg underline decoration-status-success-fg"
+                  >
                     {part.value}
                   </span>
                 );
               }
               if (part.removed) {
                 return (
-                  <span key={partIndex} className="bg-red-100 text-red-900 line-through decoration-red-500 dark:bg-red-950 dark:text-red-200">
+                  <span
+                    key={partIndex}
+                    className="bg-status-urgent-bg text-status-urgent-fg line-through decoration-status-urgent-fg"
+                  >
                     {part.value}
                   </span>
                 );

@@ -42,7 +42,7 @@ export default async function StudioPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="AIスタジオ" />
+      <PageHeader title="発信スタジオ" />
       <StudioWorkspace
         aiConfigured={aiConfigured}
         sources={sources}

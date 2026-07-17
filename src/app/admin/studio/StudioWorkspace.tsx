@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { NoticePanel, StageProgress, Surface, type StageProgressStep } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,10 +52,42 @@ async function postJson<T>(url: string, body: unknown): Promise<{ ok: true; data
   return { ok: true, data: json as T };
 }
 
+// [#127 R6a] source→整文→run→レビューの 4 段階を stage-progress.tsx で可視化する。
+// URL クエリ (?source / ?run) と props から現在の段階を導出するだけの見た目専用ロジックで、
+// 既存のフロー・分岐条件 (下の JSX) は一切変更しない。
+const STUDIO_STAGE_DEFS: { key: string; label: string }[] = [
+  { key: "input", label: "入力" },
+  { key: "clean", label: "整文" },
+  { key: "run", label: "実行" },
+  { key: "review", label: "レビュー" },
+];
+
+function buildStudioStages(
+  selectedSource: SourceRow | null,
+  selectedRun: RunRow | null,
+): StageProgressStep[] {
+  const cleanConfirmed = selectedSource ? isCleanConfirmed(selectedSource) : false;
+  const runReview =
+    selectedRun !== null && (selectedRun.status === "ready_for_review" || selectedRun.status === "completed");
+
+  let currentIndex: number;
+  if (!selectedSource) currentIndex = 0; // 入力
+  else if (!cleanConfirmed) currentIndex = 1; // 整文
+  else if (!selectedRun) currentIndex = 2; // 実行 (開始フォーム)
+  else if (runReview) currentIndex = 3; // レビュー
+  else currentIndex = 2; // 実行 (進行中 / 失敗)
+
+  return STUDIO_STAGE_DEFS.map((s, i) => ({
+    ...s,
+    state: i < currentIndex ? "done" : i === currentIndex ? "current" : "upcoming",
+  }));
+}
+
 export function StudioWorkspace(props: Props) {
   const { aiConfigured, sources, selectedSourceId, selectedSource, runsForSource, selectedRun, drafts, imageCandidates } =
     props;
   const router = useRouter();
+  const stages = buildStudioStages(selectedSource, selectedRun);
 
   return (
     <div className="flex gap-6">
@@ -62,11 +95,15 @@ export function StudioWorkspace(props: Props) {
         <SourceSidebar sources={sources} selectedSourceId={selectedSourceId} disabled={!aiConfigured} />
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
+        <Surface className="px-4 py-3">
+          <StageProgress steps={stages} ariaLabel="発信スタジオの進行" />
+        </Surface>
+
         {!aiConfigured && (
-          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          <NoticePanel tone="warning">
             APIキー未設定です。ANTHROPIC_API_KEY / OPENAI_API_KEY を設定すると実行できるようになります。
-          </div>
+          </NoticePanel>
         )}
 
         {!selectedSource && <NewSourceForm disabled={!aiConfigured} onCreated={(id) => router.push(`/admin/studio?source=${id}`)} />}
@@ -89,9 +126,9 @@ export function StudioWorkspace(props: Props) {
         )}
 
         {selectedRun && selectedRun.status === "failed" && (
-          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+          <NoticePanel tone="danger">
             実行が失敗しました ({selectedRun.error_code ?? "不明なエラー"})。新しい実行を作成してください。
-          </div>
+          </NoticePanel>
         )}
 
         {selectedRun && (selectedRun.status === "ready_for_review" || selectedRun.status === "completed") && (
@@ -255,8 +292,8 @@ function NewSourceForm({ disabled, onCreated }: { disabled: boolean; onCreated: 
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border p-4">
-      <h2 className="font-semibold">1. 入力</h2>
+    <Surface className="flex flex-col gap-4 p-4">
+      <h2 className="font-heading text-section text-foreground">1. 入力</h2>
       <div className="flex gap-2">
         <Button size="sm" variant={mode === "text" ? "default" : "outline"} onClick={() => setMode("text")}>
           テキスト直書き
@@ -297,7 +334,7 @@ function NewSourceForm({ disabled, onCreated }: { disabled: boolean; onCreated: 
             )}
             {!isRecording && recordedBlob && (
               <>
-                <Badge variant="secondary">録音済み ({(recordedBlob.size / 1024 / 1024).toFixed(1)}MB)</Badge>
+                <Badge variant="neutral">録音済み ({(recordedBlob.size / 1024 / 1024).toFixed(1)}MB)</Badge>
                 <Button size="sm" variant="outline" onClick={() => setRecordedBlob(null)}>
                   録り直す
                 </Button>
@@ -311,7 +348,7 @@ function NewSourceForm({ disabled, onCreated }: { disabled: boolean; onCreated: 
           )}
         </div>
       )}
-    </div>
+    </Surface>
   );
 }
 
@@ -374,20 +411,20 @@ function CleanStage({ source, disabled, onConfirmed }: { source: SourceRow; disa
 
   if (needsTranscribe) {
     return (
-      <div className="flex flex-col gap-3 rounded-lg border p-4">
-        <h2 className="font-semibold">文字起こし</h2>
+      <Surface className="flex flex-col gap-3 p-4">
+        <h2 className="font-heading text-section text-foreground">文字起こし</h2>
         <Button onClick={runTranscribe} disabled={disabled || isLoading}>
           {isLoading ? "文字起こし中..." : "文字起こしを実行"}
         </Button>
-      </div>
+      </Surface>
     );
   }
 
   const rawText = source.raw_text ?? "";
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border p-4">
-      <h2 className="font-semibold">1.5 整文確認</h2>
+    <Surface className="flex flex-col gap-4 p-4">
+      <h2 className="font-heading text-section text-foreground">1.5 整文確認</h2>
       <div className="rounded-lg bg-muted/40 p-3 text-sm whitespace-pre-wrap">{rawText}</div>
 
       {!cleanResult && (
@@ -405,7 +442,7 @@ function CleanStage({ source, disabled, onConfirmed }: { source: SourceRow; disa
         <>
           <DiffView oldText={rawText} newText={cleanResult.cleaned_text} oldLabel="原文" newLabel="整文後" />
           {!cleanResult.meaning_preserved && (
-            <p className="text-xs text-amber-700 dark:text-amber-300">
+            <p className="text-xs text-status-warning-fg">
               KMB-E406: 整文処理が意味の変化を検出しました。原文をベースに手修正してください。
             </p>
           )}
@@ -415,7 +452,7 @@ function CleanStage({ source, disabled, onConfirmed }: { source: SourceRow; disa
           </Button>
         </>
       )}
-    </div>
+    </Surface>
   );
 }
 
@@ -458,8 +495,8 @@ function StartRunForm({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border p-4">
-      <h2 className="font-semibold">2. 実行</h2>
+    <Surface className="flex flex-col gap-4 p-4">
+      <h2 className="font-heading text-section text-foreground">2. 実行</h2>
       <div className="flex flex-col gap-2">
         <p className="text-sm">配信チャネル</p>
         <div className="flex flex-wrap gap-3">
@@ -480,7 +517,7 @@ function StartRunForm({
       </Button>
 
       {runsForSource.length > 0 && (
-        <div className="mt-4 border-t pt-4">
+        <div className="mt-4 border-t border-border pt-4">
           <p className="mb-2 text-sm text-muted-foreground">過去の実行</p>
           <div className="flex flex-col gap-1">
             {runsForSource.map((r) => (
@@ -495,7 +532,7 @@ function StartRunForm({
           </div>
         </div>
       )}
-    </div>
+    </Surface>
   );
 }
 
@@ -560,10 +597,10 @@ function RunProgress({ run, onDone }: { run: RunRow; onDone: () => void }) {
   }, [run.id]);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-4">
-      <h2 className="font-semibold">2. 実行中</h2>
+    <Surface className="flex flex-col gap-3 p-4">
+      <h2 className="font-heading text-section text-foreground">2. 実行中</h2>
       <p className="text-sm">
-        現在のステータス: <Badge>{status}</Badge>
+        現在のステータス: <Badge variant="info">{status}</Badge>
       </p>
       <div className="flex flex-col gap-1 text-xs text-muted-foreground">
         {log.length === 0 && <p>開始しています...</p>}
@@ -571,7 +608,7 @@ function RunProgress({ run, onDone }: { run: RunRow; onDone: () => void }) {
           <p key={i}>{l}</p>
         ))}
       </div>
-    </div>
+    </Surface>
   );
 }
 
@@ -592,7 +629,7 @@ function ReviewPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="font-semibold">3. レビュー</h2>
+      <h2 className="font-heading text-section text-foreground">3. レビュー</h2>
 
       {imageCandidates.length > 0 && (
         <ImageSelectionPanel runId={runId} candidates={imageCandidates} onChanged={onChanged} />
@@ -615,12 +652,12 @@ function ReviewPanel({
         ))}
 
         <TabsContent value="distribution" className="mt-4">
-          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <div className="rounded-surface border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
             <p>配信機能は未接続です。</p>
             <p className="mt-1">
               チャネル接続・予約投稿は{" "}
-              <a href="/admin/channels" className="underline">
-                チャネル管理
+              <a href="/admin/channels" className="underline underline-offset-2">
+                SNSの接続
               </a>{" "}
               画面で行います (別 agent 実装分)。
             </p>
@@ -664,7 +701,7 @@ function ImageSelectionPanel({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-4">
+    <Surface className="flex flex-col gap-3 p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">SNS投稿用の画像候補 (X/Instagram)</h3>
         <Button size="sm" variant="outline" onClick={() => select(null)} disabled={isBusy}>
@@ -703,8 +740,16 @@ function ImageSelectionPanel({
           1枚選択すると X (先頭ツイート) / Instagram の投稿画像として反映されます。Instagram は画像必須です。
         </p>
       )}
-    </div>
+    </Surface>
   );
+}
+
+// [#127 R6a] 下書きレビューの状態を R0 status Badge variant へ意味写像する
+// (承認=success / 却下=urgent / レビュー待ち=warning)。
+function draftStatusBadgeVariant(status: string): "success" | "urgent" | "warning" {
+  if (status === "approved") return "success";
+  if (status === "rejected") return "urgent";
+  return "warning";
 }
 
 function DraftReviewCard({ draft, cleanedText, onChanged }: { draft: DraftRow; cleanedText: string; onChanged: () => void }) {
@@ -770,15 +815,13 @@ function DraftReviewCard({ draft, cleanedText, onChanged }: { draft: DraftRow; c
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <Badge variant={draft.status === "approved" ? "default" : draft.status === "rejected" ? "destructive" : "secondary"}>
-          {draft.status}
-        </Badge>
+        <Badge variant={draftStatusBadgeVariant(draft.status)}>{draft.status}</Badge>
         <span className="text-xs text-muted-foreground">revision {draft.current_revision}</span>
       </div>
 
       <DiffView oldText={cleanedText} newText={contentText} oldLabel="整文後の発言" newLabel="生成コンテンツ" />
 
-      <div className="rounded-lg border p-3">
+      <div className="rounded-lg border border-border p-3">
         <p className="mb-2 text-xs font-medium text-muted-foreground">
           事実主張 (claims) — 黄色は推測 (inference) 由来です。判定自体もAI出力であり完全ではありません。
         </p>
@@ -789,7 +832,9 @@ function DraftReviewCard({ draft, cleanedText, onChanged }: { draft: DraftRow; c
               key={i}
               className={
                 "rounded px-2 py-1 " +
-                (c.source === "inference" ? "bg-yellow-100 dark:bg-yellow-950" : "bg-muted/40")
+                (c.source === "inference"
+                  ? "bg-status-warning-bg text-status-warning-fg"
+                  : "bg-muted/40")
               }
             >
               {c.text}
@@ -816,7 +861,7 @@ function DraftReviewCard({ draft, cleanedText, onChanged }: { draft: DraftRow; c
         )}
       </div>
 
-      <div className="flex flex-col gap-2 border-t pt-3">
+      <div className="flex flex-col gap-2 border-t border-border pt-3">
         <p className="text-sm font-medium">再生成 (修正指示付き)</p>
         <Textarea value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="例: もう少しカジュアルなトーンにしてください" />
         <div className="flex gap-2">

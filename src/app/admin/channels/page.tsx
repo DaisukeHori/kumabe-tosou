@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
-import { PageHeader } from "@/app/admin/_ui";
+import { NoticePanel, PageHeader } from "@/app/admin/_ui";
 import { isMetaOAuthConfigured, isXOAuthConfigured } from "@/lib/env";
 import { decryptCookiePayload } from "@/lib/oauth/state-cookie";
 import type { ChannelPostStatus, StyleProfileView } from "@/modules/distribution/contracts";
@@ -13,7 +13,7 @@ import { ChannelConnectionCards } from "./connection-cards";
 import { MetaPageSelector } from "./meta-page-selector";
 import { StyleProfileForms } from "./style-profile-forms";
 
-export const metadata: Metadata = { title: "チャネル管理" };
+export const metadata: Metadata = { title: "SNSの接続" };
 export const dynamic = "force-dynamic";
 
 const VALID_STATUSES: ChannelPostStatus[] = [
@@ -70,24 +70,16 @@ export default async function AdminChannelsPage({
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="チャネル管理"
+        title="SNSの接続"
         description="X / Instagram の接続、note ラベル管理、チャネル別文体プロファイル、配信キューを管理します。"
       />
 
-      {params.x_connected && (
-        <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
-          X アカウントを接続しました。
-        </div>
-      )}
+      {params.x_connected && <NoticePanel tone="success">X アカウントを接続しました。</NoticePanel>}
       {params.x_error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          X 接続でエラーが発生しました ({params.x_error})
-        </div>
+        <NoticePanel tone="danger">X 接続でエラーが発生しました ({params.x_error})</NoticePanel>
       )}
       {params.meta_error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          Instagram 接続でエラーが発生しました ({params.meta_error})
-        </div>
+        <NoticePanel tone="danger">Instagram 接続でエラーが発生しました ({params.meta_error})</NoticePanel>
       )}
 
       {!accountsResult.ok && (
