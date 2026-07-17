@@ -1,10 +1,10 @@
 # 🚨 このリポジトリを引き継いだ人へ — 最初に読むもの
 
 > **必読 (優先順)**:
-> 1. **[`HANDOFF.md`](./HANDOFF.md)** — 引き継ぎ資料(インフラ・環境変数・ハマりポイント 11 件・進行中タスク)
-> 2. [`docs/design/cms-ai-pipeline.md`](./docs/design/cms-ai-pipeline.md) — 全体設計 v3.4(canonical)
-> 3. [`docs/module-contracts.md`](./docs/module-contracts.md) — モジュール契約 v2.2(canonical)
-> 4. [`docs/design/visual-media-editor.md`](./docs/design/visual-media-editor.md) — 進行中の設計 v1.3(Codex 再々レビュー待ち)
+> 1. **[`HANDOFF.md`](./HANDOFF.md)** — 引き継ぎ資料(インフラ・環境変数・ハマりポイント・焼き付きリスク横展開点検一覧)
+> 2. [`docs/design/cms-ai-pipeline.md`](./docs/design/cms-ai-pipeline.md) — 全体設計 v3.5(canonical。既存 CMS の DDL 正 + crm-suite 参照台帳)
+> 3. [`docs/module-contracts.md`](./docs/module-contracts.md) — モジュール契約 v2.8(canonical。crm/sales/scheduling/telephony を含む)
+> 4. [`docs/design/crm-suite/00-overview.md`](./docs/design/crm-suite/00-overview.md) — CRM スイート全体設計(00〜08 の 9 本。crm/sales/scheduling/telephony の canonical)
 
 > **進行中の作業と TODO は全て GitHub Issues に整理済み**:
 > - 📌 [全 Open Issue 一覧](https://github.com/DaisukeHori/kumabe-tosou/issues)
@@ -32,6 +32,15 @@
 
 | ファイル | 内容 |
 |---|---|
+| [docs/design/crm-suite/00-overview.md](./docs/design/crm-suite/00-overview.md) | CRM スイート全体設計・モジュール割当・規模見積り(§10 が所有テーブルの正) |
+| [docs/design/crm-suite/01-crm.md](./docs/design/crm-suite/01-crm.md) | 顧客管理(customers/companies/deals/activities/tasks)DDL canonical |
+| [docs/design/crm-suite/02-sales.md](./docs/design/crm-suite/02-sales.md) | 見積・請求(documents/payments/issued_documents/document_emails)DDL canonical |
+| [docs/design/crm-suite/03-scheduling.md](./docs/design/crm-suite/03-scheduling.md) | カレンダー・製造ブロック(work_blocks/calendar_*)DDL canonical |
+| [docs/design/crm-suite/04-telephony.md](./docs/design/crm-suite/04-telephony.md) | 電話連携(calls/call_recordings/call_jobs)DDL canonical |
+| [docs/design/crm-suite/05-site-settings.md](./docs/design/crm-suite/05-site-settings.md) | サイト設定拡張(analytics/branding/invoice_issuer 他) |
+| [docs/design/crm-suite/06-simulator.md](./docs/design/crm-suite/06-simulator.md) | シミュレーター修理・焼き付きリスク恒久策(§2.4)・価格運用手順(§18 R-S6) |
+| [docs/design/crm-suite/07-contracts-delta.md](./docs/design/crm-suite/07-contracts-delta.md) | 契約差分の裁定記録(裁定 #17 = 焼き付き横展開点検を #5-3 受入に含める) |
+| [docs/design/crm-suite/08-email.md](./docs/design/crm-suite/08-email.md) | 帳票メール送付(document_emails)設計 |
 | [docs/design/visual-media-editor-review-log.md](./docs/design/visual-media-editor-review-log.md) | Codex レビュー履歴(v1.0→v1.3) |
 | [docs/mock-check.md](./docs/mock-check.md) | Phase 0 手動チェックリスト |
 
@@ -49,17 +58,27 @@
 モジュラーモノリス。各モジュールは `src/modules/<name>/` に閉じ、`facade.ts` が公開契約、`repository.ts` が DB アクセス、`internal/` が内部実装。
 
 ```
-platform    ─── 認証・エラー・共通型
+platform    ─── 認証・エラー・共通型・ExecutionContext
 content     ─── works / posts / voices の CRUD
 media       ─── 画像アップロード / レンディション / 参照カウント
 pricing     ─── 行列モデル + 見積もり計算 (legacy と 1 円単位で一致)
-settings    ─── サイト設定 (会社情報 / ヒーロー / SEO / 運用上限 / 通知)
+settings    ─── サイト設定 (会社情報 / ヒーロー / SEO / 運用上限 / 通知 / analytics / branding / invoice_issuer 他)
 inquiry     ─── 問い合わせ + rate limit + Resend 通知
+ai-providers─── AI プロバイダ鍵管理 + generateText/画像生成カスケード (AI SDK 直 import 禁止・本 facade のみ)
 ai-studio   ─── 録音 → 整文 → 要旨抽出 → リサーチ → チャネル別生成 (advance/lease)
 distribution─── X / Meta OAuth / 配信 worker (at-least-once + 人間照合)
+page-media  ─── 公開ページの画像/テキストスロット解決 (ビジュアルエディタ用)
+--- CRM スイート (Phase 0〜5 で増築) ---
+crm         ─── 顧客 / 会社 / 案件 / 活動タイムライン / タスク (→ platform, settings)
+sales       ─── 見積・請求書 / 入金 / 発行 (append-only) / 帳票メール送付 (→ crm, settings)
+scheduling  ─── 製造ブロック / 作業テンプレ / カレンダー同期 (→ crm, settings)
+telephony   ─── 通話ログ / 録音 / 文字起こしジョブ (→ crm, ai-providers, settings)
+nav-badges  ─── 管理ナビ/ダッシュボードの読み取り専用横断集計 (R6c/#129。KMB-E001/E002 帯)
 ```
 
-依存方向とテーブル所有は [`docs/module-contracts.md`](./docs/module-contracts.md) §1・§2 が単一ソース。
+依存方向とテーブル所有は [`docs/module-contracts.md`](./docs/module-contracts.md) §1・§2(既存)と [`docs/design/crm-suite/00-overview.md`](./docs/design/crm-suite/00-overview.md) §2.2・§10(crm-suite)が単一ソース。sales ⇄ scheduling は相互参照禁止(受注→ブロック生成は app 層合成)。
+
+**管理画面 IA(R0〜R6c リデザイン完了)**: 左ナビは「業務フェーズ別」6 グループ 14 項目(今日の仕事 / ①お客さんを作る / ②受付 / ③商談 / ④製造・請求 / その他)。`.admin-theme` の CSS トークン基盤上で再スタイルし、content 系 5 ルート(works/posts/voices/media/visual)は URL 維持型タブハブ(SiteSecondaryTabs)へ統合。全ルートの href は不変(`src/app/admin/nav-items.ts` が正)。
 
 ## 🚀 セットアップ (次の担当者向け)
 
@@ -79,8 +98,8 @@ npm run dev  # http://localhost:3000
 ```bash
 npm run dev              # dev server
 npm run build            # 本番ビルド
-npm run lint             # ESLint (境界ルール含む)
-npm test                 # Vitest (156 件)
+npm run lint             # ESLint (境界ルール含む。リポジトリ全体 green)
+npm test                 # Vitest (2941 件 / 164 ファイル PASS)
 npx tsx scripts/seed-from-legacy.ts   # 初期コンテンツ投入 (冪等)
 npx tsx scripts/rollback-seed.ts      # 逆順削除
 npx tsx scripts/bootstrap-admin.ts    # 管理者作成 (冪等)
@@ -104,6 +123,7 @@ REVALIDATE_SECRET=... npx tsx scripts/revalidate-tags.ts prices
 - `REVALIDATE_TARGET_URL` は省略時 `NEXT_PUBLIC_SITE_URL` を使う。
 - `REVALIDATE_SECRET` は必須(未設定は fail-closed で即エラー終了)。Vercel 本番 env に設定後は **redeploy が必須**(env はデプロイ時に焼き込まれる仕様)。
 - 実行を忘れても `/shop` は ISR (`revalidate = 3600`) + Data Cache の TTL により、最長 約 2 時間 + 次回アクセスで自己修復する(§10.3)。ただしタグ即時反映のほうが確実なため、価格 seed 後は必ず実行すること。
+- **注意**: 上記の ISR 自己修復網(P1: `export const revalidate`)は現状 `/shop` にしか無い。`works`/`voices`/`posts:*`/`page_media`/`page_text` のキャッシュも同型で「ビルド時に空データで焼き付く」リスクを持つ(是正は未実施)。詳細は [HANDOFF.md §8「焼き付きリスク横展開点検一覧」](./HANDOFF.md) を参照。seed 後は `works`/`voices`/`posts:*` タグの revalidate も本来は必要。`scripts/revalidate-tags.ts` はタグ自体は任意指定可能(コード上の制限なし)なので、`REVALIDATE_SECRET=... npx tsx scripts/revalidate-tags.ts works voices posts:blog page_media page_text site_settings` のように必要なタグをまとめて指定して実行すること。
 
 ## 📜 開発ルール(要点)
 

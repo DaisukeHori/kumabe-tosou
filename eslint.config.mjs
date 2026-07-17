@@ -119,6 +119,8 @@ const eslintConfig = [
       "legacy/**",
       // Claude Code のエージェント worktree・セッション成果物 (lint 対象外)
       ".claude/**",
+      // 管理画面リデザインの設計モック用スクリプト (プロダクトコードではないため lint 対象外)
+      "docs/design/admin-redesign/**",
     ],
   },
   {
