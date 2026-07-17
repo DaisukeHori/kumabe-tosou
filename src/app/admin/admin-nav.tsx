@@ -26,8 +26,12 @@ const COLLAPSED_STORAGE_KEY = "kumabe-admin-nav-collapsed:v2";
  * shadcn の accordion.tsx (@base-ui/react) は既定スタイルが FAQ 向け
  * (not-last:border-b, hover:underline) でナビに不適合のため使わず、
  * customers-table.tsx の onKeyDown 自前パターンと同系統で実装する。
+ *
+ * badgeCounts (#129 R6c): ナビ項目 href → 未対応件数 の対応表 (server の layout.tsx が
+ * navBadgesFacade.getNavBadgeCounts() の結果を渡す)。集計失敗時は undefined を渡すことで
+ * バッジ全非表示に縮退する (ナビ本体は常に通常描画)。値は 0 以上で、0 件は NavLink 側で非表示。
  */
-export function AdminNav() {
+export function AdminNav({ badgeCounts }: { badgeCounts?: Readonly<Record<string, number>> }) {
   const pathname = usePathname();
   // 初期レンダーは常に全展開 (空集合) にして SSR/CSR を一致させる
   // (hydration mismatch 回避)。localStorage の復元はマウント後の useEffect で行う。
@@ -135,7 +139,12 @@ export function AdminNav() {
       {ADMIN_NAV_GROUPS.map((group) => {
         if (group.label === null) {
           return group.items.map((item) => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
+            <NavLink
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              badgeCount={badgeCounts?.[item.href] ?? null}
+            />
           ));
         }
 
@@ -172,7 +181,13 @@ export function AdminNav() {
             {!isCollapsed && (
               <div id={panelId} className="flex flex-col gap-0.5">
                 {group.items.map((item) => (
-                  <NavLink key={item.href} item={item} pathname={pathname} indent />
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    pathname={pathname}
+                    indent
+                    badgeCount={badgeCounts?.[item.href] ?? null}
+                  />
                 ))}
               </div>
             )}
@@ -193,8 +208,9 @@ function NavLink({
   pathname: string;
   indent?: boolean;
   /**
-   * 項目右端に表示する未対応件数バッジ。R1 では「枠だけ用意」で常に null =
-   * 非表示 (数値なし)。実件数の供給は R6c で行う (設計書 §3.1 / #118 非スコープ)。
+   * 項目右端に表示する未対応件数バッジ。R1 では「枠だけ用意」で常に null (非表示) だったが、
+   * R6c (#129) で AdminNav の badgeCounts (server 集計) から実件数が供給される。
+   * null (= 集計失敗の縮退 or 非対象項目) と 0 件はいずれも非表示 (showBadge の条件)。
    */
   badgeCount?: number | null;
 }) {

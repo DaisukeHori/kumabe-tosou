@@ -30,6 +30,9 @@ const MODULES = [
   "sales",
   "scheduling",
   "telephony",
+  // #129 R6c: 管理ナビの未対応件数バッジ用の読み取り専用横断集計 (移行設計.md §6 の唯一の
+  // facade 追加例外)。他モジュール同様、外部からの internal/repository 直 import を禁止する。
+  "nav-badges",
 ];
 
 function restrictedModuleImportPatterns(excludeModule) {
