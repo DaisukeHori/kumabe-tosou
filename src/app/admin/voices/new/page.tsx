@@ -1,4 +1,5 @@
 import type { VoiceInput } from "@/modules/content/contracts";
+import { PageHeader } from "@/app/admin/_ui";
 
 import { listMediaForPicker } from "../media-lookup";
 import { VoiceForm } from "../VoiceForm";
@@ -18,8 +19,8 @@ const EMPTY_VOICE: VoiceInput = {
 export default async function NewVoicePage() {
   const mediaItems = await listMediaForPicker();
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-xl font-semibold">お客様の声を新規作成</h1>
+    <div className="flex flex-col gap-6 p-6">
+      <PageHeader title="お客様の声を新規作成" backHref="/admin/voices" backLabel="← ホームページ更新へ" />
       <VoiceForm mode="create" initialValues={EMPTY_VOICE} mediaItems={mediaItems} />
     </div>
   );

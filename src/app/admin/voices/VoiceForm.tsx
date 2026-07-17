@@ -15,11 +15,15 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ContentStatusBadge } from "@/app/admin/_ui";
 
 import { zVoiceInput, type ContentStatus, type VoiceInput } from "@/modules/content/contracts";
 
 import { createVoiceAction, transitionVoiceAction, updateVoiceAction } from "./actions";
 import type { SimpleMediaItem } from "./media-lookup";
+
+/** 「保存/公開する」ヘッダの保存ボタンは form の外にあるため form 属性で関連付ける (#126 R5)。 */
+const FORM_ID = "voice-edit-form";
 
 type Props = {
   mode: "create" | "edit";
@@ -166,29 +170,43 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
 
   return (
     <div className="max-w-3xl space-y-6">
-      {mode === "edit" && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 p-3">
-          <span className="text-sm">
-            現在の状態: <strong>{STATUS_LABEL[currentStatus]}</strong>
-          </span>
-          {NEXT_TRANSITIONS[currentStatus].map((to) => (
-            <span key={to} className="flex items-center gap-2">
-              {to === "published" && currentStatus === "review" && (
-                <input
-                  type="datetime-local"
-                  value={reservedPublishedAt}
-                  onChange={(e) => setReservedPublishedAt(e.target.value)}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs"
-                  aria-label="予約公開日時 (任意、未指定は即時公開)"
-                />
-              )}
-              <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => onTransition(to)}>
-                {TRANSITION_BUTTON_LABEL[to]}
-              </Button>
-            </span>
-          ))}
+      {/* [#126 R5] モックの「保存/公開する」2 ボタンヘッダ。状態遷移 (下書き→レビュー→公開→
+          アーカイブ) + 予約公開 datetime を保持したまま保存ボタンを上部に集約する
+          (action・バリデーションは不変)。保存ボタンは form={FORM_ID} で form に関連付ける。 */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card px-4 py-3 shadow-surface">
+        <div className="flex items-center gap-2 text-sm">
+          {mode === "edit" ? (
+            <>
+              <span className="text-muted-foreground">状態</span>
+              <ContentStatusBadge status={currentStatus} />
+            </>
+          ) : (
+            <span className="text-muted-foreground">新しいお客様の声を作成します。</span>
+          )}
         </div>
-      )}
+        <div className="flex flex-wrap items-center gap-2">
+          {mode === "edit" &&
+            NEXT_TRANSITIONS[currentStatus].map((to) => (
+              <span key={to} className="flex items-center gap-2">
+                {to === "published" && currentStatus === "review" && (
+                  <input
+                    type="datetime-local"
+                    value={reservedPublishedAt}
+                    onChange={(e) => setReservedPublishedAt(e.target.value)}
+                    className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs"
+                    aria-label="予約公開日時 (任意、未指定は即時公開)"
+                  />
+                )}
+                <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => onTransition(to)}>
+                  {TRANSITION_BUTTON_LABEL[to]}
+                </Button>
+              </span>
+            ))}
+          <Button type="submit" form={FORM_ID} disabled={isPending}>
+            {mode === "create" ? "作成する" : "保存する (Cmd/Ctrl+S)"}
+          </Button>
+        </div>
+      </div>
 
       {serverError && (
         <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -201,7 +219,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+      <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
         <FieldGroup>
           <div className="grid gap-5 sm:grid-cols-2">
             <Field data-invalid={!!errors.customer_initial}>
@@ -293,10 +311,6 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
             </div>
           )}
         </FieldGroup>
-
-        <Button type="submit" disabled={isPending}>
-          {mode === "create" ? "作成する" : "保存する (Cmd/Ctrl+S)"}
-        </Button>
       </form>
     </div>
   );

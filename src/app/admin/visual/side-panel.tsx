@@ -14,8 +14,8 @@ const STATE_LABEL: Record<SlotPanelItem["state"], string> = {
 
 const STATE_CLASS: Record<SlotPanelItem["state"], string> = {
   default: "border-transparent bg-muted text-muted-foreground",
-  custom: "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  placeholder: "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+  custom: "border-transparent bg-status-success-bg text-status-success-fg",
+  placeholder: "border-transparent bg-status-warning-bg text-status-warning-fg",
 };
 
 /** テキストは「未設定」概念が無いため default/custom の 2 値のみ (visual-text-editor.md §1/§5) */
@@ -26,7 +26,7 @@ const TEXT_STATE_LABEL: Record<TextPanelItem["state"], string> = {
 
 const TEXT_STATE_CLASS: Record<TextPanelItem["state"], string> = {
   default: "border-transparent bg-muted text-muted-foreground",
-  custom: "border-transparent bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
+  custom: "border-transparent bg-status-info-bg text-status-info-fg",
 };
 
 const STATUS_LABEL: Record<string, string> = {

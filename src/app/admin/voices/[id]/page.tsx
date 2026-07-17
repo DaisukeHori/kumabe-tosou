@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { contentFacade } from "@/modules/content/facade";
 
 import { listMediaForPicker } from "../media-lookup";
@@ -24,8 +25,8 @@ export default async function EditVoicePage({ params }: { params: Promise<{ id: 
   const voice = result.value;
 
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-xl font-semibold">お客様の声を編集</h1>
+    <div className="flex flex-col gap-6 p-6">
+      <PageHeader title="お客様の声を編集" backHref="/admin/voices" backLabel="← ホームページ更新へ" />
       <VoiceForm
         mode="edit"
         voiceId={voice.id}

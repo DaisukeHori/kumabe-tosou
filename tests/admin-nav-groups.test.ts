@@ -5,10 +5,13 @@ import { ADMIN_NAV_GROUPS, ADMIN_NAV_ITEMS } from "@/app/admin/nav-items";
 /**
  * #94: 管理画面左ナビのグルーピング化。
  * #118 (R1): 「リソース別」→「業務フェーズ別」IA へ再編。**href は不変**で
- * ラベル・グループ・順序・フェーズ番号のみ変更した。全 top-level ルートが
- * 引き続きナビから到達可能であること (= href 集合が従来と完全一致) を回帰防止で検証する。
+ * ラベル・グループ・順序・フェーズ番号のみ変更した。
+ * #126 (R5): content 系 5 項目 (works/posts/voices/media/visual) を「ホームページ更新」
+ * 1 項目 (href=/admin/works) へ統合し、最終形の 6 グループ 14 項目とした。posts/voices/media/
+ * visual の 4 ルートはナビ項目からは外れるが、URL 自体は不変で、/admin/works 配下の
+ * SiteSecondaryTabs (5 タブ) から到達可能なため、ここで検証する「ナビ項目 href 集合」は 14 になる。
  */
-const LEGACY_HREFS = [
+const NAV_HREFS = [
   "/admin",
   "/admin/customers",
   "/admin/deals",
@@ -17,11 +20,7 @@ const LEGACY_HREFS = [
   "/admin/calendar",
   "/admin/calls",
   "/admin/works",
-  "/admin/posts",
-  "/admin/voices",
   "/admin/prices",
-  "/admin/media",
-  "/admin/visual",
   "/admin/inquiries",
   "/admin/studio",
   "/admin/channels",
@@ -40,16 +39,25 @@ const EXPECTED_GROUP_IDS = [
 ] as const;
 
 describe("ADMIN_NAV_GROUPS", () => {
-  it("flatten した href 集合が従来18ルートと完全一致し、重複がない (全ルート到達可能を維持)", () => {
+  it("flatten した href 集合が最終形14ルートと完全一致し、重複がない (全ナビルート到達可能を維持)", () => {
     const hrefs = ADMIN_NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href));
-    expect(hrefs).toHaveLength(18);
-    expect(new Set(hrefs).size).toBe(18);
-    expect(new Set(hrefs)).toEqual(new Set(LEGACY_HREFS));
+    expect(hrefs).toHaveLength(14);
+    expect(new Set(hrefs).size).toBe(14);
+    expect(new Set(hrefs)).toEqual(new Set(NAV_HREFS));
+  });
+
+  it("R5 で統合された content サブルート (posts/voices/media/visual) はナビ項目から外れる (URL は不変・ハブタブから到達)", () => {
+    const hrefs = new Set(ADMIN_NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href)));
+    for (const merged of ["/admin/posts", "/admin/voices", "/admin/media", "/admin/visual"]) {
+      expect(hrefs.has(merged)).toBe(false);
+    }
+    // ハブの入口 (ホームページ更新) は /admin/works として残る。
+    expect(hrefs.has("/admin/works")).toBe(true);
   });
 
   it("ADMIN_NAV_ITEMS (後方互換 derived export) が ADMIN_NAV_GROUPS の flatten と一致する", () => {
     expect(ADMIN_NAV_ITEMS).toEqual(ADMIN_NAV_GROUPS.flatMap((group) => group.items));
-    expect(ADMIN_NAV_ITEMS).toHaveLength(18);
+    expect(ADMIN_NAV_ITEMS).toHaveLength(14);
   });
 
   it("各項目がちょうど1グループに属する (重複なし)", () => {
@@ -59,7 +67,7 @@ describe("ADMIN_NAV_GROUPS", () => {
         counts.set(item.href, (counts.get(item.href) ?? 0) + 1);
       }
     }
-    for (const href of LEGACY_HREFS) {
+    for (const href of NAV_HREFS) {
       expect(counts.get(href)).toBe(1);
     }
   });
@@ -91,6 +99,8 @@ describe("ADMIN_NAV_GROUPS", () => {
     const labelByHref = new Map(ADMIN_NAV_ITEMS.map((item) => [item.href, item.label]));
     expect(labelByHref.get("/admin")).toBe("今日の仕事");
     expect(labelByHref.get("/admin/documents")).toBe("見積書・請求書");
+    // #126 (R5): content 5 項目統合後、/admin/works は「ホームページ更新」ハブの入口ラベルになる。
+    expect(labelByHref.get("/admin/works")).toBe("ホームページ更新");
     expect(labelByHref.get("/admin/studio")).toBe("発信スタジオ");
     expect(labelByHref.get("/admin/channels")).toBe("SNSの接続");
     expect(labelByHref.get("/admin/settings")).toBe("設定");

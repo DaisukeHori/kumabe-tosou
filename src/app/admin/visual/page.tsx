@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
-import { PageHeader } from "@/app/admin/_ui";
+import { PageHeader, SiteSecondaryTabs } from "@/app/admin/_ui";
 import { listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 import { EDITABLE_ROUTES } from "@/modules/page-media/facade";
 
 import { VisualEditor, type PageTab } from "./visual-editor";
 
-export const metadata: Metadata = { title: "ビジュアル編集" };
+export const metadata: Metadata = { title: "見た目の編集" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -53,9 +53,10 @@ export default async function VisualEditorPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="ビジュアル編集"
+        title="見た目の編集"
         description="ページ上の写真をクリックして差し替えます。ホットスポットは Tab で移動、Enter で選択、Esc で閉じます。"
       />
+      <SiteSecondaryTabs />
       {tabs.length === 0 ? (
         <p className="text-sm text-destructive">編集可能なページがありません。</p>
       ) : (
