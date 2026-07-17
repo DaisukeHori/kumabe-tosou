@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ADMIN_NAV_GROUPS, ADMIN_NAV_ITEMS } from "@/app/admin/nav-items";
+import { NAV_BADGE_HREFS } from "@/modules/nav-badges/contracts";
 
 /**
  * #94: 管理画面左ナビのグルーピング化。
@@ -93,6 +94,17 @@ describe("ADMIN_NAV_GROUPS", () => {
     expect(phaseById.get("production")).toBe("④");
     expect(phaseById.get("dashboard")).toBeUndefined();
     expect(phaseById.get("misc")).toBeUndefined();
+  });
+
+  it("NAV_BADGE_HREFS (#129 バッジ宛先の真実源) の href がすべて実在するナビ項目を指す", () => {
+    const navHrefs = new Set(ADMIN_NAV_ITEMS.map((item) => item.href));
+    for (const href of Object.values(NAV_BADGE_HREFS)) {
+      expect(navHrefs.has(href)).toBe(true);
+    }
+    // R6c で件数バッジを持つのは 問い合わせ・通話・やること の 3 項目に固定 (真実源の分散を禁止)。
+    expect(new Set(Object.values(NAV_BADGE_HREFS))).toEqual(
+      new Set(["/admin/inquiries", "/admin/calls", "/admin/tasks"]),
+    );
   });
 
   it("確定済みのラベル改称が nav-items に反映されている (href→label)", () => {

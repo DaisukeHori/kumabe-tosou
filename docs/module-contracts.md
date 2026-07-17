@@ -38,6 +38,7 @@
 | `scheduling` | 作業種別/工数テンプレート/作業ブロック/実績/キャパシティ/外部カレンダー双方向同期 — 03-scheduling.md が親設計 | work_types, work_templates, work_template_items, work_blocks, calendar_connections, calendar_event_links | KMB-E701〜E739 | SchedulingFacade |
 | `telephony` | Twilio 発番設定/着信 webhook/録音/通話ジョブ (転写→議事録→タスク起票)/通話 UI — 04-telephony.md が親設計 | calls, call_recordings, call_jobs (+Storage bucket: call-audio) | KMB-E801〜E839 | TelephonyFacade |
 | `site-public` | 公開サイトの表示 (App Router ページ群) | **所有テーブルなし** (read 専用) | なし | なし (他 facade の消費者) |
+| `nav-badges` | 管理サイドナビの未対応件数バッジ用の**読み取り専用横断集計** (問い合わせ/通話/やること) — 管理画面リデザイン移行設計.md §6 の唯一の facade 追加例外 (#129 R6c) | **所有テーブルなし** (contact_inquiries / calls / tasks へ**行を引かない count のみ**発行。書込・行取得は各所有モジュール facade 経由) | KMB-E0xx (E001, E002 — 新設「0xx 横断集計」帯) | NavBadgesFacade |
 
 規則:
 - テーブルへの直接クエリは**所有モジュールの repository のみ**。他モジュールは facade 経由。

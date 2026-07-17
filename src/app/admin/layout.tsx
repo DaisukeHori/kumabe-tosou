@@ -4,6 +4,8 @@ import { headers } from "next/headers";
 
 import { Toaster } from "@/components/ui/sonner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { NAV_BADGE_HREFS } from "@/modules/nav-badges/contracts";
+import { navBadgesFacade } from "@/modules/nav-badges/facade";
 
 import { AdminNav } from "./admin-nav";
 import { logoutAction } from "./actions";
@@ -57,6 +59,34 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     data: { user },
   } = await supabase.auth.getUser();
 
+  // [#129 R6c] ナビの未対応件数バッジ (問い合わせ/通話/やること) を server 集計する。
+  // 【失敗時非表示縮退】集計が err / タイムアウトでも badgeCounts=undefined を渡すだけで
+  // ナビは通常描画される (レイアウトを壊さない)。facade は Result を返し throw しない設計だが、
+  // 万一の例外でもシェル全体が落ちないよう try/catch でも二重に囲む (エラーはログのみ)。
+  // タイムアウト (NAV_BADGE_TIMEOUT_MS) により、この await が全 admin ページの描画をブロック
+  // する時間には上限がある (超過時は縮退)。
+  let navBadgeCounts: Record<string, number> | undefined;
+  if (user) {
+    try {
+      const counts = await navBadgesFacade.getNavBadgeCounts();
+      if (counts.ok) {
+        // href は contracts の NAV_BADGE_HREFS を真実源にする (文字列直書きの分散を排除)。
+        navBadgeCounts = {
+          [NAV_BADGE_HREFS.inquiries]: counts.value.inquiries,
+          [NAV_BADGE_HREFS.calls]: counts.value.calls,
+          [NAV_BADGE_HREFS.tasks]: counts.value.tasks,
+        };
+      } else {
+        console.error(
+          `[${counts.code}] admin ナビバッジ集計に失敗しました (バッジ非表示に縮退):`,
+          counts.detail,
+        );
+      }
+    } catch (err) {
+      console.error("admin ナビバッジ集計で予期しない例外 (バッジ非表示に縮退):", err);
+    }
+  }
+
   return (
     // admin-shell: 公開サイトのクリーム背景 (--primer) とは別の、CMS ツールらしい
     // 暖色クリーム背景 (--admin-canvas, globals.css で admin 専用に定義)。
@@ -77,7 +107,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <p className="text-[11px] text-admin-text-meta">しごと管理</p>
           </div>
         </div>
-        <AdminNav />
+        <AdminNav badgeCounts={navBadgeCounts} />
         <div className="mt-4 border-t border-admin-divider px-3 pt-3">
           <p className="truncate text-xs text-admin-text-meta">{user?.email}</p>
           <form action={logoutAction} className="mt-1.5">
