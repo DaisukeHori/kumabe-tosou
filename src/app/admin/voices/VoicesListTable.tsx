@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { ContentStatusBadge, DataTableHeaderRow, DataTableShell, dataTableRowClassName } from "@/app/admin/_ui";
+import { ContentStatusBadge, DataTableHeaderRow, DataTableShell, dataTableRowClassName, formatJstDateTime } from "@/app/admin/_ui";
 import type { AdminVoice } from "@/modules/content/contracts";
 
 const GRID_COLS = "grid-cols-[1fr_auto_auto_auto_auto]";
@@ -64,7 +64,7 @@ export function VoicesListTable({ items }: { items: AdminVoice[] }) {
             </div>
             <ContentStatusBadge status={item.status} />
             <div className="text-xs whitespace-nowrap text-muted-foreground">
-              {new Date(item.updated_at).toLocaleString("ja-JP")}
+              {formatJstDateTime(item.updated_at)}
             </div>
           </div>
         ))}

@@ -2,6 +2,8 @@ export { Surface, DataTableShell } from "./surface";
 export { PageHeader } from "./page-header";
 export { DataTableHeaderRow, dataTableRowClassName } from "./data-table";
 export { ContentStatusBadge } from "./status-badge";
+// [#418 fix] timestamptz の JST 決定的整形 (SSR/クライアントで一致させ hydration mismatch を防ぐ)
+export { formatJstDate, formatJstDateTime } from "./jst-format";
 // [#117 R0] admin リデザイン共通 UI 小物 (後続 Issue R1〜R6 が使用)
 export { UnderlineTabs, type UnderlineTab } from "./underline-tabs";
 // [#126 R5] ホームページ更新ハブの 5 タブ (works/posts/voices/media/visual 統合)

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { DataTableHeaderRow, DataTableShell, dataTableRowClassName } from "@/app/admin/_ui";
+import { DataTableHeaderRow, DataTableShell, dataTableRowClassName, formatJstDate } from "@/app/admin/_ui";
 import type { CompanyListItem } from "@/modules/crm/contracts";
 
 import { CompanySheet } from "./CompanySheet";
@@ -66,7 +66,7 @@ export function CompaniesTable({ items }: { items: CompanyListItem[] }) {
               <div className="truncate text-meta text-muted-foreground">{item.address ?? "—"}</div>
               <div className="text-meta text-muted-foreground">{item.customer_count}</div>
               <div className="text-meta whitespace-nowrap text-muted-foreground">
-                {new Date(item.updated_at).toLocaleDateString("ja-JP")}
+                {formatJstDate(item.updated_at)}
               </div>
             </div>
           ))}

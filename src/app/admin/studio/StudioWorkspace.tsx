@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { NoticePanel, StageProgress, Surface, type StageProgressStep } from "@/app/admin/_ui";
+import { NoticePanel, StageProgress, Surface, formatJstDateTime, type StageProgressStep } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -169,7 +169,7 @@ function SourceSidebar({ sources, selectedSourceId, disabled }: { sources: Sourc
             }
           >
             <p className="truncate">{(s.raw_text ?? "(音声/未処理)").slice(0, 30) || "(空)"}</p>
-            <p className="mt-0.5 opacity-70">{new Date(s.created_at).toLocaleString("ja-JP")}</p>
+            <p className="mt-0.5 opacity-70">{formatJstDateTime(s.created_at)}</p>
           </button>
         ))}
       </div>
@@ -526,7 +526,7 @@ function StartRunForm({
                 onClick={() => router.push(`/admin/studio?source=${sourceId}&run=${r.id}`)}
                 className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
               >
-                {r.status} / {new Date(r.created_at).toLocaleString("ja-JP")}
+                {r.status} / {formatJstDateTime(r.created_at)}
               </button>
             ))}
           </div>
