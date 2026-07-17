@@ -1,7 +1,6 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 
-import { PageHeader, Surface } from "@/app/admin/_ui";
+import { PageHeader, PillToggle, Surface } from "@/app/admin/_ui";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { aiProvidersFacade } from "@/modules/ai-providers/facade";
@@ -129,19 +128,19 @@ export default async function AdminCostsPage({
         <UsageStackedBarChart data={chartData} />
       </Surface>
 
-      <div className="flex flex-wrap gap-2">
-        {PERIOD_OPTIONS.map((opt) => (
-          <Link key={opt.key} href={`/admin/costs?period=${opt.key}`}>
-            <Badge variant={period === opt.key ? "default" : "outline"} className="cursor-pointer px-3 py-1">
-              {opt.label}
-            </Badge>
-          </Link>
-        ))}
-      </div>
+      <PillToggle
+        ariaLabel="集計期間"
+        items={PERIOD_OPTIONS.map((opt) => ({
+          key: opt.key,
+          label: opt.label,
+          href: `/admin/costs?period=${opt.key}`,
+          active: period === opt.key,
+        }))}
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Surface className="overflow-hidden p-0">
-          <p className="border-b border-admin-card-border px-4 py-3 text-sm font-medium text-foreground">モデル別</p>
+          <p className="border-b border-border px-4 py-3 text-sm font-medium text-foreground">モデル別</p>
           <Table>
             <TableHeader>
               <TableRow>
@@ -175,7 +174,7 @@ export default async function AdminCostsPage({
         </Surface>
 
         <Surface className="overflow-hidden p-0">
-          <p className="border-b border-admin-card-border px-4 py-3 text-sm font-medium text-foreground">キー別</p>
+          <p className="border-b border-border px-4 py-3 text-sm font-medium text-foreground">キー別</p>
           <Table>
             <TableHeader>
               <TableRow>
@@ -202,7 +201,7 @@ export default async function AdminCostsPage({
         </Surface>
 
         <Surface className="overflow-hidden p-0">
-          <p className="border-b border-admin-card-border px-4 py-3 text-sm font-medium text-foreground">feature別</p>
+          <p className="border-b border-border px-4 py-3 text-sm font-medium text-foreground">feature別</p>
           <Table>
             <TableHeader>
               <TableRow>

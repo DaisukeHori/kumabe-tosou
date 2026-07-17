@@ -278,7 +278,7 @@ function ActivityBody({ item }: { item: TimelineItem }) {
         <div
           className={cn(
             "text-sm",
-            isWarning && "rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-amber-700 dark:text-amber-400",
+            isWarning && "rounded-lg border border-status-warning-border bg-status-warning-panel px-2.5 py-2 text-status-warning-fg",
           )}
         >
           <p>{item.title}</p>

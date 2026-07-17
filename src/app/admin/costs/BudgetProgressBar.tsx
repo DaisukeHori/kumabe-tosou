@@ -6,7 +6,7 @@ import { budgetProgressRatio } from "./aggregate";
  * 「塗りプログレスバー」の意匠 (components/motion/paint-progress.tsx の
  * 塗り進める見た目のモチーフ) を流用した、静的な塗りバー。
  * ページスクロール追従の JS (PaintProgress) はここでは不要 (値は SSR 時点で確定) なため、
- * 見た目だけを踏襲した最小実装 (track を bg-muted、塗りを bg-primary/bg-destructive) にする。
+ * 見た目だけを踏襲した最小実装 (track を R0 の --color-admin-well、塗りを bg-primary/bg-destructive) にする。
  * 90% 以上で destructive (admin の警告色) に切り替え、予算逼迫を視覚化する。
  */
 export function BudgetProgressBar({
@@ -37,7 +37,7 @@ export function BudgetProgressBar({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={label}
-        className="h-2 w-full overflow-hidden rounded-full bg-muted"
+        className="h-2 w-full overflow-hidden rounded-full bg-admin-well"
       >
         <div
           className={cn("h-full rounded-full transition-[width]", isNearLimit ? "bg-destructive" : "bg-primary")}

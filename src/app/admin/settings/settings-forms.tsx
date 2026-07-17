@@ -487,7 +487,7 @@ function SeoDefaultsForm({
         </Field>
       </FieldGroup>
       {state.warning && (
-        <p role="status" className="mt-3 text-sm text-amber-600">
+        <p role="status" className="mt-3 text-sm text-status-warning-fg">
           {state.warning}
         </p>
       )}
@@ -625,7 +625,7 @@ function BrandingForm({
         </Field>
       </FieldGroup>
       {state.warning && (
-        <p role="status" className="mt-3 text-sm text-amber-600">
+        <p role="status" className="mt-3 text-sm text-status-warning-fg">
           {state.warning}
         </p>
       )}

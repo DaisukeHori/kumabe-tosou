@@ -35,11 +35,13 @@ const STATUS_LABELS: Record<AiKeyStatus, string> = {
   limited: "レート制限中",
 };
 
-function statusBadgeVariant(status: AiKeyStatus): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "ok") return "default";
-  if (status === "failed") return "destructive";
-  if (status === "limited") return "outline";
-  return "secondary";
+// [#128 R6b] AI キー状態を R0 のステータス 5 系統へ意味写像する
+// (旧: default(=primary 赤)/destructive/outline/secondary → success/urgent/warning/neutral)。
+function statusBadgeVariant(status: AiKeyStatus): "success" | "urgent" | "warning" | "neutral" {
+  if (status === "ok") return "success";
+  if (status === "failed") return "urgent";
+  if (status === "limited") return "warning";
+  return "neutral";
 }
 
 /** キーごとのモデル管理パネル (検知済みモデルの有効化 + text 既定モデルのラジオ選択、§6-2) */
