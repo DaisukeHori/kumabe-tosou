@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { PageHeader } from "@/app/admin/_ui";
+import { PageHeader, SiteSecondaryTabs } from "@/app/admin/_ui";
 import { contentFacade } from "@/modules/content/facade";
 import type { ContentStatus } from "@/modules/content/contracts";
 
@@ -60,6 +60,7 @@ export default async function VoicesListPage({
           </Link>
         }
       />
+      <SiteSecondaryTabs />
 
       <form method="get" className="flex flex-wrap items-center gap-3">
         <input

@@ -1,4 +1,5 @@
 import type { WorkInput } from "@/modules/content/contracts";
+import { PageHeader } from "@/app/admin/_ui";
 import { listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 
 import { WorkForm } from "../WorkForm";
@@ -19,8 +20,8 @@ const EMPTY_WORK: WorkInput = {
 export default async function NewWorkPage() {
   const mediaList = await listMediaForPicker();
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-xl font-semibold">施工事例を新規作成</h1>
+    <div className="flex flex-col gap-6 p-6">
+      <PageHeader title="施工事例を新規作成" backHref="/admin/works" backLabel="← ホームページ更新へ" />
       <WorkForm
         mode="create"
         initialValues={EMPTY_WORK}

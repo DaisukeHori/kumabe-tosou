@@ -16,11 +16,15 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ContentStatusBadge, NoticePanel } from "@/app/admin/_ui";
 import { MediaPicker, type PickerMediaItem } from "@/app/admin/_ui/media-picker";
 
 import { zPostInput, type ContentStatus, type PostInput, type PostKind } from "@/modules/content/contracts";
 
 import { createPostAction, transitionPostAction, updatePostAction } from "./actions";
+
+/** 「保存/公開する」ヘッダの保存ボタンは form の外にあるため form 属性で関連付ける (#126 R5)。 */
+const FORM_ID = "post-edit-form";
 
 type Props = {
   mode: "create" | "edit";
@@ -30,6 +34,11 @@ type Props = {
   initialValues: PostInput;
   mediaItems: PickerMediaItem[];
   mediaNextCursor?: string | null;
+  /**
+   * posts.source_run_id (AI 生成元の ai_runs.id)。非 null の場合のみ AI 生成注記バナーを出す
+   * (#126 R5: 「生成元メタがある場合のみ表示」)。手動作成の記事では null のためバナーは出さない。
+   */
+  sourceRunId?: string | null;
 };
 
 const KIND_LABEL: Record<PostKind, string> = {
@@ -67,6 +76,7 @@ export function PostForm({
   initialValues,
   mediaItems,
   mediaNextCursor = null,
+  sourceRunId = null,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -186,28 +196,48 @@ export function PostForm({
     <div className="max-w-3xl space-y-6">
       <p className="text-sm text-muted-foreground">種類: {KIND_LABEL[initialValues.kind]}</p>
 
-      {mode === "edit" && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 p-3">
-          <span className="text-sm">
-            現在の状態: <strong>{STATUS_LABEL[currentStatus]}</strong>
-          </span>
-          {NEXT_TRANSITIONS[currentStatus].map((to) => (
-            <span key={to} className="flex items-center gap-2">
-              {to === "published" && currentStatus === "review" && (
-                <input
-                  type="datetime-local"
-                  value={reservedPublishedAt}
-                  onChange={(e) => setReservedPublishedAt(e.target.value)}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs"
-                  aria-label="予約公開日時 (任意、未指定は即時公開)"
-                />
-              )}
-              <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => onTransition(to)}>
-                {TRANSITION_BUTTON_LABEL[to]}
-              </Button>
-            </span>
-          ))}
+      {/* [#126 R5] モックの「保存/公開する」2 ボタンヘッダ。状態遷移 (下書き→レビュー→公開→
+          アーカイブ) + 予約公開 datetime を保持したまま保存ボタンを上部に集約する
+          (action・バリデーションは不変)。保存ボタンは form={FORM_ID} で form に関連付ける。 */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card px-4 py-3 shadow-surface">
+        <div className="flex items-center gap-2 text-sm">
+          {mode === "edit" ? (
+            <>
+              <span className="text-muted-foreground">状態</span>
+              <ContentStatusBadge status={currentStatus} />
+            </>
+          ) : (
+            <span className="text-muted-foreground">新しい記事を作成します。</span>
+          )}
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {mode === "edit" &&
+            NEXT_TRANSITIONS[currentStatus].map((to) => (
+              <span key={to} className="flex items-center gap-2">
+                {to === "published" && currentStatus === "review" && (
+                  <input
+                    type="datetime-local"
+                    value={reservedPublishedAt}
+                    onChange={(e) => setReservedPublishedAt(e.target.value)}
+                    className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs"
+                    aria-label="予約公開日時 (任意、未指定は即時公開)"
+                  />
+                )}
+                <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => onTransition(to)}>
+                  {TRANSITION_BUTTON_LABEL[to]}
+                </Button>
+              </span>
+            ))}
+          <Button type="submit" form={FORM_ID} disabled={isPending}>
+            {mode === "create" ? "作成する" : "保存する (Cmd/Ctrl+S)"}
+          </Button>
+        </div>
+      </div>
+
+      {sourceRunId && (
+        <NoticePanel tone="info" title="この記事は AI が生成した下書きです">
+          AI 生成の下書きから作成されました。公開前に内容 (事実・固有名詞・表現) を必ず確認してください。
+        </NoticePanel>
       )}
 
       {serverError && (
@@ -221,7 +251,7 @@ export function PostForm({
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+      <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
         <input type="hidden" {...register("kind")} />
         <FieldGroup>
           <Field data-invalid={!!errors.title}>
@@ -310,10 +340,6 @@ export function PostForm({
             <FieldError errors={errors.cover_media_id ? [errors.cover_media_id] : undefined} />
           </Field>
         </FieldGroup>
-
-        <Button type="submit" disabled={isPending}>
-          {mode === "create" ? "作成する" : "保存する (Cmd/Ctrl+S)"}
-        </Button>
       </form>
 
       <MediaPicker

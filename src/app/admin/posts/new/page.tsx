@@ -1,4 +1,5 @@
 import type { PostInput, PostKind } from "@/modules/content/contracts";
+import { PageHeader } from "@/app/admin/_ui";
 import { listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 
 import { PostForm } from "../PostForm";
@@ -29,8 +30,12 @@ export default async function NewPostPage({
   const mediaList = await listMediaForPicker();
 
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-xl font-semibold">記事を新規作成</h1>
+    <div className="flex flex-col gap-6 p-6">
+      <PageHeader
+        title="記事を新規作成"
+        backHref={`/admin/posts?kind=${kind}`}
+        backLabel="← ホームページ更新へ"
+      />
       <PostForm
         mode="create"
         initialValues={initialValues}

@@ -161,7 +161,7 @@ export function MediaGrid({ items }: { items: MediaListItem[] }) {
             onFocus={() => setFocusedIndex(index)}
             onClick={() => setEditId(item.id)}
             className={cn(
-              "cursor-pointer rounded-xl border border-admin-card-border bg-card p-2 shadow-md outline-none transition-colors",
+              "cursor-pointer rounded-surface border border-border bg-card p-2 shadow-surface outline-none transition-colors",
               focusedIndex === index ? "ring-2 ring-primary" : "hover:bg-muted/40",
             )}
           >
@@ -357,7 +357,7 @@ function UploadRowStatusIndicator({ status }: { status: UploadRowStatus }) {
   }
   if (status === "done") {
     return (
-      <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+      <span className="flex items-center gap-1 text-[11px] text-status-success-fg">
         <CircleCheckIcon className="size-3" />
         完了
       </span>
@@ -591,7 +591,7 @@ function UploadMediaDialog({ onClose, onUploaded }: { onClose: () => void; onUpl
               {rows.map((row) => (
                 <div
                   key={row.id}
-                  className="flex items-start gap-2 rounded-lg border border-admin-card-border bg-card p-2"
+                  className="flex items-start gap-2 rounded-lg border border-border bg-card p-2"
                 >
                   <div className="relative size-12 shrink-0 overflow-hidden rounded-md bg-muted">
                     {/* eslint-disable-next-line @next/next/no-img-element */}

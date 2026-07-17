@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { contentFacade } from "@/modules/content/facade";
 import { ensureMediaItems, listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 
@@ -27,8 +28,8 @@ export default async function EditWorkPage({ params }: { params: Promise<{ id: s
   const mediaItems = await ensureMediaItems(mediaList.items, [work.cover_media_id, ...work.image_ids]);
 
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-xl font-semibold">施工事例を編集</h1>
+    <div className="flex flex-col gap-6 p-6">
+      <PageHeader title="施工事例を編集" backHref="/admin/works" backLabel="← ホームページ更新へ" />
       <WorkForm
         mode="edit"
         workId={work.id}

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { PageHeader } from "@/app/admin/_ui";
 import { contentFacade } from "@/modules/content/facade";
 import { ensureMediaItems, listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 
@@ -27,8 +28,12 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
   const mediaItems = await ensureMediaItems(mediaList.items, [post.cover_media_id]);
 
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-xl font-semibold">記事を編集</h1>
+    <div className="flex flex-col gap-6 p-6">
+      <PageHeader
+        title="記事を編集"
+        backHref={`/admin/posts?kind=${post.kind}`}
+        backLabel="← ホームページ更新へ"
+      />
       <PostForm
         mode="edit"
         postId={post.id}
@@ -44,6 +49,7 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
         }}
         mediaItems={mediaItems}
         mediaNextCursor={mediaList.nextCursor}
+        sourceRunId={post.source_run_id}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { PageHeader } from "@/app/admin/_ui";
+import { PageHeader, PillToggle, SiteSecondaryTabs, type PillItem } from "@/app/admin/_ui";
 import { contentFacade } from "@/modules/content/facade";
 import type { ContentStatus, PostKind } from "@/modules/content/contracts";
 
@@ -59,6 +59,15 @@ export default async function PostsListPage({
   if (search) nextQuery.set("q", search);
   if (result.value.next_cursor) nextQuery.set("cursor", result.value.next_cursor);
 
+  // ハブタブ配下の二次フィルタ (移行設計.md §1.2A: kind タブは共存)。R0 の PillToggle で
+  // reading/news/blog を切り替える。URL クエリ (?kind=) は現行のまま維持する。
+  const kindPills: PillItem[] = KIND_TABS.map((tab) => ({
+    key: tab.value,
+    label: tab.label,
+    href: `/admin/posts?kind=${tab.value}`,
+    active: tab.value === kind,
+  }));
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -72,23 +81,9 @@ export default async function PostsListPage({
           </Link>
         }
       />
+      <SiteSecondaryTabs />
 
-      <nav className="flex gap-2 border-b border-border" aria-label="記事の種類">
-        {KIND_TABS.map((tab) => (
-          <Link
-            key={tab.value}
-            href={`/admin/posts?kind=${tab.value}`}
-            aria-current={tab.value === kind ? "page" : undefined}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm ${
-              tab.value === kind
-                ? "border-primary font-medium text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+      <PillToggle items={kindPills} ariaLabel="記事の種類" />
 
       <form method="get" className="flex flex-wrap items-center gap-3">
         <input type="hidden" name="kind" value={kind} />
