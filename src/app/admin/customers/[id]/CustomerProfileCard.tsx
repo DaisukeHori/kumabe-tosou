@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Surface } from "@/app/admin/_ui";
+import { Surface, formatJstDate } from "@/app/admin/_ui";
 import type { CustomerAddressBlock, CustomerDetail } from "@/modules/crm/contracts";
 
 import { CustomerDetailActions } from "./CustomerDetailActions";
@@ -91,7 +91,7 @@ export function CustomerProfileCard({ customer }: { customer: CustomerDetail }) 
         <dt className="text-admin-text-label">流入元</dt>
         <dd className="text-foreground">{customer.source}</dd>
         <dt className="text-admin-text-label">登録日</dt>
-        <dd className="text-foreground">{new Date(customer.created_at).toLocaleDateString("ja-JP")}</dd>
+        <dd className="text-foreground">{formatJstDate(customer.created_at)}</dd>
       </dl>
 
       {customer.notes && (

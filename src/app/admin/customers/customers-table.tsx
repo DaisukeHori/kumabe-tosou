@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
-import { DataTableHeaderRow, DataTableShell, dataTableRowClassName } from "@/app/admin/_ui";
+import { DataTableHeaderRow, DataTableShell, dataTableRowClassName, formatJstDate } from "@/app/admin/_ui";
 import type { CustomerListItem } from "@/modules/crm/contracts";
 
 const GRID_COLS = "grid-cols-[1.4fr_1.4fr_1fr_auto_auto_auto]";
@@ -87,7 +87,7 @@ export function CustomersTable({ items }: { items: CustomerListItem[] }) {
             <Badge variant={lifecycleBadgeVariant(item.lifecycle)}>{LIFECYCLE_LABEL[item.lifecycle]}</Badge>
             <div className="text-meta text-muted-foreground">{item.open_deal_count}</div>
             <div className="text-meta whitespace-nowrap text-muted-foreground">
-              {new Date(item.created_at).toLocaleDateString("ja-JP")}
+              {formatJstDate(item.created_at)}
             </div>
           </div>
         ))}

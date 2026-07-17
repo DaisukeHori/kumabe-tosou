@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { ContentStatusBadge, DataTableHeaderRow, DataTableShell, dataTableRowClassName } from "@/app/admin/_ui";
+import { ContentStatusBadge, DataTableHeaderRow, DataTableShell, dataTableRowClassName, formatJstDateTime } from "@/app/admin/_ui";
 import type { AdminWork } from "@/modules/content/contracts";
 
 const GRID_COLS = "grid-cols-[1fr_auto_auto_auto]";
@@ -65,7 +65,7 @@ export function WorksListTable({ items }: { items: AdminWork[] }) {
             <div className="text-xs text-muted-foreground">{item.category}</div>
             <ContentStatusBadge status={item.status} />
             <div className="text-xs whitespace-nowrap text-muted-foreground">
-              {new Date(item.updated_at).toLocaleString("ja-JP")}
+              {formatJstDateTime(item.updated_at)}
             </div>
           </div>
         ))}
