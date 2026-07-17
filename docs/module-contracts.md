@@ -1,6 +1,16 @@
 # モジュール契約書 (canonical)
 
-- 版: v2.8 (2026-07-11: CRM スイート追加 — crm/sales/scheduling/telephony の 4 モジュール新設 (00-overview.md §2)、
+- 版: v2.9 (2026-07-17: 契約同期 (#19) — Wave1〜2 実装で入った facade 拡張・列追加を現行コードへ同期。
+  ① AiStudioFacade.startRun に第 4 引数 `styleProfiles: StyleProfilesByChannel` を追加 (§5) — Issue #20 で
+  DistributionFacade.getStyleProfiles() の結果を app 層 (POST /api/ai/runs) が取得し startRun に渡す合成パターンが
+  配線済みになった実態を反映。ai_runs.style_profiles jsonb 列 (migration 20260714000036)、zChannelStyleProfile /
+  zStyleProfilesByChannel を §4.3 に追加。DistributionFacade.getStyleProfiles の「Wave 3 で配線」注記を配線済みへ更新 (§5)。
+  ② PricingFacade の admin 専用拡張 (getFullPriceTable / savePriceGrade / savePriceOption / replacePriceSizeClasses /
+  replacePriceMatrix / replacePriceQuantityTiers) を §5 に「契約外拡張」として明示 (facade.ts の乖離注記を格上げ)。
+  ③ rate_limits の app 層直アクセス経路 (contact/lead route が service client で読み書き — RateLimitFacade は未新設) を §1 に注記。
+  なお ContentFacade.createBlogPostFromDraft の source_run_id・InquiryFacade.submit の Resend 通知内蔵・rate_limits の
+  inquiry 所有は既に契約 (§5/§1) と一致しており本改訂での変更はなし — #19 起票時の乖離は v2.3〜v2.8 で解消済みを実測確認)
+- 旧版: v2.8 (2026-07-11: CRM スイート追加 — crm/sales/scheduling/telephony の 4 モジュール新設 (00-overview.md §2)、
   ExecutionContext と AI facade のバックグラウンド実行契約 (同 §3.1、裁定 J2)、activities タイムライン・ハブ統合契約 (同 §3.2.3)、
   共通スカラー (E.164/JPY/税区分/書類番号)、SETTINGS_SCHEMAS に analytics/branding/invoice_issuer/business_hours/work_capacity/telephony、
   KMB-E6xx/E7xx/E8xx 帯の割当 (E608/E807 含む — 個別 canonical は 00-overview §3.3)、zEstimateInput.quantity max 1000 是正 (裁定 J6)、
@@ -42,6 +52,7 @@
 
 規則:
 - テーブルへの直接クエリは**所有モジュールの repository のみ**。他モジュールは facade 経由。
+- **rate_limits は inquiry 所有だが、現行実装では facade を経ず app 層 (`src/components/contact/rate-limit.server.ts` — contact フォーム / POST /api/shop/lead リード) が service client で直接読み書きする** (v2.9 注記)。RLS が anon/authenticated ポリシーを持たない service 専用テーブルで、site-public 保護という inquiry 隣接の関心事だが RateLimitFacade は未新設 (contact INSERT を InquiryFacade.submit の例外とする §2 と同じ「公開サイトからの限定的直アクセス」枠)。facade 化が必要と判断された時点で本書を先に改訂する
 - エラーコードの新設は所有モジュールの契約変更として本書を先に更新。
 - KMB-E6xx/E7xx/E8xx の個別割当 canonical は docs/design/crm-suite/00-overview.md §3.3。帯内の追加は本書改訂が先
 - **activities への直接クエリは crm repository のみ**。他モジュールのタイムライン書き込みは `CrmFacade.appendActivity` に限る (§7.9 の統合契約)
@@ -411,6 +422,23 @@ export const zTokenUsage = z.object({
   web_search_requests: z.number().int().min(0).default(0),
 }).strict();
 // → ai_runs.token_usage (stage 別合算)
+
+/** v2.9 (Issue #20): チャネル別文体プロファイル。distribution/contracts.ts の StyleProfile と
+ *  構造的同型を ai-studio 側に独立定義する (ai-studio → distribution の import は依存方向 §2 で
+ *  禁止のため — フィールド変更時は distribution 側 StyleProfile も同期させること)。
+ *  startRun の第 4 引数 (§5) として app 層 (POST /api/ai/runs) が DistributionFacade.getStyleProfiles()
+ *  の結果を渡し、ai_runs.style_profiles jsonb 列 (migration 20260714000036) に確定保存する。 */
+export const zChannelStyleProfile = z.object({
+  tone_instructions: z.string(),
+  format_rules: z.string(),
+  example_output: z.string().nullable(),
+}).strict();
+export type ChannelStyleProfile = z.infer<typeof zChannelStyleProfile>;
+
+/** 4 チャネル全件マップ (z.record + enum key で全キー必須の exhaustive。
+ *  getStyleProfiles() が常に 4 チャネル全件を返す前提と一致)。→ ai_runs.style_profiles */
+export const zStyleProfilesByChannel = z.record(zChannel, zChannelStyleProfile);
+export type StyleProfilesByChannel = z.infer<typeof zStyleProfilesByChannel>;
 ```
 
 ### 4.4 channel_drafts.content — チャネル別コンテンツ (ai-studio/contracts.ts)
@@ -1402,7 +1430,13 @@ export interface AiStudioFacade {
   createSource(input: CreateSourceInput): Promise<Result<{ source_id: string }>>;
   createAudioUploadUrl(req: CreateUploadUrlInput): Promise<Result<{ upload_url: string; storage_path: string }>>;
   confirmCleanedText(sourceId: string, finalText: string): Promise<Result<void>>; // 整文の人間確定 (stage 1.5)
-  startRun(sourceId: string, channels: Channel[], research: boolean): Promise<Result<{ run_id: string }>>;
+  // v2.9: 第 4 引数 styleProfiles を追加 (Issue #20)。ai-studio → distribution の import は依存方向 §2 で
+  // 禁止のため、DistributionFacade.getStyleProfiles() (4 チャネル全件) を app 層 (POST /api/ai/runs) が取得し
+  // startRun に渡す合成パターン。startRun 時点で ai_runs.style_profiles (jsonb、migration 20260714000036) に
+  // 確定保存し、drafting ステージ再試行・regenerateDraft は run の生存期間中この値を使い続ける。
+  // StyleProfilesByChannel は distribution の StyleProfile と構造的同型を ai-studio 側に独立定義 (§4.3、逆流回避)
+  startRun(sourceId: string, channels: Channel[], research: boolean,
+    styleProfiles: StyleProfilesByChannel): Promise<Result<{ run_id: string }>>;
   advanceRun(runId: string): Promise<Result<{ status: RunStatus }>>; // 1 呼び出し = 1 stage (lease 取得込み、§7.1)
   editDraft(draftId: string, content: unknown): Promise<Result<{ revision: number }>>; // human revision を積む
   approveDraft(draftId: string): Promise<Result<void>>;
@@ -1413,9 +1447,11 @@ export interface AiStudioFacade {
 // distribution/facade.ts
 export interface DistributionFacade {
   getStyleProfiles(): Promise<Result<Record<Channel, StyleProfile>>>;
-  // ai-studio の draft 生成は本メソッドの結果を **app 層 (route handler) が取得して
-  // AiStudioFacade に引数で渡す** 合成パターンで使う (ai-studio → distribution の
-  // 依存を作らないため。Wave2-E で暫定ハードコードになっている箇所の正式解 — Wave 3 で配線)
+  // ai-studio の draft 生成は本メソッドの結果を **app 層 (route handler、POST /api/ai/runs) が取得して
+  // AiStudioFacade.startRun に引数で渡す** 合成パターンで使う (ai-studio → distribution の
+  // 依存を作らないため)。v2.9: Wave2-E の暫定ハードコード (旧 ai-studio/internal/prompts.ts の
+  // DEFAULT_STYLE_PROFILES) は Issue #20 で解消済み — startRun の styleProfiles 引数へ配線し
+  // ai_runs.style_profiles (jsonb) に確定保存する (未接続チャネルも既定文体で 4 チャネル全件を返す)
   schedulePosts(entries: ScheduleEntry[]): Promise<Result<{ post_ids: string[] }>>; // entry = {draft_id, scheduled_at|null}
   cancel(postId: string): Promise<Result<void>>;
   markNotePublished(postId: string, externalUrl: string): Promise<Result<void>>;
@@ -1476,6 +1512,19 @@ export interface AiProvidersFacade {
 export interface PricingFacade {
   getActivePriceTable(): Promise<Result<PriceTable>>;
   estimate(input: EstimateInput): Result<EstimateResult>; // 純関数。shop シミュレータと admin プレビューで共用
+
+  // ---- 契約外拡張 (admin — 拡張規約。/admin/prices の行列インライン編集に必須。v2.9 で §5 に明示) ----
+  // 上記 2 メソッドはモジュール間契約として不変。以下は自モジュールの admin Server Action からのみ呼ぶ
+  // (ESLint 境界で admin 画面から repository を直接呼べないため facade 経由。他モジュールからの呼び出しは禁止)。
+  // 実装は createPricingFacade() ファクトリ経由 (getActivePriceTable で読んだ PriceTable を facade
+  // インスタンスに閉じ込め estimate() が使う設計 — pricing/facade.ts の乖離注記を格上げ)。
+  getFullPriceTable(): Promise<Result<PriceTable>>;                        // is_active に関わらず全件 (キャッシュ非経由)
+  savePriceGrade(input: PriceGradeInput, id: string | null,
+    expectedUpdatedAt: string | null): Promise<Result<{ id: string }>>;   // 楽観排他 E103
+  savePriceOption(input: PriceOptionInput, id: string | null): Promise<Result<{ id: string }>>;
+  replacePriceSizeClasses(input: PriceSizeClassInput[]): Promise<Result<void>>;
+  replacePriceMatrix(input: PriceMatrixCellInput[]): Promise<Result<void>>;
+  replacePriceQuantityTiers(input: QuantityTierInput[]): Promise<Result<void>>;
 }
 
 // ---------- v2.8 追加 facade (CRM スイート) ----------
