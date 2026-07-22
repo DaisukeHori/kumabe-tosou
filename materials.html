@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>素材対応 | 隈部塗装 — 造形方式・樹脂ごとの下地の作り分け</title>
+<meta name="description" content="FDM（PLA/PETG/ABS/ASA）、光造形（SLA/DLP レジン）、SLS（ナイロン）——3Dプリントの造形方式ごとに、積層痕の出方も塗料の乗り方も違います。素材別の下地の作り分け、UV耐性、入稿ファイル形式まで。隈部塗装の素材対応。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="css/style.css">
+<script type="speculationrules">
+{"prerender": [{"source": "document", "eagerness": "moderate"}]}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Antique+B1&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Archivo:wdth,wght@125,500;125,600;125,700&display=swap" rel="stylesheet">
+</head>
+<body data-page="materials">
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="brand">
+      <span class="brand-ja">隈部塗装</span>
+      <span class="brand-en">KUMABE TOSO</span>
+    </a>
+    <nav class="global-nav" id="globalNav" aria-label="メインナビゲーション">
+      <a href="story.html" data-nav="story"><span class="nav-no">01</span>ストーリー</a>
+      <a href="about.html" data-nav="about"><span class="nav-no">02</span>会社案内</a>
+      <a href="service.html" data-nav="service"><span class="nav-no">03</span>サービス・料金</a>
+      <a href="materials.html" data-nav="materials"><span class="nav-no">04</span>素材対応</a>
+      <a href="colors.html" data-nav="colors"><span class="nav-no">05</span>色見本</a>
+      <a href="notes.html" data-nav="notes"><span class="nav-no">06</span>読みもの</a>
+      <a href="shop.html" data-nav="shop"><span class="nav-no">07</span>SHOP</a>
+      <a href="contact.html" data-nav="contact" class="nav-cta">相談する</a>
+    </nav>
+    <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="globalNav" aria-label="メニューを開く"><span></span><span></span></button>
+  </div>
+</header>
+
+<main>
+
+  <div class="page-head">
+    <p class="page-index mono"><span>INDEX 05 — MATERIALS</span><span class="rule"></span><span>FDM / SLA / SLS</span></p>
+    <h1 class="page-title">素材を選ばない。<br>ただし、素材ごとに手を変える。</h1>
+    <p class="page-lead">3Dプリントは、造形方式によって積層痕の出方も、塗料の乗り方も、まったく違います。FDMは研磨で埋め、光造形は洗浄と二次硬化を前提にし、SLSは多孔質を作り込む——同じ「下地」でも、素材ごとに手を変えます。ここでは対応方式と、素材別の考え方をまとめます。</p>
+  </div>
+
+  <!-- ============ 3方式 ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>SEC. 01</span><span class="rule"></span><span>PRINTING METHODS</span></p>
+      <h2 class="sec-title reveal">3つの造形方式、<br>それぞれの下地。</h2>
+      <div class="method-grid reveal" style="margin-top: clamp(30px, 4.5vw, 48px);">
+        <div class="method-cell">
+          <p class="method-tag">METHOD 01</p>
+          <h3>FDM / FFF方式</h3>
+          <p class="method-en">FUSED DEPOSITION MODELING</p>
+          <p class="method-desc">熱で溶かした樹脂を層状に積み上げる方式。3方式の中で積層痕が最も目立ち、研磨とサーフェイサーによる下地づくりが仕上がりを大きく左右します。</p>
+          <p class="method-diff"><strong>この工房での位置づけ</strong> — 最も下地に手がかかる＝研磨の技術が最も活きる素材。<span class="mono">#800</span> で面出しし、厚膜プラサフで積層痕を埋め、<span class="mono">#1200</span> で仕上げます。</p>
+        </div>
+        <div class="method-cell">
+          <p class="method-tag">METHOD 02</p>
+          <h3>光造形方式（レジン）</h3>
+          <p class="method-en">SLA / MSLA / DLP</p>
+          <p class="method-desc">液体樹脂を光で硬化させる方式。もともと積層痕が少なく滑らかですが、未硬化レジンの洗浄と二次硬化を済ませないと塗料が乗りません。レジンはアクリル系で、塗料との相性は良好です。</p>
+          <p class="method-diff"><strong>この工房での位置づけ</strong> — 洗浄・脱脂・二次硬化の状態を確認してから工程へ。滑らかなぶん下地は軽く、意匠塗装の美しさが素直に出ます。</p>
+        </div>
+        <div class="method-cell">
+          <p class="method-tag">METHOD 03</p>
+          <h3>SLS方式（粉末）</h3>
+          <p class="method-en">SELECTIVE LASER SINTERING</p>
+          <p class="method-desc">ナイロン粉末をレーザーで焼結する方式。表面は多孔質で、ビーズブラストで均一化するのが一般的。塗装には粉末特有の下地づくりが必要です。</p>
+          <p class="method-diff"><strong>この工房での位置づけ</strong> — 要相談・テストピース確認を推奨。多孔質を活かした下地で、艶を作り込みます。</p>
+        </div>
+      </div>
+      <div class="photo-duo reveal" style="margin-top: clamp(24px, 3.5vw, 40px);">
+        <figure class="photo photo--wide">
+          <span class="fig-no">FIG.01</span>
+          <img src="assets/img/printer-3d.jpg" alt="稼働する3Dプリンター" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">FDMの造形</span><span class="cap-en">FDM PRINTING</span></span>
+            <span class="cap-credit">Photo: zmorph3d / Unsplash</span>
+          </figcaption>
+        </figure>
+        <figure class="photo photo--wide">
+          <span class="fig-no">FIG.02</span>
+          <img src="assets/img/machine.jpg" alt="精密な造形機械" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">精密な造形機械</span><span class="cap-en">PRECISION MACHINE</span></span>
+            <span class="cap-credit">Photo: kadircelep / Unsplash</span>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 素材別対応表 ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>SEC. 02</span><span class="rule"></span><span>MATERIAL MATRIX</span></p>
+      <h2 class="sec-title reveal">素材別の、対応と勘所。</h2>
+      <p class="sec-lead reveal">代表的な樹脂ごとの下地処理・注意点・耐候性の目安です。ここに無い素材も、テストピースで相性を確認してからお受けできます。</p>
+      <div class="reveal" style="margin-top: clamp(30px, 4.5vw, 48px); overflow-x: auto;">
+        <table class="mat-table">
+          <thead>
+            <tr>
+              <th scope="col">素材</th>
+              <th scope="col">造形方式</th>
+              <th scope="col">下地の勘所</th>
+              <th scope="col">耐候性の目安</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">PLA<small>ポリ乳酸</small></th>
+              <td data-label="造形方式">FDM</td>
+              <td data-label="下地の勘所">アセトンは効かないため、研磨とスプレーパテで物理的に平滑化。サーフェイサーで密着を確保します。</td>
+              <td data-label="耐候性"><span class="mat-badge">屋内向き</span></td>
+            </tr>
+            <tr>
+              <th scope="row">PETG</th>
+              <td data-label="造形方式">FDM</td>
+              <td data-label="下地の勘所">研磨・サーフェイサー・塗装が基本。密着のため脱脂を丁寧に行います。</td>
+              <td data-label="耐候性"><span class="mat-badge is-uv">UV安定</span></td>
+            </tr>
+            <tr>
+              <th scope="row">ABS</th>
+              <td data-label="造形方式">FDM</td>
+              <td data-label="下地の勘所">研磨に加え、アセトン蒸気処理で光沢化する手もあります。塗装前は必ず脱脂。</td>
+              <td data-label="耐候性"><span class="mat-badge">屋内向き</span></td>
+            </tr>
+            <tr>
+              <th scope="row">ASA</th>
+              <td data-label="造形方式">FDM</td>
+              <td data-label="下地の勘所">ABSに近い扱い。屋外用途に向く素材で、クリアのUVカットと相性良好です。</td>
+              <td data-label="耐候性"><span class="mat-badge is-uv">UV安定</span></td>
+            </tr>
+            <tr>
+              <th scope="row">標準レジン<small>アクリル系</small></th>
+              <td data-label="造形方式">光造形</td>
+              <td data-label="下地の勘所">IPA洗浄とUV二次硬化を前提に。滑らかで下地は軽く、意匠塗装が映えます。黄変対策のクリアを推奨。</td>
+              <td data-label="耐候性"><span class="mat-badge">屋内向き</span></td>
+            </tr>
+            <tr>
+              <th scope="row">タフレジン<small>ABSライク</small></th>
+              <td data-label="造形方式">光造形</td>
+              <td data-label="下地の勘所">靭性が高く、割れにくい。標準レジン同様の下地で、扱いやすい素材です。</td>
+              <td data-label="耐候性"><span class="mat-badge">屋内向き</span></td>
+            </tr>
+            <tr>
+              <th scope="row">クリアレジン</th>
+              <td data-label="造形方式">光造形</td>
+              <td data-label="下地の勘所">段階研磨とクリアコートで透明感を出せます。透過部を活かした意匠にも対応。</td>
+              <td data-label="耐候性"><span class="mat-badge">屋内向き</span></td>
+            </tr>
+            <tr>
+              <th scope="row">ナイロン<small>PA12 / PA11</small></th>
+              <td data-label="造形方式">SLS</td>
+              <td data-label="下地の勘所">多孔質のため下地を作り込む。ブラスト後の均一な面に艶を重ねます。要テスト。</td>
+              <td data-label="耐候性"><span class="mat-badge is-uv">UV安定</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="map-note reveal" style="margin-top: 22px;">※ 耐候性は一般的な目安です。標準レジンは紫外線で黄変・脆化が進むため、屋外長期使用には向きません。撮影・展示・商談用の高品質仕上げとしての運用を前提にしています。屋外で長く使う想定がある場合は、素材段階からご相談ください。</p>
+    </div>
+  </section>
+
+  <!-- ============ 下地の作り分け ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>SEC. 03</span><span class="rule"></span><span>WHY IT MATTERS</span></p>
+      <h2 class="sec-title reveal">失敗の多くは、<br>塗る前に決まっている。</h2>
+      <p class="sec-lead reveal">塗料の食いつき不良やムラは、塗装技術以前の「素地の準備」で起きることがほとんどです。だから、この工房は塗る前の工程に最も神経を使います。</p>
+      <div class="timeline reveal" style="margin-top: clamp(30px, 4.5vw, 48px);">
+        <div class="timeline-item">
+          <span class="timeline-no">CAUSE 01</span>
+          <h4>洗浄・脱脂の不足</h4>
+          <p>造形物に残った離型剤・削りカス・指の脂は、塗料の密着を著しく下げます。研磨後に水洗いし、イソプロピルアルコールで脱脂、タッククロスで微粉を除いてから塗装に入ります。光造形品は未硬化レジンの洗浄も欠かせません。</p>
+        </div>
+        <div class="timeline-item">
+          <span class="timeline-no">CAUSE 02</span>
+          <h4>サーフェイサーの省略</h4>
+          <p>下地のサーフェイサー（プラサフ）を省くと、密着も発色も落ちます。厚膜タイプで微細な段差を埋め、塗料が乗る土台をつくる——この一手間を飛ばさないことが、量産品のような均一な面につながります。</p>
+        </div>
+        <div class="timeline-item">
+          <span class="timeline-no">CAUSE 03</span>
+          <h4>厚塗りによる細部の潰れ</h4>
+          <p>一度に厚く吹くと、タレ・ゆず肌が出て、細かな造形ディテールも埋まります。塗る方向を層ごとに変えながら、薄く数回に分けて重ねる——地味ですが、これが仕上がりの質を決めます。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 入稿 ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>SEC. 04</span><span class="rule"></span><span>DATA INTAKE</span></p>
+      <h2 class="sec-title reveal">造形から、任せてもいい。</h2>
+      <p class="sec-lead reveal">完成した造形物を送っていただくのはもちろん、データ入稿 → 提携出力 → 工房直送の流れにも対応します。出力先と塗装先を別々に手配する手間を省けます。</p>
+      <div class="intake-grid reveal" style="margin-top: clamp(30px, 4.5vw, 48px);">
+        <div class="intake-card">
+          <p class="fmt">STL<small>汎用フォーマット</small></p>
+          <p>ほぼすべての3Dプリント環境で扱える標準形式。造形するだけなら、これで十分です。メッシュ（三角形の集合）でモデルを表現します。</p>
+        </div>
+        <div class="intake-card">
+          <p class="fmt">STEP<small>精密フォーマット</small></p>
+          <p>正確な形状を保持する形式（ISO 10303）。寸法精度が重要な場合や、任意の解像度で再メッシュしたい場合に向きます。精密案件ではこちらを推奨します。</p>
+        </div>
+      </div>
+      <p class="map-note reveal" style="margin-top: 22px;">※ ご相談時に、造形方式・素材・希望色（カラーコード可）・希望納期をあわせてお知らせいただけると、概算が正確になります。未発表製品はNDA対応可。</p>
+    </div>
+  </section>
+
+  <!-- ============ GALLERY ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>GALLERY</span><span class="rule"></span><span>BEYOND MATERIAL</span></p>
+      <h2 class="sec-title reveal">素材の、その先。</h2>
+      <p class="sec-lead reveal">素材ごとに手を変える。それが下地づくりの本質です。</p>
+      <div class="photo-duo reveal" style="margin-top: clamp(30px, 4.5vw, 48px);">
+        <figure class="photo photo--wide">
+          <span class="fig-no">FIG.03</span>
+          <img src="assets/img/surface.jpg" alt="素材表面の質感" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">質感</span><span class="cap-en">TEXTURE</span></span>
+            <span class="cap-credit">Photo: apryan_cahyo / Unsplash</span>
+          </figcaption>
+        </figure>
+        <figure class="photo photo--wide">
+          <span class="fig-no">FIG.04</span>
+          <img src="assets/img/car-detail.jpg" alt="仕上がりの艶" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">仕上がり</span><span class="cap-en">THE FINISH</span></span>
+            <span class="cap-credit">Photo: avenir_visuals / Unsplash</span>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section class="cta-band">
+    <div class="cta-inner">
+      <div>
+        <p class="cta-title">素材が決まっていなくても、<br>用途から相談できます。</p>
+        <p class="cta-note">「屋外で使う」「撮影用」「触れる展示物」——用途に合う素材と仕上げをご提案します。</p>
+      </div>
+      <a class="btn" href="contact.html">相談する<span class="arrow">→</span></a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div>
+        <p class="footer-brand-ja">隈部塗装</p>
+        <p class="footer-desc">3Dプリント造形物の表面処理（研磨・塗装）専門工房。積層痕除去から自動車グレードの仕上げまで、郵送で全国からお受けします。</p>
+      </div>
+      <nav aria-label="フッターナビゲーション">
+        <p class="footer-h">SITEMAP</p>
+        <ul class="footer-nav">
+          <li><a href="index.html"><span class="nav-no">00</span>ホーム</a></li>
+          <li><a href="story.html"><span class="nav-no">01</span>ストーリー</a></li>
+          <li><a href="about.html"><span class="nav-no">02</span>会社案内</a></li>
+          <li><a href="service.html"><span class="nav-no">03</span>サービス・料金</a></li>
+          <li><a href="process.html"><span class="nav-no">04</span>工程</a></li>
+          <li><a href="materials.html"><span class="nav-no">05</span>素材対応</a></li>
+          <li><a href="colors.html"><span class="nav-no">06</span>色見本</a></li>
+          <li><a href="notes.html"><span class="nav-no">07</span>読みもの</a></li>
+          <li><a href="shop.html"><span class="nav-no">08</span>SHOP</a></li>
+          <li><a href="contact.html"><span class="nav-no">09</span>相談する</a></li>
+        </ul>
+      </nav>
+      <div>
+        <p class="footer-h">WORKSHOP</p>
+        <address class="footer-addr">隈部塗装（代表: 隈部 信之）<br>大分県豊後高田市<br>郵送受託・全国対応</address>
+        <p class="footer-h" style="margin-top: 18px;">LEGAL</p>
+        <ul class="footer-nav">
+          <li><a href="tokushoho.html">特定商取引法に基づく表記</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-marquee" aria-hidden="true">
+      <div class="footer-marquee-track">
+        <span>研磨 · 塗装 · 3Dプリント表面処理</span><span class="sep">✳</span><span>NATIONWIDE MAIL-IN</span><span class="sep">✳</span><span>OITA BUNGOTAKADA</span><span class="sep">✳</span><span>試作1点 — ブリッジ生産1,000個</span><span class="sep">✳</span>
+        <span>研磨 · 塗装 · 3Dプリント表面処理</span><span class="sep">✳</span><span>NATIONWIDE MAIL-IN</span><span class="sep">✳</span><span>OITA BUNGOTAKADA</span><span class="sep">✳</span><span>試作1点 — ブリッジ生産1,000個</span><span class="sep">✳</span>
+      </div>
+    </div>
+    <p class="footer-giant" aria-hidden="true">KUMABE TOSO</p>
+    <div class="footer-base">
+      <span class="mono">© 2026 KUMABE TOSO. ALL RIGHTS RESERVED.</span>
+      <span class="mono">3D PRINT SURFACE FINISHING — OITA, JAPAN</span>
+    </div>
+    <p class="footer-imgcredit mono">掲載写真は Unsplash の商用利用可能なイメージ素材で、各写真のクレジットはキャプションに記載しています。これらは隈部塗装の工房・制作事例の写真ではなく、あくまでイメージです（実際の写真は準備中）。</p>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>

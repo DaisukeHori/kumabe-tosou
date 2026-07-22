@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工程 | 隈部塗装 — 一個が仕上がるまでの、9つの手</title>
+<meta name="description" content="3Dプリント造形物が量産品の外観になるまで。積層痕の研磨、洗浄・脱脂、プラサフ、足付け水研ぎ、ベースコート、クリアコート、常温硬化、検品——自動車補修の工程を、塗膜の層構造とともに一手ずつ解説します。隈部塗装の全工程。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="css/style.css">
+<script type="speculationrules">
+{"prerender": [{"source": "document", "eagerness": "moderate"}]}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Antique+B1&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Archivo:wdth,wght@125,500;125,600;125,700&display=swap" rel="stylesheet">
+</head>
+<body data-page="process">
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="brand">
+      <span class="brand-ja">隈部塗装</span>
+      <span class="brand-en">KUMABE TOSO</span>
+    </a>
+    <nav class="global-nav" id="globalNav" aria-label="メインナビゲーション">
+      <a href="story.html" data-nav="story"><span class="nav-no">01</span>ストーリー</a>
+      <a href="about.html" data-nav="about"><span class="nav-no">02</span>会社案内</a>
+      <a href="service.html" data-nav="service"><span class="nav-no">03</span>サービス・料金</a>
+      <a href="materials.html" data-nav="materials"><span class="nav-no">04</span>素材対応</a>
+      <a href="colors.html" data-nav="colors"><span class="nav-no">05</span>色見本</a>
+      <a href="notes.html" data-nav="notes"><span class="nav-no">06</span>読みもの</a>
+      <a href="shop.html" data-nav="shop"><span class="nav-no">07</span>SHOP</a>
+      <a href="contact.html" data-nav="contact" class="nav-cta">相談する</a>
+    </nav>
+    <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="globalNav" aria-label="メニューを開く"><span></span><span></span></button>
+  </div>
+</header>
+
+<main>
+
+  <div class="page-head">
+    <p class="page-index mono"><span>PROCESS — 塗りが仕上がるまで</span><span class="rule"></span><span>9 STEPS</span></p>
+    <h1 class="page-title">一個が仕上がるまでの、<br>9つの手。</h1>
+    <p class="page-lead">3Dプリントの造形物が、量産品と見分けがつかない外観になるまでには、決まった順序があります。派手なのは色を吹く瞬間だけ。その前後にある地味な工程こそが、仕上がりを決めます。自動車補修の手順を、一手ずつ開きます。</p>
+  </div>
+
+  <!-- ============ 塗膜の層構造 ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>SEC. 01</span><span class="rule"></span><span>COATING STRUCTURE</span></p>
+      <h2 class="sec-title reveal">塗装は、<br>層でできている。</h2>
+      <p class="sec-lead reveal">仕上がった塗面は一枚に見えますが、実際は役割の違う層の積み重ねです。下から順に、造形物・プラサフ・ベースコート・クリア。積層痕は、下の層で吸収して消します。</p>
+      <div class="coat-diagram reveal">
+        <svg viewBox="0 0 800 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="塗膜の層構造断面図：造形物の積層痕をプラサフで埋め、ベースコート、クリアを重ねる">
+          <defs>
+            <linearGradient id="clearGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+              <stop offset="45%" stop-color="#EAEAE4" stop-opacity="0.28"/>
+              <stop offset="100%" stop-color="#D8D8D0" stop-opacity="0.5"/>
+            </linearGradient>
+            <linearGradient id="baseGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#B21226"/>
+              <stop offset="100%" stop-color="#8E0F1E"/>
+            </linearGradient>
+          </defs>
+
+          <!-- 造形物（積層痕：上辺がギザギザ） -->
+          <path d="M60,300 L740,300 L740,235
+                   L700,235 L690,248 L672,235 L654,248 L636,235 L618,248 L600,235 L582,248 L564,235
+                   L546,248 L528,235 L510,248 L492,235 L474,248 L456,235 L438,248 L420,235 L402,248
+                   L384,235 L366,248 L348,235 L330,248 L312,235 L294,248 L276,235 L258,248 L240,235
+                   L222,248 L204,235 L186,248 L168,235 L150,248 L132,235 L114,248 L96,235 L78,248 L60,235 Z"
+                fill="#CBCBC3" stroke="#17191B" stroke-width="1.2" stroke-opacity="0.35"/>
+          <text x="76" y="285" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#4B4F53" letter-spacing="1.5">3D PRINT — 積層痕 (layer lines)</text>
+
+          <!-- プラサフ（ギザギザを埋めて平滑な上辺に） -->
+          <path d="M60,235
+                   L78,222 L96,222 L114,222 L132,222 L150,222 L168,222 L186,222 L204,222 L222,222
+                   L240,222 L258,222 L276,222 L294,222 L312,222 L330,222 L348,222 L366,222 L384,222
+                   L402,222 L420,222 L438,222 L456,222 L474,222 L492,222 L510,222 L528,222 L546,222
+                   L564,222 L582,222 L600,222 L618,222 L636,222 L654,222 L672,222 L690,222 L700,222
+                   L740,222 L740,235
+                   L700,235 L690,248 L672,235 L654,248 L636,235 L618,248 L600,235 L582,248 L564,235
+                   L546,248 L528,235 L510,248 L492,235 L474,248 L456,235 L438,248 L420,235 L402,248
+                   L384,235 L366,248 L348,235 L330,248 L312,235 L294,248 L276,235 L258,248 L240,235
+                   L222,248 L204,235 L186,248 L168,235 L150,248 L132,235 L114,248 L96,235 L78,248 L60,235 Z"
+                fill="#E6E6E1" stroke="#17191B" stroke-width="1" stroke-opacity="0.25"/>
+          <rect x="60" y="200" width="680" height="22" fill="#E6E6E1" stroke="#17191B" stroke-width="1" stroke-opacity="0.25"/>
+          <text x="76" y="215" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#4B4F53" letter-spacing="1.5">PRIMER-SURFACER — プラサフ (埋める)</text>
+
+          <!-- ベースコート（色） -->
+          <rect x="60" y="168" width="680" height="32" fill="url(#baseGrad)"/>
+          <text x="76" y="189" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#FFFFFF" letter-spacing="1.5" opacity="0.92">BASE COAT — 発色層</text>
+
+          <!-- クリア（透明・光沢） -->
+          <rect x="60" y="128" width="680" height="40" fill="url(#clearGrad)" stroke="#17191B" stroke-width="1" stroke-opacity="0.18"/>
+          <text x="76" y="153" font-family="'IBM Plex Mono',monospace" font-size="12" fill="#4B4F53" letter-spacing="1.5">CLEAR (2K) — 保護・艶</text>
+          <!-- 光沢ハイライト -->
+          <path d="M110,134 Q200,130 320,138 L300,146 Q200,140 130,144 Z" fill="#FFFFFF" opacity="0.6"/>
+
+          <!-- 右側の厚み矢印と総膜厚ラベル -->
+          <line x1="760" y1="128" x2="760" y2="300" stroke="#797E83" stroke-width="1"/>
+          <line x1="755" y1="128" x2="765" y2="128" stroke="#797E83" stroke-width="1"/>
+          <line x1="755" y1="300" x2="765" y2="300" stroke="#797E83" stroke-width="1"/>
+          <text x="772" y="218" font-family="'IBM Plex Mono',monospace" font-size="11" fill="#797E83" transform="rotate(90 772 218)" letter-spacing="1">BUILD-UP</text>
+
+          <!-- 上部の光線（艶の表現） -->
+          <line x1="150" y1="60" x2="230" y2="128" stroke="#A80F22" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.5"/>
+          <line x1="230" y1="128" x2="330" y2="60" stroke="#A80F22" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.5"/>
+          <text x="150" y="52" font-family="'IBM Plex Mono',monospace" font-size="10" fill="#A80F22" letter-spacing="1">LIGHT — 平滑な面が光を素直に返す</text>
+        </svg>
+        <div class="coat-legend">
+          <div class="coat-legend-item">
+            <div class="cl-swatch" style="background:#CBCBC3;"></div>
+            <span class="cl-name">造形物</span><span class="cl-en">3D PRINT</span>
+            <p class="cl-desc">出発点。表面には積層痕という横縞がある。</p>
+          </div>
+          <div class="coat-legend-item">
+            <div class="cl-swatch" style="background:#E6E6E1; border:1px solid rgba(23,25,27,0.2);"></div>
+            <span class="cl-name">プラサフ</span><span class="cl-en">PRIMER-SURFACER</span>
+            <p class="cl-desc">積層痕を埋めて平滑化し、塗料の密着をつくる下地。</p>
+          </div>
+          <div class="coat-legend-item">
+            <div class="cl-swatch" style="background:linear-gradient(90deg,#B21226,#8E0F1E);"></div>
+            <span class="cl-name">ベースコート</span><span class="cl-en">BASE COAT</span>
+            <p class="cl-desc">色を決める発色層。メタリック・パールもこの層。</p>
+          </div>
+          <div class="coat-legend-item">
+            <div class="cl-swatch" style="background:linear-gradient(90deg,rgba(255,255,255,0.7),rgba(216,216,208,0.7)); border:1px solid rgba(23,25,27,0.15);"></div>
+            <span class="cl-name">クリア</span><span class="cl-en">CLEAR (2K)</span>
+            <p class="cl-desc">2液ウレタン。色を守り、磨かずとも深い艶を出す。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 9工程 ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>SEC. 02</span><span class="rule"></span><span>THE 9 STEPS</span></p>
+      <h2 class="sec-title reveal">受け取ってから、<br>送り出すまで。</h2>
+      <div class="photo-row reveal" style="margin-top: clamp(24px, 3.5vw, 40px); margin-bottom: clamp(8px, 1.5vw, 16px);">
+        <figure class="photo photo--sq">
+          <span class="fig-no">FIG.02a</span>
+          <img src="assets/img/sanding.jpg" alt="ベルトサンダーで研磨する手元" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">下地をつくる</span><span class="cap-en">SANDING &amp; PRIMER</span></span>
+            <span class="cap-credit">Photo: mazinomron / Unsplash</span>
+          </figcaption>
+        </figure>
+        <figure class="photo photo--sq">
+          <span class="fig-no">FIG.02b</span>
+          <img src="assets/img/spray-hold.jpg" alt="色を吹き付けるスプレーガン" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">色を吹く</span><span class="cap-en">BASE &amp; CLEAR</span></span>
+            <span class="cap-credit">Photo: createasea / Unsplash</span>
+          </figcaption>
+        </figure>
+        <figure class="photo photo--sq">
+          <span class="fig-no">FIG.02c</span>
+          <img src="assets/img/black-car.jpg" alt="塗装が仕上がった車体" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">仕上がり</span><span class="cap-en">THE FINISH</span></span>
+            <span class="cap-credit">Photo: cmreflections / Unsplash</span>
+          </figcaption>
+        </figure>
+      </div>
+      <div class="process-list reveal" style="margin-top: clamp(20px, 3vw, 32px);">
+
+        <div class="process-step">
+          <span class="ps-no">01</span>
+          <div class="ps-body">
+            <p class="ps-tag">STEP 01</p>
+            <h3>受け入れ・確認</h3>
+            <p class="ps-en">INTAKE &amp; INSPECTION</p>
+            <p class="ps-desc">届いた造形物を確認します。造形方式と素材、積層痕の状態、欠けや反りの有無を見ます。初めての素材なら、いきなり本番にはせず、テストピースで塗料の相性を確かめてから進めます。</p>
+            <p class="ps-why"><strong>なぜ</strong> — 素材ごとに塗料の乗り方が違うから。最初の見極めが、後の失敗を防ぎます。</p>
+          </div>
+        </div>
+
+        <div class="process-step">
+          <span class="ps-no">02</span>
+          <div class="ps-body">
+            <p class="ps-tag">STEP 02</p>
+            <h3>積層痕の研磨</h3>
+            <p class="ps-en">SANDING — #800</p>
+            <p class="ps-desc"><span class="mono">#800</span> の紙やすりで、積層痕を面ごと研ぎ落とします。ここで縞の大半を物理的に消します。細いディテールや薄い壁は、力を入れすぎないよう手加減しながら。</p>
+            <p class="ps-why"><strong>なぜ</strong> — 積層痕は塗料では消えません。<strong>縞を消すのは、塗料ではなく研ぎ</strong>です。</p>
+          </div>
+        </div>
+
+        <div class="process-step">
+          <span class="ps-no">03</span>
+          <div class="ps-body">
+            <p class="ps-tag">STEP 03</p>
+            <h3>洗浄・脱脂</h3>
+            <p class="ps-en">CLEANING &amp; DEGREASING</p>
+            <p class="ps-desc">研磨後、水洗いで削りカスを流し、脱脂剤（シリコンオフ）で油分を除去、タッククロスで微粉を拭き取ります。光造形品は、未硬化レジンの洗浄と二次硬化もここまでに済ませます。</p>
+            <p class="ps-why"><strong>なぜ</strong> — 油分が残ると塗料が弾き（ハジキ）、密着不良や膨れの原因に。<strong>脱脂を怠ると、あとで必ず出ます。</strong></p>
+          </div>
+        </div>
+
+        <div class="process-step">
+          <span class="ps-no">04</span>
+          <div class="ps-body">
+            <p class="ps-tag">STEP 04</p>
+            <h3>マスキング</h3>
+            <p class="ps-en">MASKING</p>
+            <p class="ps-desc">塗料を乗せない部分、塗り分ける境界を養生します。曲面や細部に沿ってテープを貼る精度が、塗り際の美しさを決めます。可動部や勘合部があれば、噛み合わせを保つよう保護します。</p>
+            <p class="ps-why"><strong>なぜ</strong> — マスキングの技術は、そのまま仕上がりの輪郭に出ます。地味ですが、差が出る工程です。</p>
+          </div>
+        </div>
+
+        <div class="process-step">
+          <span class="ps-no">05</span>
+          <div class="ps-body">
+            <p class="ps-tag">STEP 05</p>
+            <h3>プラサフ（下塗り・中塗り）</h3>
+            <p class="ps-en">PRIMER-SURFACER</p>
+            <p class="ps-desc">プライマー（密着）とサーフェイサー（凹凸埋め）を兼ねたプラサフを吹きます。厚膜タイプで微細な段差を埋め、研磨で残った細かな傷を覆う。塗料が乗る土台を、ここでつくります。</p>
+            <p class="ps-why"><strong>なぜ</strong> — サーフェイサーを省くと密着も発色も落ちます。<strong>塗装の出来の大半は、この下地で決まる。</strong></p>
+          </div>
+        </div>
+
+        <div class="process-step">
+          <span class="ps-no">06</span>
+          <div class="ps-body">
+            <p class="ps-tag">STEP 06</p>
+            <h3>足付け・水研ぎ</h3>
+            <p class="ps-en">WET-SANDING — #1200</p>
+            <p class="ps-desc">プラサフが乾いたら、<span class="mono">#1200</span> の耐水ペーパーで水研ぎします。摩擦熱を抑えながら表面を整え、あえて細かな傷（足）をつけて、上塗り塗料の食いつきを良くします。</p>
+            <p class="ps-why"><strong>なぜ</strong> — つるつるより、わずかに足がある方が塗料は密着します。平滑さと密着の、両立点です。</p>
+          </div>
+        </div>
+
+        <div class="process-step">
+          <span class="ps-no">07</span>
+          <div class="ps-body">
+            <p class="ps-tag">STEP 07</p>
+            <h3>ベースコート（色）</h3>
+            <p class="ps-en">BASE COAT</p>
+            <p class="ps-desc">いよいよ色を吹きます。一度に厚く吹かず、薄く数回に分けて重ねる。塗る方向を層ごとに変え、乾燥間隔（フラッシュタイム）を取りながら発色を積み上げます。メタリック・パールは、この膜厚の管理が仕上がりを左右します。</p>
+            <p class="ps-why"><strong>なぜ</strong> — 厚塗りはタレ・ゆず肌・ディテールの潰れを招く。<strong>薄く、数回。</strong>これが均一な発色の条件です。</p>
+          </div>
+        </div>
+
+        <div class="process-step">
+          <span class="ps-no">08</span>
+          <div class="ps-body">
+            <p class="ps-tag">STEP 08</p>
+            <h3>クリアコート</h3>
+            <p class="ps-en">CLEAR COAT — 2K URETHANE</p>
+            <p class="ps-desc">2液ウレタンクリアを吹きます。3コートパールの場合は、ベースとクリアの間にパール層を挟みます。主剤と硬化剤が反応し、硬く平滑な塗膜そのものを形成する——だから、吹きっぱなしで深い艶が出ます。</p>
+            <p class="ps-why"><strong>なぜ</strong> — 2液ウレタンは磨かずとも光る。<strong>だから鏡面磨きをしません。</strong>その時間を、数量対応と価格の還元に回します。</p>
+          </div>
+        </div>
+
+        <div class="process-step">
+          <span class="ps-no">09</span>
+          <div class="ps-body">
+            <p class="ps-tag">STEP 09</p>
+            <h3>常温硬化・検品・発送</h3>
+            <p class="ps-en">CURING &amp; SHIPPING</p>
+            <p class="ps-desc">2液ウレタンを常温で5〜7日かけて完全硬化させます。硬化を確認したら、発送前の検品へ。タレ・ゆず肌・色ムラ・異物・密着・エッジ・硬化——項目を確認し、養生・梱包して発送します。</p>
+            <p class="ps-why"><strong>なぜ</strong> — 硬化を待たずに送れば、輸送で傷みます。<strong>急がば、回る。</strong>完全硬化を待つのは、届いてからの品質のためです。</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 塗装環境 ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>SEC. 03</span><span class="rule"></span><span>THE BOOTH</span></p>
+      <h2 class="sec-title reveal">きれいな空気でしか、<br>きれいには塗れない。</h2>
+      <p class="sec-lead reveal">塗装の大敵は、宙を舞うホコリです。だから塗装は、専用のブースの中で行います。フィルターを通した清浄な空気を上から下へ流し、オーバーミストとともに床下へ排気する——異物混入をふせぐ、目に見えない設備です。</p>
+      <div class="booth-facts reveal">
+        <div class="booth-fact">
+          <p class="bf-num">5<span class="unit">ミクロン</span></p>
+          <p class="bf-label">二次フィルターが捕集する埃の大きさ<span class="en">DUST CAPTURED</span></p>
+        </div>
+        <div class="booth-fact">
+          <p class="bf-num">90<span class="unit">%超</span></p>
+          <p class="bf-label">一次フィルターの外気ダスト捕集率<span class="en">PRIMARY FILTER</span></p>
+        </div>
+        <div class="booth-fact">
+          <p class="bf-num">上→下<span class="unit"></span></p>
+          <p class="bf-label">清浄空気の流れ（ダウンフロー）<span class="en">DOWNDRAFT AIRFLOW</span></p>
+        </div>
+      </div>
+      <p class="map-note reveal" style="margin-top: 22px;">※ 一般的な自動車塗装ブースの仕組みです。それでも極小のゴミは付着し得るため、最終的な確認は検品工程（サービスページ参照）で行います。</p>
+    </div>
+  </section>
+
+  <!-- ============ 関連導線 ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>SEC. 04</span><span class="rule"></span><span>RELATED</span></p>
+      <h2 class="sec-title reveal">工程の、その先へ。</h2>
+      <p class="sec-lead reveal">グレード別の料金や数量スライドはサービスページに、素材ごとの下地の作り分けは素材対応ページにまとめています。工程の思想を、色の実例で見たいときは色見本へ。</p>
+      <div class="leadout reveal" style="justify-content: flex-start; gap: 14px; flex-wrap: wrap;">
+        <a class="btn" href="service.html">サービス・料金<span class="arrow">→</span></a>
+        <a class="btn" href="materials.html">素材対応<span class="arrow">→</span></a>
+        <a class="btn" href="colors.html">色見本<span class="arrow">→</span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ GALLERY ============ -->
+  <section class="sec">
+    <div class="sec-inner">
+      <p class="sec-mark mono reveal"><span>GALLERY</span><span class="rule"></span><span>BEHIND THE STEPS</span></p>
+      <h2 class="sec-title reveal">工程を、支えるもの。</h2>
+      <p class="sec-lead reveal">地味な工程の積み重ねが、量産品と見分けがつかない顔をつくります。</p>
+      <div class="photo-row reveal" style="margin-top: clamp(30px, 4.5vw, 48px);">
+        <figure class="photo photo--wide">
+          <span class="fig-no">FIG.03</span>
+          <img src="assets/img/airbrush-dark.jpg" alt="吹き付けの設備" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">設備</span><span class="cap-en">SPRAY EQUIPMENT</span></span>
+            <span class="cap-credit">Photo: kagan_4854 / Unsplash</span>
+          </figcaption>
+        </figure>
+        <figure class="photo photo--wide">
+          <span class="fig-no">FIG.04</span>
+          <img src="assets/img/machine.jpg" alt="精密な機械" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">精度</span><span class="cap-en">PRECISION</span></span>
+            <span class="cap-credit">Photo: kadircelep / Unsplash</span>
+          </figcaption>
+        </figure>
+        <figure class="photo photo--wide">
+          <span class="fig-no">FIG.05</span>
+          <img src="assets/img/surface.jpg" alt="塗装面の質感" loading="lazy">
+          <figcaption>
+            <span><span class="cap-ja">質感</span><span class="cap-en">THE SURFACE</span></span>
+            <span class="cap-credit">Photo: apryan_cahyo / Unsplash</span>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section class="cta-band">
+    <div class="cta-inner">
+      <div>
+        <p class="cta-title">この9工程を、<br>あなたの一個に。</p>
+        <p class="cta-note">サイズ・個数・グレードが分かれば、概算をお出しできます。まずはご相談ください。</p>
+      </div>
+      <a class="btn" href="contact.html">相談する<span class="arrow">→</span></a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div>
+        <p class="footer-brand-ja">隈部塗装</p>
+        <p class="footer-desc">3Dプリント造形物の表面処理（研磨・塗装）専門工房。積層痕除去から自動車グレードの仕上げまで、郵送で全国からお受けします。</p>
+      </div>
+      <nav aria-label="フッターナビゲーション">
+        <p class="footer-h">SITEMAP</p>
+        <ul class="footer-nav">
+          <li><a href="index.html"><span class="nav-no">00</span>ホーム</a></li>
+          <li><a href="story.html"><span class="nav-no">01</span>ストーリー</a></li>
+          <li><a href="about.html"><span class="nav-no">02</span>会社案内</a></li>
+          <li><a href="service.html"><span class="nav-no">03</span>サービス・料金</a></li>
+          <li><a href="process.html"><span class="nav-no">04</span>工程</a></li>
+          <li><a href="materials.html"><span class="nav-no">05</span>素材対応</a></li>
+          <li><a href="colors.html"><span class="nav-no">06</span>色見本</a></li>
+          <li><a href="notes.html"><span class="nav-no">07</span>読みもの</a></li>
+          <li><a href="shop.html"><span class="nav-no">08</span>SHOP</a></li>
+          <li><a href="contact.html"><span class="nav-no">09</span>相談する</a></li>
+        </ul>
+      </nav>
+      <div>
+        <p class="footer-h">WORKSHOP</p>
+        <address class="footer-addr">隈部塗装（代表: 隈部 信之）<br>大分県豊後高田市<br>郵送受託・全国対応</address>
+        <p class="footer-h" style="margin-top: 18px;">LEGAL</p>
+        <ul class="footer-nav">
+          <li><a href="tokushoho.html">特定商取引法に基づく表記</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-marquee" aria-hidden="true">
+      <div class="footer-marquee-track">
+        <span>研磨 · 塗装 · 3Dプリント表面処理</span><span class="sep">✳</span><span>NATIONWIDE MAIL-IN</span><span class="sep">✳</span><span>OITA BUNGOTAKADA</span><span class="sep">✳</span><span>試作1点 — ブリッジ生産1,000個</span><span class="sep">✳</span>
+        <span>研磨 · 塗装 · 3Dプリント表面処理</span><span class="sep">✳</span><span>NATIONWIDE MAIL-IN</span><span class="sep">✳</span><span>OITA BUNGOTAKADA</span><span class="sep">✳</span><span>試作1点 — ブリッジ生産1,000個</span><span class="sep">✳</span>
+      </div>
+    </div>
+    <p class="footer-giant" aria-hidden="true">KUMABE TOSO</p>
+    <div class="footer-base">
+      <span class="mono">© 2026 KUMABE TOSO. ALL RIGHTS RESERVED.</span>
+      <span class="mono">3D PRINT SURFACE FINISHING — OITA, JAPAN</span>
+    </div>
+    <p class="footer-imgcredit mono">掲載写真は Unsplash の商用利用可能なイメージ素材で、各写真のクレジットはキャプションに記載しています。これらは隈部塗装の工房・制作事例の写真ではなく、あくまでイメージです（実際の写真は準備中）。</p>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>
