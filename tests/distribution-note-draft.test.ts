@@ -419,13 +419,13 @@ describe("saveNoteSessionCookie: Vault 保存 + channel_accounts メタ更新", 
   it("既存の profile_url を保持したまま Cookie だけを更新する", async () => {
     getChannelAccount.mockResolvedValue({
       ok: true,
-      value: noteAccount({ meta: { profile_url: "https://note.com/kumabe", cookie_saved_at: null } }),
+      value: noteAccount({ meta: { profile_url: "https://note.com/yamagishi", cookie_saved_at: null } }),
     });
 
     const cookie = "_note_session_v5=new-value-here";
     await distributionFacade.saveNoteSessionCookie({ cookie });
 
     const upsertArgs = upsertChannelAccount.mock.calls[0][1];
-    expect(upsertArgs.meta.profile_url).toBe("https://note.com/kumabe");
+    expect(upsertArgs.meta.profile_url).toBe("https://note.com/yamagishi");
   });
 });

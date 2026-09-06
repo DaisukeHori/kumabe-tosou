@@ -380,7 +380,7 @@ NO IMAGE プレースホルダ分岐 (55-75 行) は**変更しない**。`edita
           aria-hidden="true"
           className="kt-footer-giant mt-8 select-none overflow-hidden whitespace-nowrap font-mono text-[clamp(40px,9vw,110px)] font-semibold leading-none tracking-[0.08em]"
         >
-          KUMABE TOSO
+          YAMAGISHI TOSO
         </p>
 ```
 変更点: `text-carbon/10` を削除し `kt-footer-giant` を追加 (静置時はアウトライン文字 = legacy css:1102-1103、hover で 1.1s 塗り込み)。
@@ -494,7 +494,7 @@ Drawdown コンポーネントのルート div (140 行) に 1 語追加:
 | 5 | 各ページの写真 | 静置でほぼモノクロ、hover で 0.7s カラー化 + 1s で 1.04 倍ズーム (枠からはみ出さない) |
 | 6 | /works /voices スクロール | カードが 0.85s Reveal。hover で -6px 浮上 + 影 + 写真カラー化 |
 | 7 | /colors Drawdown hover | 光沢が 18% スライド (B1 復活) |
-| 8 | footer「KUMABE TOSO」hover | 左から 1.1s で塗られる。560px 以下でストローク 0.6px |
+| 8 | footer「YAMAGISHI TOSO」hover | 左から 1.1s で塗られる。560px 以下でストローク 0.6px |
 | 9 | ページ内アンカー (/colors#c-202 を colors 内リンクから) | スムーススクロール |
 | 10 | Link でページ遷移 | 新ページが 0.44s フェード+ライズ。**初回ロード/リロードでは発火しない** (Performance パネルで LCP 要素が opacity:0 で始まらないこと) |
 | 11 | DevTools Rendering → prefers-reduced-motion: reduce | smooth 無効 / 帯・写真・footer・lift が即時切替 / ページ遷移アニメなし |

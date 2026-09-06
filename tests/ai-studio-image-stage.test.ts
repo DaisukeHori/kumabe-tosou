@@ -148,7 +148,7 @@ describe("image_generation ステージ: X/IG を含む run", () => {
       draftRow("x", { thread: [{ text: "新しい塗装が完成しました", media_id: null }] }),
       draftRow("instagram", {
         caption: "耐候クリアで仕上げた車体です",
-        hashtags: ["塗装", "カー", "隈部塗装", "福岡", "自動車"],
+        hashtags: ["塗装", "カー", "山岸塗装", "福岡", "自動車"],
         media_ids: ["00000000-0000-4000-8000-000000000000"],
       }),
     ]);

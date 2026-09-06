@@ -94,7 +94,7 @@ export const TOKUSHOHO_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "特商法表記 / SpecTable 行1 内容 (販売業者)",
     kind: "text",
     maxLen: 20,
-    defaultText: "隈部塗装",
+    defaultText: "山岸塗装",
   },
   {
     key: "tokushoho.spec.representative.th",
@@ -112,7 +112,7 @@ export const TOKUSHOHO_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "特商法表記 / SpecTable 行2 内容 (運営統括責任者名)",
     kind: "text",
     maxLen: 20,
-    defaultText: "隈部 信之",
+    defaultText: "山岸 信之",
   },
   {
     key: "tokushoho.spec.address.th",

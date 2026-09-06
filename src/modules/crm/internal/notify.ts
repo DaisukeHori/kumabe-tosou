@@ -129,7 +129,7 @@ export async function sendCrmDigestEmail(digest: CrmDigest, ctx: ExecutionContex
     const { error } = await resend.emails.send({
       from: fromAddress(),
       to: inquiryTo,
-      subject: `【隈部塗装】CRM 日次ダイジェスト (${digest.generated_on})`,
+      subject: `【山岸塗装】CRM 日次ダイジェスト (${digest.generated_on})`,
       text,
       html,
     });

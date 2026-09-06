@@ -143,11 +143,11 @@ describe("page-body: editMode=false は data-editable-text を出力しない (�
     expect(headerHtml).not.toContain("data-editable-text");
     expect(footerHtml).not.toContain("data-editable-text");
     expect(headerHtml).toContain("相談する");
-    expect(headerHtml).toContain("隈部塗装");
+    expect(headerHtml).toContain("山岸塗装");
     expect(headerHtml).toContain("ストーリー");
     expect(footerHtml).toContain("3Dプリント造形物の表面処理");
-    expect(footerHtml).toContain("隈部塗装(代表: 隈部 信之)");
-    expect(footerHtml).toContain("© 2026 KUMABE TOSO. ALL RIGHTS RESERVED.");
+    expect(footerHtml).toContain("山岸塗装(代表: 山岸 信之)");
+    expect(footerHtml).toContain("© 2026 YAMAGISHI TOSO. ALL RIGHTS RESERVED.");
   });
 });
 

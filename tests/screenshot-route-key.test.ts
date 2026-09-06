@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 vi.mock("@/lib/env", () => ({
-  getEnv: () => ({ NEXT_PUBLIC_SITE_URL: "https://kumabe-tosou.example.com" }),
+  getEnv: () => ({ NEXT_PUBLIC_SITE_URL: "https://yamagishi-tosou.example.com" }),
 }));
 
 vi.mock("@/modules/page-media/facade", () => ({
@@ -150,12 +150,12 @@ describe("buildScreenshotTargetUrl: 常に SITE_URL のオリジンに解決さ�
 
   it("正常な routeKey は SITE_URL 配下の絶対 URL になる", () => {
     const result = buildScreenshotTargetUrl("/about");
-    expect(result).toEqual({ ok: true, value: "https://kumabe-tosou.example.com/about" });
+    expect(result).toEqual({ ok: true, value: "https://yamagishi-tosou.example.com/about" });
   });
 
   it("ルート ('/') も SITE_URL のトップページに解決される", () => {
     const result = buildScreenshotTargetUrl("/");
-    expect(result).toEqual({ ok: true, value: "https://kumabe-tosou.example.com/" });
+    expect(result).toEqual({ ok: true, value: "https://yamagishi-tosou.example.com/" });
   });
 
   it("不正な routeKey (絶対 URL) は URL を組み立てず検証エラーをそのまま返す", () => {
@@ -179,7 +179,7 @@ describe("buildScreenshotTargetUrl: 常に SITE_URL のオリジンに解決さ�
     // buildScreenshotTargetUrl はこの入力を validateRouteKey の段階で拒否し、
     // 危険な new URL() 呼び出しに到達しないことを確認する。
     const dangerousInput = "/\t/evil.example/x";
-    expect(new URL(dangerousInput, "https://kumabe-tosou.example.com").host).toBe("evil.example");
+    expect(new URL(dangerousInput, "https://yamagishi-tosou.example.com").host).toBe("evil.example");
 
     const result = buildScreenshotTargetUrl(dangerousInput);
     expect(result.ok).toBe(false);

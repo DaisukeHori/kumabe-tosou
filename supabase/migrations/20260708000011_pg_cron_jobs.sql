@@ -1,5 +1,5 @@
 -- =========================================================
--- 隈部塗装 CMS + AI コンテンツパイプライン: pg_cron 起床ジョブ
+-- 山岸塗装 CMS + AI コンテンツパイプライン: pg_cron 起床ジョブ
 -- canonical: docs/design/cms-ai-pipeline.md §1.1 (予約実行) / §7.5 / 契約書 §7.2
 --
 -- 本 migration は pg_cron + pg_net を有効化し、毎分 /api/jobs/publish、

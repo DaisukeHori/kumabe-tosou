@@ -17,7 +17,7 @@ export type AdminNavItem = { readonly href: string; readonly label: string };
 
 export type AdminNavGroup = {
   /**
-   * 折りたたみ状態の localStorage 永続化キー (kumabe-admin-nav-collapsed:v2 の
+   * 折りたたみ状態の localStorage 永続化キー (yamagishi-admin-nav-collapsed:v2 の
    * JSON 配列要素)。グループ間で一意。label:null のグループ (今日の仕事) は
    * 折りたたみ UI を持たないため実質未使用だが、一意性検証の対象にするため付与する。
    */

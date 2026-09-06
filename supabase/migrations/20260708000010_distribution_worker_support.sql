@@ -1,5 +1,5 @@
 -- =========================================================
--- 隈部塗装 CMS + AI コンテンツパイプライン: distribution worker 支援
+-- 山岸塗装 CMS + AI コンテンツパイプライン: distribution worker 支援
 -- canonical: docs/design/cms-ai-pipeline.md §3.6 (Vault アクセス規約) / §7.7 (X refresh) / §8.2
 -- 既存 migration (0001 DDL / 0004 vault_upsert_secret) に対する追加分のみ。
 -- =========================================================

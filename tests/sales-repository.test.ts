@@ -785,7 +785,7 @@ describe("finalizeDocumentIssue (document_finalize_issue RPC 接続)", () => {
     subtotalJpy: 10_000,
     taxSummary: [{ tax_category: "standard_10", taxable_jpy: 10_000, tax_jpy: 1_000 }],
     totalJpy: 11_000,
-    issuerSnapshot: { issuer_name: "隈部塗装" },
+    issuerSnapshot: { issuer_name: "山岸塗装" },
     sha256: "a".repeat(64),
     storagePath: "documents/doc-1/v1-aaaaaaaa.pdf",
     counterparty: "サンプル建設",

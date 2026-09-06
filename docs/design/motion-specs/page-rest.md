@@ -377,9 +377,9 @@
 // BEFORE (骨格)
 <div className="mt-10 grid gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] md:gap-14">
   <div>
-    <p className="text-[clamp(28px,4vw,44px)] font-bold tracking-[0.1em]">隈部 信之</p>
+    <p className="text-[clamp(28px,4vw,44px)] font-bold tracking-[0.1em]">山岸 信之</p>
     <p className="mt-3 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-      KUMABE NOBUYUKI — REPRESENTATIVE / PAINTER
+      YAMAGISHI NOBUYUKI — REPRESENTATIVE / PAINTER
     </p>
   </div>
   <Reveal as="div" className="space-y-6 ...">...</Reveal>
@@ -389,10 +389,10 @@
 <div className="mt-10 grid gap-8 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:items-end md:gap-[clamp(32px,5vw,72px)]">
   <Reveal as="div">
     <p className="text-[clamp(28px,4vw,44px)] font-bold tracking-[0.1em]">
-      隈部 信之
+      山岸 信之
     </p>
     <p className="mt-3 font-mono text-[11px] tracking-[0.2em] text-carbon-soft">
-      KUMABE NOBUYUKI — REPRESENTATIVE / PAINTER
+      YAMAGISHI NOBUYUKI — REPRESENTATIVE / PAINTER
     </p>
   </Reveal>
   <Reveal

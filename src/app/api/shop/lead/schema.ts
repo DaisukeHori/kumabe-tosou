@@ -101,7 +101,7 @@ export function buildInquiryBody(args: {
   const { estimate: e } = args;
   const yen = (n: number) => `¥${n.toLocaleString("ja-JP")}`;
   const lines = [
-    "【隈部塗装 SHOP — シミュレーター経由の問い合わせ】",
+    "【山岸塗装 SHOP — シミュレーター経由の問い合わせ】",
     `グレード: ${e.grade_label}`,
     `サイズ帯: ${e.size_label}`,
     `個数: ${e.quantity} 個`,

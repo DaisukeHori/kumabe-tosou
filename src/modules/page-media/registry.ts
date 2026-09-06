@@ -421,7 +421,7 @@ const STORY_SLOTS: readonly PageSlot[] = [
     route: "/story",
     label: "ストーリー / 代表ポートレート (COMING SOON)",
     defaultSrc: null,
-    altDefault: "代表・隈部信之のポートレート",
+    altDefault: "代表・山岸信之のポートレート",
     aspect: "card34",
   },
 ];

@@ -26,8 +26,8 @@ import { findMediaIdBySourceFile } from "./media";
  */
 
 export const COMPANY_SETTINGS_SEED: SettingsValue<"company"> = zCompanySettings.parse({
-  name: "隈部塗装",
-  representative: "隈部 信之",
+  name: "山岸塗装",
+  representative: "山岸 信之",
   address: "大分県豊後高田市",
   tel: null,
   email: null,
@@ -44,9 +44,9 @@ export const HERO_SETTINGS_SEED: SettingsValue<"hero"> = zHeroSettings.parse({
 });
 
 export const SEO_DEFAULTS_SEED: SettingsValue<"seo_defaults"> = zSeoDefaults.parse({
-  title_template: "%s | 隈部塗装",
+  title_template: "%s | 山岸塗装",
   description:
-    "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。隈部塗装(大分県豊後高田市)。",
+    "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。山岸塗装(大分県豊後高田市)。",
   og_media_id: findMediaIdBySourceFile("public/og-image.jpg"),
 });
 

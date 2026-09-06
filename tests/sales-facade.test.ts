@@ -1181,7 +1181,7 @@ function issuedContentSnapshotFixture(overrides: Record<string, unknown> = {}) {
     notes: null,
     tax_rounding: "floor",
     issuer: {
-      issuer_name: "隈部塗装",
+      issuer_name: "山岸塗装",
       registration_number: null,
       address: null,
       tel: null,

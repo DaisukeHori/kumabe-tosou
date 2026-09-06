@@ -152,7 +152,7 @@ function NoteAccountCard({ note }: { note: ChannelAccountView | null }) {
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="note-account-label" className="text-xs">
-              表示名 (例: @kumabe_tosou)
+              表示名 (例: @yamagishi_tosou)
             </FieldLabel>
             <Input
               id="note-account-label"

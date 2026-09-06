@@ -64,7 +64,7 @@ export async function notifyNoteSessionExpired(detail: string): Promise<void> {
     const { error } = await resend.emails.send({
       from: fromAddress(),
       to,
-      subject: "【隈部塗装】note セッションが失効しました",
+      subject: "【山岸塗装】note セッションが失効しました",
       text,
     });
     if (error) {

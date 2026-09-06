@@ -55,7 +55,7 @@ export const MEDIA_SEED: SeedMediaRow[] = (
       id: "925e6898-6a98-4ea4-8c86-8be1556bca23",
       sourceFile: "public/og-image.jpg",
       storagePath: "seed/og-image.jpg",
-      alt: "隈部塗装 — 3Dプリント表面処理の専門工房",
+      alt: "山岸塗装 — 3Dプリント表面処理の専門工房",
       width: 1400,
       height: 787,
       mimeType: "image/jpeg",

@@ -81,7 +81,7 @@
 - `home.gallery.2.caption` [caption/単行/max16] 「段取り」 — home.gallery.2画像に紐づくキャプション、既存画像スロット番号に対応
 - `home.gallery.3.caption` [caption/単行/max16] 「精度」 — home.gallery.3画像に紐づくキャプション、既存画像スロット番号に対応
 - `home.cta.note` [body/単行/max44] 「造形データや写真があれば、より正確に概算をお出しできます。」 — CTA帯の補足説明文
-- `story.chapter1.body` [body/複数行/max600] 「隈部塗装を始める前、隈部信之の一日は、色に始まり、色に終わっていました…」 — 第一章本文3段落。<strong>強調タグを含むためプレーンテキスト化時は書式喪失に注意
+- `story.chapter1.body` [body/複数行/max600] 「山岸塗装を始める前、山岸信之の一日は、色に始まり、色に終わっていました…」 — 第一章本文3段落。<strong>強調タグを含むためプレーンテキスト化時は書式喪失に注意
 - `story.chapter1.photo.caption` [caption/単行/max30] 「均一に、正確に。それが量産塗装の日常だった。」 — 第一章の写真キャプション
 - `story.chapter2.body` [body/複数行/max400] 「きっかけは、知人からの一本の相談でした。手のひらにのる、樹脂の造形物…」 — 第二章本文2段落。<strong>強調タグを含む
 - `story.chapter2.quote.text` [body/複数行/max130] 「「塗装をやってくれる店はあるんです。でも、この積層痕を分かってる人がいない…」 — 顧客の声として提示される疑似証言の引用文、表現の信頼性維持に注意
@@ -90,7 +90,7 @@
 - `story.chapter3.photo.caption` [caption/単行/max20] 「研いでは吹き、吹いては削る。」 — 第三章の写真キャプション
 - `story.chapter4.body` [body/複数行/max400] 「転機は、ある一枚のテストピースでした。積層痕を #800 の紙やすりで面ごと…」 — 第四章本文2段落。#800/#1200等のインライン等幅数値表記と<strong>強調を含む
 - `story.chapter4.photo.caption` [caption/単行/max20] 「量産品と、見分けがつかない。」 — 第四章の写真キャプション
-- `story.chapter5.body` [body/複数行/max500] 「こうして、隈部塗装は始まりました。大分県豊後高田市の、小さな工房…」 — 第五章本文3段落。<strong>強調タグ、所在地(大分県豊後高田市)言及を含む
+- `story.chapter5.body` [body/複数行/max500] 「こうして、山岸塗装は始まりました。大分県豊後高田市の、小さな工房…」 — 第五章本文3段落。<strong>強調タグ、所在地(大分県豊後高田市)言及を含む
 - `story.chapter5.photo.caption` [caption/単行/max20] 「大分から、あなたの一個へ。」 — 第五章の写真キャプション
 - `story.cta.note` [body/単行/max55] 「「絶対に外せない一個」を、量産品の顔に。まずはお気軽にご相談ください。」 — CTA帯の補足説明文
 
@@ -137,14 +137,14 @@
 - `story.chapter.photo.captionEn` [label/単行/max28] 「THE DISCIPLINE / AWAITING ITS FINISH / TRIAL & ERROR 他」 — 英語装飾キャプション、編集対象外(5件)
 - `story.chapter.photo.credit` [caption/単行/max40] 「Photo: cmreflections / Unsplash 他」 — 写真クレジット表記、帰属情報のため編集対象外(5件)
 - `story.message.badge` [label/単行/max20] 「MESSAGE — 代表挨拶」 — SEC.xxと同種のバッジ意匠、編集対象外
-- `story.message.signature.role` [label/単行/max20] 「隈部塗装 代表 / 塗装職人」 — 社名部分はsite_settings.company.nameと重複する複合表記で、肩書き部分はDB外のため編集対象外
+- `story.message.signature.role` [label/単行/max20] 「山岸塗装 代表 / 塗装職人」 — 社名部分はsite_settings.company.nameと重複する複合表記で、肩書き部分はDB外のため編集対象外
 - `story.portrait.placeholder` [label/複数行/max40] 「信之 / PORTRAIT — COMING SOON」 — story.portrait画像未設定時のみ表示される暫定プレースホルダ、実写真差し替え後は消えるため恒久コンテンツでなく編集対象外
 
 ## DB 由来 (スロット化しない)
 - home hero 見出し(h1)「3Dプリントを、量産品と見分けがつかない外観に。」— site_settings.hero.heading (maxLength 40, /admin/settings hero タブで既に編集可能)。ただし (site)/page.tsx は settings.hero を fetch しておらず、現状ページは完全ハードコードでDB値と非接続(実装ドリフト、要オーケストレーター判断)
 - home hero リード文「積層痕を消す研磨から…全国からお受けします。」(90字) — site_settings.hero.subheading (maxLength 80) に相当する内容だが、現行文言が10字超過。DB化する場合は文言短縮かmaxLength拡張が必要
-- story 代表メッセージ署名「隈部 信之」— site_settings.company.representative (maxLength 30, /admin/settings 会社情報タブ「代表者名」) で既に編集可能。story/page-body.tsxはハードコードでDBと非接続
-- story 署名行「隈部塗装 代表 / 塗装職人」内の社名「隈部塗装」— site_settings.company.name (maxLength 50, 会社情報タブ「会社名」) で既に編集可能。site-footer.tsxにも同様のハードコード重複あり
+- story 代表メッセージ署名「山岸 信之」— site_settings.company.representative (maxLength 30, /admin/settings 会社情報タブ「代表者名」) で既に編集可能。story/page-body.tsxはハードコードでDBと非接続
+- story 署名行「山岸塗装 代表 / 塗装職人」内の社名「山岸塗装」— site_settings.company.name (maxLength 50, 会社情報タブ「会社名」) で既に編集可能。site-footer.tsxにも同様のハードコード重複あり
 - story 第五章本文中の所在地言及「大分県豊後高田市」— site_settings.company.address (会社情報タブ「所在地」) と重複する事実情報。物語文の一部でDB直結スロット化は非推奨だが、住所変更時は本文側も手動更新が必要
 
 ## レイアウトリスク

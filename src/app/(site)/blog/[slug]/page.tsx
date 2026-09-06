@@ -18,14 +18,14 @@ export async function generateMetadata({
   const { slug } = await params;
   const post = await getPublishedBlogPostBySlug(slug);
   if (!post) {
-    return { title: "記事が見つかりません | 隈部塗装" };
+    return { title: "記事が見つかりません | 山岸塗装" };
   }
 
   return {
-    title: { absolute: `${post.title} | 隈部塗装 — ブログ` },
+    title: { absolute: `${post.title} | 山岸塗装 — ブログ` },
     description: post.excerpt,
     openGraph: {
-      title: `${post.title} | 隈部塗装`,
+      title: `${post.title} | 山岸塗装`,
       description: post.excerpt,
       images: post.cover ? [post.cover.url] : undefined,
     },

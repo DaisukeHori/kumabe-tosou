@@ -1,4 +1,4 @@
-# 隈部塗装 CRM スイート — sales モジュール設計書 (02-sales)
+# 山岸塗装 CRM スイート — sales モジュール設計書 (02-sales)
 
 - 版: v1.3 (2026-07-16: **顧客の請求先/配送先の帳票連携 (Issue #113)** — §5.2 previewBillingFields/previewShippingDefaults (named export)、§6.1 deriveBillingFields の billing_info 優先フィールド単位フォールバック + composePostalAddress + site_* 補完、§7.1 getDealShippingDefaultsAction、§8.3 NewDocumentForm の site_address 欄・prefill。跨モジュール射影は 07-delta v1.10・顧客側は 01-crm v1.4。canonical 契約は無変更。詳細は更新履歴)。旧: v1.2 (2026-07-11: 07 §D5 v1.2 (角印 private 化) への追随 — seal_media_id 廃止 → seal_storage_path、migration 0028 を branding-assets バケット作成に内容置換 (media 参照 3 点セット置換の廃止)、§10.6 を署名 URL 解決に是正、§6.1 getDocumentLinesForBlocks の空文字→null 正規化注記。詳細は更新履歴)。旧: v1.1 (2026-07-11: レビュー指摘反映 — 取引年月日の分離 (transaction_date)・訂正発行の原子化 (staging→PDF→単一 RPC)・/print ワンタイム消費 (print_tokens)・PDF 生成のグローバル直列化 (pdf_render_lock)・revoke の authenticated 完全化・draft 保存の RPC 化・deal 'paid' 適用の確認化・入金済み invoice の void ガード (trigger)・Storage 不変 trigger・CrmFacade 読み取り契約 Δs4・payment_recorded イベント Δs5・WYSIWYG 主張の限定・シミュレーター変換の canonical 分担明記 (06 §5.4) ほか。詳細は更新履歴)
 - 旧版: v1.0 (2026-07-11: 初版 — 設計裁定 J5/J9/J10 準拠)
@@ -1820,7 +1820,7 @@ table.lines tr    { break-inside: avoid; }         /* 行の不可分 (§10.7-2)
 │ No. Q-2026-0012                    発行日: 2026年7月11日 (右)│
 │                                                          │
 │ [宛名ブロック 左・幅〜95mm]     [発行者ブロック 右・幅〜70mm]  │
-│  大分 太郎 様 (下線・11pt)       隈部塗装        ⊂角印⊃    │
+│  大分 太郎 様 (下線・11pt)       山岸塗装        ⊂角印⊃    │
 │  大分県豊後高田市…               登録番号: T1234567890123   │
 │                                  住所 / TEL / email        │
 │ 現場: ○○様邸 (site_name)／大分県…(site_address)            │

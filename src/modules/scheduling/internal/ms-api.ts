@@ -27,7 +27,7 @@ import type { CalendarVaultSecret } from "./vault-names";
 const GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
 const MS_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const FETCH_TIMEOUT_MS = 15_000;
-const APP_CALENDAR_NAME = "隈部塗装 作業予定";
+const APP_CALENDAR_NAME = "山岸塗装 作業予定";
 const GRAPH_TIME_ZONE_NAME = "Tokyo Standard Time"; // Windows タイムゾーン名 (Graph の timeZone フィールド用)
 // scope はスペース区切りの単一文字列。トークン交換 (exchangeMsAuthorizationCode) / refresh
 // (refreshTokens) の 2 箇所で共用する。認可開始 URL 側 (route) は Google 版と同様に

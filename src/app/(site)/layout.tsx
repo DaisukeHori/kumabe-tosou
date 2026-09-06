@@ -22,7 +22,7 @@ function buildLocalBusinessJsonLd(description: string) {
   return {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    name: "隈部塗装",
+    name: "山岸塗装",
     description,
     url: SITE_URL,
     address: {

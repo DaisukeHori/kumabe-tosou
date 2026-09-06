@@ -35,7 +35,7 @@ export const ABOUT_TEXT_SLOTS: readonly PageTextSlot[] = [
     kind: "multiline",
     maxLen: 200,
     defaultText:
-      "仕上がった塗面に、研ぎの跡は残りません。それでも、艶の深さも、色の正確さも、すべては見えなくなった下地が決めています。隈部塗装は、その見えない工程に最も時間を割く工房です。",
+      "仕上がった塗面に、研ぎの跡は残りません。それでも、艶の深さも、色の正確さも、すべては見えなくなった下地が決めています。山岸塗装は、その見えない工程に最も時間を割く工房です。",
   },
   {
     key: "about.why.heading",
@@ -176,10 +176,10 @@ export const ABOUT_TEXT_SLOTS: readonly PageTextSlot[] = [
     key: "about.why.table.4.th",
     page: "about",
     route: "/about",
-    label: "会社案内 / WHY比較表 行4 見出し (隈部塗装)",
+    label: "会社案内 / WHY比較表 行4 見出し (山岸塗装)",
     kind: "text",
     maxLen: 12,
-    defaultText: "隈部塗装",
+    defaultText: "山岸塗装",
   },
   {
     key: "about.why.table.4.td",
@@ -209,7 +209,7 @@ export const ABOUT_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "会社案内 / 代表者名 (大見出し表示)",
     kind: "text",
     maxLen: 10,
-    defaultText: "隈部 信之",
+    defaultText: "山岸 信之",
   },
   {
     key: "about.craftsman.romaji",
@@ -218,7 +218,7 @@ export const ABOUT_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "会社案内 / 代表者名 ローマ字+肩書",
     kind: "text",
     maxLen: 55,
-    defaultText: "KUMABE NOBUYUKI — REPRESENTATIVE / PAINTER",
+    defaultText: "YAMAGISHI NOBUYUKI — REPRESENTATIVE / PAINTER",
   },
   {
     key: "about.craftsman.bio.1",
@@ -472,7 +472,7 @@ export const ABOUT_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "会社案内 / 会社概要表 行1 本文",
     kind: "text",
     maxLen: 24,
-    defaultText: "隈部塗装（くまべとそう）",
+    defaultText: "山岸塗装（やまぎしとそう）",
   },
   {
     key: "about.profile.table.2.th",
@@ -490,7 +490,7 @@ export const ABOUT_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "会社案内 / 会社概要表 行2 本文",
     kind: "text",
     maxLen: 14,
-    defaultText: "隈部 信之",
+    defaultText: "山岸 信之",
   },
   {
     key: "about.profile.table.3.th",

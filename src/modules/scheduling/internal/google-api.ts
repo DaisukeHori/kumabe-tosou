@@ -17,7 +17,7 @@ import type { CalendarVaultSecret } from "./vault-names";
 const GOOGLE_API_BASE = "https://www.googleapis.com/calendar/v3";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const FETCH_TIMEOUT_MS = 15_000;
-const APP_CALENDAR_SUMMARY = "隈部塗装 作業予定";
+const APP_CALENDAR_SUMMARY = "山岸塗装 作業予定";
 const APP_CALENDAR_TIME_ZONE = "Asia/Tokyo";
 
 // ---------------------------------------------------------------------------

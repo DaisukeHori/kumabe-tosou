@@ -193,7 +193,7 @@ describe("updateBrandingSettingsAction (§6.2 寸法 warning)", () => {
 describe("updateSeoDefaultsAction (§6.2 JPEG ensure + 寸法 warning)", () => {
   function makeSeoFormData(overrides: Record<string, string> = {}): FormData {
     return makeFormData({
-      title_template: "%s | くまべ塗装",
+      title_template: "%s | やまぎし塗装",
       description:
         "熊本の外壁塗装専門店。無料相談から施工、アフターフォローまで一貫して丁寧に対応します。品質と安心をお届けし、住まいの美しさを長く保ちます。",
       og_media_id: MEDIA_ID,

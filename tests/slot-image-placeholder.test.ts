@@ -126,7 +126,7 @@ describe("StoryPortraitPlaceholder (story.portrait の旧装飾復元)", () => {
     );
     expect(html).toContain("信之");
     expect(html).toContain("PORTRAIT — COMING SOON");
-    expect(html).toContain("代表・隈部信之（近日、実際の写真に差し替え予定）");
+    expect(html).toContain("代表・山岸信之（近日、実際の写真に差し替え予定）");
     expect(html).toContain("aspect-[3/4]");
   });
 

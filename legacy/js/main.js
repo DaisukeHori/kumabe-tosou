@@ -1,5 +1,5 @@
 /* =============================================================
-   隈部塗装 — KUMABE TOSO / main.js (v2)
+   山岸塗装 — YAMAGISHI TOSO / main.js (v2)
    1) 現在ページのナビ強調
    2) スクロールリビール
    3) モバイルナビ
@@ -513,7 +513,7 @@
   orderBtn.addEventListener("click", function () {
     var r = calc();
     var lines = [
-      "【隈部塗装 SHOP — 注文・相談内容】",
+      "【山岸塗装 SHOP — 注文・相談内容】",
       "グレード: " + (GRADE_LABEL[r.grade] || "—"),
       "サイズ帯: " + (SIZE_LABEL[r.size] || "—"),
       "個数: " + r.qty + " 個",

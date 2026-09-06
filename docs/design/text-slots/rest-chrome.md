@@ -142,10 +142,10 @@
 - `privacy.hero.index` [label/単行/max10] 「LEGAL」 — 法的ページの構造ラベル
 - `privacy.hero.en` [label/単行/max20] 「PRIVACY POLICY」 — 英語装飾ラベル、法的ページのためtier C
 - `privacy.hero.heading` [heading/単行/max16] 「プライバシーポリシー」 — 法的文言(プライバシーポリシー)そのもの、tier C確定
-- `privacy.hero.lead` [lead/単行/max160] 「隈部塗装（以下「当工房」といいます）は、お問い合わせ・お見積もり・施工のご依頼にあたってお預かりする個人情報を...」 — 法的リード文、tier C確定
+- `privacy.hero.lead` [lead/単行/max160] 「山岸塗装（以下「当工房」といいます）は、お問い合わせ・お見積もり・施工のご依頼にあたってお預かりする個人情報を...」 — 法的リード文、tier C確定
 - `privacy.specTable` [body/複数行/max0] 「1.事業者情報/2.取得する個人情報/3.利用目的/4.第三者提供/5.保存期間/6.開示・訂正・削除等の請求/7.Co」 — プライバシーポリシー本文全8項、法的文言のためtier C確定
 - `privacy.mapNote` [body/複数行/max100] 「制定日・改定日：2026年7月7日 / 本ページは開業準備中のドラフトです...」 — 法的注記(制定日を含む)、tier C確定
-- `chrome.header.brandEn` [caption/単行/max16] 「KUMABE TOSO」 — 社名のローマ字装飾ブランドマーク。site_settings.company.nameにローマ字専用フィールドが無く、デザイン意匠として維持
+- `chrome.header.brandEn` [caption/単行/max16] 「YAMAGISHI TOSO」 — 社名のローマ字装飾ブランドマーク。site_settings.company.nameにローマ字専用フィールドが無く、デザイン意匠として維持
 - `chrome.header.menuAriaLabel` [label/単行/max16] 「メニューを開く」 — aria-labelのみ、画面には表示されない
 - `chrome.header.navAriaLabel` [label/単行/max20] 「メインナビゲーション」 — aria-labelのみ、画面には表示されない
 - `chrome.footer.sitemapLabel` [label/単行/max14] 「SITEMAP」 — footerナビ見出しの英語装飾ラベル
@@ -157,15 +157,15 @@
 - `chrome.footer.marquee.2` [caption/単行/max24] 「NATIONWIDE MAIL-IN」 — マーキー装飾文言(英語)
 - `chrome.footer.marquee.3` [caption/単行/max24] 「OITA BUNGOTAKADA」 — マーキー装飾文言(英語、所在地のローマ字表記)
 - `chrome.footer.marquee.4` [caption/単行/max24] 「試作1点 — ブリッジ生産1,000個」 — マーキー装飾文言、数量(1,000個)を含みpricing/QUOTE_VARSの数値と整合が必要
-- `chrome.footer.brandGiant` [caption/単行/max16] 「KUMABE TOSO」 — footer最下部の巨大装飾テキスト(kt-footer-giant)、overflow-hidden/whitespace-nowrap前提のCSS意匠、社名ローマ字表記と重複
-- `chrome.footer.copyright` [caption/単行/max50] 「© 2026 KUMABE TOSO. ALL RIGHTS RESERVED.」 — 著作権表記、法的/技術的性質のため編集不可
+- `chrome.footer.brandGiant` [caption/単行/max16] 「YAMAGISHI TOSO」 — footer最下部の巨大装飾テキスト(kt-footer-giant)、overflow-hidden/whitespace-nowrap前提のCSS意匠、社名ローマ字表記と重複
+- `chrome.footer.copyright` [caption/単行/max50] 「© 2026 YAMAGISHI TOSO. ALL RIGHTS RESERVED.」 — 著作権表記、法的/技術的性質のため編集不可
 - `chrome.footer.tagEn` [caption/単行/max50] 「3D PRINT SURFACE FINISHING — OITA, JAPAN」 — 英語装飾サブコピー(フッター最下段)
 - `chrome.footer.photoDisclaimer` [caption/複数行/max140] 「掲載写真は Unsplash の商用利用可能なイメージ素材で、各写真のクレジットはキャプションに記載しています...」 — 写真ライセンス・実写真ではない旨の免責事項。事実情報のため自由編集させない
 
 ## DB 由来 (スロット化しない)
 - notes 一覧・詳細の記事タイトル/抜粋/本文 (posts.title / posts.excerpt / posts.body、Markdown経由でSimpleMarkdown表示)。前後記事ナビの nav.prev.title / nav.next.title も同源。既存CMS編集画面の領分でありpage_textスロット化しない
-- 会社名「隈部塗装」— site-header.tsx のロゴ文字・モバイルSheetTitle、site-footer.tsx の見出し・住所ブロック冒頭で計4箇所使用。概念上は site_settings.company.name の領分だが、現状は3ファイルとも文字列リテラルでハードコードされておりDBと未連携(admin/settingsで社名を変更してもheader/footerには反映されない状態と推測。要確認)
-- 代表者名「隈部 信之」— site-footer.tsx 住所ブロック、tokushoho/page.tsx「運営統括責任者」行、privacy/page.tsx「1. 事業者情報」行で使用。概念上は site_settings.company.representative の領分だが同様に現状ハードコード
+- 会社名「山岸塗装」— site-header.tsx のロゴ文字・モバイルSheetTitle、site-footer.tsx の見出し・住所ブロック冒頭で計4箇所使用。概念上は site_settings.company.name の領分だが、現状は3ファイルとも文字列リテラルでハードコードされておりDBと未連携(admin/settingsで社名を変更してもheader/footerには反映されない状態と推測。要確認)
+- 代表者名「山岸 信之」— site-footer.tsx 住所ブロック、tokushoho/page.tsx「運営統括責任者」行、privacy/page.tsx「1. 事業者情報」行で使用。概念上は site_settings.company.representative の領分だが同様に現状ハードコード
 - 所在地「大分県豊後高田市」— site-footer.tsx、tokushoho/page.tsx「所在地」行、privacy/page.tsx「1. 事業者情報」行で使用。概念上は site_settings.company.address の領分だが同様に現状ハードコード
 
 ## レイアウトリスク

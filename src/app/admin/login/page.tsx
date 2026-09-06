@@ -5,7 +5,7 @@ import { isAllowedLoginNext } from "./next-path";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
-  title: "ログイン | 隈部塗装 CMS",
+  title: "ログイン | 山岸塗装 CMS",
 };
 
 export default async function AdminLoginPage({

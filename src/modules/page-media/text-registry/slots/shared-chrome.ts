@@ -36,7 +36,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "共通 / ヘッダーブランド名",
     kind: "text",
     maxLen: 8,
-    defaultText: "隈部塗装",
+    defaultText: "山岸塗装",
     affectsAllRoutes: true,
   },
   {
@@ -46,7 +46,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "共通 / ヘッダーブランド名 (英字)",
     kind: "text",
     maxLen: 20,
-    defaultText: "KUMABE TOSO",
+    defaultText: "YAMAGISHI TOSO",
     affectsAllRoutes: true,
   },
   {
@@ -550,7 +550,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "共通 / フッター会社名",
     kind: "text",
     maxLen: 8,
-    defaultText: "隈部塗装",
+    defaultText: "山岸塗装",
     affectsAllRoutes: true,
   },
   {
@@ -560,7 +560,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "共通 / フッター住所ブロック",
     kind: "lines",
     maxLen: 60,
-    defaultText: "隈部塗装(代表: 隈部 信之)\n大分県豊後高田市\n郵送受託・全国対応",
+    defaultText: "山岸塗装(代表: 山岸 信之)\n大分県豊後高田市\n郵送受託・全国対応",
     maxLines: 3,
     affectsAllRoutes: true,
   },
@@ -591,7 +591,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "共通 / フッター装飾巨大文字",
     kind: "text",
     maxLen: 16,
-    defaultText: "KUMABE TOSO",
+    defaultText: "YAMAGISHI TOSO",
     affectsAllRoutes: true,
   },
   {
@@ -601,7 +601,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "共通 / フッターコピーライト",
     kind: "text",
     maxLen: 60,
-    defaultText: "© 2026 KUMABE TOSO. ALL RIGHTS RESERVED.",
+    defaultText: "© 2026 YAMAGISHI TOSO. ALL RIGHTS RESERVED.",
     affectsAllRoutes: true,
   },
   {
@@ -622,7 +622,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     kind: "multiline",
     maxLen: 150,
     defaultText:
-      "掲載写真は Unsplash の商用利用可能なイメージ素材で、各写真のクレジットはキャプションに記載しています。これらは隈部塗装の工房・制作事例の写真ではなく、あくまでイメージです(実際の写真は準備中)。",
+      "掲載写真は Unsplash の商用利用可能なイメージ素材で、各写真のクレジットはキャプションに記載しています。これらは山岸塗装の工房・制作事例の写真ではなく、あくまでイメージです(実際の写真は準備中)。",
     affectsAllRoutes: true,
   },
 ];

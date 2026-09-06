@@ -72,7 +72,7 @@ export async function getInquiryNotificationEmail(): Promise<string | null> {
 }
 
 function buildEmailSubject(input: InquiryInput): string {
-  return `【隈部塗装】新しいお問い合わせ: ${INQUIRY_TYPE_LABELS[input.inquiry_type]} (${input.name}様)`;
+  return `【山岸塗装】新しいお問い合わせ: ${INQUIRY_TYPE_LABELS[input.inquiry_type]} (${input.name}様)`;
 }
 
 function buildEmailBodies(input: InquiryInput, inquiryId: string) {

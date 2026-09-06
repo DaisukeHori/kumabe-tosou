@@ -99,7 +99,7 @@
 - `shop.sim.tier_fallback` [label/単行/max20] 「適用なし（10個以上 −15%） / 適用なし」 — 数量値引き未適用時の表示、DB由来のtier.labelとテンプレート結合
 - `shop.sim.footnote` [body/複数行/max200] 「※ 立ち上げ期の概算目安です。形状の複雑さ・素材・色により変動します。初回のみ治具・段取り費を別途（リピー…」 — 見積り条件の免責文言、価格ドメインに直結
 - `shop.sim.empty_state` [label/単行/max24] 「価格はお問い合わせください。」 — PriceTable未取得時のエラー状態表示、価格ドメイン
-- `shop.sim.clipboard_header` [label/単行/max30] 「【隈部塗装 SHOP — 注文・相談内容】」 — クリップボードコピー文の見出し。社名「隈部塗装」がハードコードされておりsite_settingsの会社名と重複(db_backed_texts参照)
+- `shop.sim.clipboard_header` [label/単行/max30] 「【山岸塗装 SHOP — 注文・相談内容】」 — クリップボードコピー文の見出し。社名「山岸塗装」がハードコードされておりsite_settingsの会社名と重複(db_backed_texts参照)
 - `shop.sim.clipboard_labels` [label/単行/max10] 「グレード: / サイズ帯: / 個数: / オプション: / 概算: (5件)」 — クリップボード本文の項目ラベル、構造的テンプレート文言
 - `shop.sim.clipboard_footer` [body/単行/max60] 「※ 上記はシミュレータの目安です。素材・色・形状を添えてご相談ください。」 — クリップボード本文末尾の免責文言
 - `shop.sim.swatch_tooltip` [label/単行/max16] 「プレシャスホワイトパール 等 (SWATCH_TITLES, title属性, 8件)」 — MiniSwatchのtitle属性(ネイティブツールチップ)用の色名複製データ。colors.swatch.{n}.nameと重複するカタログデータで将来は共通カラーカタログへ一元化すべき
@@ -118,7 +118,7 @@
 
 ## DB 由来 (スロット化しない)
 - PriceTable由来の grade.label / grade.description / size.label / option.label (shop-simulator.tsx が @/modules/pricing/contracts の PriceTable を通じて参照) — 既にpricingモジュールのDBで編集可能なため page_text 化不要
-- shop-simulator.tsx のクリップボードヘッダー文字列に含まれる社名「隈部塗装」— site_settings の会社名テキストと重複しうるハードコードで、page_text 化ではなく site_settings 参照への統一を design 側で検討すべき
+- shop-simulator.tsx のクリップボードヘッダー文字列に含まれる社名「山岸塗装」— site_settings の会社名テキストと重複しうるハードコードで、page_text 化ではなく site_settings 参照への統一を design 側で検討すべき
 
 ## レイアウトリスク
 - PageHead / SecTitle / CtaBand.title は clamp(...)フォントサイズ + JSX内の手動<br/>で2行に固定改行しているため、文字数が増えると改行位置が崩れ2行目が極端に短く/長くなる。差し替えUIは改行位置ごと編集できる設計か、改行なし版に統一するかの判断が必要

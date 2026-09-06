@@ -154,7 +154,7 @@ describe("zIssuedContentSnapshot (台帳の内容スナップショット)", () 
     notes: null,
     tax_rounding: "floor",
     issuer: {
-      issuer_name: "隈部塗装",
+      issuer_name: "山岸塗装",
       registration_number: null,
       address: null,
       tel: null,
@@ -218,11 +218,11 @@ describe("zBankAccountSnapshot / zIssuerSnapshot (発行者スナップショッ
   it("zBankAccountSnapshot の代表値を受理する", () => {
     expect(
       zBankAccountSnapshot.safeParse({
-        bank_name: "隈部銀行",
+        bank_name: "山岸銀行",
         branch_name: "本店",
         account_type: "ordinary",
         account_number: "1234567",
-        account_holder_kana: "クマベトソウ",
+        account_holder_kana: "ヤマギシトソウ",
       }).success,
     ).toBe(true);
   });
@@ -230,7 +230,7 @@ describe("zBankAccountSnapshot / zIssuerSnapshot (発行者スナップショッ
   it("zIssuerSnapshot は任意項目 (bank_account / seal_storage_path 等) の null を許容する", () => {
     expect(
       zIssuerSnapshot.safeParse({
-        issuer_name: "隈部塗装",
+        issuer_name: "山岸塗装",
         registration_number: null,
         address: null,
         tel: null,
@@ -244,7 +244,7 @@ describe("zBankAccountSnapshot / zIssuerSnapshot (発行者スナップショッ
 
   it("zIssuerSnapshot.registration_number は T+13桁形式のみ許容 (null = 免税モード)", () => {
     const okBase = {
-      issuer_name: "隈部塗装",
+      issuer_name: "山岸塗装",
       address: null,
       tel: null,
       email: null,

@@ -1,4 +1,4 @@
-# 隈部塗装 CRM スイート — scheduling モジュール設計書 (03-scheduling)
+# 山岸塗装 CRM スイート — scheduling モジュール設計書 (03-scheduling)
 
 - 版: v1.1 (2026-07-11: レビュー指摘反映 — §19 更新履歴参照) / v1.0 (2026-07-11: 初版 — 全体設計 00-overview v1.0 / 07-contracts-delta v1.0 / 裁定 J1・J4・J8 準拠)
 - 作成: Fable 5 (設計サブエージェント、model=opus 系)
@@ -29,7 +29,7 @@
 
 ### 0.3 いつものスマホのカレンダーにも写る
 
-熊部さんは昔から Google のカレンダーで暮らしている。作業の札を置くと、数分後にはスマホのカレンダーに「隈部塗装 作業予定」という専用の欄として同じ予定が現れる。現場への移動中に「明日の塗装を午後にずらそう」とスマホ側で予定を動かすと、工房に戻る頃には管理画面のカレンダーも同じ形に直っている。逆にスマホ側でうっかり予定を消してしまっても、管理画面の札が勝手に消えることはない。「スマホ側で削除されています。どうしますか?」と確認してくれるので、誤操作で仕事が消える心配がない。
+熊部さんは昔から Google のカレンダーで暮らしている。作業の札を置くと、数分後にはスマホのカレンダーに「山岸塗装 作業予定」という専用の欄として同じ予定が現れる。現場への移動中に「明日の塗装を午後にずらそう」とスマホ側で予定を動かすと、工房に戻る頃には管理画面のカレンダーも同じ形に直っている。逆にスマホ側でうっかり予定を消してしまっても、管理画面の札が勝手に消えることはない。「スマホ側で削除されています。どうしますか?」と確認してくれるので、誤操作で仕事が消える心配がない。
 
 ### 0.4 実績を入れると、次の見積りが賢くなる
 
@@ -115,7 +115,7 @@ admin UI / app 層 ──→ SchedulingFacade (拡張メソッド含む)
 | 項目 | 選定 | 根拠 |
 |---|---|---|
 | 同期方式 | **polling 主軸** (pg_cron 5 分 + Google syncToken / Graph deltaLink)。push は Phase 2 契約予約のみ | 裁定 J4。両ベンダー公式が「push は 100% 信頼できず polling 併用必須」と明言 (ext-calendar §2.1/§2.3)。1 ユーザー規模では polling 単独で成立し、チャネル/サブスクリプション更新ジョブの運用を丸ごと省ける |
-| 書き込み先 | **アプリ専用カレンダー** (「隈部塗装 作業予定」)。主カレンダーは free/busy 参照のみ | 裁定 J4。専用カレンダー内は全部自アプリ発 → ループ防止が構造的に楽 (ext-calendar §3.4)。Google の初回フル同期も母数が小さい |
+| 書き込み先 | **アプリ専用カレンダー** (「山岸塗装 作業予定」)。主カレンダーは free/busy 参照のみ | 裁定 J4。専用カレンダー内は全部自アプリ発 → ループ防止が構造的に楽 (ext-calendar §3.4)。Google の初回フル同期も母数が小さい |
 | Google スコープ | `calendar.app.created` + `calendar.freebusy` + `openid email` | 最小権限。app.created はアプリ作成カレンダーのみ管理 (作成・calendars.get 含む — 公式リファレンス実確認 2026-07-11)。free/busy は主カレンダーの busy 帯表示用。openid email は account_email 取得用 (token 応答の id_token から — 追加 API 呼び出し不要)。**calendarList 系 API は app.created では呼べない** (calendarList.list の許可スコープは calendar.readonly / calendar / calendar.calendarlist(.readonly) の 4 つのみ — 同日実確認) ため本設計は calendarList を全面不使用 (§8.1/§8.2/§8.8)。**app.created の sensitive 分類は未確認** (ext-calendar §6.1) — 実プロジェクトの Data Access ページで分類と API 能力を確認し、不都合なら `calendar.events` へフォールバック (§18 R4) |
 | Microsoft スコープ | `Calendars.ReadWrite` + `offline_access` + `User.Read` (delegated) | カレンダー作成 + イベント CRUD を 1 スコープで充足。MSA (個人) 対応は delegated のみ (ext-calendar §1.3)。**getSchedule は MSA の delegated では Not supported** (Microsoft Learn 実確認 2026-07-11 — 調査 ext-calendar には未記載の制約) — busy 帯は主カレンダー calendarView からの合成フォールバックを併設 (§8.1、§18 R1) |
 | API クライアント | SDK 不使用の薄い fetch ラッパ + `AbortSignal.timeout(15_000)` | 既存規約 (x-api.ts / instagram-api.ts 前例)。SDK 依存を増やさない (上位指示) |
@@ -1401,7 +1401,7 @@ export interface CalendarProviderAdapter {
 
 | 操作 | Google (`google-api.ts`) | Microsoft (`ms-api.ts`) |
 |---|---|---|
-| アプリ専用カレンダー | `POST /calendar/v3/calendars` {summary:"隈部塗装 作業予定", timeZone:"Asia/Tokyo"}。既存確認は保存済み `meta.app_calendar_id` への `calendars.get` (app.created で可 — §1.4。**calendarList は不使用** — 許可スコープ外で 403 になる) | 既存確認は保存済み id へ `GET /me/calendars/{id}` (未保存時のみ `GET /me/calendars?$filter=name eq '隈部塗装 作業予定'`) → なければ `POST /me/calendars` |
+| アプリ専用カレンダー | `POST /calendar/v3/calendars` {summary:"山岸塗装 作業予定", timeZone:"Asia/Tokyo"}。既存確認は保存済み `meta.app_calendar_id` への `calendars.get` (app.created で可 — §1.4。**calendarList は不使用** — 許可スコープ外で 403 になる) | 既存確認は保存済み id へ `GET /me/calendars/{id}` (未保存時のみ `GET /me/calendars?$filter=name eq '山岸塗装 作業予定'`) → なければ `POST /me/calendars` |
 | 作成 | `POST /calendars/{id}/events`。`extendedProperties.private = { kumabe_link_id, kumabe_block_id, kumabe_origin: "app" }` (key ≤44 字制約内。block_id は再接続後の link 再構築キー — §8.5) | `POST /me/calendars/{id}/events`。**`transactionId: "kmb-{linkId}"`** (リトライ二重作成防止 — ext-calendar §3.3) |
 | 更新 | `PUT /calendars/{id}/events/{eid}` + `If-Match: {etag}` → 412 で ConflictError | `PATCH /me/events/{eid}` + `If-Match: {changeKey}` → 412 で ConflictError |
 | 削除 | `DELETE /calendars/{id}/events/{eid}` (404/410 = 成功扱い) | `DELETE /me/events/{eid}` (同) |

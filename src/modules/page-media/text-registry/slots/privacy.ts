@@ -54,7 +54,7 @@ export const PRIVACY_TEXT_SLOTS: readonly PageTextSlot[] = [
     kind: "multiline",
     maxLen: 250,
     defaultText:
-      "隈部塗装(以下「当工房」といいます)は、お問い合わせ・お見積もり・施工のご依頼にあたってお預かりする個人情報を、以下の方針に基づき適切に取り扱います。本ページは開業準備中のドラフトであり、正式な法務チェックを経て内容を確定します。",
+      "山岸塗装(以下「当工房」といいます)は、お問い合わせ・お見積もり・施工のご依頼にあたってお預かりする個人情報を、以下の方針に基づき適切に取り扱います。本ページは開業準備中のドラフトであり、正式な法務チェックを経て内容を確定します。",
   },
   {
     key: "privacy.spec.business.th",
@@ -72,7 +72,7 @@ export const PRIVACY_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "プライバシーポリシー / 事業者情報 本文 (屋号/代表者/所在地)",
     kind: "lines",
     maxLen: 120,
-    defaultText: "屋号：隈部塗装(くまべとそう)\n代表者：隈部 信之\n所在地：大分県豊後高田市",
+    defaultText: "屋号：山岸塗装(やまぎしとそう)\n代表者：山岸 信之\n所在地：大分県豊後高田市",
     maxLines: 3,
     maxLineLen: 40,
   },

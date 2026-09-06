@@ -28,7 +28,7 @@
 | G6 | View Transitions(旧 0.28s 退場 / 新 0.44s 入場、ヘッダー固定) | css:1187-1205 | 無し | ★★ |
 | G7 | スクロール駆動 6 種(§2 参照) | css:1503-1550,1624-1636,2487-2500 | 無し | ★★★ |
 | G8 | 写真 grayscale(0.9)→hover(0.1)+scale(1.04)(filter 0.7s / transform 1s 非対称) | css:2409-2424 | 常時カラー・ズーム無し | ★★★ |
-| G9 | footer-giant「KUMABE TOSO」hover 塗り込み(background-clip:text 0→100% 1.1s) | css:1311-1318 | 静的透過文字 | ★★ |
+| G9 | footer-giant「YAMAGISHI TOSO」hover 塗り込み(background-clip:text 0→100% 1.1s) | css:1311-1318 | 静的透過文字 | ★★ |
 | G10 | 紙ノイズ(body::before feTurbulence opacity 0.045) | css:1333-1341 | swatch 局所のみ | ★★ |
 | G11 | 静的装飾 3 点: ヘッダー 8 色小口帯 / 罫線端の「+」レジマーク / フッター目盛りティック | css:1207-1222,1236-1256,1258-1269 | 無し | ★★ |
 | G12 | ハンバーガー→X モーフィング(0.3s) | css:179-192 | 静止アイコン差し替え | ★ |

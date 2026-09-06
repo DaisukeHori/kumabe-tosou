@@ -373,7 +373,7 @@ const candidates = await crmFacade.listDeliveredDealsForFollowup(90, {mode:'serv
 await engagementFacade.scheduleForDeliveredDeals(candidates.value, {mode:'service'})
 await engagementFacade.dispatchDueRequests({mode:'service'})   // scheduled_for <= today を送信
 ```
-送信は `engagement/internal/email.ts`(sales/internal/email.ts:9-16 と同型の Resend・Result 返却)。nps メール = /f/[token]、review_x メール = 「作品を作例として紹介させてください(/c/[token])+よろしければ @kumabe_tosou へのメンションで完成報告を」— consent token は 3.1 の `issueConsentRequestToken` を facade 内部で連結発行。失敗は status='failed' + send_error(digest に「送信失敗 n 件」)。
+送信は `engagement/internal/email.ts`(sales/internal/email.ts:9-16 と同型の Resend・Result 返却)。nps メール = /f/[token]、review_x メール = 「作品を作例として紹介させてください(/c/[token])+よろしければ @yamagishi_tosou へのメンションで完成報告を」— consent token は 3.1 の `issueConsentRequestToken` を facade 内部で連結発行。失敗は status='failed' + send_error(digest に「送信失敗 n 件」)。
 
 **契約・facade**:
 
@@ -395,7 +395,7 @@ listFeedbackRequests(filter: { status?; kind?; cursor; limit }): Promise<Result<
 
 回答時は appendActivity(system)で deal タイムラインに「NPS 9点・コメントあり」を冪等記録。
 
-**画面**: `/admin/feedback`(新規・サイドナビ「お客様の反応」)。data-table で 依頼一覧(kind/status バッジ・スコア・コメント抜粋・言及URL)。行アクション: 「お客様の声の下書きにする」→ 既存 `zVoiceInput` へプリフィル(`/admin/voices/new?from_feedback=...`、rating=NPS を 5 段階へ丸め、source_deal_id 設定)— content への依存は app 層合成。スコア 0-6(批判者)は行を赤系 status-badge で強調(電話フォロー判断は人間)。公開ページ `/f/[token]` は 0-10 ボタン+コメント1枠のみ(スマホ前提・30秒で終わる)。回答後サンクス画面: 9-10 の推奨者にだけ X intent リンク(`https://x.com/intent/post?text=...@kumabe_tosou...`)を表示(#104 の言及依頼を NPS 側でも回収)。
+**画面**: `/admin/feedback`(新規・サイドナビ「お客様の反応」)。data-table で 依頼一覧(kind/status バッジ・スコア・コメント抜粋・言及URL)。行アクション: 「お客様の声の下書きにする」→ 既存 `zVoiceInput` へプリフィル(`/admin/voices/new?from_feedback=...`、rating=NPS を 5 段階へ丸め、source_deal_id 設定)— content への依存は app 層合成。スコア 0-6(批判者)は行を赤系 status-badge で強調(電話フォロー判断は人間)。公開ページ `/f/[token]` は 0-10 ボタン+コメント1枠のみ(スマホ前提・30秒で終わる)。回答後サンクス画面: 9-10 の推奨者にだけ X intent リンク(`https://x.com/intent/post?text=...@yamagishi_tosou...`)を表示(#104 の言及依頼を NPS 側でも回収)。
 
 **受入基準**:
 - [ ] delivered 以降の deal に日次で nps/review_x 依頼が各1件だけ作られる(再実行・Track2 トリガー併用でも増えない)
@@ -628,7 +628,7 @@ create table deal_crowdfunding (
   reward_due_on date,        -- リターン量産の納品期限 (scheduling の納期はあくまで受注明細側が正)
   credit_status text not null default 'none'
     check (credit_status in ('none','requested','granted','published')),
-  credit_note text,          -- '塗装: 隈部塗装' の掲載箇所メモ
+  credit_note text,          -- '塗装: 山岸塗装' の掲載箇所メモ
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

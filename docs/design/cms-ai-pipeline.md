@@ -1,4 +1,4 @@
-# 隈部塗装 CMS + AI コンテンツパイプライン 設計書
+# 山岸塗装 CMS + AI コンテンツパイプライン 設計書
 
 - 版: v3.5 (2026-07-17: crm-suite 新規 24 テーブルの §2 参照台帳追記 + 単一ソース宣言の是正。詳細は末尾「更新履歴」)
 - 作成日: 2026-07-07
@@ -405,7 +405,7 @@ create table channel_posts (
 
 create table channel_accounts (
   channel text primary key check (channel in ('x','instagram','note')),
-  account_label text not null,              -- '@kumabe_tosou' 等表示用
+  account_label text not null,              -- '@yamagishi_tosou' 等表示用
   auth_status text not null default 'disconnected'
     check (auth_status in ('disconnected','connected','expired','error')),
   vault_secret_name text,                   -- Supabase Vault 上のシークレット名
@@ -518,7 +518,7 @@ JSONB カラムは**必ず契約書 (module-contracts.md §4) のスキーマで
 | ロール | 実体 | 説明 |
 |---|---|---|
 | `anon` | 公開サイト訪問者 | Supabase anon key。読み取り専用 |
-| `admin` | profiles に存在する認証済みユーザー | 堀さん / 隈部さん。当面 1〜2 名 |
+| `admin` | profiles に存在する認証済みユーザー | 堀さん / 山岸さん。当面 1〜2 名 |
 | `service` | service_role key (サーバのみ) | Route Handler / Edge Function 内部処理。クライアントに露出禁止 |
 
 ### 3.2 認可マトリクス
@@ -751,7 +751,7 @@ or テキスト直書き   確認・手修正            researching…         
 | 初期値 | bootstrap-admin 実行時に管理者メールアドレスで自動初期化 (§3.3 — 未設定のまま運用が始まる事故を防ぐ) |
 | 差出人 | `no-reply@<独自ドメイン>` (Resend 認証済みドメイン) |
 | Reply-To | **問い合わせ者のメールアドレス** — 受信メールにそのまま返信すれば問い合わせ者に届く |
-| 件名 | `【隈部塗装】新しいお問い合わせ: {種別} ({お名前}様)` |
+| 件名 | `【山岸塗装】新しいお問い合わせ: {種別} ({お名前}様)` |
 | 本文 | 問い合わせ内容の**全文** (お名前 / メール / 電話 / 種別 / 対象品目 / 内容 / 受信日時 JST) + /admin/inquiries/{id} への直リンク。HTML + プレーンテキストの multipart |
 
 ### 6.4 SEO 継続条件
@@ -816,7 +816,7 @@ const stream = anthropic.messages.stream({
 
 ### 7.4 プロンプト設計方針
 
-- **BRAND_SYSTEM_PROMPT** (固定): 隈部塗装の事業内容 / 一人称 / 禁止表現 (誇大広告・効果保証・他社比較) / 事実でないことを書かない / 引用元の明記ルール。
+- **BRAND_SYSTEM_PROMPT** (固定): 山岸塗装の事業内容 / 一人称 / 禁止表現 (誇大広告・効果保証・他社比較) / 事実でないことを書かない / 引用元の明記ルール。
 - **style_profiles** (DB、admin が編集可能): チャネル別の tone + format。初期値:
   - site_blog: 丁寧なですます調、見出し 2〜4 個、1500〜3000 字、SEO を意識した title
   - note: 一人称の語り口、体験談ベース、2000〜4000 字、ハッシュタグ 3 個

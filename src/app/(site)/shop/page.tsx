@@ -8,12 +8,12 @@ import { ShopPageBody } from "./page-body";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "SHOP | 隈部塗装 — 仕上げを、通販のように買う",
+    absolute: "SHOP | 山岸塗装 — 仕上げを、通販のように買う",
   },
   description:
-    "隈部塗装のSHOP。3Dプリント表面処理の受託サービス（下地仕上げ・スタンダード・プレミアム）を、サイズ×個数×グレードのシミュレータで概算し、そのまま注文相談へ。塗装済み製品の販売枠も。",
+    "山岸塗装のSHOP。3Dプリント表面処理の受託サービス（下地仕上げ・スタンダード・プレミアム）を、サイズ×個数×グレードのシミュレータで概算し、そのまま注文相談へ。塗装済み製品の販売枠も。",
   openGraph: {
-    title: "SHOP | 隈部塗装 — 仕上げを、通販のように買う",
+    title: "SHOP | 山岸塗装 — 仕上げを、通販のように買う",
     description:
       "受託サービスをサイズ×個数×グレードのシミュレータで概算し、そのまま注文相談へ。塗装済み製品の販売枠も。",
     images: ["/img/black-car.jpg"],

@@ -34,7 +34,7 @@ const DIAL_RESULT_FALLBACK_TEXT = "ただいま電話に出られません。ご
 const RECORD_FAILURE_TEXT = "録音を確認できませんでした。失礼いたします。";
 const RECORDED_ACK_TEXT = "ありがとうございました。失礼いたします。";
 
-const BASE_URL = "https://kumabe-tosou.example.com";
+const BASE_URL = "https://yamagishi-tosou.example.com";
 
 function expectedRecordFlow(sayText: string, voicemailMaxSeconds: number, baseUrl: string): string {
   return (

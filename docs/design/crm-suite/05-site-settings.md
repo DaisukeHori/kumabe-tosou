@@ -1,4 +1,4 @@
-# 隈部塗装 CRM スイート — サイト設定 (site-settings) 設計書 (05)
+# 山岸塗装 CRM スイート — サイト設定 (site-settings) 設計書 (05)
 
 - 版: v1.2 (2026-07-11: 07 §D5 v1.2 (角印 private 化 — seal_media_id 廃止・0028 内容置換) への追随 — §2.2/§2.5 の seal_media_id 条件と 0028↔0035 逆時系列運用規則 (裁定 #21) を前提消滅により撤回・整理。詳細は更新履歴)。旧: v1.1 (2026-07-11: レビュー反映 — 本番 seo_defaults 行の実在対応 / og メタの fallback 意味論是正 / 0028↔0035 適用順運用 / 破損行復旧経路 ほか)
 - 旧版: v1.0 (2026-07-11: 初版 — 設計裁定 J12 準拠)
@@ -276,16 +276,16 @@ import type { SettingsValue } from "@/modules/settings/contracts";
  *  import して検証する (二重定義の乖離防止) */
 export const SITE_META_FALLBACK = {
   siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app",
-  titleDefault: "隈部塗装 | 3Dプリント表面処理の専門工房 — 大分県豊後高田市",
-  titleTemplate: "%s | 隈部塗装",
+  titleDefault: "山岸塗装 | 3Dプリント表面処理の専門工房 — 大分県豊後高田市",
+  titleTemplate: "%s | 山岸塗装",
   description:
-    "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。隈部塗装(大分県豊後高田市)。",
-  ogTitle: "隈部塗装 | 3Dプリント表面処理の専門工房",
+    "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。山岸塗装(大分県豊後高田市)。",
+  ogTitle: "山岸塗装 | 3Dプリント表面処理の専門工房",
   ogDescription:
     "積層痕を消す研磨から、自動車グレードの塗装仕上げまで。郵送で全国からお受けします。",
   ogImage: { url: "/og-image.jpg", width: 1200, height: 630,
-    alt: "隈部塗装 — 3Dプリント表面処理の専門工房" },
-  siteName: "隈部塗装",
+    alt: "山岸塗装 — 3Dプリント表面処理の専門工房" },
+  siteName: "山岸塗装",
 } as const;
 
 /** generateMetadata / layout 本体が使う解決済みメタ (DB 値 + fallback を合成した後の形) */
@@ -578,12 +578,12 @@ admin 保存 (Server Action submitSettingsForm — 全キー共通)
 | (site)/tokushoho/page.tsx | 静的 metadata + `robots: { index: false }` | **変更なし** (sitemap 除外も維持) |
 | (site)/works/[slug]/page.tsx | `generateMetadata()` — DB (works) から title.absolute / description / OG=cover WebP URL | **変更なし**。「見つかりません」分岐の plain string title には (site) template が適用される (下記・既知事象) |
 | (site)/blog/[slug]/page.tsx / notes/[slug]/page.tsx | 同型 `generateMetadata()` | **変更なし** (同上) |
-| admin/layout.tsx | `title.template "%s | 隈部塗装 CMS"` + `robots: noindex` | **変更なし**。GA/favicon リンクは載らない (favicon はブラウザ既定 /favicon.ico) |
+| admin/layout.tsx | `title.template "%s | 山岸塗装 CMS"` + `robots: noindex` | **変更なし**。GA/favicon リンクは載らない (favicon はブラウザ既定 /favicon.ico) |
 | (editor)/layout.tsx | `robots: noindex` | **変更なし** |
 | robots.ts | disallow /admin, /edit | **/print 追記** (§5.5) |
 | sitemap.ts | 静的 14 + 動的 3 種 | **変更なし** |
 
-既知事象 (本書では変更しない・Issue 候補として記録): works/blog/notes の「見つかりません」フォールバックは plain string title (例 `"記事が見つかりません | 隈部塗装"`) のため親 template が適用され「… | 隈部塗装 | 隈部塗装」と二重サフィックスになる (現行 root template でも同様に発生している既存事象)。是正するなら `title.absolute` 化 1 行 ×3 ファイルだが、既存ページ無変更の原則を優先し本書スコープ外とする。
+既知事象 (本書では変更しない・Issue 候補として記録): works/blog/notes の「見つかりません」フォールバックは plain string title (例 `"記事が見つかりません | 山岸塗装"`) のため親 template が適用され「… | 山岸塗装 | 山岸塗装」と二重サフィックスになる (現行 root template でも同様に発生している既存事象)。是正するなら `title.absolute` 化 1 行 ×3 ファイルだが、既存ページ無変更の原則を優先し本書スコープ外とする。
 
 ---
 

@@ -10,18 +10,18 @@ import { describe, expect, it } from "vitest";
 import { isAllowedSubresource, isSameOriginAsSite } from "@/lib/screenshot/subresource-policy";
 
 const OPTIONS = {
-  siteOrigin: "https://kumabe-tosou.example.com",
+  siteOrigin: "https://yamagishi-tosou.example.com",
   storageOrigin: "https://abcdefgh.supabase.co",
 };
 
 describe("isAllowedSubresource: SSRF 対策 (§11 MAJOR-5)", () => {
   it("自オリジンの画像 URL は許可する", () => {
-    expect(isAllowedSubresource("https://kumabe-tosou.example.com/images/hero.webp", OPTIONS)).toBe(true);
+    expect(isAllowedSubresource("https://yamagishi-tosou.example.com/images/hero.webp", OPTIONS)).toBe(true);
   });
 
   it("自オリジンの script / stylesheet も許可する (オリジン一致のみで判定するため resourceType を問わない)", () => {
-    expect(isAllowedSubresource("https://kumabe-tosou.example.com/_next/static/app.js", OPTIONS)).toBe(true);
-    expect(isAllowedSubresource("https://kumabe-tosou.example.com/styles.css", OPTIONS)).toBe(true);
+    expect(isAllowedSubresource("https://yamagishi-tosou.example.com/_next/static/app.js", OPTIONS)).toBe(true);
+    expect(isAllowedSubresource("https://yamagishi-tosou.example.com/styles.css", OPTIONS)).toBe(true);
   });
 
   it("Supabase Storage オリジンの画像 URL は許可する", () => {
@@ -44,15 +44,15 @@ describe("isAllowedSubresource: SSRF 対策 (§11 MAJOR-5)", () => {
   });
 
   it("同一ホストでもポート違いは別オリジンとして拒否する", () => {
-    expect(isAllowedSubresource("https://kumabe-tosou.example.com:8443/x.png", OPTIONS)).toBe(false);
+    expect(isAllowedSubresource("https://yamagishi-tosou.example.com:8443/x.png", OPTIONS)).toBe(false);
   });
 
   it("同一ホストでもスキーム違い (http vs https) は別オリジンとして拒否する", () => {
-    expect(isAllowedSubresource("http://kumabe-tosou.example.com/x.png", OPTIONS)).toBe(false);
+    expect(isAllowedSubresource("http://yamagishi-tosou.example.com/x.png", OPTIONS)).toBe(false);
   });
 
   it("別ホスト (サブドメイン違い含む) は拒否する", () => {
-    expect(isAllowedSubresource("https://cdn.kumabe-tosou.example.com/x.png", OPTIONS)).toBe(false);
+    expect(isAllowedSubresource("https://cdn.yamagishi-tosou.example.com/x.png", OPTIONS)).toBe(false);
   });
 
   it("内部/メタデータサーバーを狙う URL (169.254.169.254 等) も自オリジン以外として拒否する", () => {
@@ -68,7 +68,7 @@ describe("isAllowedSubresource: SSRF 対策 (§11 MAJOR-5)", () => {
   });
 
   it("blob: スキームは許可する (生成元コンテキストのメモリ内オブジェクト参照であり SSRF 経路にならないため)", () => {
-    expect(isAllowedSubresource("blob:https://kumabe-tosou.example.com/uuid-1234", OPTIONS)).toBe(true);
+    expect(isAllowedSubresource("blob:https://yamagishi-tosou.example.com/uuid-1234", OPTIONS)).toBe(true);
   });
 
   it("blob: URL 内に他オリジン文字列が埋め込まれていても許可する (blob URL は生成元コンテキストにスコープされ実データの取得元にはならないため)", () => {
@@ -88,7 +88,7 @@ describe("isSameOriginAsSite: リダイレクト検証 (§11「リダイレク�
   const siteOrigin = OPTIONS.siteOrigin;
 
   it("最終 URL が自オリジンと一致すれば true", () => {
-    expect(isSameOriginAsSite("https://kumabe-tosou.example.com/about", siteOrigin)).toBe(true);
+    expect(isSameOriginAsSite("https://yamagishi-tosou.example.com/about", siteOrigin)).toBe(true);
   });
 
   it("最終 URL が別オリジンにリダイレクトされていれば false (撮影前に拒否する対象)", () => {
@@ -96,7 +96,7 @@ describe("isSameOriginAsSite: リダイレクト検証 (§11「リダイレク�
   });
 
   it("スキームだけ違う場合も別オリジンとして false", () => {
-    expect(isSameOriginAsSite("http://kumabe-tosou.example.com/about", siteOrigin)).toBe(false);
+    expect(isSameOriginAsSite("http://yamagishi-tosou.example.com/about", siteOrigin)).toBe(false);
   });
 
   it("パース不能な URL は fail-closed で false", () => {

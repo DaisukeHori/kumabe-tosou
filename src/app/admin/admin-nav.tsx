@@ -10,7 +10,7 @@ import { ADMIN_NAV_GROUPS, type AdminNavItem } from "./nav-items";
 // #118 (R1) でグループ id を業務フェーズ別へ再編したため v1 → v2 へバンプする。
 // 旧 v1 の値 (顧客管理/営業・予定… の id) は新構造に存在せず、そのまま読むと
 // 折りたたみ状態がちぐはぐに見えるため、キーを分離して旧値を無視する。
-const COLLAPSED_STORAGE_KEY = "kumabe-admin-nav-collapsed:v2";
+const COLLAPSED_STORAGE_KEY = "yamagishi-admin-nav-collapsed:v2";
 
 /**
  * 左サイドナビ (Client Component)。#94 でグループ折りたたみ化 (6 セクション)。

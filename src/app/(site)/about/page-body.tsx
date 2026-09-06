@@ -530,7 +530,7 @@ export function AboutPageBody({
         <Reveal as="div" className="kt-map-frame mt-10 border border-hair bg-paper p-2">
           <iframe
             src="https://maps.google.com/maps?q=%E5%A4%A7%E5%88%86%E7%9C%8C%E8%B1%8A%E5%BE%8C%E9%AB%98%E7%94%B0%E5%B8%82&t=m&z=10&output=embed"
-            title="隈部塗装の所在地（大分県豊後高田市）"
+            title="山岸塗装の所在地（大分県豊後高田市）"
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
             className="block aspect-[21/9] w-full border-0"

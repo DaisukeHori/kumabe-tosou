@@ -16,7 +16,7 @@ function baseSnapshot(overrides: Partial<IssuedContentSnapshot> = {}): IssuedCon
     issue_date: "2026-07-01",
     transaction_date: "2026-07-01",
     valid_until: "2026-07-31",
-    billing_name: "隈部太郎",
+    billing_name: "山岸太郎",
     billing_suffix: "様",
     billing_address: "熊本県熊本市中央区1-1-1",
     site_name: "本社工場",
@@ -24,7 +24,7 @@ function baseSnapshot(overrides: Partial<IssuedContentSnapshot> = {}): IssuedCon
     notes: null,
     tax_rounding: "floor",
     issuer: {
-      issuer_name: "隈部塗装",
+      issuer_name: "山岸塗装",
       registration_number: "T1234567890123",
       address: null,
       tel: null,
@@ -65,10 +65,10 @@ describe("diffIssuedSnapshots (§11.1 版間差分)", () => {
 
   it("ヘッダ1項目変更 (billing_name) を検出する", () => {
     const older = baseSnapshot();
-    const newer = baseSnapshot({ billing_name: "隈部次郎" });
+    const newer = baseSnapshot({ billing_name: "山岸次郎" });
     const result = diffIssuedSnapshots(older, newer);
     expect(result.identical).toBe(false);
-    expect(result.headerDiffs).toContainEqual({ field: "billing_name", old: "隈部太郎", new: "隈部次郎" });
+    expect(result.headerDiffs).toContainEqual({ field: "billing_name", old: "山岸太郎", new: "山岸次郎" });
     // 他のヘッダフィールドは変化なしのため含まれない
     expect(result.headerDiffs).toHaveLength(1);
   });
@@ -198,11 +198,11 @@ describe("diffIssuedSnapshots (§11.1 版間差分)", () => {
 
   it("older・newer の入力順を入れ替えても対称に動作する (old/new が入れ替わるだけでロジックは崩れない)", () => {
     const a = baseSnapshot();
-    const b = baseSnapshot({ billing_name: "隈部次郎", total_jpy: 22000 });
+    const b = baseSnapshot({ billing_name: "山岸次郎", total_jpy: 22000 });
     const forward = diffIssuedSnapshots(a, b);
     const backward = diffIssuedSnapshots(b, a);
-    expect(forward.headerDiffs).toContainEqual({ field: "billing_name", old: "隈部太郎", new: "隈部次郎" });
-    expect(backward.headerDiffs).toContainEqual({ field: "billing_name", old: "隈部次郎", new: "隈部太郎" });
+    expect(forward.headerDiffs).toContainEqual({ field: "billing_name", old: "山岸太郎", new: "山岸次郎" });
+    expect(backward.headerDiffs).toContainEqual({ field: "billing_name", old: "山岸次郎", new: "山岸太郎" });
     expect(forward.totalDiff).toEqual({ old: 11000, new: 22000, changed: true });
     expect(backward.totalDiff).toEqual({ old: 22000, new: 11000, changed: true });
   });

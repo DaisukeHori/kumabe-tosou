@@ -18,9 +18,9 @@ import type { KmbErrorCode, Result } from "@/modules/platform/contracts";
 const MODEL = "gpt-4o-transcribe" as const;
 const MAX_BYTES = 25 * 1024 * 1024;
 
-/** 隈部塗装の専門用語 (§7.3 精度対策)。誤認識訂正の補助として prompt に注入する。 */
+/** 山岸塗装の専門用語 (§7.3 精度対策)。誤認識訂正の補助として prompt に注入する。 */
 const TERMINOLOGY_PROMPT =
-  "隈部塗装、ソウルレッド、プライマー、耐候クリア、サフェーサー、コンパウンド、ガンコート";
+  "山岸塗装、ソウルレッド、プライマー、耐候クリア、サフェーサー、コンパウンド、ガンコート";
 
 export async function transcribeAudio(
   bytes: Buffer,

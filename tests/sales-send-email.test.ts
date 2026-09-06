@@ -93,7 +93,7 @@ function documentRow(overrides: Partial<DocumentRow> = {}): DocumentRow {
     tax_summary: [],
     total_jpy: 11_000,
     issuer_snapshot: {
-      issuer_name: "隈部塗装",
+      issuer_name: "山岸塗装",
       registration_number: null,
       address: null,
       tel: null,
@@ -117,7 +117,7 @@ function validInput(overrides: Partial<SendDocumentEmailInput> = {}): SendDocume
   return {
     to: "customer@example.com",
     cc: null,
-    subject: "【隈部塗装】請求書のご送付 (I-2026-0001)",
+    subject: "【山岸塗装】請求書のご送付 (I-2026-0001)",
     body: "本文です。",
     version: 1,
     ...overrides,
@@ -335,7 +335,7 @@ describe("createSalesFacade().sendDocumentByEmail — 成功", () => {
       ok: true,
       value: documentRow({
         issuer_snapshot: {
-          issuer_name: "隈部塗装",
+          issuer_name: "山岸塗装",
           registration_number: null,
           address: null,
           tel: null,

@@ -125,7 +125,7 @@ export function isRevalidateSecretConfigured(): boolean {
 }
 
 /** rate limit の IP hash 用 salt が未設定の場合のフォールバック (本番では env 設定を推奨) */
-const RATE_LIMIT_IP_SALT_FALLBACK = "kumabe-tosou-rate-limit-fallback-salt-please-set-env";
+const RATE_LIMIT_IP_SALT_FALLBACK = "yamagishi-tosou-rate-limit-fallback-salt-please-set-env";
 
 /** rate limit の IP hash に使う salt。未設定時は固定フォールバックを返す */
 export function getRateLimitIpSalt(): string {

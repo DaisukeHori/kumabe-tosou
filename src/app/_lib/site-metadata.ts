@@ -20,19 +20,19 @@ import type { SettingsValue } from "@/modules/settings/contracts";
  */
 export const SITE_META_FALLBACK = {
   siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app",
-  titleDefault: "隈部塗装 | 3Dプリント表面処理の専門工房 — 大分県豊後高田市",
-  titleTemplate: "%s | 隈部塗装",
+  titleDefault: "山岸塗装 | 3Dプリント表面処理の専門工房 — 大分県豊後高田市",
+  titleTemplate: "%s | 山岸塗装",
   description:
-    "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。隈部塗装(大分県豊後高田市)。",
-  ogTitle: "隈部塗装 | 3Dプリント表面処理の専門工房",
+    "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。山岸塗装(大分県豊後高田市)。",
+  ogTitle: "山岸塗装 | 3Dプリント表面処理の専門工房",
   ogDescription: "積層痕を消す研磨から、自動車グレードの塗装仕上げまで。郵送で全国からお受けします。",
   ogImage: {
     url: "/og-image.jpg",
     width: 1200,
     height: 630,
-    alt: "隈部塗装 — 3Dプリント表面処理の専門工房",
+    alt: "山岸塗装 — 3Dプリント表面処理の専門工房",
   },
-  siteName: "隈部塗装",
+  siteName: "山岸塗装",
 } as const;
 
 /** generateMetadata / (site) layout 本体が使う解決済みメタ (DB 値 + fallback を合成した後の形) */

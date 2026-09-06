@@ -444,7 +444,7 @@ function SeoDefaultsForm({
           <Input
             id="seo-title-template"
             name="title_template"
-            defaultValue={v?.title_template ?? "%s | 隈部塗装"}
+            defaultValue={v?.title_template ?? "%s | 山岸塗装"}
             required
             maxLength={60}
           />

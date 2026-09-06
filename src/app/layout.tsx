@@ -42,37 +42,37 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
-const SITE_TITLE = "隈部塗装 | 3Dプリント表面処理の専門工房 — 大分県豊後高田市";
+const SITE_TITLE = "山岸塗装 | 3Dプリント表面処理の専門工房 — 大分県豊後高田市";
 const SITE_DESCRIPTION =
-  "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。隈部塗装(大分県豊後高田市)。";
+  "3Dプリントを、量産品と見分けがつかない外観に。積層痕除去の研磨から自動車グレードの塗装仕上げまで、試作1点からブリッジ生産1,000個まで郵送で全国受託。山岸塗装(大分県豊後高田市)。";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: SITE_TITLE,
-    template: "%s | 隈部塗装",
+    template: "%s | 山岸塗装",
   },
   description: SITE_DESCRIPTION,
   openGraph: {
-    title: "隈部塗装 | 3Dプリント表面処理の専門工房",
+    title: "山岸塗装 | 3Dプリント表面処理の専門工房",
     description:
       "積層痕を消す研磨から、自動車グレードの塗装仕上げまで。郵送で全国からお受けします。",
     type: "website",
     locale: "ja_JP",
-    siteName: "隈部塗装",
+    siteName: "山岸塗装",
     url: SITE_URL,
     images: [
       {
         url: "/og-image.jpg",
         width: 1200,
         height: 630,
-        alt: "隈部塗装 — 3Dプリント表面処理の専門工房",
+        alt: "山岸塗装 — 3Dプリント表面処理の専門工房",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "隈部塗装 | 3Dプリント表面処理の専門工房",
+    title: "山岸塗装 | 3Dプリント表面処理の専門工房",
     description:
       "積層痕を消す研磨から、自動車グレードの塗装仕上げまで。郵送で全国からお受けします。",
     images: ["/og-image.jpg"],

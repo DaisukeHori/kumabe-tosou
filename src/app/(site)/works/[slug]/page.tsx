@@ -19,15 +19,15 @@ export async function generateMetadata({
   const { slug } = await params;
   const work = await getPublishedWorkBySlug(slug);
   if (!work) {
-    return { title: "施工事例が見つかりません | 隈部塗装" };
+    return { title: "施工事例が見つかりません | 山岸塗装" };
   }
 
   const description = work.processNote ?? work.body.slice(0, 120);
   return {
-    title: { absolute: `${work.title} | 隈部塗装 — 施工事例` },
+    title: { absolute: `${work.title} | 山岸塗装 — 施工事例` },
     description,
     openGraph: {
-      title: `${work.title} | 隈部塗装`,
+      title: `${work.title} | 山岸塗装`,
       description,
       images: work.cover ? [work.cover.url] : undefined,
     },

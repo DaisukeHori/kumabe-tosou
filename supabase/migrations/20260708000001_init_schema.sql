@@ -1,5 +1,5 @@
 -- =========================================================
--- 隈部塗装 CMS + AI コンテンツパイプライン: 初期スキーマ
+-- 山岸塗装 CMS + AI コンテンツパイプライン: 初期スキーマ
 -- canonical: docs/design/cms-ai-pipeline.md §2.2 (DDL)
 -- 一字一句 §2.2 の定義に従う。乖離があれば設計書を正とし本ファイルを直す。
 -- =========================================================
@@ -250,7 +250,7 @@ create table channel_posts (
 
 create table channel_accounts (
   channel text primary key check (channel in ('x','instagram','note')),
-  account_label text not null,              -- '@kumabe_tosou' 等表示用
+  account_label text not null,              -- '@yamagishi_tosou' 等表示用
   auth_status text not null default 'disconnected'
     check (auth_status in ('disconnected','connected','expired','error')),
   vault_secret_name text,                   -- Supabase Vault 上のシークレット名

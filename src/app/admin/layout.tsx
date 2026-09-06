@@ -21,7 +21,7 @@ const notoSansJP = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: { default: "隈部塗装 CMS", template: "%s | 隈部塗装 CMS" },
+  title: { default: "山岸塗装 CMS", template: "%s | 山岸塗装 CMS" },
   robots: { index: false, follow: false },
 };
 
@@ -103,7 +103,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             隈
           </div>
           <div className="leading-tight">
-            <p className="text-sm font-extrabold">隈部塗装</p>
+            <p className="text-sm font-extrabold">山岸塗装</p>
             <p className="text-[11px] text-admin-text-meta">しごと管理</p>
           </div>
         </div>

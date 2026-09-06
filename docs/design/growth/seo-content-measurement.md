@@ -525,7 +525,7 @@ export const zAeoSettings = z.object({
 ## 2.8 #129 ブランドボイス/ブランドキット (中・S)
 
 ### 目的
-チャネル別 style_profiles (トーン断片) の上位に**横断ブランド定義** (ミッション/トーン/NG ワード/推奨表記) を 1 箇所定義し、発信スタジオの全チャネル生成・FAQ 文面・llms.txt に注入する。「隈部塗装らしさ」が生成のたびにブレない。
+チャネル別 style_profiles (トーン断片) の上位に**横断ブランド定義** (ミッション/トーン/NG ワード/推奨表記) を 1 箇所定義し、発信スタジオの全チャネル生成・FAQ 文面・llms.txt に注入する。「山岸塗装らしさ」が生成のたびにブレない。
 
 ### スコープ / 非スコープ
 - スコープ: settings キー `brand_voice`、drafting プロンプトへの反映 (ai-studio が settingsFacade を直接 read)、llms.txt への反映、admin 編集フォーム。

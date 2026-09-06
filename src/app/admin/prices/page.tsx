@@ -6,7 +6,7 @@ import { createPricingFacade } from "@/modules/pricing/facade";
 import { PriceTableEditor } from "./price-table-editor";
 
 export const metadata: Metadata = {
-  title: "価格表管理 | 隈部塗装 CMS",
+  title: "価格表管理 | 山岸塗装 CMS",
 };
 
 /**

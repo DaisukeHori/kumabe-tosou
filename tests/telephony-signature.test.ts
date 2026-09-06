@@ -39,7 +39,7 @@ import path from "node:path";
 import { computeTwilioSignature, verifyTwilioSignature } from "@/lib/telephony-signature";
 
 const AUTH_TOKEN = "__telephony_test__auth_token_1234567890";
-const URL = "https://kumabe-tosou.example.com/api/telephony/voice";
+const URL = "https://yamagishi-tosou.example.com/api/telephony/voice";
 const PARAMS: Record<string, string> = {
   CallSid: "CA00000000000000000000000000000001",
   From: "+819012345678",

@@ -49,7 +49,7 @@ function emailAppendInput(overrides: {
     body: null,
     payload: {
       direction: overrides.direction,
-      subject: "【隈部塗装】請求書のご送付 (I-2026-0001)",
+      subject: "【山岸塗装】請求書のご送付 (I-2026-0001)",
       to: "customer@example.com",
       document_id: DOCUMENT_ID,
       doc_no: "I-2026-0001",

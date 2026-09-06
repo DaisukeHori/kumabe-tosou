@@ -1,5 +1,5 @@
 -- =========================================================
--- 隈部塗装 CMS + AI コンテンツパイプライン: advance (lease 型 stage 実行) RPC
+-- 山岸塗装 CMS + AI コンテンツパイプライン: advance (lease 型 stage 実行) RPC
 -- canonical: docs/design/cms-ai-pipeline.md §7.6 (lease 意味論) /
 --            docs/module-contracts.md §7.1 (結合シーケンス: AI 実行)
 --

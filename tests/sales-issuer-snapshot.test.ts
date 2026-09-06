@@ -21,8 +21,8 @@ type CompanySettings = SettingsValue<"company">;
 type InvoiceIssuerSettings = SettingsValue<"invoice_issuer">;
 
 const FULL_COMPANY: CompanySettings = {
-  name: "隈部塗装",
-  representative: "隈部太郎",
+  name: "山岸塗装",
+  representative: "山岸太郎",
   address: "大分県豊後高田市○○1-2-3",
   tel: "0978-12-3456",
   email: "info@example.com",
@@ -31,7 +31,7 @@ const FULL_COMPANY: CompanySettings = {
 };
 
 const FULL_ISSUER: InvoiceIssuerSettings = {
-  issuer_name: "隈部塗装",
+  issuer_name: "山岸塗装",
   registration_number: "T1234567890123",
   tax_rounding: "floor",
   bank_account: {
@@ -39,10 +39,10 @@ const FULL_ISSUER: InvoiceIssuerSettings = {
     branch_name: "豊後高田支店",
     account_type: "ordinary",
     account_number: "1234567",
-    account_holder_kana: "クマベトソウ",
+    account_holder_kana: "ヤマギシトソウ",
   },
   transfer_fee_note: "振込手数料はお客様負担でお願いいたします。",
-  seal_storage_path: "seal/kumabe.png",
+  seal_storage_path: "seal/yamagishi.png",
   quote_valid_days: 30,
 };
 
@@ -74,12 +74,12 @@ describe("internal/issuer.ts buildIssuerSnapshot", () => {
     expect(result).toEqual({
       ok: true,
       value: {
-        issuer_name: "隈部塗装",
+        issuer_name: "山岸塗装",
         registration_number: "T1234567890123",
         address: "大分県豊後高田市○○1-2-3",
         tel: "0978-12-3456",
         email: "info@example.com",
-        seal_storage_path: "seal/kumabe.png",
+        seal_storage_path: "seal/yamagishi.png",
         bank_account: FULL_ISSUER.bank_account,
         transfer_fee_note: "振込手数料はお客様負担でお願いいたします。",
       },
@@ -138,7 +138,7 @@ describe("internal/issuer.ts buildIssuerSnapshot", () => {
     expect(result).toEqual({
       ok: true,
       value: {
-        issuer_name: "隈部塗装",
+        issuer_name: "山岸塗装",
         registration_number: null,
         address: "大分県豊後高田市○○1-2-3",
         tel: null,
@@ -185,7 +185,7 @@ describe("internal/issuer.ts buildIssuerSnapshot", () => {
       expect(result.value.address).toBeNull();
       expect(result.value.tel).toBeNull();
       expect(result.value.email).toBeNull();
-      expect(result.value.issuer_name).toBe("隈部塗装");
+      expect(result.value.issuer_name).toBe("山岸塗装");
     }
   });
 });

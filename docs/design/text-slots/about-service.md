@@ -119,11 +119,11 @@
 - `about.pagehead.en` [label/単行/max30] 「WORKSHOP & CRAFTSMAN」 — 英語装飾ラベル(意匠)。SEC.xxと同種の固定意匠要素
 - `about.why.sec_no` [label/単行/max12] 「SEC. 01」 — セクション番号。section-indicator ナビにも data-sec-no として供給される構造要素
 - `about.why.sec_label` [label/単行/max30] 「WHY THIS WORKSHOP」 — 英語装飾ラベル。data-sec-label としてフローティングナビ表示にも使われる
-- `about.why.compare.kumabe.th` [label/単行/max12] 「隈部塗装」 — 自社名。site_settings.company.name (DB) と重複するため個別スロット化しない(db_backed_texts参照)
+- `about.why.compare.kumabe.th` [label/単行/max12] 「山岸塗装」 — 自社名。site_settings.company.name (DB) と重複するため個別スロット化しない(db_backed_texts参照)
 - `about.craftsman.sec_no` [label/単行/max12] 「SEC. 02」 — セクション番号、構造要素
 - `about.craftsman.sec_label` [label/単行/max20] 「CRAFTSMAN」 — 英語装飾ラベル、ナビ供給元
-- `about.craftsman.name` [label/単行/max10] 「隈部 信之」 — 代表者名の大見出し表示(clamp 48-96px)。site_settings.company.representative(DB)と重複(db_backed_texts参照)
-- `about.craftsman.romaji` [label/単行/max50] 「KUMABE NOBUYUKI — REPRESENTATIVE / PAINTER」 — ローマ字氏名+肩書の装飾サブタイトル。英語装飾ラベルに準ずる
+- `about.craftsman.name` [label/単行/max10] 「山岸 信之」 — 代表者名の大見出し表示(clamp 48-96px)。site_settings.company.representative(DB)と重複(db_backed_texts参照)
+- `about.craftsman.romaji` [label/単行/max50] 「YAMAGISHI NOBUYUKI — REPRESENTATIVE / PAINTER」 — ローマ字氏名+肩書の装飾サブタイトル。英語装飾ラベルに準ずる
 - `about.facility.sec_no` [label/単行/max12] 「SEC. 03」 — セクション番号
 - `about.facility.sec_label` [label/単行/max16] 「FACILITY」 — 英語装飾ラベル
 - `about.facility.spec.booth.th` [label/単行/max12] 「塗装ブース」 — 設備仕様表の項目名。数値(6本)と一体の技術仕様、DB/pricing領分
@@ -145,9 +145,9 @@
 - `about.profile.sec_no` [label/単行/max12] 「SEC. 04」 — セクション番号
 - `about.profile.sec_label` [label/単行/max14] 「PROFILE」 — 英語装飾ラベル
 - `about.profile.name.th` [label/単行/max8] 「屋号」 — 会社概要表のフィールド名。DBスキーマのキー名相当で固定
-- `about.profile.name.td` [label/単行/max20] 「隈部塗装（くまべとそう）」 — site_settings.company.name(DB, /admin/settingsで編集可)と重複(db_backed_texts参照)
+- `about.profile.name.td` [label/単行/max20] 「山岸塗装（やまぎしとそう）」 — site_settings.company.name(DB, /admin/settingsで編集可)と重複(db_backed_texts参照)
 - `about.profile.rep.th` [label/単行/max8] 「代表」 — 会社概要表のフィールド名
-- `about.profile.rep.td` [label/単行/max10] 「隈部 信之」 — site_settings.company.representative(DB)と重複(db_backed_texts参照)
+- `about.profile.rep.td` [label/単行/max10] 「山岸 信之」 — site_settings.company.representative(DB)と重複(db_backed_texts参照)
 - `about.profile.address.th` [label/単行/max8] 「所在地」 — 会社概要表のフィールド名
 - `about.profile.address.td` [label/単行/max16] 「大分県豊後高田市」 — site_settings.company.address(DB)と重複(db_backed_texts参照)
 - `about.profile.business.th` [label/単行/max10] 「事業内容」 — 会社概要表のフィールド名
@@ -156,7 +156,7 @@
 - `about.location.sec_no` [label/単行/max12] 「SEC. 05」 — セクション番号
 - `about.location.sec_label` [label/単行/max14] 「LOCATION」 — 英語装飾ラベル
 - `about.location.heading` [heading/単行/max16] 「大分県豊後高田市」 — site_settings.company.address(DB)と重複する見出し表示(db_backed_texts参照)
-- `about.location.map_title` [label/単行/max30] 「隈部塗装の所在地（大分県豊後高田市）」 — iframe title属性(非表示のアクセシビリティテキスト)。altと同様に対象外、かつ会社住所と重複
+- `about.location.map_title` [label/単行/max30] 「山岸塗装の所在地（大分県豊後高田市）」 — iframe title属性(非表示のアクセシビリティテキスト)。altと同様に対象外、かつ会社住所と重複
 - `about.gallery.sec_no` [label/単行/max14] 「GALLERY」 — セクション番号相当の固定ラベル
 - `about.gallery.sec_label` [label/単行/max16] 「THE PLACE」 — 英語装飾ラベル
 - `about.gallery.1.cap_en` [label/単行/max22] 「CRAFTSMANSHIP」 — 英語装飾キャプション
@@ -203,14 +203,14 @@
 - `service.gallery.2.credit` [caption/単行/max40] 「Photo: avenir_visuals / Unsplash」 — 写真クレジット表記
 
 ## DB 由来 (スロット化しない)
-- site_settings.company.name (DB, /admin/settings で編集可) — about ページ『会社概要』表の『屋号』td (現在値: 隈部塗装（くまべとそう）) と重複するハードコード文字列
-- site_settings.company.representative (DB) — about ページ代表者名の大見出し (clamp 48-96px 表示, 現在値: 隈部 信之) および『会社概要』表『代表』td と重複
+- site_settings.company.name (DB, /admin/settings で編集可) — about ページ『会社概要』表の『屋号』td (現在値: 山岸塗装（やまぎしとそう）) と重複するハードコード文字列
+- site_settings.company.representative (DB) — about ページ代表者名の大見出し (clamp 48-96px 表示, 現在値: 山岸 信之) および『会社概要』表『代表』td と重複
 - site_settings.company.address (DB) — about ページ『会社概要』表『所在地』td および LOCATION セクション見出し (現在値: 大分県豊後高田市) と重複
 
 ## レイアウトリスク
 - about.why.compare.kumabe.td: <strong>による太字強調と平文が1つの td (JSXフラグメント) に混在。単純な文字列スロットに変換する場合は強調文/補足文の2フィールドへ分割しないと装飾が失われるか構造が壊れる
 - PageHead/CtaBand の見出し (about.hero.heading, service.hero.heading, about.cta.heading, service.cta.heading) は手動 <br/> による2行組版が前提。clamp(30px,5vw,56px) 相当のフォントで、モバイル最小30px時に長文を入れると3行以上になり組版バランスが崩れる。max_len 超過時は改行位置の再指定手段が必要
 - SectionMark の label は Reveal の data-sec-label 属性として section-indicator (motion/section-indicator.tsx) のフローティングナビにも供給される。tier C 判定の主因だが、将来編集可能にする場合は本文表示とナビ表示の両方を同時に確認する必要がある
-- about.craftsman.name (代表名, clamp(48px,7.6vw,96px)) は現状4文字『隈部 信之』という短い日本語名を前提にした巨大表示。DB側 site_settings.company.representative は zod で最大30文字まで許容しており、その上限をそのままこの表示に流用すると96px時に重大な折り返し/オーバーフローを起こす
+- about.craftsman.name (代表名, clamp(48px,7.6vw,96px)) は現状4文字『山岸 信之』という短い日本語名を前提にした巨大表示。DB側 site_settings.company.representative は zod で最大30文字まで許容しており、その上限をそのままこの表示に流用すると96px時に重大な折り返し/オーバーフローを起こす
 - QC_ITEMS/FLOW_CELLS の等幅グリッドカード (sm:grid-cols-2 lg:grid-cols-4, p-5) は line-clamp が無く、行内で文字数が不揃いだとカード高さがガタつく (機能破綻は無いが見た目のガタつきリスク)
 - service.grade の3カード (md:grid-cols-3) のうちプレミアムカードの価格文字列 (¥15,000–35,000 / 1点) は tracking-wider 指定の太字表示で pricing 領分として tier C 固定。グレード名・説明文だけを編集可能にし、価格ブロックは別枠として明確に除外する設計が必要

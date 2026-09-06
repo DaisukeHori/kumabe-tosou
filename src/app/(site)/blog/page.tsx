@@ -6,12 +6,12 @@ import { BlogPageBody } from "./page-body";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "ブログ | 隈部塗装 — 現場の記録",
+    absolute: "ブログ | 山岸塗装 — 現場の記録",
   },
   description:
-    "隈部塗装のブログ。日々の工程・素材・色にまつわる話題を発信しています。",
+    "山岸塗装のブログ。日々の工程・素材・色にまつわる話題を発信しています。",
   openGraph: {
-    title: "ブログ | 隈部塗装 — 現場の記録",
+    title: "ブログ | 山岸塗装 — 現場の記録",
     description: "日々の工程・素材・色にまつわる話題を発信しています。",
     images: ["/img/garage-work.jpg"],
   },

@@ -27,7 +27,7 @@ export function LoginForm({ next }: { next: string }) {
             隈
           </div>
           <div className="leading-tight">
-            <CardTitle className="text-[15px] font-extrabold">隈部塗装 しごと管理</CardTitle>
+            <CardTitle className="text-[15px] font-extrabold">山岸塗装 しごと管理</CardTitle>
             <CardDescription className="text-xs text-admin-text-meta">管理者ログイン</CardDescription>
           </div>
         </div>
