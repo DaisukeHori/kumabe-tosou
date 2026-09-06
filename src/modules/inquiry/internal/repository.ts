@@ -18,6 +18,7 @@ import type { InquiryInput } from "../contracts";
  */
 
 type ContactInquiryRow = {
+  id: string;
   name: string;
   email: string;
   tel: string | null;
@@ -29,7 +30,13 @@ type ContactInquiryRow = {
 
 export async function insertContactInquiry(input: InquiryInput): Promise<Result<{ id: string }>> {
   const client = createSupabasePublicClient();
+  // id はサーバ側で先に採番する。anon には INSERT ポリシーしか無く SELECT ポリシーが無いため、
+  // `.insert().select("id")` (Prefer: return=representation) は PostgREST が返却行の読み取りを
+  // RLS で拒否し「new row violates row-level security policy」(401) になる (本番で再現・修正)。
+  // return=minimal (select を付けない) で INSERT し、id は自前生成した値をそのまま返す。
+  const id = crypto.randomUUID();
   const row: ContactInquiryRow = {
+    id,
     name: input.name,
     email: input.email,
     tel: input.tel,
@@ -39,16 +46,12 @@ export async function insertContactInquiry(input: InquiryInput): Promise<Result<
     status: "new",
   };
 
-  const { data, error } = await client
-    .from("contact_inquiries")
-    .insert(row)
-    .select("id")
-    .single<{ id: string }>();
+  const { error } = await client.from("contact_inquiries").insert(row);
 
-  if (error || !data) {
+  if (error) {
     console.error("[inquiry] contact_inquiries INSERT に失敗しました:", error);
-    return { ok: false, code: "KMB-E901", detail: error?.message };
+    return { ok: false, code: "KMB-E901", detail: error.message };
   }
 
-  return { ok: true, value: { id: data.id } };
+  return { ok: true, value: { id } };
 }
