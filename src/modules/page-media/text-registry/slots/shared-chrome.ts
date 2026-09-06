@@ -614,15 +614,4 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     defaultText: "3D PRINT SURFACE FINISHING — OITA, JAPAN",
     affectsAllRoutes: true,
   },
-  {
-    key: "common.footer.creditNote",
-    page: "chrome",
-    route: "/",
-    label: "共通 / フッター写真クレジット注記",
-    kind: "multiline",
-    maxLen: 150,
-    defaultText:
-      "掲載写真は Unsplash の商用利用可能なイメージ素材で、各写真のクレジットはキャプションに記載しています。これらは山岸塗装の工房・制作事例の写真ではなく、あくまでイメージです(実際の写真は準備中)。",
-    affectsAllRoutes: true,
-  },
 ];

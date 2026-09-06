@@ -254,12 +254,6 @@ export function SiteFooter({
             editMode={editMode}
           />
         </div>
-        <SlotText
-          slotKey="common.footer.creditNote"
-          resolved={texts["common.footer.creditNote"]}
-          editMode={editMode}
-          className="mt-6 font-mono text-[10px] leading-5 text-carbon-soft"
-        />
       </div>
     </footer>
   );

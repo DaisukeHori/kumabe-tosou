@@ -50,7 +50,10 @@ import {
 // Issue #60 (docs/design/crm-suite/06-simulator.md §7.1、裁定 J6-(a)): shop 143→151 (+10-2)。
 // クリップボードコピー UX の shop.simulator.toast.copied / .redirect を削除し、インライン展開型
 // リードフォーム用の shop.simulator.lead.* を10件新設。合計 1061 → 1069。
-const EXPECTED_COUNT = 1069;
+//
+// 屋号変更 (山岸塗装) に伴い、フッターの写真クレジット注記 common.footer.creditNote を
+// 廃止 (掲載写真がイメージ素材である旨の但し書きはユーザー指示で削除)。合計 1069 → 1068。
+const EXPECTED_COUNT = 1068;
 
 const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "shared.cta.consult": "相談する",
@@ -114,7 +117,6 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "common.footer.giant": "YAMAGISHI TOSO",
   "common.footer.copyright": "© 2026 YAMAGISHI TOSO. ALL RIGHTS RESERVED.",
   "common.footer.copyright.sub": "3D PRINT SURFACE FINISHING — OITA, JAPAN",
-  "common.footer.creditNote": "掲載写真は Unsplash の商用利用可能なイメージ素材で、各写真のクレジットはキャプションに記載しています。これらは山岸塗装の工房・制作事例の写真ではなく、あくまでイメージです(実際の写真は準備中)。",
 
   "home.statement.heading": "デザインモデルの品質は、\n表面処理で決まる。\nそれでも、表面処理を高い水準で\n内製できる会社は、多くない。\nその空白のために、この工房がある。",
   "home.craft.heading": "3つの技術を、ひとりで持つ。",

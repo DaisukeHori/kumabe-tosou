@@ -160,7 +160,6 @@
 - `chrome.footer.brandGiant` [caption/単行/max16] 「YAMAGISHI TOSO」 — footer最下部の巨大装飾テキスト(kt-footer-giant)、overflow-hidden/whitespace-nowrap前提のCSS意匠、社名ローマ字表記と重複
 - `chrome.footer.copyright` [caption/単行/max50] 「© 2026 YAMAGISHI TOSO. ALL RIGHTS RESERVED.」 — 著作権表記、法的/技術的性質のため編集不可
 - `chrome.footer.tagEn` [caption/単行/max50] 「3D PRINT SURFACE FINISHING — OITA, JAPAN」 — 英語装飾サブコピー(フッター最下段)
-- `chrome.footer.photoDisclaimer` [caption/複数行/max140] 「掲載写真は Unsplash の商用利用可能なイメージ素材で、各写真のクレジットはキャプションに記載しています...」 — 写真ライセンス・実写真ではない旨の免責事項。事実情報のため自由編集させない
 
 ## DB 由来 (スロット化しない)
 - notes 一覧・詳細の記事タイトル/抜粋/本文 (posts.title / posts.excerpt / posts.body、Markdown経由でSimpleMarkdown表示)。前後記事ナビの nav.prev.title / nav.next.title も同源。既存CMS編集画面の領分でありpage_textスロット化しない
