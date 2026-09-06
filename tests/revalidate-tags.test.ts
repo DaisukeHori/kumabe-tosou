@@ -64,14 +64,14 @@ describe("resolveTargetUrl", () => {
 
 describe("buildRevalidateRequestUrl", () => {
   it("ベース URL の末尾に /api/revalidate を付与する", () => {
-    expect(buildRevalidateRequestUrl("https://kumabe-tosou.vercel.app")).toBe(
-      "https://kumabe-tosou.vercel.app/api/revalidate",
+    expect(buildRevalidateRequestUrl("https://yamagishi-tosou.com")).toBe(
+      "https://yamagishi-tosou.com/api/revalidate",
     );
   });
 
   it("末尾スラッシュがあっても二重にならない", () => {
-    expect(buildRevalidateRequestUrl("https://kumabe-tosou.vercel.app/")).toBe(
-      "https://kumabe-tosou.vercel.app/api/revalidate",
+    expect(buildRevalidateRequestUrl("https://yamagishi-tosou.com/")).toBe(
+      "https://yamagishi-tosou.com/api/revalidate",
     );
   });
 });

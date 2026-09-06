@@ -23,7 +23,7 @@ const DOC_TYPE_ATTACHMENT_LABEL: Record<DocType, string> = {
 };
 
 function siteUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
+  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://yamagishi-tosou.com";
 }
 
 /** 差出人ドメイン。NEXT_PUBLIC_SITE_URL のホスト名から導出する (inquiry/internal/notify.ts と同型)。 */
@@ -32,7 +32,7 @@ function fromAddress(): string {
     const host = new URL(siteUrl()).hostname;
     return `no-reply@${host}`;
   } catch {
-    return "no-reply@kumabe-tosou.vercel.app";
+    return "no-reply@yamagishi-tosou.com";
   }
 }
 

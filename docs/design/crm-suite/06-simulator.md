@@ -122,7 +122,7 @@ pricing     ──→ platform のみ (変更なし)
 | Step | 操作 | 判定 | 次アクション |
 |---|---|---|---|
 | 0 | Vercel 本番 env に `REVALIDATE_SECRET` が設定済みか確認 | 未設定 → /api/revalidate は 503 (F7/F8) | 堀さんが設定 (C2 の一部)。**設定後は redeploy が必須** (Vercel の env はデプロイ時に関数へ焼き込まれ、追加・変更は次のデプロイからのみ有効 — 公式仕様。Redeploy ボタン・ビルドキャッシュ利用で可)。なお redeploy で Full Route Cache は再生成されるが Data Cache (unstable_cache) はデプロイを跨いで残るため、**redeploy 後も Step 1 の revalidate は必要** |
-| 1 | **第一手**: `curl -X POST https://kumabe-tosou.vercel.app/api/revalidate -H "x-revalidate-secret: $REVALIDATE_SECRET" -H "content-type: application/json" -d '{"tags":["prices"]}'` → 200 `{"revalidated":["prices"]}` を確認 | — | Step 2 へ |
+| 1 | **第一手**: `curl -X POST https://yamagishi-tosou.com/api/revalidate -H "x-revalidate-secret: $REVALIDATE_SECRET" -H "content-type: application/json" -d '{"tags":["prices"]}'` → 200 `{"revalidated":["prices"]}` を確認 | — | Step 2 へ |
 | 2 | Chrome MCP で本番 `/shop` を **2 回** 開く (1 回目が再生成トリガ、2 回目で確定確認)。#sim にグレード 3 択・サイズ 4 択・個数ステッパー・合計金額が描画されるか実測 | 描画 OK → **原因 ③ 確定、修理完了** | §2.4 恒久策の実装へ。受入 S1 記録 |
 | 3 | 描画 NG → env 切り分け: (i) 本番の他 DB 駆動ページ (/works 一覧) が DB 内容を表示しているか (ii) Vercel env の `NEXT_PUBLIC_SUPABASE_URL` が `https://ixvfhxbfpdquwktsnmqy.supabase.co` か・ANON_KEY が有効か (iii) Vercel runtime logs で `KMB-E901` (facade L98) の有無 | env 不正 → **原因 ②** | env 修正 → redeploy → Step 1 から再実行 |
 | 4 | それでも NG → ローカルで本番 env を指して `getPriceTable({activeOnly:true})` を直接実行し、返る grades/sizes の件数と `is_active` を確認 (is_active=false 化などデータ状態の再点検) | — | 結果を持って再切り分け (想定外事象として記録) |

@@ -22,8 +22,8 @@
 
 3D プリント表面処理(研磨・塗装)専門工房「山岸塗装」のコーポレートサイト + 自作 CMS + AI コンテンツパイプライン。
 
-- 本番: https://kumabe-tosou.vercel.app
-- 管理画面: https://kumabe-tosou.vercel.app/admin
+- 本番: https://yamagishi-tosou.com
+- 管理画面: https://yamagishi-tosou.com/admin
 - 代表: 山岸 信之(大分県豊後高田市、郵送受託・全国対応)
 
 ## 📁 主要ドキュメント (canonical)

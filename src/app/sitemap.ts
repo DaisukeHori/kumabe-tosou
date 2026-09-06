@@ -7,7 +7,7 @@ import {
 } from "@/app/_lib/public-content";
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://yamagishi-tosou.com";
 
 /*
   /tokushoho は metadata.robots.index = false (noindex) のため、

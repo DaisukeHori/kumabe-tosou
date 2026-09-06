@@ -11,7 +11,7 @@ import { pageMediaFacade } from "@/modules/page-media/facade";
 import { buildSiteMetadata, resolveSiteMeta } from "@/app/_lib/site-metadata";
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://yamagishi-tosou.com";
 
 /**
  * LocalBusiness JSON-LD の生成 (canonical: 05-site-settings.md §5.2 末尾)。

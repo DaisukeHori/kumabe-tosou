@@ -275,7 +275,7 @@ import type { SettingsValue } from "@/modules/settings/contracts";
  *  一致は tests/site-metadata-fallback-parity.test.ts が root layout の export を
  *  import して検証する (二重定義の乖離防止) */
 export const SITE_META_FALLBACK = {
-  siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app",
+  siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://yamagishi-tosou.com",
   titleDefault: "山岸塗装 | 3Dプリント表面処理の専門工房 — 大分県豊後高田市",
   titleTemplate: "%s | 山岸塗装",
   description:

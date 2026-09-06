@@ -24,7 +24,7 @@ const INQUIRY_TYPE_LABELS: Record<InquiryInput["inquiry_type"], string> = {
 };
 
 function siteUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://kumabe-tosou.vercel.app";
+  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://yamagishi-tosou.com";
 }
 
 /** 差出人ドメイン。NEXT_PUBLIC_SITE_URL のホスト名から導出する (§6.3: no-reply@<独自ドメイン>) */
@@ -33,7 +33,7 @@ function fromAddress(): string {
     const host = new URL(siteUrl()).hostname;
     return `no-reply@${host}`;
   } catch {
-    return "no-reply@kumabe-tosou.vercel.app";
+    return "no-reply@yamagishi-tosou.com";
   }
 }
 

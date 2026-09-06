@@ -16,8 +16,8 @@
 
 | URL | 状態 |
 |---|---|
-| https://kumabe-tosou.vercel.app | 公開サイト(DB 駆動、seed 済み) |
-| https://kumabe-tosou.vercel.app/admin/login | 管理画面ログイン |
+| https://yamagishi-tosou.com | 公開サイト(DB 駆動、seed 済み) |
+| https://yamagishi-tosou.com/admin/login | 管理画面ログイン |
 
 **本番稼働中のモジュール(CRM スイート Phase 0〜5 完了後の実態)**
 
