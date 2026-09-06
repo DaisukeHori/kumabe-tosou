@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { NoticePanel, PageHeader } from "@/app/admin/_ui";
-import { isGoogleCalendarConfigured, isMsCalendarConfigured } from "@/lib/env";
+import { isIntegrationConfigured } from "@/lib/integration-credentials";
 import { KMB_ERRORS, type KmbErrorCode } from "@/modules/platform/errors";
 import type { CalendarProvider } from "@/modules/scheduling/contracts";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
@@ -41,9 +41,11 @@ export default async function AdminCalendarConnectionsPage({
   const params = await searchParams;
   const schedulingFacade = createSchedulingFacade();
 
-  const [connectionsResult, issuesResult] = await Promise.all([
+  const [connectionsResult, issuesResult, googleEnabled, msEnabled] = await Promise.all([
     schedulingFacade.getCalendarConnections(),
     schedulingFacade.listSyncIssues(),
+    isIntegrationConfigured("google_calendar"),
+    isIntegrationConfigured("ms_calendar"),
   ]);
 
   const errorInfo =
@@ -68,7 +70,9 @@ export default async function AdminCalendarConnectionsPage({
         </NoticePanel>
       )}
       {params.cal_error === "disabled" && (
-        <NoticePanel tone="danger">外部カレンダー連携が設定されていません (env 未設定)。</NoticePanel>
+        <NoticePanel tone="danger">
+          外部カレンダー連携の認証情報が未設定です。設定 &gt; 外部連携 でクライアント ID とシークレットを登録してください。
+        </NoticePanel>
       )}
       {params.cal_error && params.cal_error !== "disabled" && (
         <NoticePanel tone="danger">
@@ -81,8 +85,8 @@ export default async function AdminCalendarConnectionsPage({
       )}
       <CalendarConnectionCards
         connections={connectionsResult.ok ? connectionsResult.value : []}
-        googleEnabled={isGoogleCalendarConfigured()}
-        msEnabled={isMsCalendarConfigured()}
+        googleEnabled={googleEnabled}
+        msEnabled={msEnabled}
       />
 
       <div className="flex flex-col gap-3">

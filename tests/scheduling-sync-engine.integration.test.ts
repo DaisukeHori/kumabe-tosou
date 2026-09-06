@@ -17,11 +17,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *  6. 削除待ちリンク (external_event_id NULL) への外部 API 呼び出し禁止
  */
 
-vi.mock("@/lib/env", () => ({
-  getEnv: () => ({
-    GOOGLE_CALENDAR_CLIENT_ID: "test-client-id",
-    GOOGLE_CALENDAR_CLIENT_SECRET: "test-client-secret",
-  }),
+// OAuth クライアント資格情報は sync-engine.ts の resolveProviderCredentials →
+// resolveIntegrationCredentials() (integration_credentials + Vault → env フォールバック) で解決される。
+// 既定では固定値を返し、「DB 保存値が env より優先される」ケースだけ実装 (importActual) に
+// フェイク Supabase client を渡して委譲する。
+const resolveIntegrationCredentialsMock = vi.fn();
+vi.mock("@/lib/integration-credentials", () => ({
+  resolveIntegrationCredentials: (...a: unknown[]) => resolveIntegrationCredentialsMock(...a),
+  isIntegrationConfigured: async () => true,
 }));
 
 const repoMocks = {
@@ -222,6 +225,12 @@ beforeEach(() => {
   calls = [];
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
+  resolveIntegrationCredentialsMock.mockImplementation(async (provider: string) => ({
+    provider,
+    publicId: "test-client-id",
+    secret: "test-client-secret",
+    source: "env",
+  }));
 
   // 妥当なデフォルト (各テストで必要な分だけ上書きする)
   repoMocks.getCalendarConnection.mockResolvedValue({ ok: true, value: connectionRow() });
@@ -485,6 +494,86 @@ describe("runPush: 401 → refresh 1回 → 再試行成功", () => {
     expect(eventsPostCount).toBe(2);
     expect(repoMocks.vaultUpsertSecret).toHaveBeenCalled(); // refresh 結果が Vault に保存された
     expect(repoMocks.updateCalendarConnectionStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe("runPush: OAuth クライアント資格情報は管理画面 (integration_credentials) の保存値が env より優先される", () => {
+  const ENV_KEYS = ["GOOGLE_CALENDAR_CLIENT_ID", "GOOGLE_CALENDAR_CLIENT_SECRET"] as const;
+  const savedEnv: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> = {};
+
+  beforeEach(() => {
+    for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
+  });
+  afterEach(() => {
+    for (const key of ENV_KEYS) {
+      if (savedEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = savedEnv[key];
+    }
+  });
+
+  it("DB 行 + Vault の値で token refresh を行い、env の client_id/secret は使わない", async () => {
+    process.env.GOOGLE_CALENDAR_CLIENT_ID = "env-client-id";
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET = "env-client-secret";
+
+    // integration_credentials テーブル + vault_read_secret RPC を最小限に模したフェイク client
+    const fakeCredentialsClient = {
+      from(table: string) {
+        expect(table).toBe("integration_credentials");
+        return {
+          select: () => ({
+            eq: (_col: string, provider: string) => ({
+              async maybeSingle() {
+                expect(provider).toBe("google_calendar");
+                return {
+                  data: {
+                    provider,
+                    public_id: "db-client-id",
+                    secret_vault_name: "integration_google_calendar_secret",
+                    secret_last4: "cret",
+                    updated_at: "2026-09-06T00:00:00Z",
+                  },
+                  error: null,
+                };
+              },
+            }),
+          }),
+        };
+      },
+      async rpc(name: string, args: Record<string, string>) {
+        expect(name).toBe("vault_read_secret");
+        expect(args.p_name).toBe("integration_google_calendar_secret");
+        return { data: "db-client-secret", error: null };
+      },
+    } as unknown as SupabaseClient;
+
+    const actual = await vi.importActual<typeof import("@/lib/integration-credentials")>("@/lib/integration-credentials");
+    resolveIntegrationCredentialsMock.mockImplementation((provider: "google_calendar") =>
+      actual.resolveIntegrationCredentials(provider, { client: fakeCredentialsClient, bypassCache: true }),
+    );
+
+    repoMocks.listPendingPushLinks.mockResolvedValue({ ok: true, value: [pendingLink()] });
+    let tokenBody: URLSearchParams | null = null;
+    let eventsPostCount = 0;
+    recordAndRoute((url, method, init) => {
+      if (url === "https://oauth2.googleapis.com/token" && method === "POST") {
+        tokenBody = new URLSearchParams(String(init?.body));
+        return jsonResponse(200, { access_token: "access-refreshed", expires_in: 3600 });
+      }
+      if (url === `${CAL_BASE}/events` && method === "POST") {
+        eventsPostCount += 1;
+        if (eventsPostCount === 1) return new Response("unauthorized", { status: 401 });
+        return jsonResponse(200, { id: "ext-new", etag: "etag-new", updated: "2026-07-12T00:00:00.000Z" });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    const result = await runPush(FAKE_CLIENT, "google", googleCalendarAdapter);
+
+    expect(result).toEqual({ pushed: 1, conflicts: 0 });
+    expect(resolveIntegrationCredentialsMock).toHaveBeenCalledWith("google_calendar");
+    expect(tokenBody).not.toBeNull();
+    expect(tokenBody!.get("client_id")).toBe("db-client-id");
+    expect(tokenBody!.get("client_secret")).toBe("db-client-secret");
   });
 });
 

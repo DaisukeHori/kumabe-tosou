@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { getEnv, isGoogleCalendarConfigured } from "@/lib/env";
+import { getEnv } from "@/lib/env";
+import { isIntegrationConfigured } from "@/lib/integration-credentials";
 import { decryptCookiePayload } from "@/lib/oauth/state-cookie";
 import { platformFacade } from "@/modules/platform/facade";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
   if (!admin.ok) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
-  if (!isGoogleCalendarConfigured()) {
+  if (!(await isIntegrationConfigured("google_calendar"))) {
     return NextResponse.redirect(new URL("/admin/calendar/connections?cal_error=disabled", request.url));
   }
 

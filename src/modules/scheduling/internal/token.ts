@@ -34,7 +34,7 @@ export class TokenExpiredError extends Error {
 /** invalid_client (クライアントシークレット失効。§8.3 手順 6 — E720 と区別する)。 */
 export class TokenClientMisconfiguredError extends Error {
   constructor(public readonly provider: CalendarProvider) {
-    super(`カレンダー接続 (${provider}) のクライアントシークレット更新 (env) が必要です`);
+    super(`カレンダー接続 (${provider}) のクライアント ID / シークレットが無効です (設定 > 外部連携 で更新してください)`);
     this.name = "TokenClientMisconfiguredError";
   }
 }

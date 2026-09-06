@@ -12,16 +12,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * deleteWorkTemplate (E702) / listWorkTypes・listWorkTemplates (パススルー)。
  */
 
-// getExternalBusy/runCalendarMaintenance の provider ループが resolveProviderEnv(provider) 経由で
-// getEnv() を呼ぶため、実 env 検証 (KMB-E901) に落ちないよう固定値を与える
+// getExternalBusy/runCalendarMaintenance の provider ループが resolveProviderCredentials(provider) 経由で
+// resolveIntegrationCredentials() (DB+Vault → env) を呼ぶため、実 DB に触れないよう固定値を与える
 // (tests/scheduling-sync-engine.integration.test.ts と同型のモック)。
-vi.mock("@/lib/env", () => ({
-  getEnv: () => ({
-    GOOGLE_CALENDAR_CLIENT_ID: "test-google-client-id",
-    GOOGLE_CALENDAR_CLIENT_SECRET: "test-google-client-secret",
-    MS_CALENDAR_CLIENT_ID: "test-ms-client-id",
-    MS_CALENDAR_CLIENT_SECRET: "test-ms-client-secret",
-  }),
+vi.mock("@/lib/integration-credentials", () => ({
+  resolveIntegrationCredentials: async (provider: string) =>
+    provider === "google_calendar"
+      ? { provider, publicId: "test-google-client-id", secret: "test-google-client-secret", source: "env" }
+      : { provider, publicId: "test-ms-client-id", secret: "test-ms-client-secret", source: "env" },
+  isIntegrationConfigured: async () => true,
 }));
 
 const getSessionAndClientMock = vi.fn();

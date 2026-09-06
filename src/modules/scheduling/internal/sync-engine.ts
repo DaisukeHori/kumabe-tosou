@@ -27,7 +27,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getEnv } from "@/lib/env";
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 
 import type { CalendarConnectionMeta, CalendarProvider } from "../contracts";
 import { zCalendarConnectionMeta } from "../contracts";
@@ -47,18 +47,17 @@ function errMessage(err: unknown): string {
 }
 
 /**
- * provider ごとの OAuth クライアント資格情報を env から解決する。
+ * provider ごとの OAuth クライアント資格情報を解決する。管理画面で保存した値 (integration_credentials +
+ * Vault) を優先し、無ければ env にフォールバックする (src/lib/integration-credentials.ts)。
+ * 未設定時は空文字を返し、token.ts の refresh が invalid_client → TokenClientMisconfiguredError で
+ * 安全側に停止する (ここでは throw しない — runPush/runPull の既存分岐を変えないため)。
  * facade.ts (getExternalBusy/reconcilePushUnknown 等、runPush/runPull を経由しない箇所) も
  * 同じ解決ロジックを必要とするため export する (#54 UI 実装分)。
  */
-export function resolveProviderEnv(provider: CalendarProvider): ProviderEnv {
-  const env = getEnv();
-  if (provider === "google") {
-    return { clientId: env.GOOGLE_CALENDAR_CLIENT_ID ?? "", clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET ?? "" };
-  }
-  // provider === "microsoft" (#55)。CalendarProvider は "google" | "microsoft" の 2 値のみ
-  // (zCalendarProvider) なので網羅的。
-  return { clientId: env.MS_CALENDAR_CLIENT_ID ?? "", clientSecret: env.MS_CALENDAR_CLIENT_SECRET ?? "" };
+export async function resolveProviderCredentials(provider: CalendarProvider): Promise<ProviderEnv> {
+  // CalendarProvider は "google" | "microsoft" の 2 値のみ (zCalendarProvider) なので網羅的。
+  const creds = await resolveIntegrationCredentials(provider === "google" ? "google_calendar" : "ms_calendar");
+  return { clientId: creds.publicId ?? "", clientSecret: creds.secret ?? "" };
 }
 
 /**
@@ -289,7 +288,7 @@ export async function runPush(
   const links = linksResult.value;
   if (links.length === 0) return { pushed: 0, conflicts: 0 };
 
-  const env = resolveProviderEnv(provider);
+  const env = await resolveProviderCredentials(provider);
   let secret: CalendarVaultSecret;
   try {
     secret = await getValidCalendarSecret(serviceClient, provider, adapter, env);
@@ -731,7 +730,7 @@ async function runPullLoop(
         }
         authRefreshAttempted = true;
         try {
-          secret = await forceRefreshCalendarSecret(serviceClient, provider, adapter, resolveProviderEnv(provider));
+          secret = await forceRefreshCalendarSecret(serviceClient, provider, adapter, await resolveProviderCredentials(provider));
           continue; // 同じページを新トークンで再試行
         } catch {
           break; // token.ts が既に connection.status を更新済み
@@ -879,7 +878,7 @@ export async function runPull(
   }
 
   try {
-    const env = resolveProviderEnv(provider);
+    const env = await resolveProviderCredentials(provider);
     let secret: CalendarVaultSecret;
     try {
       secret = await getValidCalendarSecret(serviceClient, provider, adapter, env);

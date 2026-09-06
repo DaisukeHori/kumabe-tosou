@@ -62,8 +62,8 @@ export type WriteOutcome = {
   icalUid: string | null;
 };
 
-/** refreshTokens に渡す OAuth クライアント資格情報。provider ごとに env から解決する
- *  (google: GOOGLE_CALENDAR_CLIENT_ID/SECRET。#55 が microsoft 分の解決を追加する)。 */
+/** refreshTokens に渡す OAuth クライアント資格情報。provider ごとに sync-engine.ts の
+ *  resolveProviderCredentials が管理画面 (integration_credentials) → env の順で解決する。 */
 export type ProviderEnv = {
   clientId: string;
   clientSecret: string;

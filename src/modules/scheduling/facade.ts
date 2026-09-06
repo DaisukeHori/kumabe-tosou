@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getEnv } from "@/lib/env";
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import { crmFacade } from "@/modules/crm/facade";
@@ -62,7 +62,7 @@ import { decodeGoogleIdTokenEmail, exchangeGoogleAuthorizationCode, googleCalend
 import { MANUAL_SYNC_PULL_PAGES, MANUAL_SYNC_PUSH_LIMIT } from "./internal/lease";
 import { exchangeMsAuthorizationCode, fetchMsAccountEmail, msCalendarAdapter } from "./internal/ms-api";
 import { OAuthTokenError } from "./internal/provider";
-import { resolveProviderEnv, runPull, runPush } from "./internal/sync-engine";
+import { resolveProviderCredentials, runPull, runPush } from "./internal/sync-engine";
 import {
   canReconcilePushUnknown,
   canResendConflictedLink,
@@ -889,7 +889,7 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
 
           let secret: CalendarVaultSecret;
           try {
-            secret = await getValidCalendarSecret(serviceClient, provider, adapter, resolveProviderEnv(provider));
+            secret = await getValidCalendarSecret(serviceClient, provider, adapter, await resolveProviderCredentials(provider));
           } catch (err) {
             if (err instanceof TokenExpiredError) return { ok: false, code: "KMB-E720", detail: err.message };
             if (err instanceof TokenClientMisconfiguredError) return { ok: false, code: "KMB-E723", detail: err.message };
@@ -1153,7 +1153,7 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
 
         let secret: CalendarVaultSecret;
         try {
-          secret = await getValidCalendarSecret(serviceClient, link.provider, adapter, resolveProviderEnv(link.provider));
+          secret = await getValidCalendarSecret(serviceClient, link.provider, adapter, await resolveProviderCredentials(link.provider));
         } catch (err) {
           if (err instanceof TokenExpiredError) return { ok: false, code: "KMB-E720", detail: err.message };
           if (err instanceof TokenClientMisconfiguredError) return { ok: false, code: "KMB-E723", detail: err.message };
@@ -1267,14 +1267,18 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
     },
 
     async completeGoogleCalendarOAuthCallback(input) {
-      const env = getEnv();
-      if (!env.GOOGLE_CALENDAR_CLIENT_ID || !env.GOOGLE_CALENDAR_CLIENT_SECRET) {
-        return { ok: false, code: "KMB-E901", detail: "GOOGLE_CALENDAR_CLIENT_ID/SECRET が未設定です" };
+      const creds = await resolveIntegrationCredentials("google_calendar");
+      if (!creds.publicId || !creds.secret) {
+        return {
+          ok: false,
+          code: "KMB-E901",
+          detail: "Google カレンダーの認証情報が未設定です (設定 > 外部連携 で登録してください)",
+        };
       }
       try {
         const tokenResult = await exchangeGoogleAuthorizationCode({
-          clientId: env.GOOGLE_CALENDAR_CLIENT_ID,
-          clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
+          clientId: creds.publicId,
+          clientSecret: creds.secret,
           code: input.code,
           codeVerifier: input.codeVerifier,
           redirectUri: input.redirectUri,
@@ -1350,14 +1354,18 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
       //  - account_email は id_token デコードではなく GET /me (fetchMsAccountEmail) を叩く (§8.2 手順3)
       //  - meta.sync_window_start/end を今日−30日〜+180日で初期化する (§8.2「Microsoft は同型」注記。
       //    Graph delta の calendarView は時間窓必須 — sync-engine.ts の resolveSyncWindow が読む)
-      const env = getEnv();
-      if (!env.MS_CALENDAR_CLIENT_ID || !env.MS_CALENDAR_CLIENT_SECRET) {
-        return { ok: false, code: "KMB-E901", detail: "MS_CALENDAR_CLIENT_ID/SECRET が未設定です" };
+      const creds = await resolveIntegrationCredentials("ms_calendar");
+      if (!creds.publicId || !creds.secret) {
+        return {
+          ok: false,
+          code: "KMB-E901",
+          detail: "Microsoft カレンダーの認証情報が未設定です (設定 > 外部連携 で登録してください)",
+        };
       }
       try {
         const tokenResult = await exchangeMsAuthorizationCode({
-          clientId: env.MS_CALENDAR_CLIENT_ID,
-          clientSecret: env.MS_CALENDAR_CLIENT_SECRET,
+          clientId: creds.publicId,
+          clientSecret: creds.secret,
           code: input.code,
           codeVerifier: input.codeVerifier,
           redirectUri: input.redirectUri,
@@ -1554,7 +1562,7 @@ async function runCalendarMaintenanceTasks(serviceClient: SupabaseClient): Promi
     if (!metaResult.success || !metaResult.data.app_calendar_id) continue;
     const appCalendarId = metaResult.data.app_calendar_id;
 
-    const env = resolveProviderEnv(provider);
+    const env = await resolveProviderCredentials(provider);
 
     // 1. トークン健全性: 期限 24h 以内のもののみ refresh を実行する (getValidCalendarSecret の
     //    5 分マージンでは日次 maintenance の間隔 (24h) をカバーできないため、ここだけ広めの

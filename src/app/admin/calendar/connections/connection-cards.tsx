@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
@@ -166,7 +167,8 @@ function ProviderCard({
       {config.staticNote && <p className="mt-2 text-xs text-muted-foreground">{config.staticNote}</p>}
       {!enabled && (
         <p className="mt-2 text-xs text-status-warning-fg">
-          OAuth 未設定です (OAUTH_ENABLED / {config.provider === "google" ? "GOOGLE_CALENDAR_CLIENT_ID" : "MS_CALENDAR_CLIENT_ID"} 等の env を設定してください)。
+          認証情報が未設定です。設定 &gt; 外部連携 で {config.provider === "google" ? "Google" : "Microsoft"} のクライアント ID
+          とシークレットを登録してください。
         </p>
       )}
       <div className="mt-3 flex gap-2">
@@ -175,9 +177,14 @@ function ProviderCard({
             {connection?.status === "connected" || connection?.status === "expired" ? "再連携" : "接続する"}
           </a>
         ) : (
-          <Button size="sm" disabled>
-            接続する
-          </Button>
+          <>
+            <Button size="sm" disabled>
+              接続する
+            </Button>
+            <Link href="/admin/settings?tab=integrations" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+              外部連携の設定へ
+            </Link>
+          </>
         )}
         {connection && connection.status !== "disconnected" && (
           <Button size="sm" variant="outline" disabled={isPending} onClick={handleDisconnect}>
