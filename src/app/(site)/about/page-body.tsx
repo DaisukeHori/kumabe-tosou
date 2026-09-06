@@ -529,8 +529,8 @@ export function AboutPageBody({
         </SecLead>
         <Reveal as="div" className="kt-map-frame mt-10 border border-hair bg-paper p-2">
           <iframe
-            src="https://maps.google.com/maps?q=%E5%A4%A7%E5%88%86%E7%9C%8C%E8%B1%8A%E5%BE%8C%E9%AB%98%E7%94%B0%E5%B8%82&t=m&z=10&output=embed"
-            title="山岸塗装の所在地（大分県豊後高田市）"
+            src="https://maps.google.com/maps?q=%E5%A4%A7%E5%88%86%E7%9C%8C%E8%B1%8A%E5%BE%8C%E9%AB%98%E7%94%B0%E5%B8%82%E6%9D%A5%E7%B8%843036-1&t=m&z=15&output=embed"
+            title="山岸塗装の所在地（大分県豊後高田市来縄3036-1）"
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
             className="block aspect-[21/9] w-full border-0"
