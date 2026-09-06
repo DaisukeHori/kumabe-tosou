@@ -69,7 +69,7 @@ export function StoryPortraitPlaceholder({
   return (
     <figure
       className="relative flex aspect-[3/4] w-full flex-col items-center justify-center"
-      aria-label="代表・山岸信之（近日、実際の写真に差し替え予定）"
+      aria-label="代表・山岸信之のポートレート"
     >
       <SlotText
         as="span"

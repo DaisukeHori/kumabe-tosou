@@ -54,7 +54,7 @@ export const PRIVACY_TEXT_SLOTS: readonly PageTextSlot[] = [
     kind: "multiline",
     maxLen: 250,
     defaultText:
-      "山岸塗装(以下「当工房」といいます)は、お問い合わせ・お見積もり・施工のご依頼にあたってお預かりする個人情報を、以下の方針に基づき適切に取り扱います。本ページは開業準備中のドラフトであり、正式な法務チェックを経て内容を確定します。",
+      "山岸塗装(以下「当工房」といいます)は、お問い合わせ・お見積もり・施工のご依頼にあたってお預かりする個人情報を、以下の方針に基づき適切に取り扱います。",
   },
   {
     key: "privacy.spec.business.th",
@@ -226,11 +226,11 @@ export const PRIVACY_TEXT_SLOTS: readonly PageTextSlot[] = [
     key: "privacy.mapnote",
     page: "privacy",
     route: "/privacy",
-    label: "プライバシーポリシー / 末尾注記 (制定日+ドラフト断り書き)",
+    label: "プライバシーポリシー / 末尾注記 (制定日)",
     kind: "lines",
     maxLen: 200,
     defaultText:
-      "制定日・改定日：2026年7月7日\n※ 本ページは開業準備中のドラフトです。正式な法務チェックを経て、代表者名・所在地の開示範囲・第三者提供の想定などの内容を確定します。",
+      "制定日・改定日：2026年7月7日",
     maxLines: 2,
     maxLineLen: 100,
   },

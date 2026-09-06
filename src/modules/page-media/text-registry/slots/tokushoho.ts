@@ -76,7 +76,7 @@ export const TOKUSHOHO_TEXT_SLOTS: readonly PageTextSlot[] = [
     kind: "multiline",
     maxLen: 160,
     defaultText:
-      "通信販売（受託仕上げサービスおよび塗装済み製品の販売）に関する、特定商取引に関する法律第11条に基づく表示です。当工房は現在開業準備中のため、一部項目は準備中である旨を明記し、確定次第このページを更新します。",
+      "通信販売（受託仕上げサービスおよび塗装済み製品の販売）に関する、特定商取引に関する法律第11条に基づく表示です。",
   },
   {
     key: "tokushoho.spec.seller.th",
@@ -186,7 +186,7 @@ export const TOKUSHOHO_TEXT_SLOTS: readonly PageTextSlot[] = [
     kind: "text",
     maxLen: 80,
     defaultText:
-      "「相談する」ページ記載の窓口（正式な受付窓口は現在準備中です。開設次第、本欄を更新します）",
+      "「相談する」ページのお問い合わせフォーム、または電話（090-9478-5028）",
   },
   {
     key: "tokushoho.spec.price.th",
@@ -360,6 +360,6 @@ export const TOKUSHOHO_TEXT_SLOTS: readonly PageTextSlot[] = [
     kind: "text",
     maxLen: 110,
     defaultText:
-      "本表記は開業準備中の内容を含みます。正式な販売開始時に、確定した事業者情報・支払い方法・窓口へ更新します（最終更新：2026年7月）。",
+      "最終更新：2026年9月",
   },
 ];

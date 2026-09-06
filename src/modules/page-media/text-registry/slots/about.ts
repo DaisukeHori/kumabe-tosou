@@ -562,7 +562,7 @@ export const ABOUT_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "会社案内 / 会社概要表 行6 本文",
     kind: "text",
     maxLen: 40,
-    defaultText: "準備中（先行のご相談は紹介経由で承っています）",
+    defaultText: "「相談する」ページのフォーム／電話 090-9478-5028",
   },
 
   // ---- SEC.05 LOCATION ----
