@@ -61,13 +61,17 @@ export default async function AdminCalendarConnectionsPage({
         backHref="/admin/calendar"
         backLabel="← 予定表へ"
       />
-      <CalendarSettingsTabs />
+      <div data-help="calendar-settings-tabs">
+        <CalendarSettingsTabs />
+      </div>
 
       {params.cal_connected && (
-        <NoticePanel tone="success">
-          {isCalendarProvider(params.cal_connected) ? PROVIDER_LABEL[params.cal_connected] : params.cal_connected}
-          に接続しました。
-        </NoticePanel>
+        <div data-help="connected-banner">
+          <NoticePanel tone="success">
+            {isCalendarProvider(params.cal_connected) ? PROVIDER_LABEL[params.cal_connected] : params.cal_connected}
+            に接続しました。
+          </NoticePanel>
+        </div>
       )}
       {params.cal_error === "disabled" && (
         <NoticePanel tone="danger">
@@ -89,7 +93,7 @@ export default async function AdminCalendarConnectionsPage({
         msEnabled={msEnabled}
       />
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3" data-help="sync-issues-section">
         <div>
           <h2 className="font-heading text-sm font-semibold">同期の問題</h2>
           <p className="mt-1 text-xs text-muted-foreground">

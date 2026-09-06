@@ -1,0 +1,84 @@
+{
+  "width": 1008,
+  "height": 920,
+  "boxes": {
+    "help-button": {
+      "x": 960,
+      "y": 20,
+      "w": 28,
+      "h": 28
+    },
+    "doc-edit-fields": {
+      "x": 20,
+      "y": 56,
+      "w": 968,
+      "h": 446
+    },
+    "doc-edit-billing": {
+      "x": 45,
+      "y": 81,
+      "w": 451,
+      "h": 59
+    },
+    "doc-edit-issue-date": {
+      "x": 45,
+      "y": 232,
+      "w": 451,
+      "h": 59
+    },
+    "doc-edit-rounding": {
+      "x": 512,
+      "y": 307,
+      "w": 451,
+      "h": 59
+    },
+    "doc-edit-lines": {
+      "x": 20,
+      "y": 526,
+      "w": 968,
+      "h": 163
+    },
+    "doc-edit-preset": {
+      "x": 702,
+      "y": 551,
+      "w": 99,
+      "h": 28
+    },
+    "doc-edit-add-line": {
+      "x": 809,
+      "y": 551,
+      "w": 154,
+      "h": 28
+    },
+    "doc-edit-totals": {
+      "x": 20,
+      "y": 713,
+      "w": 968,
+      "h": 131
+    },
+    "doc-edit-save": {
+      "x": 20,
+      "y": 868,
+      "w": 111,
+      "h": 32
+    },
+    "doc-edit-preview": {
+      "x": 139,
+      "y": 868,
+      "w": 120,
+      "h": 32
+    },
+    "doc-edit-issue": {
+      "x": 267,
+      "y": 868,
+      "w": 50,
+      "h": 32
+    },
+    "doc-edit-delete": {
+      "x": 325,
+      "y": 868,
+      "w": 50,
+      "h": 32
+    }
+  }
+}

@@ -91,19 +91,21 @@ export function StudioWorkspace(props: Props) {
 
   return (
     <div className="flex gap-6">
-      <aside className="w-64 shrink-0">
+      <aside className="w-64 shrink-0" data-help="source-list">
         <SourceSidebar sources={sources} selectedSourceId={selectedSourceId} disabled={!aiConfigured} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col gap-6">
-        <Surface className="px-4 py-3">
+        <Surface className="px-4 py-3" data-help="stage-progress">
           <StageProgress steps={stages} ariaLabel="発信スタジオの進行" />
         </Surface>
 
         {!aiConfigured && (
-          <NoticePanel tone="warning">
-            APIキー未設定です。ANTHROPIC_API_KEY / OPENAI_API_KEY を設定すると実行できるようになります。
-          </NoticePanel>
+          <div data-help="ai-not-configured">
+            <NoticePanel tone="warning">
+              APIキー未設定です。ANTHROPIC_API_KEY / OPENAI_API_KEY を設定すると実行できるようになります。
+            </NoticePanel>
+          </div>
         )}
 
         {!selectedSource && <NewSourceForm disabled={!aiConfigured} onCreated={(id) => router.push(`/admin/studio?source=${id}`)} />}
@@ -292,9 +294,9 @@ function NewSourceForm({ disabled, onCreated }: { disabled: boolean; onCreated: 
   }
 
   return (
-    <Surface className="flex flex-col gap-4 p-4">
+    <Surface className="flex flex-col gap-4 p-4" data-help="input-form">
       <h2 className="font-heading text-section text-foreground">1. 入力</h2>
-      <div className="flex gap-2">
+      <div className="flex gap-2" data-help="input-mode">
         <Button size="sm" variant={mode === "text" ? "default" : "outline"} onClick={() => setMode("text")}>
           テキスト直書き
         </Button>
@@ -423,12 +425,12 @@ function CleanStage({ source, disabled, onConfirmed }: { source: SourceRow; disa
   const rawText = source.raw_text ?? "";
 
   return (
-    <Surface className="flex flex-col gap-4 p-4">
+    <Surface className="flex flex-col gap-4 p-4" data-help="clean-stage">
       <h2 className="font-heading text-section text-foreground">1.5 整文確認</h2>
-      <div className="rounded-lg bg-muted/40 p-3 text-sm whitespace-pre-wrap">{rawText}</div>
+      <div data-help="raw-text" className="rounded-lg bg-muted/40 p-3 text-sm whitespace-pre-wrap">{rawText}</div>
 
       {!cleanResult && (
-        <div className="flex gap-2">
+        <div className="flex gap-2" data-help="clean-actions">
           <Button onClick={runClean} disabled={disabled || isLoading || !rawText}>
             {isLoading ? "整文中..." : "AIで整文する"}
           </Button>
@@ -495,11 +497,11 @@ function StartRunForm({
   }
 
   return (
-    <Surface className="flex flex-col gap-4 p-4">
+    <Surface className="flex flex-col gap-4 p-4" data-help="run-form">
       <h2 className="font-heading text-section text-foreground">2. 実行</h2>
       <div className="flex flex-col gap-2">
         <p className="text-sm">配信チャネル</p>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3" data-help="channel-choice">
           {ALL_CHANNELS.map((ch) => (
             <label key={ch} className="flex items-center gap-1.5 text-sm">
               <Checkbox checked={channels.includes(ch)} onCheckedChange={() => toggleChannel(ch)} />
@@ -507,17 +509,17 @@ function StartRunForm({
             </label>
           ))}
         </div>
-        <label className="mt-2 flex items-center gap-1.5 text-sm">
+        <label className="mt-2 flex items-center gap-1.5 text-sm" data-help="research-toggle">
           <Checkbox checked={research} onCheckedChange={(c) => setResearch(Boolean(c))} />
           リサーチを有効にする (web_search)
         </label>
       </div>
-      <Button onClick={start} disabled={disabled || isSubmitting}>
+      <Button onClick={start} disabled={disabled || isSubmitting} data-help="run-start">
         {isSubmitting ? "開始中..." : "実行を開始"}
       </Button>
 
       {runsForSource.length > 0 && (
-        <div className="mt-4 border-t border-border pt-4">
+        <div className="mt-4 border-t border-border pt-4" data-help="past-runs">
           <p className="mb-2 text-sm text-muted-foreground">過去の実行</p>
           <div className="flex flex-col gap-1">
             {runsForSource.map((r) => (
@@ -628,7 +630,7 @@ function ReviewPanel({
   const [active, setActive] = useState<Channel | "distribution">(drafts[0]?.channel ?? "distribution");
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-help="review-panel">
       <h2 className="font-heading text-section text-foreground">3. レビュー</h2>
 
       {imageCandidates.length > 0 && (
@@ -636,7 +638,7 @@ function ReviewPanel({
       )}
 
       <Tabs value={active} onValueChange={(v) => setActive(v as Channel | "distribution")}>
-        <TabsList variant="line">
+        <TabsList variant="line" data-help="channel-tabs">
           {drafts.map((d) => (
             <TabsTrigger key={d.channel} value={d.channel}>
               {CHANNEL_LABELS[d.channel]}
@@ -814,14 +816,16 @@ function DraftReviewCard({ draft, cleanedText, onChanged }: { draft: DraftRow; c
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" data-help="draft-status">
         <Badge variant={draftStatusBadgeVariant(draft.status)}>{draft.status}</Badge>
         <span className="text-xs text-muted-foreground">revision {draft.current_revision}</span>
       </div>
 
-      <DiffView oldText={cleanedText} newText={contentText} oldLabel="整文後の発言" newLabel="生成コンテンツ" />
+      <div data-help="draft-diff">
+        <DiffView oldText={cleanedText} newText={contentText} oldLabel="整文後の発言" newLabel="生成コンテンツ" />
+      </div>
 
-      <div className="rounded-lg border border-border p-3">
+      <div className="rounded-lg border border-border p-3" data-help="draft-claims">
         <p className="mb-2 text-xs font-medium text-muted-foreground">
           事実主張 (claims) — 黄色は推測 (inference) 由来です。判定自体もAI出力であり完全ではありません。
         </p>
@@ -847,7 +851,7 @@ function DraftReviewCard({ draft, cleanedText, onChanged }: { draft: DraftRow; c
         </ul>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2" data-help="draft-edit">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">内容の編集</p>
           <Button size="sm" variant="outline" onClick={() => setIsEditing((v) => !v)}>
@@ -861,9 +865,14 @@ function DraftReviewCard({ draft, cleanedText, onChanged }: { draft: DraftRow; c
         )}
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-border pt-3">
+      <div className="flex flex-col gap-2 border-t border-border pt-3" data-help="draft-decide">
         <p className="text-sm font-medium">再生成 (修正指示付き)</p>
-        <Textarea value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="例: もう少しカジュアルなトーンにしてください" />
+        <Textarea
+          data-help="draft-instruction"
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          placeholder="例: もう少しカジュアルなトーンにしてください"
+        />
         <div className="flex gap-2">
           <Button variant="outline" onClick={regenerate} disabled={isBusy}>
             再生成
@@ -871,7 +880,7 @@ function DraftReviewCard({ draft, cleanedText, onChanged }: { draft: DraftRow; c
           <Button variant="destructive" onClick={reject} disabled={isBusy}>
             却下
           </Button>
-          <Button onClick={approve} disabled={isBusy}>
+          <Button data-help="draft-approve" onClick={approve} disabled={isBusy}>
             承認
           </Button>
         </div>

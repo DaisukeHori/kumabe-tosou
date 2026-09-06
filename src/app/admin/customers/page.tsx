@@ -86,17 +86,19 @@ export default async function AdminCustomersPage({
                 </Link>
               ) : (
                 <Link href="/admin/customers?view=kanban">
-                  <Badge variant="default" className="cursor-pointer">
+                  <Badge data-help="customer-view-toggle" variant="default" className="cursor-pointer">
                     カンバン表示
                   </Badge>
                 </Link>
               ))}
-            <Button render={<Link href="/admin/customers/new" />}>新規顧客</Button>
+            <Button data-help="customer-new" render={<Link href="/admin/customers/new" />}>
+              新規顧客
+            </Button>
           </>
         }
       />
 
-      <div className="flex gap-2">
+      <div data-help="customer-tabs" className="flex gap-2">
         <Link href={tabHref("customers")}>
           <Badge variant={tab === "customers" ? "default" : "outline"} className="cursor-pointer">
             顧客

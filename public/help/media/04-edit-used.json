@@ -1,0 +1,48 @@
+{
+  "width": 416,
+  "height": 607,
+  "boxes": {
+    "media-edit-dialog": {
+      "x": 16,
+      "y": 16,
+      "w": 384,
+      "h": 575
+    },
+    "media-alt-field": {
+      "x": 32,
+      "y": 320,
+      "w": 352,
+      "h": 59
+    },
+    "media-tags-field": {
+      "x": 32,
+      "y": 391,
+      "w": 352,
+      "h": 59
+    },
+    "media-placeholder-field": {
+      "x": 32,
+      "y": 462,
+      "w": 352,
+      "h": 19
+    },
+    "media-reference-count": {
+      "x": 32,
+      "y": 493,
+      "w": 352,
+      "h": 16
+    },
+    "media-delete": {
+      "x": 108,
+      "y": 542,
+      "w": 50,
+      "h": 32
+    },
+    "media-save": {
+      "x": 273,
+      "y": 542,
+      "w": 111,
+      "h": 32
+    }
+  }
+}

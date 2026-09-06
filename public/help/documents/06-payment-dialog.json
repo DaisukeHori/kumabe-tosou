@@ -1,0 +1,36 @@
+{
+  "width": 616,
+  "height": 570,
+  "boxes": {
+    "doc-payment-dialog": {
+      "x": 28,
+      "y": 28,
+      "w": 560,
+      "h": 514
+    },
+    "doc-payment-date": {
+      "x": 44,
+      "y": 132,
+      "w": 528,
+      "h": 59
+    },
+    "doc-payment-amount": {
+      "x": 44,
+      "y": 211,
+      "w": 528,
+      "h": 59
+    },
+    "doc-payment-method": {
+      "x": 44,
+      "y": 291,
+      "w": 528,
+      "h": 59
+    },
+    "doc-payment-submit": {
+      "x": 494,
+      "y": 494,
+      "w": 78,
+      "h": 32
+    }
+  }
+}

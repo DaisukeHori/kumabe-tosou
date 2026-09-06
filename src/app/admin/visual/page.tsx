@@ -56,7 +56,10 @@ export default async function VisualEditorPage() {
         title="見た目の編集"
         description="ページ上の写真をクリックして差し替えます。ホットスポットは Tab で移動、Enter で選択、Esc で閉じます。"
       />
-      <SiteSecondaryTabs />
+      {/* data-help: 管理画面ヘルプ (/help/visual) のスクリーンショット注釈用アンカー。見た目には影響しない。 */}
+      <div data-help="site-tabs">
+        <SiteSecondaryTabs />
+      </div>
       {tabs.length === 0 ? (
         <p className="text-sm text-destructive">編集可能なページがありません。</p>
       ) : (

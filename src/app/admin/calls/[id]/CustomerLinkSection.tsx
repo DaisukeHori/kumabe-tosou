@@ -167,16 +167,16 @@ export function CustomerLinkSection({
 
   if (customerId !== null) {
     return (
-      <Surface className="flex flex-col gap-3 p-4">
+      <Surface data-help="call-customer-link" className="flex flex-col gap-3 p-4">
         <h3 className="text-sm font-medium text-foreground">顧客紐づけ</h3>
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span>
             顧客: <Link href={`/admin/customers/${customerId}`} className="underline underline-offset-4">{customerName ?? "(名称不明)"}</Link>
           </span>
-          <Button variant="outline" size="sm" onClick={openSearch} disabled={isPending}>
+          <Button data-help="call-link-change" variant="outline" size="sm" onClick={openSearch} disabled={isPending}>
             付け替え
           </Button>
-          <Button variant="outline" size="sm" onClick={handleUnlink} disabled={isPending}>
+          <Button data-help="call-link-unlink" variant="outline" size="sm" onClick={handleUnlink} disabled={isPending}>
             解除
           </Button>
         </div>
@@ -214,7 +214,7 @@ export function CustomerLinkSection({
           : { tone: "info" as const, text: "まだ処理中です (顧客の紐づけ待ち)。先に手動で紐づけることもできます。" };
 
   return (
-    <Surface className="flex flex-col gap-3 p-4">
+    <Surface data-help="call-customer-link" className="flex flex-col gap-3 p-4">
       <h3 className="text-sm font-medium text-foreground">顧客紐づけ</h3>
       {banner.tone === "warn" ? (
         <NoticePanel tone="warning">{banner.text}</NoticePanel>
@@ -222,10 +222,16 @@ export function CustomerLinkSection({
         <p className="text-sm text-muted-foreground">{banner.text}</p>
       )}
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={openSearch} disabled={isPending}>
+        <Button data-help="call-link-search" variant="outline" size="sm" onClick={openSearch} disabled={isPending}>
           顧客を検索して紐づける
         </Button>
-        <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)} disabled={isPending}>
+        <Button
+          data-help="call-link-create"
+          variant="outline"
+          size="sm"
+          onClick={() => setCreateOpen(true)}
+          disabled={isPending}
+        >
           新しい顧客として作る
         </Button>
       </div>
@@ -276,14 +282,19 @@ function SearchDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton className="sm:max-w-md">
+      <DialogContent data-help="call-search-dialog" showCloseButton className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>顧客を検索</DialogTitle>
           <DialogDescription>↑↓ で選択、Enter で紐づけ、Esc で閉じます。</DialogDescription>
         </DialogHeader>
         <Command shouldFilter={false} className="rounded-lg border">
-          <CommandInput placeholder="名前・電話番号で検索" value={query} onValueChange={setQuery} />
-          <CommandList>
+          <CommandInput
+            data-help="call-search-input"
+            placeholder="名前・電話番号で検索"
+            value={query}
+            onValueChange={setQuery}
+          />
+          <CommandList data-help="call-search-results">
             {!isSearching && results.length === 0 && <CommandEmpty>該当する顧客がいません。</CommandEmpty>}
             <CommandGroup>
               {results.map((c) => (

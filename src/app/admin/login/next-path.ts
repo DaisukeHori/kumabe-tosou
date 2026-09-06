@@ -2,10 +2,13 @@
  * ログイン後の戻り先 (next パラメータ) のホワイトリスト判定。
  * canonical: docs/design/visual-media-editor.md §5.3 (MINOR-v1.4)。
  *
- * 許可 prefix = /admin /edit。相対パスのみ受け付けてオープンリダイレクトを防ぐ
+ * 許可 prefix = /admin /edit /help。相対パスのみ受け付けてオープンリダイレクトを防ぐ
  * (外部 URL・プロトコル相対 URL は startsWith 判定に一致しないため弾かれる)。
+ *
+ * /help は管理画面ヘルプ (docs/design/admin-help/README.md §3)。ヘルプも middleware で
+ * 保護しているため、未ログインでヘルプ URL を開いた人をログイン後にヘルプへ戻せるようにする。
  */
-const ALLOWED_NEXT_PREFIXES = ["/admin", "/edit"] as const;
+const ALLOWED_NEXT_PREFIXES = ["/admin", "/edit", "/help"] as const;
 
 export function isAllowedLoginNext(next: string): boolean {
   return ALLOWED_NEXT_PREFIXES.some((prefix) => next.startsWith(prefix));

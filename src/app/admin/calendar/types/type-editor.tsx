@@ -128,6 +128,7 @@ function WorkTypeFormDialog({
       }}
     >
       <DialogContent
+        data-help="type-dialog"
         className="sm:max-w-[560px] shadow-modal"
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
@@ -141,12 +142,12 @@ function WorkTypeFormDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
           <FieldGroup>
-            <Field data-invalid={!!errors.label}>
+            <Field data-help="type-label" data-invalid={!!errors.label}>
               <FieldLabel htmlFor="wt-label">表示名</FieldLabel>
               <Input id="wt-label" {...register("label")} />
               <FieldError errors={errors.label ? [errors.label] : undefined} />
             </Field>
-            <Field data-invalid={!!errors.color}>
+            <Field data-help="type-color" data-invalid={!!errors.color}>
               <FieldLabel htmlFor="wt-color">色</FieldLabel>
               <ColorPicker
                 id="wt-color"
@@ -155,7 +156,7 @@ function WorkTypeFormDialog({
               />
               <FieldError errors={errors.color ? [errors.color] : undefined} />
             </Field>
-            <Field orientation="horizontal">
+            <Field orientation="horizontal" data-help="type-consumes">
               <Checkbox
                 id="wt-consumes"
                 checked={watch("consumes_capacity")}
@@ -163,7 +164,7 @@ function WorkTypeFormDialog({
               />
               <FieldLabel htmlFor="wt-consumes">拘束 (週間キャパを消費する)</FieldLabel>
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div data-help="type-defaults" className="grid grid-cols-2 gap-3">
               <Field data-invalid={!!errors.default_hours}>
                 <FieldLabel htmlFor="wt-default-hours">既定時間 (h、任意)</FieldLabel>
                 <Input
@@ -192,6 +193,7 @@ function WorkTypeFormDialog({
               <FieldLabel htmlFor="wt-active">有効</FieldLabel>
             </Field>
             <Accordion
+              data-help="type-details"
               value={detailsOpen ? ["details"] : []}
               onValueChange={(v) => setDetailsOpen(v.includes("details"))}
             >
@@ -286,14 +288,14 @@ export function TypeEditor({ initialWorkTypes }: { initialWorkTypes: WorkTypeRow
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button type="button" onClick={openCreate}>
+        <Button type="button" data-help="type-new" onClick={openCreate}>
           新規作成
         </Button>
       </div>
       {initialWorkTypes.length === 0 ? (
         <p className="text-sm text-muted-foreground">作業種別がまだありません。</p>
       ) : (
-        <DataTableShell>
+        <DataTableShell data-help="type-table">
           <DataTableHeaderRow
             columns={["色", "表示名 / key", "拘束", "既定h", "並び順", "有効", ""]}
             gridClassName={GRID_COLS}

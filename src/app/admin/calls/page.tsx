@@ -119,7 +119,7 @@ export default async function AdminCallsPage({
         </NoticePanel>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div data-help="calls-filters" className="flex flex-wrap items-center gap-2">
         <PillToggle items={handlingPills} ariaLabel="種別で絞り込み" />
         <PillToggle items={modePills} ariaLabel="対応状況で絞り込み" />
       </div>

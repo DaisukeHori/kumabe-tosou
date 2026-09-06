@@ -34,10 +34,13 @@ export default async function AdminMediaPage({
       <SiteSecondaryTabs />
 
       {placeholderCount > 0 && (
-        <NoticePanel title="仮画像があります">
-          仮素材として登録された画像が {placeholderCount} 枚あります。公開前に本番用の写真へ差し替えてください
-          (各画像の編集ダイアログで「仮素材として扱う」を外すと解消されます)。
-        </NoticePanel>
+        // ヘルプの注釈用に data-help を付けるための包み (NoticePanel は任意属性を受け取らないため)。
+        <div data-help="media-placeholder-notice">
+          <NoticePanel title="仮画像があります">
+            仮素材として登録された画像が {placeholderCount} 枚あります。公開前に本番用の写真へ差し替えてください
+            (各画像の編集ダイアログで「仮素材として扱う」を外すと解消されます)。
+          </NoticePanel>
+        </div>
       )}
 
       {!result.ok && (

@@ -1,0 +1,42 @@
+{
+  "width": 960,
+  "height": 150,
+  "boxes": {
+    "work-actionbar": {
+      "x": 20,
+      "y": 72,
+      "w": 768,
+      "h": 58
+    },
+    "work-status": {
+      "x": 73,
+      "y": 91,
+      "w": 90,
+      "h": 21
+    },
+    "work-schedule": {
+      "x": 314,
+      "y": 85,
+      "w": 200,
+      "h": 32
+    },
+    "work-transition-draft": {
+      "x": 207,
+      "y": 87,
+      "w": 99,
+      "h": 28
+    },
+    "work-transition-published": {
+      "x": 522,
+      "y": 87,
+      "w": 73,
+      "h": 28
+    },
+    "work-save": {
+      "x": 603,
+      "y": 85,
+      "w": 168,
+      "h": 32
+    }
+  }
+}

@@ -89,10 +89,15 @@ export function TasksList({ tasks: initialTasks }: { tasks: TaskListItem[] }) {
   return (
     <>
       <div className="flex flex-col gap-2">
-        {tasks.map((task) => (
-          <Surface key={task.id} className="flex items-center gap-3 px-4 py-3">
+        {tasks.map((task, index) => (
+          <Surface
+            key={task.id}
+            data-help={index === 0 ? "task-row-1" : undefined}
+            className="flex items-center gap-3 px-4 py-3"
+          >
             {task.status === "open" && (
               <Checkbox
+                data-help={index === 0 ? "task-check-1" : undefined}
                 checked={false}
                 onCheckedChange={() => void handleComplete(task)}
                 aria-label={`「${task.title}」を完了にする`}
@@ -103,7 +108,11 @@ export function TasksList({ tasks: initialTasks }: { tasks: TaskListItem[] }) {
                 <p className={cn("truncate text-sm", task.status !== "open" && "text-muted-foreground line-through")}>
                   {task.title}
                 </p>
-                <Badge variant="outline" className="shrink-0">
+                <Badge
+                  data-help={index === 0 ? "task-origin-1" : undefined}
+                  variant="outline"
+                  className="shrink-0"
+                >
                   {ORIGIN_LABEL[task.origin]}
                 </Badge>
               </div>
@@ -130,7 +139,16 @@ export function TasksList({ tasks: initialTasks }: { tasks: TaskListItem[] }) {
             </div>
             {task.status !== "cancelled" && (
               <DropdownMenu>
-                <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" />}>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      data-help={index === 0 ? "task-menu-1" : undefined}
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                    />
+                  }
+                >
                   <span aria-hidden>⋯</span>
                   <span className="sr-only">操作</span>
                 </DropdownMenuTrigger>

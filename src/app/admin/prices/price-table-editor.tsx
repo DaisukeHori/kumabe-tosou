@@ -211,7 +211,7 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
   return (
     <div className="space-y-10">
       {/* ---- グレード ---- */}
-      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface" data-help="price-grades">
         <h2 className="font-heading text-section text-foreground">グレード</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[640px] text-sm">
@@ -315,6 +315,7 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
               },
             ])
           }
+          data-help="grade-add"
         >
           グレードを追加
         </Button>
@@ -324,7 +325,7 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
       </section>
 
       {/* ---- サイズ帯 ---- */}
-      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface" data-help="price-sizes">
         <h2 className="font-heading text-section text-foreground">サイズ帯</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[560px] text-sm">
@@ -439,13 +440,14 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
               { key: "", label: "", max_mm: null, quote_only: false, sort_order: prev.length },
             ])
           }
+          data-help="size-add"
         >
           サイズ帯を追加
         </Button>
       </section>
 
       {/* ---- 価格行列 (グレード × サイズ) ---- */}
-      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface" data-help="price-matrix">
         <h2 className="font-heading text-section text-foreground">価格行列 (1点あたりの下限〜上限・円)</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[640px] text-sm">
@@ -467,7 +469,7 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
                     const cell = getCell(g.key, s.key);
                     return (
                       <td key={s.key} className="p-2">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1" data-help={`price-cell-${g.key}-${s.key}`}>
                           <Input
                             type="number"
                             value={cell.price_min}
@@ -500,7 +502,7 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
       </section>
 
       {/* ---- 数量値引き ---- */}
-      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface" data-help="price-tiers">
         <h2 className="font-heading text-section text-foreground">数量値引き (自動適用)</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[480px] text-sm">
@@ -577,13 +579,14 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
           onClick={() =>
             setTiers((prev) => [...prev, { min_qty: 2, discount_rate: 0.1, label: "" }])
           }
+          data-help="tier-add"
         >
           値引き段階を追加
         </Button>
       </section>
 
       {/* ---- オプション ---- */}
-      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface" data-help="price-options">
         <h2 className="font-heading text-section text-foreground">オプション</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full min-w-[640px] text-sm">
@@ -704,6 +707,7 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
               },
             ])
           }
+          data-help="option-add"
         >
           オプションを追加
         </Button>
@@ -713,14 +717,14 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
       </section>
 
       {/* ---- 保存前プレビュー (設計書 §5.2: 変更前後の見積り例 3 パターン並記) ---- */}
-      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface">
+      <section className="space-y-3 rounded-surface border border-border bg-card p-4 shadow-surface" data-help="price-preview">
         <h2 className="font-heading text-section text-foreground">保存前プレビュー — 変更前後の見積り例</h2>
         {previewRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             プレビュー対象のグレード/サイズ帯が見つかりません。
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-md border border-border">
+          <div className="overflow-x-auto rounded-md border border-border" data-help="price-preview-table">
             <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
                 <tr>
@@ -751,12 +755,15 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
         )}
       </section>
 
-      <div className="flex items-center gap-4">
-        <Button type="button" onClick={handleSave} disabled={isPending}>
+      <div className="flex items-center gap-4" data-help="price-save-row">
+        <Button type="button" onClick={handleSave} disabled={isPending} data-help="price-save">
           {isPending ? "保存中…" : "保存する"}
         </Button>
         {message ? (
-          <p className={message.type === "error" ? "text-sm text-destructive" : "text-sm text-status-success-fg"}>
+          <p
+            data-help="price-save-message"
+            className={message.type === "error" ? "text-sm text-destructive" : "text-sm text-status-success-fg"}
+          >
             {message.text}
           </p>
         ) : null}

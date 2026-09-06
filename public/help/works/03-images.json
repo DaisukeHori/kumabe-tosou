@@ -1,0 +1,36 @@
+{
+  "width": 808,
+  "height": 227,
+  "boxes": {
+    "work-cover-field": {
+      "x": 20,
+      "y": 20,
+      "w": 374,
+      "h": 107
+    },
+    "work-cover-pick": {
+      "x": 112,
+      "y": 73,
+      "w": 86,
+      "h": 28
+    },
+    "work-sort-field": {
+      "x": 414,
+      "y": 20,
+      "w": 374,
+      "h": 107
+    },
+    "work-images-field": {
+      "x": 20,
+      "y": 147,
+      "w": 768,
+      "h": 59
+    },
+    "work-images-pick": {
+      "x": 20,
+      "y": 175,
+      "w": 148,
+      "h": 32
+    }
+  }
+}

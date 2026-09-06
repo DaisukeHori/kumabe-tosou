@@ -45,7 +45,7 @@ export default async function NewDocumentPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="帳票の新規作成" description="案件・種別・最初の明細行を入力して下書きを作成します。" />
-      <Surface className="max-w-2xl p-6">
+      <Surface data-help="doc-new-form" className="max-w-2xl p-6">
         <NewDocumentForm initialDeal={initialDeal} initialShippingDefaults={initialShippingDefaults} />
       </Surface>
     </div>

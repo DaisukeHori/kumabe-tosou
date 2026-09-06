@@ -269,10 +269,10 @@ export function DocumentEditor({
     <div className="flex flex-col gap-6">
       {simulatorReference && <SimulatorReferencePanel data={simulatorReference} currentTotalJpy={totals.total_jpy} />}
 
-      <Surface className="p-6">
+      <Surface data-help="doc-edit-fields" className="p-6">
         <FieldGroup>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
+            <Field data-help="doc-edit-billing">
               <FieldLabel htmlFor="doc-billing-name">宛名</FieldLabel>
               <div className="flex gap-2">
                 <Input id="doc-billing-name" value={billingName} onChange={(e) => setBillingName(e.target.value)} maxLength={80} />
@@ -299,7 +299,7 @@ export function DocumentEditor({
               <FieldLabel htmlFor="doc-site-address">現場住所</FieldLabel>
               <Input id="doc-site-address" value={siteAddress} onChange={(e) => setSiteAddress(e.target.value)} maxLength={200} />
             </Field>
-            <Field>
+            <Field data-help="doc-edit-issue-date">
               <FieldLabel>発行日 (空 = 発行時の今日)</FieldLabel>
               <DatePicker value={issueDate} onChange={setIssueDate} />
             </Field>
@@ -313,7 +313,7 @@ export function DocumentEditor({
               <FieldLabel>取引年月日 (任意、空 = 発行日と同日)</FieldLabel>
               <DatePicker value={transactionDate} onChange={setTransactionDate} />
             </Field>
-            <Field>
+            <Field data-help="doc-edit-rounding">
               <FieldLabel htmlFor="doc-tax-rounding">端数処理</FieldLabel>
               <select
                 id="doc-tax-rounding"
@@ -336,12 +336,14 @@ export function DocumentEditor({
         </FieldGroup>
       </Surface>
 
-      <Surface className="p-6">
+      <Surface data-help="doc-edit-lines" className="p-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-label font-bold text-admin-text-label">明細</h2>
           <div className="flex gap-2">
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>定型行を挿入</DropdownMenuTrigger>
+              <DropdownMenuTrigger data-help="doc-edit-preset" render={<Button type="button" variant="outline" size="sm" />}>
+                定型行を挿入
+              </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {STANDARD_LINE_PRESETS.map((p) => (
                   <DropdownMenuItem key={p.label} onClick={() => insertPreset(p)}>
@@ -350,7 +352,7 @@ export function DocumentEditor({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button type="button" variant="outline" size="sm" onClick={() => addLine()}>
+            <Button data-help="doc-edit-add-line" type="button" variant="outline" size="sm" onClick={() => addLine()}>
               行を追加 (Cmd+Enter)
             </Button>
           </div>
@@ -459,7 +461,7 @@ export function DocumentEditor({
         </div>
       </Surface>
 
-      <Surface className="flex flex-col gap-1 p-6 text-sm">
+      <Surface data-help="doc-edit-totals" className="flex flex-col gap-1 p-6 text-sm">
         <div className="flex justify-between">
           <span className="text-admin-text-meta">小計</span>
           <span className="tabular-nums">{formatJpy(totals.subtotal_jpy)}</span>
@@ -479,31 +481,33 @@ export function DocumentEditor({
       <FieldError errors={error ? [{ message: error }] : undefined} />
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" disabled={isSaving} onClick={() => void handleSave()}>
+        <Button data-help="doc-edit-save" type="button" disabled={isSaving} onClick={() => void handleSave()}>
           {isSaving ? "保存中..." : "保存 (Cmd+S)"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => void handlePreview()}>
+        <Button data-help="doc-edit-preview" type="button" variant="outline" onClick={() => void handlePreview()}>
           印刷プレビュー
         </Button>
-        <Button type="button" onClick={() => setIssueConfirmOpen(true)}>
+        <Button data-help="doc-edit-issue" type="button" onClick={() => setIssueConfirmOpen(true)}>
           発行
         </Button>
-        <Button type="button" variant="destructive-outline" onClick={() => setDeleteConfirmOpen(true)}>
+        <Button data-help="doc-edit-delete" type="button" variant="destructive-outline" onClick={() => setDeleteConfirmOpen(true)}>
           削除
         </Button>
       </div>
 
       <Dialog open={issueConfirmOpen} onOpenChange={setIssueConfirmOpen}>
-        <DialogContent className="sm:max-w-[560px] shadow-modal">
+        <DialogContent data-help="doc-issue-dialog" className="sm:max-w-[560px] shadow-modal">
           <DialogHeader>
             <DialogTitle>{DOC_TYPE_LABEL[doc.doc_type]}を発行しますか</DialogTitle>
-            <DialogDescription>番号を採番し PDF を確定保存します。発行後は内容を変更できません。</DialogDescription>
+            <DialogDescription data-help="doc-issue-warning">
+              番号を採番し PDF を確定保存します。発行後は内容を変更できません。
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setIssueConfirmOpen(false)}>
               キャンセル
             </Button>
-            <Button type="button" disabled={isIssuing} onClick={() => void handleIssue()}>
+            <Button data-help="doc-issue-confirm" type="button" disabled={isIssuing} onClick={() => void handleIssue()}>
               {isIssuing ? "発行中..." : "発行する"}
             </Button>
           </DialogFooter>

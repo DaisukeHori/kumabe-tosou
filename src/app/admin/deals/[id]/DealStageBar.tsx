@@ -46,7 +46,7 @@ export function DealStageBar({ deal }: { deal: DealDetail }) {
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div data-help="deal-stage-bar" className="flex flex-col gap-1.5">
       <div className="flex flex-wrap gap-1.5">
         {BAR_STAGES.filter((s) => s !== "lost").map((stage, idx) => {
           const isCurrent = stage === current.stage;

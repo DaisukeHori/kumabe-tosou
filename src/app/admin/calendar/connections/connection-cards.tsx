@@ -94,7 +94,7 @@ export function CalendarConnectionCards({
   const enabledByProvider: Record<CalendarProvider, boolean> = { google: googleEnabled, microsoft: msEnabled };
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-4 md:grid-cols-2" data-help="connection-cards">
       {PROVIDER_CONFIG.map((config) => (
         <ProviderCard
           key={config.provider}
@@ -133,14 +133,17 @@ function ProviderCard({
   }
 
   return (
-    <Surface className="p-4">
+    <Surface className="p-4" data-help={`connection-card-${config.provider}`}>
       <div className="flex items-center justify-between">
         <p className="font-heading text-sm font-semibold">{config.label}</p>
-        <Badge variant={statusBadgeVariant(connection?.status ?? "disconnected")}>
+        <Badge
+          variant={statusBadgeVariant(connection?.status ?? "disconnected")}
+          data-help={`connection-status-${config.provider}`}
+        >
           {STATUS_LABEL[connection?.status ?? "disconnected"]}
         </Badge>
       </div>
-      <dl className="mt-2 space-y-1 text-xs text-muted-foreground">
+      <dl className="mt-2 space-y-1 text-xs text-muted-foreground" data-help={`connection-detail-${config.provider}`}>
         <div className="flex justify-between gap-2">
           <dt>アカウント</dt>
           <dd className="truncate">{connection?.account_email ?? "-"}</dd>
@@ -171,9 +174,13 @@ function ProviderCard({
           とシークレットを登録してください。
         </p>
       )}
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex gap-2" data-help={`connection-buttons-${config.provider}`}>
         {enabled ? (
-          <a href={config.startPath} className={cn(buttonVariants({ size: "sm" }))}>
+          <a
+            href={config.startPath}
+            className={cn(buttonVariants({ size: "sm" }))}
+            data-help={`connect-${config.provider}`}
+          >
             {connection?.status === "connected" || connection?.status === "expired" ? "再連携" : "接続する"}
           </a>
         ) : (
@@ -187,7 +194,13 @@ function ProviderCard({
           </>
         )}
         {connection && connection.status !== "disconnected" && (
-          <Button size="sm" variant="outline" disabled={isPending} onClick={handleDisconnect}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isPending}
+            onClick={handleDisconnect}
+            data-help={`disconnect-${config.provider}`}
+          >
             切断
           </Button>
         )}

@@ -1,0 +1,24 @@
+{
+  "width": 616,
+  "height": 277,
+  "boxes": {
+    "deal-lost-dialog": {
+      "x": 28,
+      "y": 28,
+      "w": 560,
+      "h": 221
+    },
+    "deal-lost-reason": {
+      "x": 44,
+      "y": 104,
+      "w": 528,
+      "h": 64
+    },
+    "deal-lost-submit": {
+      "x": 480,
+      "y": 201,
+      "w": 92,
+      "h": 32
+    }
+  }
+}

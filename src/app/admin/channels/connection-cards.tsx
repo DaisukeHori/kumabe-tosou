@@ -55,9 +55,9 @@ export function ChannelConnectionCards({
   const note = findAccount(accounts, "note");
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-help="connection-cards">
       <div className="grid gap-4 md:grid-cols-2">
-        <Surface className="p-4">
+        <Surface className="p-4" data-help="channel-card-x">
           <div className="flex items-center justify-between">
             <p className="font-heading text-sm font-semibold">X (旧 Twitter)</p>
             <Badge variant={authStatusBadgeVariant(x?.auth_status ?? "disconnected")}>
@@ -85,7 +85,7 @@ export function ChannelConnectionCards({
           )}
         </Surface>
 
-        <Surface className="p-4">
+        <Surface className="p-4" data-help="channel-card-instagram">
           <div className="flex items-center justify-between">
             <p className="font-heading text-sm font-semibold">Instagram</p>
             <Badge variant={authStatusBadgeVariant(instagram?.auth_status ?? "disconnected")}>
@@ -147,7 +147,7 @@ function NoteAccountCard({ note }: { note: ChannelAccountView | null }) {
   const daysRemaining = cookieDaysRemaining(note?.meta.cookie_saved_at);
 
   return (
-    <Surface className="p-4">
+    <Surface className="p-4" data-help="channel-card-note">
       <div className="flex items-center justify-between">
         <p className="font-heading text-sm font-semibold">note</p>
         <Badge variant={authStatusBadgeVariant(note?.auth_status ?? "disconnected")}>
@@ -198,6 +198,7 @@ function NoteAccountCard({ note }: { note: ChannelAccountView | null }) {
           </FieldLabel>
           <Textarea
             id="note-session-cookie"
+            data-help="note-cookie"
             name="cookie"
             rows={3}
             placeholder="_note_session_v5=...; note_gql_auth_token=...; XSRF-TOKEN=..."

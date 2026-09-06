@@ -136,7 +136,7 @@ export function NewDocumentForm({
   return (
     <div className="space-y-6">
       <FieldGroup>
-        <Field>
+        <Field data-help="doc-new-deal">
           <FieldLabel>案件</FieldLabel>
           <EntityPicker value={deal} onChange={(item) => void handleDealChange(item)} search={searchDealsAction} placeholder="案件を検索" />
           {billingPreview && (
@@ -149,7 +149,12 @@ export function NewDocumentForm({
 
         <Field>
           <FieldLabel id="new-doc-type-label">種別</FieldLabel>
-          <div role="group" aria-labelledby="new-doc-type-label" className="inline-flex flex-wrap items-center gap-1.5">
+          <div
+            data-help="doc-new-type"
+            role="group"
+            aria-labelledby="new-doc-type-label"
+            className="inline-flex flex-wrap items-center gap-1.5"
+          >
             {zDocType.options.map((t) => {
               const active = docType === t;
               return (
@@ -198,7 +203,7 @@ export function NewDocumentForm({
           />
         </Field>
 
-        <div className="rounded-lg border border-border p-3">
+        <div data-help="doc-new-first-line" className="rounded-lg border border-border p-3">
           <p className="mb-3 text-sm font-medium">最初の明細行</p>
           <div className="grid gap-3 sm:grid-cols-6">
             <Field className="sm:col-span-3">
@@ -217,7 +222,7 @@ export function NewDocumentForm({
               <FieldLabel htmlFor="new-doc-unit-price">単価</FieldLabel>
               <Input id="new-doc-unit-price" type="number" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
             </Field>
-            <Field className="sm:col-span-6">
+            <Field data-help="doc-new-tax" className="sm:col-span-6">
               <FieldLabel htmlFor="new-doc-tax-category">税区分</FieldLabel>
               <select
                 id="new-doc-tax-category"
@@ -242,7 +247,7 @@ export function NewDocumentForm({
       </FieldGroup>
 
       <FieldError errors={error ? [{ message: error }] : undefined} />
-      <Button type="button" disabled={isPending} onClick={() => void handleSubmit()}>
+      <Button data-help="doc-new-submit" type="button" disabled={isPending} onClick={() => void handleSubmit()}>
         {isPending ? "作成中..." : "下書きを作成する (Cmd+S)"}
       </Button>
     </div>

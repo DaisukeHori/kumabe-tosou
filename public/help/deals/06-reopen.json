@@ -1,0 +1,30 @@
+{
+  "width": 616,
+  "height": 404,
+  "boxes": {
+    "deal-reopen-dialog": {
+      "x": 28,
+      "y": 28,
+      "w": 560,
+      "h": 348
+    },
+    "deal-reopen-stage": {
+      "x": 44,
+      "y": 152,
+      "w": 528,
+      "h": 32
+    },
+    "deal-reopen-reason": {
+      "x": 44,
+      "y": 231,
+      "w": 528,
+      "h": 64
+    },
+    "deal-reopen-submit": {
+      "x": 433,
+      "y": 328,
+      "w": 139,
+      "h": 32
+    }
+  }
+}

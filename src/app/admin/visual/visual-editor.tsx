@@ -679,9 +679,23 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
     activeTextMeta = sidePanel.texts.find((t) => t.slotKey === slotKey) ?? null;
   }
 
+  // data-help: 管理画面ヘルプ (/help/visual) のスクリーンショット注釈用アンカー。
+  // 大量にあるホットスポットのうち「写真の枠」「文章の枠」を 1 つずつだけ目印にする
+  // (見た目・挙動には影響しない属性)。
+  const imageHotspotId = hotspots.find((h) => h.target.type !== "text")?.id ?? null;
+  const textHotspotId =
+    hotspots
+      .filter((h) => h.target.type === "text")
+      .reduce<Hotspot | null>(
+        (best, h) =>
+          best === null || h.rect.width * h.rect.height > best.rect.width * best.rect.height ? h : best,
+        null,
+      )?.id ?? null;
+
   return (
     <div className="flex flex-col gap-4">
       <Tabs
+        data-help="page-tabs"
         value={activeRoute}
         onValueChange={(v) => {
           setActiveRoute(v as string);
@@ -701,6 +715,7 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div
           ref={containerRef}
+          data-help="preview"
           className="relative w-full overflow-hidden rounded-xl border border-border bg-muted/30"
           style={{ height: Math.max(intrinsicHeight * scale, 200) }}
         >
@@ -727,6 +742,13 @@ export function VisualEditor({ tabs, initialRoute, initialMediaItems, initialMed
               }}
               type="button"
               aria-label={`${hotspot.label} を編集`}
+              data-help={
+                hotspot.id === imageHotspotId
+                  ? "image-hotspot"
+                  : hotspot.id === textHotspotId
+                    ? "text-hotspot"
+                    : undefined
+              }
               onClick={() => openMenuFor(hotspot)}
               className={cn(
                 "absolute rounded-md border-2 border-dashed border-transparent outline-none transition-colors",

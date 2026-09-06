@@ -109,6 +109,7 @@ function TemplateFormDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onOpenChange(false); }}>
       <DialogContent
+        data-help="template-dialog"
         className="sm:max-w-[560px] shadow-modal"
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
@@ -122,12 +123,12 @@ function TemplateFormDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
           <FieldGroup>
-            <Field data-invalid={!!errors.name}>
+            <Field data-help="template-name" data-invalid={!!errors.name}>
               <FieldLabel htmlFor="tmpl-name">名称</FieldLabel>
               <Input id="tmpl-name" {...register("name")} />
               <FieldError errors={errors.name ? [errors.name] : undefined} />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div data-help="template-grade-size" className="grid grid-cols-2 gap-3">
               <Field>
                 <FieldLabel>グレード</FieldLabel>
                 <Select
@@ -178,7 +179,7 @@ function TemplateFormDialog({
               <FieldLabel htmlFor="tmpl-active">有効</FieldLabel>
             </Field>
 
-            <div className="space-y-2">
+            <div data-help="template-items" className="space-y-2">
               <FieldLabel>明細 (作業ブロックのセット)</FieldLabel>
               <div className="space-y-2">
                 {fields.map((field, index) => (
@@ -308,7 +309,7 @@ export function TemplateEditor({
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button type="button" onClick={openCreate} disabled={workTypes.length === 0}>
+        <Button type="button" data-help="template-new" onClick={openCreate} disabled={workTypes.length === 0}>
           新規作成
         </Button>
       </div>
@@ -318,7 +319,7 @@ export function TemplateEditor({
       {initialTemplates.length === 0 ? (
         <p className="text-sm text-muted-foreground">テンプレートがまだありません。</p>
       ) : (
-        <DataTableShell>
+        <DataTableShell data-help="template-table">
           <DataTableHeaderRow columns={["名称", "グレード", "サイズ", "明細数", "有効", ""]} gridClassName={GRID_COLS} />
           <div
             role="listbox"

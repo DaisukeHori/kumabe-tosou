@@ -1,0 +1,48 @@
+{
+  "width": 958,
+  "height": 542,
+  "boxes": {
+    "integrations-intro": {
+      "x": 20,
+      "y": 20,
+      "w": 918,
+      "h": 62
+    },
+    "integration-card-google_calendar": {
+      "x": 20,
+      "y": 106,
+      "w": 918,
+      "h": 416
+    },
+    "integration-status-google_calendar": {
+      "x": 166,
+      "y": 123,
+      "w": 54,
+      "h": 20
+    },
+    "integration-urls-google_calendar": {
+      "x": 37,
+      "y": 188,
+      "w": 884,
+      "h": 115
+    },
+    "integration-public-id-google_calendar": {
+      "x": 37,
+      "y": 319,
+      "w": 576,
+      "h": 59
+    },
+    "integration-secret-google_calendar": {
+      "x": 37,
+      "y": 398,
+      "w": 576,
+      "h": 59
+    },
+    "integration-save-google_calendar": {
+      "x": 37,
+      "y": 473,
+      "w": 50,
+      "h": 32
+    }
+  }
+}

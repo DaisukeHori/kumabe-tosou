@@ -47,7 +47,9 @@ export default async function AdminInquiriesPage({
         description="↑↓ で移動、Enter で詳細、Cmd+S で保存、Esc で閉じます。"
       />
 
-      <PillToggle items={filterPills} ariaLabel="状態で絞り込み" />
+      <div data-help="inquiry-filter" className="w-fit">
+        <PillToggle items={filterPills} ariaLabel="状態で絞り込み" />
+      </div>
 
       {!result.ok && (
         <p className="text-sm text-destructive">一覧の取得に失敗しました: {result.detail ?? result.code}</p>

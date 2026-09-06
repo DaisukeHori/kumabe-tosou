@@ -56,6 +56,7 @@ export function CustomersSearchBar({
   return (
     <div className="flex flex-col gap-3">
       <Input
+        data-help="customer-search"
         ref={inputRef}
         value={value}
         onChange={(e) => {
@@ -71,15 +72,17 @@ export function CustomersSearchBar({
       {/* lifecycle フィルタは顧客一覧クエリにのみ効く。会社タブでは listCompanies へ渡らない
           死にフィルタのため非表示にする (#121 カバレッジ監査 追補・ユーザー承認済み)。 */}
       {tab === "customers" && (
-        <PillToggle
-          ariaLabel="状態で絞り込み"
-          items={filters.map((f) => ({
-            key: f.value,
-            label: f.label,
-            href: buildHref(value, f.value),
-            active: lifecycle === f.value,
-          }))}
-        />
+        <div data-help="customer-lifecycle-filter" className="w-fit">
+          <PillToggle
+            ariaLabel="状態で絞り込み"
+            items={filters.map((f) => ({
+              key: f.value,
+              label: f.label,
+              href: buildHref(value, f.value),
+              active: lifecycle === f.value,
+            }))}
+          />
+        </div>
       )}
     </div>
   );

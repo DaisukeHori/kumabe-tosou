@@ -55,7 +55,7 @@ export function CancelBlocksDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px] shadow-modal">
+      <DialogContent data-help="deal-cancel-blocks-dialog" className="sm:max-w-[560px] shadow-modal">
         <DialogHeader>
           <DialogTitle>未着手の作業ブロックを取り消しますか?</DialogTitle>
           <DialogDescription>

@@ -29,6 +29,7 @@ export function DocumentsSearch({ initialQuery, type, status }: { initialQuery: 
   return (
     <Input
       data-documents-search
+      data-help="doc-search"
       value={value}
       onChange={(e) => {
         setValue(e.target.value);

@@ -211,7 +211,10 @@ async function requireAdminClient(): Promise<Result<{ client: SupabaseClient; us
   try {
     const { supabase, user } = await getSessionAndClient();
     if (!user) return { ok: false, code: "KMB-E201" };
-    const isAdmin = await platformFacade.isAdmin(user.id);
+    // 本人判定なので service role key に依存しない isSelfAdmin を使う (RLS profiles_self_select)。
+    // isAdmin() は service client 必須のため、鍵未設定環境ではログイン済み admin でも false になり
+    // KMB-E202 に化けていた (admin layout の requireAdmin は通るのに、この画面だけ落ちる)。
+    const isAdmin = await platformFacade.isSelfAdmin(supabase, user.id);
     if (!isAdmin) return { ok: false, code: "KMB-E202" };
     return { ok: true, value: { client: supabase, userId: user.id } };
   } catch (err) {

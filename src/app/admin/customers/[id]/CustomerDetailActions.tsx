@@ -108,7 +108,9 @@ export function CustomerDetailActions({ customer }: { customer: CustomerDetail }
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>操作</DropdownMenuTrigger>
+        <DropdownMenuTrigger data-help="customer-actions" render={<Button type="button" variant="outline" size="sm" />}>
+          操作
+        </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => setMergeOpen(true)}>重複を統合</DropdownMenuItem>
           <DropdownMenuItem variant="destructive" disabled={isArchiving} onClick={() => void handleArchive()}>
@@ -118,25 +120,33 @@ export function CustomerDetailActions({ customer }: { customer: CustomerDetail }
       </DropdownMenu>
 
       <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
-        <DialogContent>
+        <DialogContent data-help="customer-merge-dialog">
           <DialogHeader>
             <DialogTitle>重複顧客を統合</DialogTitle>
-            <DialogDescription>
+            <DialogDescription data-help="customer-merge-warning">
               選んだ顧客をこの顧客 ({customer.name}) に統合します。統合すると選んだ顧客の案件・タスク・記録がこちらへ移り、選んだ顧客はアーカイブされます。この操作は取り消せません。
             </DialogDescription>
           </DialogHeader>
-          <EntityPicker
-            value={mergeTarget}
-            onChange={setMergeTarget}
-            search={searchCustomersAction}
-            placeholder="統合する顧客 (消える側) を検索"
-          />
+          <div data-help="customer-merge-picker">
+            <EntityPicker
+              value={mergeTarget}
+              onChange={setMergeTarget}
+              search={searchCustomersAction}
+              placeholder="統合する顧客 (消える側) を検索"
+            />
+          </div>
           {isSelf && <p className="text-sm text-destructive">同一の顧客は選べません。</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setMergeOpen(false)}>
               キャンセル
             </Button>
-            <Button type="button" variant="destructive" disabled={!mergeTarget || isSelf || isMerging} onClick={() => void handleMerge()}>
+            <Button
+              data-help="customer-merge-submit"
+              type="button"
+              variant="destructive"
+              disabled={!mergeTarget || isSelf || isMerging}
+              onClick={() => void handleMerge()}
+            >
               {isMerging ? "統合中..." : "統合する"}
             </Button>
           </DialogFooter>

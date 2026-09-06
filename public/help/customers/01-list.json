@@ -1,0 +1,54 @@
+{
+  "width": 1008,
+  "height": 808,
+  "boxes": {
+    "page-header": {
+      "x": 20,
+      "y": 20,
+      "w": 968,
+      "h": 52
+    },
+    "help-button": {
+      "x": 960,
+      "y": 22,
+      "w": 28,
+      "h": 28
+    },
+    "customer-new": {
+      "x": 874,
+      "y": 20,
+      "w": 78,
+      "h": 32
+    },
+    "customer-tabs": {
+      "x": 20,
+      "y": 96,
+      "w": 968,
+      "h": 22
+    },
+    "customer-search": {
+      "x": 20,
+      "y": 142,
+      "w": 384,
+      "h": 32
+    },
+    "customer-lifecycle-filter": {
+      "x": 20,
+      "y": 186,
+      "w": 384,
+      "h": 32
+    },
+    "customer-table": {
+      "x": 20,
+      "y": 242,
+      "w": 968,
+      "h": 546
+    },
+    "customer-row-first": {
+      "x": 21,
+      "y": 282,
+      "w": 966,
+      "h": 63
+    }
+  }
+}

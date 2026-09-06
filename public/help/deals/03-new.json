@@ -1,0 +1,54 @@
+{
+  "width": 1000,
+  "height": 622,
+  "boxes": {
+    "page-header": {
+      "x": 16,
+      "y": 16,
+      "w": 968,
+      "h": 52
+    },
+    "deal-field-title": {
+      "x": 41,
+      "y": 117,
+      "w": 622,
+      "h": 59
+    },
+    "deal-field-customer": {
+      "x": 41,
+      "y": 196,
+      "w": 622,
+      "h": 59
+    },
+    "deal-field-amount": {
+      "x": 41,
+      "y": 276,
+      "w": 301,
+      "h": 59
+    },
+    "deal-field-close": {
+      "x": 362,
+      "y": 276,
+      "w": 301,
+      "h": 59
+    },
+    "deal-field-source": {
+      "x": 41,
+      "y": 355,
+      "w": 622,
+      "h": 59
+    },
+    "deal-field-notes": {
+      "x": 41,
+      "y": 434,
+      "w": 622,
+      "h": 91
+    },
+    "deal-submit": {
+      "x": 41,
+      "y": 549,
+      "w": 168,
+      "h": 32
+    }
+  }
+}

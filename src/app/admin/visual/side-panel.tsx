@@ -80,6 +80,7 @@ export function SidePanel({
 }: Props) {
   return (
     <aside
+      data-help="side-panel"
       className="flex h-fit flex-col gap-4 rounded-xl border border-border bg-background p-4"
       aria-busy={pending}
     >
@@ -130,7 +131,7 @@ export function SidePanel({
         </div>
       )}
 
-      <div>
+      <div data-help="side-panel-images">
         <h2 className="text-sm font-semibold">このページの画像スロット</h2>
         {slots.length === 0 &&
           texts.length === 0 &&
@@ -139,15 +140,20 @@ export function SidePanel({
           !pending &&
           !error && <p className="mt-2 text-xs text-muted-foreground">このページに編集可能な画像はありません。</p>}
         <ul className="mt-2 flex flex-col gap-1.5">
-          {slots.map((item) => (
+          {slots.map((item, index) => (
             <li key={item.slotKey}>
               <button
                 type="button"
+                data-help={index === 0 ? "slot-row" : undefined}
                 onClick={() => onSlotClick(item)}
                 className="flex w-full items-center justify-between gap-2 rounded-lg border border-border px-2.5 py-1.5 text-left text-xs hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
               >
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                <Badge variant="outline" className={cn("shrink-0", STATE_CLASS[item.state])}>
+                <Badge
+                  variant="outline"
+                  data-help={index === 0 ? "slot-state" : undefined}
+                  className={cn("shrink-0", STATE_CLASS[item.state])}
+                >
                   {STATE_LABEL[item.state]}
                 </Badge>
               </button>
@@ -157,7 +163,7 @@ export function SidePanel({
       </div>
 
       {texts.length > 0 && (
-        <div>
+        <div data-help="side-panel-texts">
           <h2 className="text-sm font-semibold">このページのテキスト</h2>
           <ul className="mt-2 flex flex-col gap-1.5">
             {texts.map((item) => (

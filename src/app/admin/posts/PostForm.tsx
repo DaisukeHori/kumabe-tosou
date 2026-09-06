@@ -199,12 +199,17 @@ export function PostForm({
       {/* [#126 R5] モックの「保存/公開する」2 ボタンヘッダ。状態遷移 (下書き→レビュー→公開→
           アーカイブ) + 予約公開 datetime を保持したまま保存ボタンを上部に集約する
           (action・バリデーションは不変)。保存ボタンは form={FORM_ID} で form に関連付ける。 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card px-4 py-3 shadow-surface">
+      <div
+        data-help="post-actionbar"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card px-4 py-3 shadow-surface"
+      >
         <div className="flex items-center gap-2 text-sm">
           {mode === "edit" ? (
             <>
               <span className="text-muted-foreground">状態</span>
-              <ContentStatusBadge status={currentStatus} />
+              <span data-help="post-status">
+                <ContentStatusBadge status={currentStatus} />
+              </span>
             </>
           ) : (
             <span className="text-muted-foreground">新しい記事を作成します。</span>
@@ -219,25 +224,35 @@ export function PostForm({
                     type="datetime-local"
                     value={reservedPublishedAt}
                     onChange={(e) => setReservedPublishedAt(e.target.value)}
+                    data-help="post-schedule"
                     className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs"
                     aria-label="予約公開日時 (任意、未指定は即時公開)"
                   />
                 )}
-                <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => onTransition(to)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-help={`post-transition-${to}`}
+                  disabled={isPending}
+                  onClick={() => onTransition(to)}
+                >
                   {TRANSITION_BUTTON_LABEL[to]}
                 </Button>
               </span>
             ))}
-          <Button type="submit" form={FORM_ID} disabled={isPending}>
+          <Button type="submit" form={FORM_ID} data-help="post-save" disabled={isPending}>
             {mode === "create" ? "作成する" : "保存する (Cmd/Ctrl+S)"}
           </Button>
         </div>
       </div>
 
       {sourceRunId && (
+        <div data-help="post-ai-notice">
         <NoticePanel tone="info" title="この記事は AI が生成した下書きです">
           AI 生成の下書きから作成されました。公開前に内容 (事実・固有名詞・表現) を必ず確認してください。
         </NoticePanel>
+        </div>
       )}
 
       {serverError && (
@@ -246,7 +261,7 @@ export function PostForm({
         </div>
       )}
       {notice && (
-        <div role="status" className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+        <div data-help="post-notice" role="status" className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
           {notice}
         </div>
       )}
@@ -254,29 +269,29 @@ export function PostForm({
       <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
         <input type="hidden" {...register("kind")} />
         <FieldGroup>
-          <Field data-invalid={!!errors.title}>
+          <Field data-help="post-title-field" data-invalid={!!errors.title}>
             <FieldLabel htmlFor="post-title">タイトル</FieldLabel>
             <Input id="post-title" aria-invalid={!!errors.title} {...register("title")} />
             <FieldError errors={errors.title ? [errors.title] : undefined} />
           </Field>
 
-          <Field data-invalid={!!errors.slug}>
+          <Field data-help="post-slug-field" data-invalid={!!errors.slug}>
             <FieldLabel htmlFor="post-slug">slug</FieldLabel>
             <Input id="post-slug" aria-invalid={!!errors.slug} {...register("slug")} />
             <FieldDescription>小文字英数とハイフンのみ</FieldDescription>
             <FieldError errors={errors.slug ? [errors.slug] : undefined} />
           </Field>
 
-          <Field data-invalid={!!errors.excerpt}>
+          <Field data-help="post-excerpt-field" data-invalid={!!errors.excerpt}>
             <FieldLabel htmlFor="post-excerpt">抜粋</FieldLabel>
             <Textarea id="post-excerpt" className="min-h-20" aria-invalid={!!errors.excerpt} {...register("excerpt")} />
             <FieldError errors={errors.excerpt ? [errors.excerpt] : undefined} />
           </Field>
 
-          <Field data-invalid={!!errors.body}>
+          <Field data-help="post-body-field" data-invalid={!!errors.body}>
             <div className="mb-1 flex items-center justify-between">
               <FieldLabel htmlFor="post-body">本文 (Markdown)</FieldLabel>
-              <div className="flex gap-1">
+              <div data-help="post-preview-toggle" className="flex gap-1">
                 <Button
                   type="button"
                   variant={showPreview ? "ghost" : "secondary"}
@@ -296,7 +311,7 @@ export function PostForm({
               </div>
             </div>
             {showPreview ? (
-              <div className="min-h-48 rounded-lg border border-input p-3 text-sm prose prose-sm max-w-none">
+              <div data-help="post-preview" className="min-h-48 rounded-lg border border-input p-3 text-sm prose prose-sm max-w-none">
                 <ReactMarkdown>{body || "*(本文が空です)*"}</ReactMarkdown>
               </div>
             ) : (
@@ -305,7 +320,7 @@ export function PostForm({
             <FieldError errors={errors.body ? [errors.body] : undefined} />
           </Field>
 
-          <Field data-invalid={!!errors.cover_media_id}>
+          <Field data-help="post-cover-field" data-invalid={!!errors.cover_media_id}>
             <FieldLabel>カバー画像 (任意)</FieldLabel>
             <div className="flex items-center gap-3">
               {coverItem ? (
@@ -321,7 +336,7 @@ export function PostForm({
                 </div>
               )}
               <div className="flex flex-col gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setCoverPickerOpen(true)}>
+                <Button type="button" variant="outline" size="sm" data-help="post-cover-pick" onClick={() => setCoverPickerOpen(true)}>
                   画像を選択
                 </Button>
                 {coverMediaId && (

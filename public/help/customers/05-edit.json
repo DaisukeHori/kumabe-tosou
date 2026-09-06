@@ -1,0 +1,30 @@
+{
+  "width": 1080,
+  "height": 900,
+  "boxes": {
+    "customer-edit-sheet": {
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 900
+    },
+    "customer-billing": {
+      "x": 17,
+      "y": 8,
+      "w": 1047,
+      "h": 276
+    },
+    "customer-shipping": {
+      "x": 17,
+      "y": 304,
+      "w": 1047,
+      "h": 276
+    },
+    "customer-custom-fields": {
+      "x": 17,
+      "y": 790,
+      "w": 1047,
+      "h": 108
+    }
+  }
+}

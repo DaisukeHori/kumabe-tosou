@@ -1,0 +1,30 @@
+{
+  "width": 1008,
+  "height": 319,
+  "boxes": {
+    "price-matrix": {
+      "x": 20,
+      "y": 20,
+      "w": 968,
+      "h": 279
+    },
+    "price-cell-standard-s": {
+      "x": 212,
+      "y": 115,
+      "w": 239,
+      "h": 32
+    },
+    "price-cell-standard-m": {
+      "x": 468,
+      "y": 115,
+      "w": 239,
+      "h": 32
+    },
+    "price-cell-show-l": {
+      "x": 723,
+      "y": 213,
+      "w": 239,
+      "h": 32
+    }
+  }
+}

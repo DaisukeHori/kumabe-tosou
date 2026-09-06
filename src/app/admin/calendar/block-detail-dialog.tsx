@@ -268,6 +268,7 @@ export function BlockDetailDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onOpenChange(false); }}>
       <DialogContent
+        data-help="detail-dialog"
         className="sm:max-w-[560px] shadow-modal"
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
@@ -323,7 +324,7 @@ export function BlockDetailDialog({
           )}
 
           {/* ---- 配置 ---- */}
-          <div className="space-y-2 rounded-lg border border-border p-3">
+          <div data-help="detail-place" className="space-y-2 rounded-lg border border-border p-3">
             <p className="text-xs font-medium text-muted-foreground">配置</p>
             {block.starts_at && block.ends_at ? (
               <p className="text-sm">
@@ -353,7 +354,7 @@ export function BlockDetailDialog({
 
           {/* ---- 編集フォーム ---- */}
           {CAN_EDIT_DETAIL[status] && (
-            <form onSubmit={handleSubmit(onSubmitEdit)} noValidate className="space-y-3">
+            <form data-help="detail-form" onSubmit={handleSubmit(onSubmitEdit)} noValidate className="space-y-3">
               <FieldGroup>
                 <Field>
                   <FieldLabel>案件リンク</FieldLabel>
@@ -410,7 +411,7 @@ export function BlockDetailDialog({
           )}
 
           {/* ---- 状態操作 ---- */}
-          <div className="flex flex-wrap gap-2">
+          <div data-help="detail-status" className="flex flex-wrap gap-2">
             {CAN_START[status] && (
               <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => handleTransition("in_progress")}>
                 着手
@@ -430,7 +431,7 @@ export function BlockDetailDialog({
 
           {/* ---- 実績入力 ---- */}
           {CAN_RECORD_ACTUAL[status] && (
-            <div className="space-y-2 rounded-lg border border-border p-3">
+            <div data-help="detail-actual" className="space-y-2 rounded-lg border border-border p-3">
               <p className="text-xs font-medium text-muted-foreground">
                 実績を入れる {status === "done" && "(訂正)"}
               </p>

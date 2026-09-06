@@ -1,0 +1,42 @@
+{
+  "width": 1440,
+  "height": 900,
+  "boxes": {
+    "page-header": {
+      "x": 356,
+      "y": 28,
+      "w": 968,
+      "h": 52
+    },
+    "help-button": {
+      "x": 1296,
+      "y": 28,
+      "w": 28,
+      "h": 28
+    },
+    "calendar-settings-tabs": {
+      "x": 356,
+      "y": 104,
+      "w": 968,
+      "h": 41
+    },
+    "connection-cards": {
+      "x": 356,
+      "y": 169,
+      "w": 968,
+      "h": 234
+    },
+    "sync-issues-section": {
+      "x": 356,
+      "y": 427,
+      "w": 968,
+      "h": 298
+    },
+    "sync-now": {
+      "x": 356,
+      "y": 479,
+      "w": 86,
+      "h": 28
+    }
+  }
+}

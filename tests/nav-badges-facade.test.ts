@@ -17,6 +17,8 @@ const isAdminMock = vi.fn();
 vi.mock("@/modules/platform/facade", () => ({
   platformFacade: {
     isAdmin: (...args: unknown[]) => isAdminMock(...args),
+    // requireAdminClient は service role 非依存の isSelfAdmin(supabase, userId) を使う。
+    isSelfAdmin: (_client: unknown, userId: unknown) => isAdminMock(userId),
   },
 }));
 

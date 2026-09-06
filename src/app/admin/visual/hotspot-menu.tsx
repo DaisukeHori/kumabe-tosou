@@ -143,6 +143,7 @@ export function HotspotMenu({
   return (
     <div
       ref={containerRef}
+      data-help="hotspot-menu"
       role="menu"
       aria-label={`${hotspot.label} の編集メニュー`}
       onKeyDown={handleKeyDown}
@@ -326,6 +327,7 @@ export function HotspotMenu({
                   type="button"
                   variant="outline"
                   size="sm"
+                  data-help="ai-suggest"
                   onClick={onToggleAiSuggest}
                   disabled={savePending}
                 >

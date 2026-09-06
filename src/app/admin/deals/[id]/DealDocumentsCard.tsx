@@ -19,7 +19,7 @@ export function DealDocumentsCard({
   documentsResult: Result<Paged<DocumentListItem>>;
 }) {
   return (
-    <Surface className="flex flex-col gap-3 p-4">
+    <Surface data-help="deal-documents" className="flex flex-col gap-3 p-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-label font-bold text-admin-text-label">帳票</h3>
         <Link href={`/admin/documents/new?deal_id=${dealId}`} className="text-sm underline underline-offset-4">

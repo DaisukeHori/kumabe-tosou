@@ -1,0 +1,30 @@
+{
+  "width": 608,
+  "height": 470,
+  "boxes": {
+    "template-dialog": {
+      "x": 24,
+      "y": 24,
+      "w": 560,
+      "h": 422
+    },
+    "template-name": {
+      "x": 40,
+      "y": 72,
+      "w": 528,
+      "h": 59
+    },
+    "template-grade-size": {
+      "x": 40,
+      "y": 151,
+      "w": 528,
+      "h": 59
+    },
+    "template-items": {
+      "x": 40,
+      "y": 270,
+      "w": 528,
+      "h": 95
+    }
+  }
+}

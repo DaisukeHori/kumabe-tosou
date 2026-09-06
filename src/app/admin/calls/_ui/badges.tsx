@@ -28,16 +28,23 @@ const HANDLING_VARIANT: Record<CallHandling, StatusVariant> = {
 };
 
 /** handling は dial_result 到達まで null (未確定 — 04-telephony.md §6.1)。 */
-export function CallHandlingBadge({ handling }: { handling: CallHandling | null }) {
+export function CallHandlingBadge({
+  handling,
+  dataHelp,
+}: {
+  handling: CallHandling | null;
+  /** ヘルプのスクリーンショット注釈用の目印 (docs/design/admin-help/README.md §5)。表示は変わらない。 */
+  dataHelp?: string;
+}) {
   if (handling === null) {
     return (
-      <Badge variant="neutral" className="whitespace-nowrap">
+      <Badge data-help={dataHelp} variant="neutral" className="whitespace-nowrap">
         処理中
       </Badge>
     );
   }
   return (
-    <Badge variant={HANDLING_VARIANT[handling]} className="whitespace-nowrap">
+    <Badge data-help={dataHelp} variant={HANDLING_VARIANT[handling]} className="whitespace-nowrap">
       {HANDLING_LABEL[handling]}
     </Badge>
   );
@@ -76,13 +83,16 @@ function isKmbErrorCode(code: string): code is KmbErrorCode {
 export function JobStatusBadge({
   status,
   errorCode,
+  dataHelp,
 }: {
   status: CallJobStatus | null;
   errorCode?: string | null;
+  /** ヘルプのスクリーンショット注釈用の目印 (docs/design/admin-help/README.md §5)。表示は変わらない。 */
+  dataHelp?: string;
 }) {
   if (status === null) {
     return (
-      <Badge variant="neutral" className="whitespace-nowrap">
+      <Badge data-help={dataHelp} variant="neutral" className="whitespace-nowrap">
         録音なし
       </Badge>
     );
@@ -92,7 +102,7 @@ export function JobStatusBadge({
       ? `${errorCode}: ${isKmbErrorCode(errorCode) ? getErrorInfo(errorCode).message : "詳細不明のエラー"}`
       : undefined;
   return (
-    <Badge variant={JOB_STATUS_VARIANT[status]} title={title} className="whitespace-nowrap">
+    <Badge data-help={dataHelp} variant={JOB_STATUS_VARIANT[status]} title={title} className="whitespace-nowrap">
       {JOB_STATUS_LABEL[status]}
     </Badge>
   );

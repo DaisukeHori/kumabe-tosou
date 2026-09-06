@@ -25,7 +25,8 @@ type TimeoutOutcome<T> = { timedOut: true } | { timedOut: false; value: T };
 async function requireAdminClient(): Promise<Result<SupabaseClient>> {
   const { supabase, user } = await getSessionAndClient();
   if (!user) return { ok: false, code: "KMB-E201" };
-  const isAdmin = await platformFacade.isAdmin(user.id);
+  // 本人判定なので service role key に依存しない isSelfAdmin を使う (RLS profiles_self_select)。
+  const isAdmin = await platformFacade.isSelfAdmin(supabase, user.id);
   if (!isAdmin) return { ok: false, code: "KMB-E202" };
   return { ok: true, value: supabase };
 }

@@ -40,7 +40,7 @@ export function CompaniesTable({ items }: { items: CompanyListItem[] }) {
 
   return (
     <>
-      <DataTableShell>
+      <DataTableShell data-help="company-table">
         <DataTableHeaderRow columns={["会社名", "電話番号", "住所", "所属顧客数", "更新日"]} gridClassName={GRID_COLS} />
         <div
           role="listbox"

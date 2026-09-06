@@ -1,0 +1,60 @@
+{
+  "width": 1440,
+  "height": 984,
+  "boxes": {
+    "page-header": {
+      "x": 356,
+      "y": 28,
+      "w": 968,
+      "h": 28
+    },
+    "customer-profile": {
+      "x": 356,
+      "y": 80,
+      "w": 472,
+      "h": 408
+    },
+    "customer-lifecycle-badge": {
+      "x": 757,
+      "y": 97,
+      "w": 54,
+      "h": 20
+    },
+    "customer-profile-fields": {
+      "x": 373,
+      "y": 152,
+      "w": 438,
+      "h": 279
+    },
+    "customer-edit": {
+      "x": 373,
+      "y": 443,
+      "w": 48,
+      "h": 28
+    },
+    "customer-actions": {
+      "x": 429,
+      "y": 443,
+      "w": 48,
+      "h": 28
+    },
+    "customer-deals": {
+      "x": 356,
+      "y": 512,
+      "w": 472,
+      "h": 166
+    },
+    "customer-tasks": {
+      "x": 356,
+      "y": 702,
+      "w": 472,
+      "h": 222
+    },
+    "customer-timeline": {
+      "x": 852,
+      "y": 80,
+      "w": 472,
+      "h": 844
+    }
+  }
+}

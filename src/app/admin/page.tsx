@@ -94,7 +94,8 @@ export default async function AdminDashboardPage() {
 
       {/* 優先度付きアクションカード: 既存 facade データから「今やること」を導出 (buildDashboardActions)。
           件数 0 のカードは出さないが、対応する KPI/導線は下段グリッドに常設される。 */}
-      <div className="flex flex-col gap-2.5">
+      {/* data-help: ヘルプのスクリーンショット注釈用の目印 (admin-help README §5)。 */}
+      <div data-help="action-list" className="flex flex-col gap-2.5">
         {actions.length > 0 ? (
           actions.map((item, i) => <ActionCard key={item.key} item={item} index={i + 1} />)
         ) : (
@@ -104,8 +105,9 @@ export default async function AdminDashboardPage() {
 
       {/* 現行ダッシュボードの全 KPI/導線を維持 (ユーザー方針: 既存機能は落とさない)。
           問い合わせ・仮素材・review 待ち・配信の 4 枚。 */}
-      <KpiSection title="受付とホームページ">
+      <KpiSection title="受付とホームページ" helpKey="kpi-section-site">
         <KpiTile
+          helpKey="kpi-new-inquiries"
           label="未処理の問い合わせ"
           value={newInquiries === null ? "—" : newInquiries}
           href="/admin/inquiries?status=new"
@@ -117,6 +119,7 @@ export default async function AdminDashboardPage() {
           badge={{ text: "content モジュール実装待ち", variant: "outline" }}
         />
         <KpiTile
+          helpKey="kpi-placeholders"
           label="仮素材 (is_placeholder) 残数"
           value={placeholders === null ? "—" : placeholders}
           href="/admin/media?filter=placeholder"
@@ -130,8 +133,9 @@ export default async function AdminDashboardPage() {
       </KpiSection>
 
       {/* crm KPI 4 枚 (01-crm.md §8.6)。導線・数値・degrade 表示を現行から保持。 */}
-      <KpiSection title="商談とやること">
+      <KpiSection title="商談とやること" helpKey="kpi-section-crm">
         <KpiTile
+          helpKey="kpi-awaiting-lead"
           label="未対応の相談"
           value={crmKpi ? crmKpi.awaiting_lead_count : "—"}
           href="/admin/deals"
@@ -147,6 +151,7 @@ export default async function AdminDashboardPage() {
           badge={{ text: "Σ floor(金額×確度)", variant: "outline" }}
         />
         <KpiTile
+          helpKey="kpi-overdue-tasks"
           label="期限切れのやること"
           value={crmKpi ? crmKpi.overdue_task_count : "—"}
           href="/admin/tasks"
@@ -169,9 +174,10 @@ export default async function AdminDashboardPage() {
       </KpiSection>
 
       {/* scheduling/sales/telephony KPI 3 枚。キャパ残・未消込請求・通話滞留の導線を保持。 */}
-      <KpiSection title="予定・請求・通話">
+      <KpiSection title="予定・請求・通話" helpKey="kpi-section-ops">
         <CapacityTile capacity={capacity} capacityError={capacityError} />
         <KpiTile
+          helpKey="kpi-unpaid"
           label="未消込の請求"
           value={unpaidCount === null ? "—" : `${unpaidCount}件`}
           href="/admin/documents?type=invoice&status=issued"
@@ -196,6 +202,7 @@ function CapacityTile({
   const remaining = formatRemainingHoursBadge(capacity);
   return (
     <KpiTile
+      helpKey="kpi-capacity"
       label="今週のキャパ残"
       value={remaining.label}
       urgentValue={remaining.negative}
@@ -218,6 +225,7 @@ function CallAlertTile({
   const badge = formatCallAlertBadge(callAlerts);
   return (
     <KpiTile
+      helpKey="kpi-calls"
       label="通話の滞留"
       value={callAlerts === null ? "—" : badge.label}
       href="/admin/calls"

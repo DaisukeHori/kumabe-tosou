@@ -18,6 +18,7 @@ import { useSaveShortcut } from "@/app/admin/_ui/use-save-shortcut";
 import type { DealDetail, DealUpdateInput } from "@/modules/crm/contracts";
 
 import { updateDealAction } from "../actions";
+import { dealSourceLabel } from "../deal-source-labels";
 
 /**
  * 案件詳細ページの基本情報カード (Issue #96 設計 §C-左1): 顧客・会社・流入元・メモ + 編集。
@@ -124,7 +125,7 @@ export function DealOverviewCard({ deal }: { deal: DealDetail }) {
   }
 
   return (
-    <Surface className="flex flex-col gap-3 p-4">
+    <Surface data-help="deal-overview" className="flex flex-col gap-3 p-4">
       <h3 className="text-label font-bold text-admin-text-label">基本情報</h3>
 
       <p className="text-sm">
@@ -136,7 +137,7 @@ export function DealOverviewCard({ deal }: { deal: DealDetail }) {
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
         <dt className="text-muted-foreground">流入元</dt>
-        <dd>{deal.source}</dd>
+        <dd>{dealSourceLabel(deal.source)}</dd>
       </dl>
 
       {deal.notes && (
@@ -144,7 +145,7 @@ export function DealOverviewCard({ deal }: { deal: DealDetail }) {
       )}
 
       <div>
-        <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+        <Button data-help="deal-edit" type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>
           編集
         </Button>
       </div>

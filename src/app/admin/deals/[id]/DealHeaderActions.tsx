@@ -91,7 +91,9 @@ export function DealHeaderActions({ deal }: { deal: DealDetail }) {
     <>
       {!isTerminal && (
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>操作</DropdownMenuTrigger>
+          <DropdownMenuTrigger render={<Button data-help="deal-actions" type="button" variant="outline" size="sm" />}>
+            操作
+          </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {deal.stage !== "ordered" && (
               <DropdownMenuItem disabled={isOrdering} onClick={() => void handleOrder()}>
@@ -105,7 +107,7 @@ export function DealHeaderActions({ deal }: { deal: DealDetail }) {
         </DropdownMenu>
       )}
       {isTerminal && (
-        <Button type="button" variant="outline" size="sm" onClick={() => setReopenOpen(true)}>
+        <Button data-help="deal-reopen" type="button" variant="outline" size="sm" onClick={() => setReopenOpen(true)}>
           案件を再開…
         </Button>
       )}

@@ -1,0 +1,48 @@
+{
+  "width": 808,
+  "height": 608,
+  "boxes": {
+    "work-actionbar": {
+      "x": 20,
+      "y": 20,
+      "w": 768,
+      "h": 58
+    },
+    "work-save": {
+      "x": 693,
+      "y": 33,
+      "w": 78,
+      "h": 32
+    },
+    "work-title-field": {
+      "x": 20,
+      "y": 102,
+      "w": 768,
+      "h": 59
+    },
+    "work-slug-field": {
+      "x": 20,
+      "y": 181,
+      "w": 374,
+      "h": 88
+    },
+    "work-category-field": {
+      "x": 414,
+      "y": 181,
+      "w": 374,
+      "h": 88
+    },
+    "work-body-field": {
+      "x": 20,
+      "y": 290,
+      "w": 768,
+      "h": 219
+    },
+    "work-process-field": {
+      "x": 20,
+      "y": 529,
+      "w": 768,
+      "h": 59
+    }
+  }
+}

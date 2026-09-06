@@ -1,0 +1,42 @@
+{
+  "width": 1048,
+  "height": 503,
+  "boxes": {
+    "settings-tab-account": {
+      "x": 941,
+      "y": 24,
+      "w": 84,
+      "h": 25
+    },
+    "account-email": {
+      "x": 20,
+      "y": 108,
+      "w": 918,
+      "h": 20
+    },
+    "account-current-password": {
+      "x": 20,
+      "y": 209,
+      "w": 448,
+      "h": 59
+    },
+    "account-new-password": {
+      "x": 20,
+      "y": 288,
+      "w": 448,
+      "h": 59
+    },
+    "account-confirm-password": {
+      "x": 20,
+      "y": 368,
+      "w": 448,
+      "h": 59
+    },
+    "account-submit": {
+      "x": 20,
+      "y": 451,
+      "w": 134,
+      "h": 32
+    }
+  }
+}

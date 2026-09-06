@@ -63,7 +63,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         <div className="flex flex-col gap-6 lg:col-span-3">
           <DealOverviewCard deal={deal} />
 
-          <Surface className="flex flex-col gap-3 p-4">
+          <Surface data-help="deal-tasks" className="flex flex-col gap-3 p-4">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-label font-bold text-admin-text-label">
                 やること ({tasksResult.ok ? tasksResult.value.items.length : 0})
@@ -91,7 +91,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
           />
         </div>
 
-        <div className="flex flex-col gap-4 lg:col-span-2">
+        <div data-help="deal-timeline" className="flex flex-col gap-4 lg:col-span-2">
           <h3 className="text-label font-bold text-admin-text-label">タイムライン</h3>
           {!timelineResult.ok && (
             <p className="text-sm text-destructive">

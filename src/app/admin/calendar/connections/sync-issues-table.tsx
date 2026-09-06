@@ -42,6 +42,16 @@ function formatDateTime(iso: string | null): string {
 }
 
 /**
+ * ヘルプのスクリーンショット注釈 (data-help) 用の行キー。
+ * 行の並び順ではなく「状態 + エラー番号」で決まるため、データが増減しても
+ * ヘルプの注釈が別の行を指すことがない (docs/design/admin-help/README.md §5)。
+ */
+function helpRowKey(item: SyncIssueItem): string {
+  const suffix = item.last_error_code ? `-${item.last_error_code.toLowerCase()}` : "";
+  return `${item.sync_status}${suffix}`;
+}
+
+/**
  * /admin/calendar/connections の「同期の問題」表 + [今すぐ同期] (03-scheduling.md §10.4)。
  * 行アクションは (sync_status, last_error_code) の組み合わせで一意に決まる (§8.7/§9.2):
  *   deleted_externally → 3 択 (未配置に戻す/キャンセルする/作り直して再送)
@@ -93,12 +103,12 @@ export function SyncIssuesTable({ items }: { items: SyncIssueItem[] }) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Button type="button" size="sm" disabled={isPending} onClick={handleSyncNow}>
+        <Button type="button" size="sm" disabled={isPending} onClick={handleSyncNow} data-help="sync-now">
           今すぐ同期
         </Button>
       </div>
 
-      <Surface className="overflow-x-auto p-0">
+      <Surface className="overflow-x-auto p-0" data-help="sync-issues-table">
         <Table>
           <TableHeader>
             <TableRow>
@@ -119,15 +129,17 @@ export function SyncIssuesTable({ items }: { items: SyncIssueItem[] }) {
               </TableRow>
             )}
             {items.map((item) => (
-              <TableRow key={item.link_id}>
+              <TableRow key={item.link_id} data-help={`sync-issue-row-${helpRowKey(item)}`}>
                 <TableCell className="max-w-48 truncate">{item.block.title || item.block.work_type_label}</TableCell>
                 <TableCell>{PROVIDER_LABEL[item.provider] ?? item.provider}</TableCell>
                 <TableCell>
-                  <Badge variant={statusBadgeVariant(item.sync_status)}>{STATUS_LABEL[item.sync_status]}</Badge>
+                  <Badge variant={statusBadgeVariant(item.sync_status)} data-help={`sync-issue-status-${helpRowKey(item)}`}>
+                    {STATUS_LABEL[item.sync_status]}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">{item.last_error_code ?? "-"}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{formatDateTime(item.deleted_externally_at)}</TableCell>
-                <TableCell className="flex flex-wrap gap-2">
+                <TableCell className="flex flex-wrap gap-2" data-help={`sync-issue-actions-${helpRowKey(item)}`}>
                   {item.sync_status === "deleted_externally" && (
                     <>
                       <Button

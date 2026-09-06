@@ -53,7 +53,7 @@ export function CustomersTable({ items }: { items: CustomerListItem[] }) {
   }
 
   return (
-    <DataTableShell>
+    <DataTableShell data-help="customer-table">
       <DataTableHeaderRow
         columns={["名前", "連絡先", "会社", "状態", "進行中案件", "登録日"]}
         gridClassName={GRID_COLS}
@@ -68,6 +68,7 @@ export function CustomersTable({ items }: { items: CustomerListItem[] }) {
         {items.map((item, index) => (
           <div
             key={item.id}
+            data-help={index === 0 ? "customer-row-first" : undefined}
             role="option"
             aria-selected={index === focusedIndex}
             onClick={() => router.push(`/admin/customers/${item.id}`)}

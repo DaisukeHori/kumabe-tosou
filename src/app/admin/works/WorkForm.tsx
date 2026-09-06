@@ -227,12 +227,17 @@ export function WorkForm({
           (下書き→レビュー→公開→アーカイブ) + 予約公開 datetime を保持したまま、保存ボタンを
           上部に集約する。保存ボタンは form の外にあるため form={FORM_ID} で関連付ける
           (action・バリデーションは不変)。 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card px-4 py-3 shadow-surface">
+      <div
+        data-help="work-actionbar"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card px-4 py-3 shadow-surface"
+      >
         <div className="flex items-center gap-2 text-sm">
           {mode === "edit" ? (
             <>
               <span className="text-muted-foreground">状態</span>
-              <ContentStatusBadge status={currentStatus} />
+              <span data-help="work-status">
+                <ContentStatusBadge status={currentStatus} />
+              </span>
             </>
           ) : (
             <span className="text-muted-foreground">新しい施工事例を作成します。</span>
@@ -247,6 +252,7 @@ export function WorkForm({
                     type="datetime-local"
                     value={reservedPublishedAt}
                     onChange={(e) => setReservedPublishedAt(e.target.value)}
+                    data-help="work-schedule"
                     className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs"
                     aria-label="予約公開日時 (任意、未指定は即時公開)"
                   />
@@ -255,6 +261,7 @@ export function WorkForm({
                   type="button"
                   variant="outline"
                   size="sm"
+                  data-help={`work-transition-${to}`}
                   disabled={isPending}
                   onClick={() => onTransition(to)}
                 >
@@ -262,7 +269,7 @@ export function WorkForm({
                 </Button>
               </span>
             ))}
-          <Button type="submit" form={FORM_ID} disabled={isPending}>
+          <Button type="submit" form={FORM_ID} data-help="work-save" disabled={isPending}>
             {mode === "create" ? "作成する" : "保存する (Cmd/Ctrl+S)"}
           </Button>
         </div>
@@ -274,41 +281,41 @@ export function WorkForm({
         </div>
       )}
       {notice && (
-        <div role="status" className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+        <div data-help="work-notice" role="status" className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
           {notice}
         </div>
       )}
 
       <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
         <FieldGroup>
-          <Field data-invalid={!!errors.title}>
+          <Field data-help="work-title-field" data-invalid={!!errors.title}>
             <FieldLabel htmlFor="work-title">タイトル</FieldLabel>
             <Input id="work-title" aria-invalid={!!errors.title} {...register("title")} />
             <FieldError errors={errors.title ? [errors.title] : undefined} />
           </Field>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field data-invalid={!!errors.slug}>
+            <Field data-help="work-slug-field" data-invalid={!!errors.slug}>
               <FieldLabel htmlFor="work-slug">slug</FieldLabel>
               <Input id="work-slug" aria-invalid={!!errors.slug} {...register("slug")} />
               <FieldDescription>小文字英数とハイフンのみ (例: work-07)</FieldDescription>
               <FieldError errors={errors.slug ? [errors.slug] : undefined} />
             </Field>
 
-            <Field data-invalid={!!errors.category}>
+            <Field data-help="work-category-field" data-invalid={!!errors.category}>
               <FieldLabel htmlFor="work-category">カテゴリ</FieldLabel>
               <Input id="work-category" aria-invalid={!!errors.category} {...register("category")} />
               <FieldError errors={errors.category ? [errors.category] : undefined} />
             </Field>
           </div>
 
-          <Field data-invalid={!!errors.body}>
+          <Field data-help="work-body-field" data-invalid={!!errors.body}>
             <FieldLabel htmlFor="work-body">本文 (Markdown)</FieldLabel>
             <Textarea id="work-body" className="min-h-48" aria-invalid={!!errors.body} {...register("body")} />
             <FieldError errors={errors.body ? [errors.body] : undefined} />
           </Field>
 
-          <Field data-invalid={!!errors.process_note}>
+          <Field data-help="work-process-field" data-invalid={!!errors.process_note}>
             <FieldLabel htmlFor="work-process-note">工程 (1行、任意)</FieldLabel>
             <Input
               id="work-process-note"
@@ -322,7 +329,7 @@ export function WorkForm({
           </Field>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field data-invalid={!!errors.cover_media_id}>
+            <Field data-help="work-cover-field" data-invalid={!!errors.cover_media_id}>
               <FieldLabel>カバー画像 (任意)</FieldLabel>
               <div className="flex items-center gap-3">
                 {coverItem ? (
@@ -338,7 +345,7 @@ export function WorkForm({
                   </div>
                 )}
                 <div className="flex flex-col gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setCoverPickerOpen(true)}>
+                  <Button type="button" variant="outline" size="sm" data-help="work-cover-pick" onClick={() => setCoverPickerOpen(true)}>
                     画像を選択
                   </Button>
                   {coverMediaId && (
@@ -357,7 +364,7 @@ export function WorkForm({
               <FieldError errors={errors.cover_media_id ? [errors.cover_media_id] : undefined} />
             </Field>
 
-            <Field data-invalid={!!errors.sort_order}>
+            <Field data-help="work-sort-field" data-invalid={!!errors.sort_order}>
               <FieldLabel htmlFor="work-sort-order">表示順 (小さいほど先頭)</FieldLabel>
               <Input
                 id="work-sort-order"
@@ -370,10 +377,10 @@ export function WorkForm({
             </Field>
           </div>
 
-          <Field>
+          <Field data-help="work-images-field">
             <FieldLabel>添付画像 (ドラッグ&ドロップ or ↑↓ で並べ替え)</FieldLabel>
             <div>
-              <Button type="button" variant="outline" onClick={() => setAttachPickerOpen(true)}>
+              <Button type="button" variant="outline" data-help="work-images-pick" onClick={() => setAttachPickerOpen(true)}>
                 画像を選択して追加
               </Button>
             </div>

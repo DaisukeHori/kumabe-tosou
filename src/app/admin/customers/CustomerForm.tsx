@@ -203,12 +203,12 @@ export function CustomerForm() {
         </div>
       )}
 
-      <Surface className="p-5">
+      <Surface data-help="customer-form" className="p-5">
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
         <FieldGroup>
           <Field>
             <FieldLabel>種別</FieldLabel>
-            <div className="flex gap-2">
+            <div data-help="customer-kind" className="flex gap-2">
               <Button
                 type="button"
                 variant={kind === "person" ? "default" : "outline"}
@@ -230,7 +230,12 @@ export function CustomerForm() {
 
           <Field data-invalid={!!errors.name}>
             <FieldLabel htmlFor="customer-name">名前</FieldLabel>
-            <Input id="customer-name" aria-invalid={!!errors.name} {...register("name")} />
+            <Input
+              data-help="customer-field-name"
+              id="customer-name"
+              aria-invalid={!!errors.name}
+              {...register("name")}
+            />
             <FieldError errors={errors.name ? [errors.name] : undefined} />
           </Field>
 
@@ -245,6 +250,7 @@ export function CustomerForm() {
             <Field data-invalid={!!errors.email}>
               <FieldLabel htmlFor="customer-email">メールアドレス</FieldLabel>
               <Input
+                data-help="customer-field-email"
                 id="customer-email"
                 type="email"
                 aria-invalid={!!errors.email}
@@ -258,6 +264,7 @@ export function CustomerForm() {
             <Field>
               <FieldLabel htmlFor="customer-tel">電話番号</FieldLabel>
               <Input
+                data-help="customer-field-tel"
                 id="customer-tel"
                 placeholder="090-1234-5678"
                 {...register("tel_raw", { setValueAs: (v: string) => (v === "" ? null : v) })}
@@ -267,6 +274,7 @@ export function CustomerForm() {
             <Field>
               <FieldLabel htmlFor="customer-source">流入元</FieldLabel>
               <select
+                data-help="customer-field-source"
                 id="customer-source"
                 className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-control"
                 {...register("source")}
@@ -283,17 +291,19 @@ export function CustomerForm() {
           {kind === "company_contact" && (
             <Field>
               <FieldLabel>会社</FieldLabel>
-              <EntityPicker
-                value={companyItem}
-                onChange={(item) => {
-                  setCompanyItem(item);
-                  setValue("company_id", item?.id ?? null);
-                }}
-                search={searchCompaniesAction}
-                placeholder="会社を検索"
-                onCreate={() => setCreateCompanyOpen(true)}
-                createLabel="新しい会社を作る"
-              />
+              <div data-help="customer-field-company">
+                <EntityPicker
+                  value={companyItem}
+                  onChange={(item) => {
+                    setCompanyItem(item);
+                    setValue("company_id", item?.id ?? null);
+                  }}
+                  search={searchCompaniesAction}
+                  placeholder="会社を検索"
+                  onCreate={() => setCreateCompanyOpen(true)}
+                  createLabel="新しい会社を作る"
+                />
+              </div>
             </Field>
           )}
 
@@ -308,6 +318,7 @@ export function CustomerForm() {
           <Field>
             <FieldLabel htmlFor="customer-lifecycle">状態</FieldLabel>
             <select
+              data-help="customer-field-lifecycle"
               id="customer-lifecycle"
               className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-control"
               {...register("lifecycle")}
@@ -326,7 +337,7 @@ export function CustomerForm() {
           </Field>
         </FieldGroup>
 
-        <Button type="submit" disabled={isPending}>
+        <Button data-help="customer-submit" type="submit" disabled={isPending}>
           {isPending ? "作成中..." : "作成する (Cmd/Ctrl+S)"}
         </Button>
         </form>
@@ -343,14 +354,17 @@ export function CustomerForm() {
       />
 
       <Dialog open={!!duplicateCandidates} onOpenChange={(open) => !open && setDuplicateCandidates(null)}>
-        <DialogContent>
+        <DialogContent data-help="customer-duplicate-dialog">
           <DialogHeader>
             <DialogTitle>似ている顧客がいます</DialogTitle>
             <DialogDescription>
-              email/電話が一致する既存の顧客が見つかりました。既存を開くか、それでも新規作成してください。
+              メールまたは電話番号が同じお客様が、すでに登録されています。既存を開くか、それでも新規作成してください。
             </DialogDescription>
           </DialogHeader>
-          <ul className="flex flex-col divide-y divide-admin-divider rounded-lg border border-border">
+          <ul
+            data-help="customer-duplicate-list"
+            className="flex flex-col divide-y divide-admin-divider rounded-lg border border-border"
+          >
             {duplicateCandidates?.map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2 text-label">
                 <span className="truncate">{c.name}</span>
@@ -374,10 +388,16 @@ export function CustomerForm() {
             ))}
           </ul>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setDuplicateCandidates(null)}>
+            <Button
+              data-help="customer-duplicate-back"
+              type="button"
+              variant="outline"
+              onClick={() => setDuplicateCandidates(null)}
+            >
               編集に戻る (Esc)
             </Button>
             <Button
+              data-help="customer-duplicate-force"
               type="button"
               variant="destructive"
               disabled={isPending}

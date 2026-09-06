@@ -46,7 +46,12 @@ export default async function AdminTasksPage({
           title="やること"
           description="←→ で列移動、↑↓ でカード移動、Shift+←/→ で期日移動、Enter で編集です。"
           actions={
-            <Button variant="outline" size="sm" render={<Link href="/admin/tasks" />}>
+            <Button
+              data-help="task-list-link"
+              variant="outline"
+              size="sm"
+              render={<Link href="/admin/tasks" />}
+            >
               リスト表示
             </Button>
           }
@@ -87,7 +92,12 @@ export default async function AdminTasksPage({
         description="やることをメモして、チェックで完了にできます。案件・顧客に紐づけると、その詳細画面にも表示されます。"
         actions={
           status === "open" ? (
-            <Button variant="outline" size="sm" render={<Link href="/admin/tasks?view=kanban" />}>
+            <Button
+              data-help="task-kanban-link"
+              variant="outline"
+              size="sm"
+              render={<Link href="/admin/tasks?view=kanban" />}
+            >
               カンバン表示
             </Button>
           ) : undefined
@@ -96,7 +106,9 @@ export default async function AdminTasksPage({
 
       <TasksQuickAdd />
 
-      <PillToggle items={filterItems} ariaLabel="ステータスで絞り込み" />
+      <div data-help="task-filters">
+        <PillToggle items={filterItems} ariaLabel="ステータスで絞り込み" />
+      </div>
 
       {!result.ok && (
         <p className="text-sm text-destructive">
@@ -107,7 +119,7 @@ export default async function AdminTasksPage({
       {result.ok && status === "open" && (
         <div className="flex flex-col gap-6">
           {groupOpenTasks(result.value.items).map((group) => (
-            <div key={group.key} className="flex flex-col gap-2">
+            <div key={group.key} data-help={`task-group-${group.key}`} className="flex flex-col gap-2">
               <h3
                 className={cn(
                   "text-table font-bold",

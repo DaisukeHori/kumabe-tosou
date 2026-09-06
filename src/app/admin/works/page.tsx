@@ -65,6 +65,7 @@ export default async function WorksListPage({
         actions={
           <Link
             href="/admin/works/new"
+            data-help="work-new"
             className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80"
           >
             新規作成
@@ -77,12 +78,14 @@ export default async function WorksListPage({
         <input
           type="text"
           name="q"
+          data-help="work-search"
           defaultValue={params.q ?? ""}
           placeholder="タイトル・slug・カテゴリで検索"
           className="h-8 w-64 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         <select
           name="status"
+          data-help="work-status-filter"
           defaultValue={params.status ?? ""}
           className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
         >

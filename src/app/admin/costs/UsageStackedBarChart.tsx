@@ -22,6 +22,7 @@ export function UsageStackedBarChart({ data }: { data: StackedBarInput[] }) {
         role="img"
         aria-label="日別のプロバイダ別 AI 利用料金 (直近30日)"
         className="h-40 w-full"
+        data-help="cost-chart-graph"
       >
         {layout.bars.map((bar) =>
           bar.segments.map((seg) =>
@@ -42,7 +43,7 @@ export function UsageStackedBarChart({ data }: { data: StackedBarInput[] }) {
           ),
         )}
       </svg>
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground" data-help="cost-chart-legend">
         {PROVIDERS.map((provider) => (
           <span key={provider} className="inline-flex items-center gap-1.5">
             <span className={`inline-block size-2.5 rounded-full ${PROVIDER_SWATCH_CLASS[provider]}`} />

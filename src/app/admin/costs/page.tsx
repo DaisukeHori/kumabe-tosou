@@ -84,8 +84,8 @@ export default async function AdminCostsPage({
         </p>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Surface className="flex flex-col gap-4 p-6">
+      <div className="grid gap-4 sm:grid-cols-2" data-help="cost-summary">
+        <Surface className="flex flex-col gap-4 p-6" data-help="cost-total">
           <div>
             <p className="text-sm text-muted-foreground">今月の合計</p>
             <p className="font-heading text-3xl font-semibold text-foreground">
@@ -93,18 +93,22 @@ export default async function AdminCostsPage({
             </p>
           </div>
           {budget ? (
-            <BudgetProgressBar
-              label="月次予算"
-              usedLabel={formatUsd(costUsed)}
-              limitLabel={formatUsd(costLimit)}
-              ratio={costLimit > 0 ? costUsed / costLimit : 0}
-            />
+            // -mt-3/pt-3 は見た目を変えずに枠の上端だけを 12px 上げるための調整
+            // (ヘルプの番号バッジが枠の左上角に重なるため、ラベル文字にかぶらないようにする)。
+            <div data-help="cost-budget-bar" className="-mt-3 pt-3">
+              <BudgetProgressBar
+                label="月次予算"
+                usedLabel={formatUsd(costUsed)}
+                limitLabel={formatUsd(costLimit)}
+                ratio={costLimit > 0 ? costUsed / costLimit : 0}
+              />
+            </div>
           ) : (
             <p className="text-xs text-muted-foreground">予算情報を取得できませんでした。</p>
           )}
         </Surface>
 
-        <Surface className="flex flex-col gap-4 p-6">
+        <Surface className="flex flex-col gap-4 p-6" data-help="cost-images">
           <div>
             <p className="text-sm text-muted-foreground">画像生成枚数 (今月)</p>
             <p className="font-heading text-3xl font-semibold text-foreground">
@@ -113,33 +117,38 @@ export default async function AdminCostsPage({
             </p>
           </div>
           {budget && (
-            <BudgetProgressBar
-              label="画像生成上限"
-              usedLabel={`${imagesUsed} 枚`}
-              limitLabel={`${imagesLimit} 枚`}
-              ratio={imagesLimit > 0 ? imagesUsed / imagesLimit : 0}
-            />
+            // -mt-3/pt-3 の意図は上の月次予算バーと同じ (番号バッジがラベルにかぶらないようにする)。
+            <div data-help="cost-image-bar" className="-mt-3 pt-3">
+              <BudgetProgressBar
+                label="画像生成上限"
+                usedLabel={`${imagesUsed} 枚`}
+                limitLabel={`${imagesLimit} 枚`}
+                ratio={imagesLimit > 0 ? imagesUsed / imagesLimit : 0}
+              />
+            </div>
           )}
         </Surface>
       </div>
 
-      <Surface className="flex flex-col gap-4 p-6">
+      <Surface className="flex flex-col gap-4 p-6" data-help="cost-chart">
         <p className="text-sm font-medium text-foreground">日別の利用料金 (直近30日、プロバイダ別)</p>
         <UsageStackedBarChart data={chartData} />
       </Surface>
 
-      <PillToggle
-        ariaLabel="集計期間"
-        items={PERIOD_OPTIONS.map((opt) => ({
-          key: opt.key,
-          label: opt.label,
-          href: `/admin/costs?period=${opt.key}`,
-          active: period === opt.key,
-        }))}
-      />
+      <div data-help="cost-period">
+        <PillToggle
+          ariaLabel="集計期間"
+          items={PERIOD_OPTIONS.map((opt) => ({
+            key: opt.key,
+            label: opt.label,
+            href: `/admin/costs?period=${opt.key}`,
+            active: period === opt.key,
+          }))}
+        />
+      </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Surface className="overflow-hidden p-0">
+      <div className="grid gap-4 lg:grid-cols-3" data-help="cost-breakdown">
+        <Surface className="overflow-hidden p-0" data-help="cost-by-model">
           <p className="border-b border-border px-4 py-3 text-sm font-medium text-foreground">モデル別</p>
           <Table>
             <TableHeader>
@@ -173,7 +182,7 @@ export default async function AdminCostsPage({
           </Table>
         </Surface>
 
-        <Surface className="overflow-hidden p-0">
+        <Surface className="overflow-hidden p-0" data-help="cost-by-key">
           <p className="border-b border-border px-4 py-3 text-sm font-medium text-foreground">キー別</p>
           <Table>
             <TableHeader>
@@ -200,7 +209,7 @@ export default async function AdminCostsPage({
           </Table>
         </Surface>
 
-        <Surface className="overflow-hidden p-0">
+        <Surface className="overflow-hidden p-0" data-help="cost-by-feature">
           <p className="border-b border-border px-4 py-3 text-sm font-medium text-foreground">feature別</p>
           <Table>
             <TableHeader>

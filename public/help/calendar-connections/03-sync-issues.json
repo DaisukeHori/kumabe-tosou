@@ -1,0 +1,42 @@
+{
+  "width": 1016,
+  "height": 346,
+  "boxes": {
+    "sync-now": {
+      "x": 24,
+      "y": 76,
+      "w": 86,
+      "h": 28
+    },
+    "sync-issues-table": {
+      "x": 24,
+      "y": 116,
+      "w": 968,
+      "h": 206
+    },
+    "sync-issue-row-deleted_externally": {
+      "x": 25,
+      "y": 157,
+      "w": 966,
+      "h": 41
+    },
+    "sync-issue-row-conflict-kmb-e724": {
+      "x": 25,
+      "y": 198,
+      "w": 966,
+      "h": 41
+    },
+    "sync-issue-row-conflict-kmb-e723": {
+      "x": 25,
+      "y": 239,
+      "w": 966,
+      "h": 41
+    },
+    "sync-issue-row-orphaned": {
+      "x": 25,
+      "y": 280,
+      "w": 966,
+      "h": 41
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "width": 1008,
+  "height": 644,
+  "boxes": {
+    "style-profiles": {
+      "x": 20,
+      "y": 20,
+      "w": 968,
+      "h": 604
+    },
+    "style-tabs": {
+      "x": 37,
+      "y": 93,
+      "w": 278,
+      "h": 32
+    },
+    "style-tone-site-blog": {
+      "x": 37,
+      "y": 176,
+      "w": 672,
+      "h": 96
+    },
+    "style-format-site-blog": {
+      "x": 37,
+      "y": 320,
+      "w": 672,
+      "h": 96
+    }
+  }
+}

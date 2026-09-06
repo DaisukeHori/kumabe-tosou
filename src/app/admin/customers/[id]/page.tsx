@@ -58,7 +58,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         <div className="flex flex-col gap-6">
           <CustomerProfileCard customer={customer} />
 
-          <Surface className="flex flex-col gap-2 p-4">
+          <Surface data-help="customer-deals" className="flex flex-col gap-2 p-4">
             <h3 className="text-label font-bold text-foreground">進行中の案件</h3>
             {!dealsResult.ok && (
               <p className="text-label text-destructive">
@@ -93,7 +93,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             </Link>
           </Surface>
 
-          <Surface className="flex flex-col gap-2 p-4">
+          <Surface data-help="customer-tasks" className="flex flex-col gap-2 p-4">
             <h3 className="text-label font-bold text-foreground">やること</h3>
             {!tasksResult.ok && (
               <p className="text-label text-destructive">
@@ -104,7 +104,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           </Surface>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div data-help="customer-timeline" className="flex flex-col gap-4">
           <h3 className="text-label font-bold text-foreground">タイムライン</h3>
           {!timelineResult.ok && (
             <p className="text-label text-destructive">

@@ -125,12 +125,15 @@ const LIFECYCLE_OPTIONS: { value: CustomerLifecycle; label: string }[] = [
  */
 function AddressBlockSection({
   title,
+  helpKey,
   block,
   onChange,
   showSuffix,
   basic,
 }: {
   title: string;
+  /** ヘルプのスクリーンショット注釈用の目印 (docs/design/admin-help/README.md §5)。 */
+  helpKey: string;
   block: AddressBlockFormInput | null;
   onChange: (next: AddressBlockFormInput | null) => void;
   showSuffix: boolean;
@@ -199,7 +202,7 @@ function AddressBlockSection({
   }
 
   return (
-    <Field>
+    <Field data-help={helpKey}>
       <div className="flex items-center justify-between">
         <FieldLabel>{title}</FieldLabel>
         <Button type="button" variant="ghost" size="sm" onClick={copyFromBasic}>
@@ -370,7 +373,10 @@ export function CustomerEditSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       {/* [#121 R3b] 右スライド 420px (mock 準拠) + --shadow-sheet。data-[side=right]:sm:max-w-[90%]
           は Sheet 既定の sm:max-w-sm (=384px) を上書きして 420px を確保するため。 */}
-      <SheetContent className="w-[420px] max-w-[90%] overflow-y-auto shadow-sheet data-[side=right]:sm:max-w-[90%]">
+      <SheetContent
+        data-help="customer-edit-sheet"
+        className="w-[420px] max-w-[90%] overflow-y-auto shadow-sheet data-[side=right]:sm:max-w-[90%]"
+      >
         <SheetHeader>
           <SheetTitle>顧客を編集</SheetTitle>
           <SheetDescription>Cmd+S で保存、Esc で閉じます。</SheetDescription>
@@ -440,6 +446,7 @@ export function CustomerEditSheet({
 
             <AddressBlockSection
               title="請求先"
+              helpKey="customer-billing"
               block={form.billing_info}
               onChange={(next) => setForm((f) => ({ ...f, billing_info: next }))}
               showSuffix
@@ -447,6 +454,7 @@ export function CustomerEditSheet({
             />
             <AddressBlockSection
               title="配送先 (施工先)"
+              helpKey="customer-shipping"
               block={form.shipping_info}
               onChange={(next) => setForm((f) => ({ ...f, shipping_info: next }))}
               showSuffix={false}
@@ -471,7 +479,7 @@ export function CustomerEditSheet({
               <FieldLabel>メモ</FieldLabel>
               <Textarea value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value || null })} />
             </Field>
-            <Field>
+            <Field data-help="customer-custom-fields">
               <div className="flex items-center justify-between">
                 <FieldLabel>追加情報</FieldLabel>
                 <Button
@@ -525,7 +533,12 @@ export function CustomerEditSheet({
             </Field>
           </FieldGroup>
           <div className="flex gap-2">
-            <Button type="button" disabled={isSaving} onClick={() => void handleSave()}>
+            <Button
+              data-help="customer-edit-save"
+              type="button"
+              disabled={isSaving}
+              onClick={() => void handleSave()}
+            >
               {isSaving ? "保存中..." : "保存 (Cmd+S)"}
             </Button>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

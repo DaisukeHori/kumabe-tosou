@@ -35,10 +35,10 @@ export function DealStageSummary({ deal }: { deal: DealDetail }) {
     deal.stage !== "lost";
 
   return (
-    <Surface className="flex flex-col gap-3 p-4">
+    <Surface data-help="deal-stage-summary" className="flex flex-col gap-3 p-4">
       <DealStageBar deal={deal} />
 
-      <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+      <dl data-help="deal-stage-stats" className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
         <div>
           <dt className="text-meta text-admin-text-meta">金額</dt>
           <dd className="font-medium">{deal.amount_jpy !== null ? `¥${jpy.format(deal.amount_jpy)}` : "—"}</dd>

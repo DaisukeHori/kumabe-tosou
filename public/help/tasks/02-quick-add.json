@@ -1,0 +1,36 @@
+{
+  "width": 1016,
+  "height": 80,
+  "boxes": {
+    "task-quick-add": {
+      "x": 24,
+      "y": 24,
+      "w": 968,
+      "h": 32
+    },
+    "task-title-input": {
+      "x": 24,
+      "y": 24,
+      "w": 542,
+      "h": 32
+    },
+    "task-due-input": {
+      "x": 574,
+      "y": 24,
+      "w": 160,
+      "h": 32
+    },
+    "task-deal-picker": {
+      "x": 742,
+      "y": 24,
+      "w": 192,
+      "h": 32
+    },
+    "task-add-button": {
+      "x": 942,
+      "y": 24,
+      "w": 50,
+      "h": 32
+    }
+  }
+}

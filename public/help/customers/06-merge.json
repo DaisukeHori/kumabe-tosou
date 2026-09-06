@@ -1,0 +1,30 @@
+{
+  "width": 440,
+  "height": 305,
+  "boxes": {
+    "customer-merge-dialog": {
+      "x": 28,
+      "y": 28,
+      "w": 384,
+      "h": 249
+    },
+    "customer-merge-warning": {
+      "x": 44,
+      "y": 68,
+      "w": 352,
+      "h": 80
+    },
+    "customer-merge-picker": {
+      "x": 44,
+      "y": 164,
+      "w": 352,
+      "h": 32
+    },
+    "customer-merge-submit": {
+      "x": 318,
+      "y": 229,
+      "w": 78,
+      "h": 32
+    }
+  }
+}

@@ -1,5 +1,8 @@
 export { Surface, DataTableShell } from "./surface";
 export { PageHeader } from "./page-header";
+// 管理画面ヘルプの入口 (docs/design/admin-help/README.md §2)。PageHeader が自動で置くため、
+// 個別に使うのは PageHeader を使わないページ (/admin/documents/[id]) だけ。
+export { HelpButton } from "./help-button";
 export { DataTableHeaderRow, dataTableRowClassName } from "./data-table";
 export { ContentStatusBadge } from "./status-badge";
 // [#418 fix] timestamptz の JST 決定的整形 (SSR/クライアントで一致させ hydration mismatch を防ぐ)

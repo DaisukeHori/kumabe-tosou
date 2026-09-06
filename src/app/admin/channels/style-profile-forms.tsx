@@ -25,13 +25,13 @@ const CHANNELS: Channel[] = ["site_blog", "note", "x", "instagram"];
 
 export function StyleProfileForms({ data }: { data: Record<Channel, StyleProfileView | null> }) {
   return (
-    <Surface className="p-4">
+    <Surface className="p-4" data-help="style-profiles">
       <h2 className="font-heading text-sm font-semibold">チャネル別文体プロファイル</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        AI 生成時のプロンプトに注入される文体指示・構成ルールです (設計書 §7.4)。
+        投稿先ごとの言葉づかい・構成の決まりです。文章を作るときの指示として使われます。
       </p>
       <Tabs defaultValue="site_blog" className="mt-4">
-        <TabsList variant="line">
+        <TabsList variant="line" data-help="style-tabs">
           {CHANNELS.map((c) => (
             <TabsTrigger key={c} value={c}>
               {CHANNEL_LABELS[c]}
@@ -60,9 +60,10 @@ function StyleProfileForm({ channel, profile }: { channel: Channel; profile: Sty
     <form action={action} className="max-w-2xl">
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor={`${channel}-tone`}>文体指示 (tone_instructions)</FieldLabel>
+          <FieldLabel htmlFor={`${channel}-tone`}>文体指示</FieldLabel>
           <Textarea
             id={`${channel}-tone`}
+            data-help={`style-tone-${channel.replace("_", "-")}`}
             name="tone_instructions"
             defaultValue={profile?.tone_instructions ?? ""}
             required
@@ -71,9 +72,10 @@ function StyleProfileForm({ channel, profile }: { channel: Channel; profile: Sty
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${channel}-format`}>構成ルール (format_rules)</FieldLabel>
+          <FieldLabel htmlFor={`${channel}-format`}>構成ルール</FieldLabel>
           <Textarea
             id={`${channel}-format`}
+            data-help={`style-format-${channel.replace("_", "-")}`}
             name="format_rules"
             defaultValue={profile?.format_rules ?? ""}
             required
@@ -83,7 +85,7 @@ function StyleProfileForm({ channel, profile }: { channel: Channel; profile: Sty
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={`${channel}-example`}>お手本出力 (example_output、任意)</FieldLabel>
+          <FieldLabel htmlFor={`${channel}-example`}>お手本出力 (任意)</FieldLabel>
           <Textarea
             id={`${channel}-example`}
             name="example_output"

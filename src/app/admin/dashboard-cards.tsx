@@ -29,6 +29,9 @@ const ACTION_TONE_BORDER: Record<DashboardActionTone, string> = {
 export function ActionCard({ item, index }: { item: DashboardActionItem; index: number }) {
   return (
     <Surface
+      // data-help: ヘルプ用スクリーンショットの注釈座標を取るための目印
+      // (docs/design/admin-help/README.md §5。見た目には影響しない)。
+      data-help={`action-card-${index}`}
       className={cn(
         "flex flex-col gap-4 border-l-4 p-5 sm:flex-row sm:items-center",
         ACTION_TONE_BORDER[item.tone],
@@ -73,6 +76,7 @@ export function KpiTile({
   hint,
   badge,
   urgentValue = false,
+  helpKey,
 }: {
   label: string;
   value: ReactNode;
@@ -80,9 +84,12 @@ export function KpiTile({
   hint?: ReactNode;
   badge?: { text: ReactNode; variant: BadgeVariant };
   urgentValue?: boolean;
+  /** ヘルプのスクリーンショット注釈用の目印 (data-help)。見た目には影響しない。 */
+  helpKey?: string;
 }) {
   const body = (
     <Surface
+      data-help={href ? undefined : helpKey}
       className={cn(
         "flex h-full flex-col gap-1 p-4",
         href && "transition-colors hover:bg-muted",
@@ -100,7 +107,7 @@ export function KpiTile({
   );
 
   return href ? (
-    <Link href={href} className="block h-full">
+    <Link href={href} data-help={helpKey} className="block h-full">
       {body}
     </Link>
   ) : (
@@ -109,9 +116,18 @@ export function KpiTile({
 }
 
 /** KPI グリッドの小見出し + 4/3 カラムのグリッド枠。 */
-export function KpiSection({ title, children }: { title: string; children: ReactNode }) {
+export function KpiSection({
+  title,
+  children,
+  helpKey,
+}: {
+  title: string;
+  children: ReactNode;
+  /** ヘルプのスクリーンショット注釈用の目印 (data-help)。見た目には影響しない。 */
+  helpKey?: string;
+}) {
   return (
-    <section className="flex flex-col gap-2">
+    <section data-help={helpKey} className="flex flex-col gap-2">
       <h2 className="text-meta font-semibold tracking-wide text-admin-text-meta">{title}</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
     </section>

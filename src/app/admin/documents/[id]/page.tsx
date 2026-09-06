@@ -6,6 +6,8 @@ import { createSalesFacade } from "@/modules/sales/facade";
 import type { DocumentListItem } from "@/modules/sales/contracts";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
 
+import { HelpButton } from "@/app/admin/_ui";
+
 import { DocumentDetailView, type Lineage } from "./document-detail";
 import { DocumentEditor } from "./document-editor";
 import type { WorkTypeHintOption } from "./line-editor-shared";
@@ -49,6 +51,22 @@ async function resolveSimulatorReference(dealId: string): Promise<SimulatorRefer
   if (!item || item.payload_error || !item.payload) return null;
   const payload = item.payload as { estimate: SimulatorReferenceData["estimate"]; price_note: string | null };
   return { estimate: payload.estimate, price_note: payload.price_note };
+}
+
+/**
+ * この画面は PageHeader を使わない (帳票のヘッダーは Surface 内に手書き) ため、
+ * ヘルプの ? ボタンだけをここで右上に置く (docs/design/admin-help/README.md §2)。
+ * page.tsx は default 以外の React 部品を export できないので、ローカル関数にとどめる。
+ */
+function DocumentPageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex justify-end">
+        <HelpButton />
+      </div>
+      {children}
+    </div>
+  );
 }
 
 /**
@@ -96,12 +114,14 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
       ? workTypesResult.value.map((wt) => ({ key: wt.key, label: wt.label }))
       : null;
     return (
-      <DocumentEditor
-        detail={detail}
-        dealId={detail.document.deal_id}
-        simulatorReference={simulatorReference}
-        workTypeOptions={workTypeOptions}
-      />
+      <DocumentPageShell>
+        <DocumentEditor
+          detail={detail}
+          dealId={detail.document.deal_id}
+          simulatorReference={simulatorReference}
+          workTypeOptions={workTypeOptions}
+        />
+      </DocumentPageShell>
     );
   }
 
@@ -121,14 +141,16 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
   const defaultRecipient = customerRef.ok ? customerRef.value.email : null;
 
   return (
-    <DocumentDetailView
-      detail={detail}
-      dealTitle={dealRef.value.title}
-      dealId={detail.document.deal_id}
-      dealUpdatedAt={dealRef.value.updated_at}
-      lineage={lineage}
-      defaultRecipient={defaultRecipient}
-      customerId={dealRef.value.customer.customer_id}
-    />
+    <DocumentPageShell>
+      <DocumentDetailView
+        detail={detail}
+        dealTitle={dealRef.value.title}
+        dealId={detail.document.deal_id}
+        dealUpdatedAt={dealRef.value.updated_at}
+        lineage={lineage}
+        defaultRecipient={defaultRecipient}
+        customerId={dealRef.value.customer.customer_id}
+      />
+    </DocumentPageShell>
   );
 }

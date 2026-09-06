@@ -1,0 +1,24 @@
+{
+  "width": 808,
+  "height": 268,
+  "boxes": {
+    "post-body-field": {
+      "x": 20,
+      "y": 20,
+      "w": 768,
+      "h": 228
+    },
+    "post-preview-toggle": {
+      "x": 664,
+      "y": 20,
+      "w": 124,
+      "h": 24
+    },
+    "post-preview": {
+      "x": 20,
+      "y": 56,
+      "w": 768,
+      "h": 192
+    }
+  }
+}

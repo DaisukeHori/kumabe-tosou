@@ -1,0 +1,48 @@
+{
+  "width": 1008,
+  "height": 457,
+  "boxes": {
+    "queue-filter": {
+      "x": 20,
+      "y": 76,
+      "w": 593,
+      "h": 32
+    },
+    "queue-table": {
+      "x": 20,
+      "y": 124,
+      "w": 968,
+      "h": 314
+    },
+    "queue-status-manual_required": {
+      "x": 249,
+      "y": 274,
+      "w": 78,
+      "h": 20
+    },
+    "queue-error": {
+      "x": 445,
+      "y": 320,
+      "w": 73,
+      "h": 41
+    },
+    "queue-retry": {
+      "x": 526,
+      "y": 328,
+      "w": 54,
+      "h": 24
+    },
+    "queue-mark-published": {
+      "x": 767,
+      "y": 255,
+      "w": 102,
+      "h": 24
+    },
+    "queue-note-copy": {
+      "x": 664,
+      "y": 255,
+      "w": 95,
+      "h": 24
+    }
+  }
+}

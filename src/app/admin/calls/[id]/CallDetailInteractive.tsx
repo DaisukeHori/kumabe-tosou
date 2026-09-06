@@ -76,6 +76,7 @@ function AudioPlayerRow({ recording }: { recording: CallDetail["recordings"][num
         <span className="text-muted-foreground">{formatDuration(recording.duration_seconds)}</span>
         {state.kind !== "ready" && (
           <Button
+            data-help="call-play"
             variant="outline"
             size="sm"
             onClick={handlePlay}
@@ -143,7 +144,7 @@ function JobStepperRow({
         </span>
       )}
       {job.status === "failed" && (
-        <Button variant="outline" size="sm" onClick={handleRetry} disabled={isPending}>
+        <Button data-help="call-job-retry" variant="outline" size="sm" onClick={handleRetry} disabled={isPending}>
           {isPending ? "実行中..." : "再実行"}
         </Button>
       )}
@@ -168,13 +169,17 @@ function TranscriptAndSummaryTabs({ jobs }: { jobs: CallDetail["jobs"] }) {
 
   return (
     <Tabs defaultValue="summary">
-      <TabsList variant="line">
-        <TabsTrigger value="summary">要約</TabsTrigger>
-        <TabsTrigger value="full">全文</TabsTrigger>
+      <TabsList data-help="call-tabs" variant="line">
+        <TabsTrigger data-help="call-tab-summary" value="summary">
+          要約
+        </TabsTrigger>
+        <TabsTrigger data-help="call-tab-full" value="full">
+          全文
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="summary" className="mt-4">
         {primaryJob.analysis ? (
-          <div className="flex flex-col gap-3 text-sm">
+          <div data-help="call-summary-body" className="flex flex-col gap-3 text-sm">
             <p className="whitespace-pre-wrap">{primaryJob.analysis.minutes.summary}</p>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="neutral">
@@ -202,7 +207,7 @@ function TranscriptAndSummaryTabs({ jobs }: { jobs: CallDetail["jobs"] }) {
       </TabsContent>
       <TabsContent value="full" className="mt-4">
         {primaryJob.transcript ? (
-          <div className="flex flex-col gap-3 text-sm">
+          <div data-help="call-transcript-body" className="flex flex-col gap-3 text-sm">
             {[0, 1].map((channel) => {
               const segments = primaryJob.transcript!.segments.filter((s) => s.channel === channel);
               if (segments.length === 0) return null;
@@ -233,7 +238,7 @@ function TaskSummaryLink({ jobs }: { jobs: CallDetail["jobs"] }) {
   const taskIds = [...new Set(jobs.flatMap((j) => j.link_result?.task_ids ?? []))];
   if (taskIds.length === 0) return null;
   return (
-    <Surface className="p-4 text-sm">
+    <Surface data-help="call-tasks" className="p-4 text-sm">
       <p>
         起票タスク {taskIds.length} 件があります。
         <a href="/admin/tasks" className="ml-2 underline underline-offset-4">
@@ -303,7 +308,9 @@ export function CallDetailInteractive({
           <span>{formatDuration(call.duration_seconds)}</span>
         </div>
         <Popover>
-          <PopoverTrigger render={<Button variant="outline" size="sm" />}>コスト内訳 (概算)</PopoverTrigger>
+          <PopoverTrigger render={<Button data-help="call-cost" variant="outline" size="sm" />}>
+          コスト内訳 (概算)
+        </PopoverTrigger>
           <PopoverContent>
             <div className="flex flex-col gap-1 text-sm">
               <p>Twilio (通話・録音): {(call.twilio_cost_estimate_micro_usd / 1_000_000).toFixed(4)} USD</p>
@@ -317,7 +324,7 @@ export function CallDetailInteractive({
         </Popover>
       </div>
 
-      <Surface className="flex flex-col gap-3 p-4">
+      <Surface data-help="call-recordings" className="flex flex-col gap-3 p-4">
         <h3 className="text-sm font-medium text-foreground">録音</h3>
         {recordings.length === 0 && <p className="text-sm text-muted-foreground">録音はありません。</p>}
         {recordings.map((r) => (
@@ -325,14 +332,14 @@ export function CallDetailInteractive({
         ))}
       </Surface>
 
-      <Surface className="p-4">
+      <Surface data-help="call-minutes" className="p-4">
         <h3 className="mb-3 text-sm font-medium text-foreground">議事録・全文</h3>
         <TranscriptAndSummaryTabs jobs={jobs} />
       </Surface>
 
       <TaskSummaryLink jobs={jobs} />
 
-      <Surface className="flex flex-col gap-3 p-4">
+      <Surface data-help="call-jobs" className="flex flex-col gap-3 p-4">
         <h3 className="text-sm font-medium text-foreground">処理状態</h3>
         {jobs.length === 0 && <p className="text-sm text-muted-foreground">処理ジョブはありません。</p>}
         {jobs.map((j) => (
@@ -340,7 +347,7 @@ export function CallDetailInteractive({
         ))}
       </Surface>
 
-      <Surface className="flex flex-col gap-3 p-4">
+      <Surface data-help="call-memo" className="flex flex-col gap-3 p-4">
         <h3 className="text-sm font-medium text-foreground">メモ</h3>
         <form
           ref={memoFormRef}
@@ -358,7 +365,7 @@ export function CallDetailInteractive({
             placeholder="通話内容の補足メモなど"
           />
           <div>
-            <Button type="submit" disabled={isSavingMemo}>
+            <Button data-help="call-memo-save" type="submit" disabled={isSavingMemo}>
               {isSavingMemo ? "保存中..." : "保存 (Cmd+S)"}
             </Button>
           </div>

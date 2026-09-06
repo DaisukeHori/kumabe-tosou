@@ -141,10 +141,12 @@ export function MediaGrid({ items }: { items: MediaListItem[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Button onClick={() => setUploadOpen(true)}>画像をアップロード</Button>
+        <Button data-help="media-upload-open" onClick={() => setUploadOpen(true)}>
+          画像をアップロード
+        </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      <div data-help="media-grid" className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {items.length === 0 && (
           <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
             メディアがまだありません。「画像をアップロード」から追加してください。
@@ -153,6 +155,8 @@ export function MediaGrid({ items }: { items: MediaListItem[] }) {
         {items.map((item, index) => (
           <div
             key={item.id}
+            /* ヘルプの注釈用 (docs/design/admin-help/README.md §5)。見た目には影響しない。 */
+            data-help={`media-card-${index + 1}`}
             ref={(el) => {
               cardRefs.current[index] = el;
             }}
@@ -176,7 +180,11 @@ export function MediaGrid({ items }: { items: MediaListItem[] }) {
                   仮素材
                 </Badge>
               )}
-              <Badge variant={item.referenceCount > 0 ? "secondary" : "outline"} className="text-[10px]">
+              <Badge
+                data-help={`media-card-${index + 1}-references`}
+                variant={item.referenceCount > 0 ? "secondary" : "outline"}
+                className="text-[10px]"
+              >
                 参照 {item.referenceCount}
               </Badge>
             </div>
@@ -263,6 +271,7 @@ function EditMediaDialog({
       }}
     >
       <DialogContent
+        data-help="media-edit-dialog"
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
             e.preventDefault();
@@ -281,33 +290,38 @@ function EditMediaDialog({
         <img src={item.url} alt={item.alt} className="max-h-48 w-full rounded-lg object-contain" />
 
         <div className="flex flex-col gap-3">
-          <Field>
+          <Field data-help="media-alt-field">
             <FieldLabel htmlFor="media-alt">alt テキスト</FieldLabel>
             <Input id="media-alt" value={alt} onChange={(e) => setAlt(e.target.value)} maxLength={200} />
           </Field>
-          <Field>
+          <Field data-help="media-tags-field">
             <FieldLabel htmlFor="media-tags">タグ (カンマ区切り)</FieldLabel>
             <Input id="media-tags" value={tags} onChange={(e) => setTags(e.target.value)} />
           </Field>
-          <Field orientation="horizontal">
+          <Field data-help="media-placeholder-field" orientation="horizontal">
             <Checkbox checked={isPlaceholder} onCheckedChange={(c) => setIsPlaceholder(Boolean(c))} />
             <FieldContent>
               <FieldLabel>仮素材として扱う (is_placeholder)</FieldLabel>
             </FieldContent>
           </Field>
-          <p className="text-xs text-muted-foreground">
+          <p data-help="media-reference-count" className="text-xs text-muted-foreground">
             参照件数: {item.referenceCount} {item.referenceCount > 0 && "(参照ゼロになるまで削除できません)"}
           </p>
         </div>
 
         <DialogFooter>
-          <Button variant="destructive" onClick={handleDelete} disabled={isDeleting || item.referenceCount > 0}>
+          <Button
+            data-help="media-delete"
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={isDeleting || item.referenceCount > 0}
+          >
             {isDeleting ? "削除中..." : "削除"}
           </Button>
           <Button variant="outline" onClick={onClose}>
             閉じる (Esc)
           </Button>
-          <Button onClick={handleSave} disabled={isSaving}>
+          <Button data-help="media-save" onClick={handleSave} disabled={isSaving}>
             {isSaving ? "保存中..." : "保存 (Cmd+S)"}
           </Button>
         </DialogFooter>
@@ -536,7 +550,7 @@ function UploadMediaDialog({ onClose, onUploaded }: { onClose: () => void; onUpl
         onClose();
       }}
     >
-      <DialogContent className="sm:max-w-lg" showCloseButton={!isUploading}>
+      <DialogContent data-help="media-upload-dialog" className="sm:max-w-lg" showCloseButton={!isUploading}>
         <DialogHeader>
           <DialogTitle>画像をアップロード</DialogTitle>
           <DialogDescription>
@@ -546,6 +560,7 @@ function UploadMediaDialog({ onClose, onUploaded }: { onClose: () => void; onUpl
 
         <div className="flex flex-col gap-3">
           <label
+            data-help="media-dropzone"
             htmlFor="upload-dropzone-input"
             onDragOver={(e) => {
               e.preventDefault();
@@ -587,7 +602,11 @@ function UploadMediaDialog({ onClose, onUploaded }: { onClose: () => void; onUpl
           </label>
 
           {rows.length > 0 && (
-            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto" aria-live="polite">
+            <div
+              data-help="media-upload-rows"
+              className="flex max-h-64 flex-col gap-2 overflow-y-auto"
+              aria-live="polite"
+            >
               {rows.map((row) => (
                 <div
                   key={row.id}
@@ -658,11 +677,11 @@ function UploadMediaDialog({ onClose, onUploaded }: { onClose: () => void; onUpl
             </div>
           )}
 
-          <Field>
+          <Field data-help="media-upload-tags">
             <FieldLabel htmlFor="upload-tags">タグ (カンマ区切り、任意・全ファイル共通)</FieldLabel>
             <Input id="upload-tags" value={tags} onChange={(e) => setTags(e.target.value)} disabled={isUploading} />
           </Field>
-          <Field>
+          <Field data-help="media-upload-credit">
             <FieldLabel htmlFor="upload-credit">出典 (任意・全ファイル共通)</FieldLabel>
             <Input
               id="upload-credit"
@@ -687,7 +706,11 @@ function UploadMediaDialog({ onClose, onUploaded }: { onClose: () => void; onUpl
           <Button variant="outline" onClick={onClose} disabled={isUploading}>
             キャンセル (Esc)
           </Button>
-          <Button onClick={() => void handleUploadAll()} disabled={isUploading || uploadTargets.length === 0}>
+          <Button
+            data-help="media-upload-submit"
+            onClick={() => void handleUploadAll()}
+            disabled={isUploading || uploadTargets.length === 0}
+          >
             {isUploading
               ? "アップロード中..."
               : uploadTargets.length > 0

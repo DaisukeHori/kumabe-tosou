@@ -57,8 +57,9 @@ export function TasksQuickAdd({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div data-help="task-quick-add" className="flex flex-wrap items-center gap-2">
       <Input
+        data-help="task-title-input"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
@@ -70,17 +71,26 @@ export function TasksQuickAdd({
         placeholder="やることを入力して Enter"
         className="min-w-48 flex-1"
       />
-      <DatePicker value={dueOn} onChange={setDueOn} placeholder="期日 (任意)" className="w-40" />
+      <span data-help="task-due-input" className="inline-flex">
+        <DatePicker value={dueOn} onChange={setDueOn} placeholder="期日 (任意)" className="w-40" />
+      </span>
       {showDealPicker && !defaultDealId && (
-        <EntityPicker
-          value={dealItem}
-          onChange={setDealItem}
-          search={searchDealsAction}
-          placeholder="案件 (任意)"
-          className="w-48"
-        />
+        <span data-help="task-deal-picker" className="inline-flex">
+          <EntityPicker
+            value={dealItem}
+            onChange={setDealItem}
+            search={searchDealsAction}
+            placeholder="案件 (任意)"
+            className="w-48"
+          />
+        </span>
       )}
-      <Button type="button" disabled={isPending || title.trim() === ""} onClick={() => void handleSubmit()}>
+      <Button
+        data-help="task-add-button"
+        type="button"
+        disabled={isPending || title.trim() === ""}
+        onClick={() => void handleSubmit()}
+      >
         追加
       </Button>
     </div>

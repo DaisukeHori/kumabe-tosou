@@ -98,14 +98,16 @@ export default async function AdminChannelsPage({
 
       <StyleProfileForms data={styleData} />
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4" data-help="queue-section">
         <div>
           <h2 className="font-heading text-sm font-semibold">配信キュー</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            manual_required は SNS 上の実投稿有無を確認してから「投稿済みにする」or「未投稿 (予約に戻す)」を選んでください。
+            「要人間照合」は、SNS に実際に投稿されているかを確かめてから「投稿済みにする」か「未投稿 (予約に戻す)」を選んでください。
           </p>
         </div>
-        <ChannelPostsStatusFilter current={statusFilter ?? "all"} />
+        <div data-help="queue-filter" className="w-fit">
+          <ChannelPostsStatusFilter current={statusFilter ?? "all"} />
+        </div>
         {!queueResult.ok && (
           <p className="text-sm text-destructive">配信キューの取得に失敗しました: {queueResult.detail ?? queueResult.code}</p>
         )}

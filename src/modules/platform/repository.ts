@@ -20,7 +20,7 @@ export type SessionProfile = { id: string; display_name: string; role: string };
 
 /** 自分自身の profiles 行 (admin 判定用)。profiles_self_select RLS により本人分のみ取得可能 */
 export async function findSelfProfile(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>> | SupabaseClient,
   userId: string,
 ): Promise<SessionProfile | null> {
   const { data } = await supabase

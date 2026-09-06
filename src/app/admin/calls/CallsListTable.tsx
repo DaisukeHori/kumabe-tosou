@@ -97,7 +97,7 @@ export function CallsListTable({ items }: { items: CallListItemView[] }) {
 
   return (
     <>
-      <DataTableShell>
+      <DataTableShell data-help="calls-table">
         <DataTableHeaderRow
           columns={["日時", "相手", "種別", "通話時間", "処理状態", "要約", "要確認"]}
           gridClassName={GRID_COLS}
@@ -116,18 +116,31 @@ export function CallsListTable({ items }: { items: CallListItemView[] }) {
               aria-selected={index === focusedIndex}
               onClick={() => router.push(`/admin/calls/${item.id}`)}
               onMouseEnter={() => setFocusedIndex(index)}
+              data-help={index === 0 ? "calls-row-1" : undefined}
               className={`grid cursor-pointer items-center gap-4 px-4 py-3 text-sm transition-colors ${GRID_COLS} ${dataTableRowClassName(index === focusedIndex)}`}
             >
               <div className="text-xs whitespace-nowrap text-muted-foreground">
                 {new Date(item.started_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
               </div>
               <div className="min-w-0 truncate">{item.customer_name ?? item.from_e164 ?? "番号非通知"}</div>
-              <CallHandlingBadge handling={item.handling} />
+              <CallHandlingBadge
+                handling={item.handling}
+                dataHelp={index === 0 ? "calls-handling-1" : undefined}
+              />
               <div className="text-xs whitespace-nowrap">{formatDuration(item.duration_seconds)}</div>
-              <JobStatusBadge status={item.job_status} errorCode={item.job_error_code} />
-              <div className="min-w-0 truncate text-xs text-muted-foreground">{item.summary_preview ?? "-"}</div>
+              <JobStatusBadge
+                status={item.job_status}
+                errorCode={item.job_error_code}
+                dataHelp={index === 0 ? "calls-job-status-1" : undefined}
+              />
+              <div
+                data-help={index === 0 ? "calls-summary-1" : undefined}
+                className="min-w-0 truncate text-xs text-muted-foreground"
+              >
+                {item.summary_preview ?? "-"}
+              </div>
               {item.match_status === "ambiguous" ? (
-                <Badge variant="warning" className="whitespace-nowrap">
+                <Badge data-help="calls-review-badge" variant="warning" className="whitespace-nowrap">
                   要確認
                 </Badge>
               ) : (

@@ -3,8 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 /**
- * /admin/** および /edit/** の保護 (設計書 §5.1: 未認証は /admin/login へ、
- * §5.3: /edit も同じ保護を適用)。
+ * /admin/**、/edit/** および /help/** の保護 (設計書 §5.1: 未認証は /admin/login へ、
+ * §5.3: /edit も同じ保護を適用。/help はヘルプ本文と説明用スクリーンショットの保護
+ * — docs/design/admin-help/README.md §3。/help/login のみ公開)。
  *
  * - Supabase セッションの cookie リフレッシュを毎リクエスト行う (updateSupabaseSession)。
  * - /admin/login 自体は保護対象外 (ここに未認証でアクセスできないと詰む)。
@@ -19,8 +20,11 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isLoginRoute = pathname === "/admin/login";
+  // 管理画面ヘルプ (docs/design/admin-help/README.md §3): /help/** も画像込みで保護するが、
+  // 「ログインできないとき」のヘルプだけは未ログインで読めないと意味がないので素通しする。
+  const isPublicHelpRoute = pathname === "/help/login";
 
-  if (!user && !isLoginRoute) {
+  if (!user && !isLoginRoute && !isPublicHelpRoute) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/admin/login";
     loginUrl.search = "";
@@ -42,5 +46,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/edit/:path*"],
+  matcher: ["/admin/:path*", "/edit/:path*", "/help/:path*"],
 };

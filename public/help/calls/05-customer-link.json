@@ -1,0 +1,24 @@
+{
+  "width": 528,
+  "height": 291,
+  "boxes": {
+    "call-search-dialog": {
+      "x": 40,
+      "y": 8,
+      "w": 448,
+      "h": 275
+    },
+    "call-search-input": {
+      "x": 90,
+      "y": 99,
+      "w": 372,
+      "h": 20
+    },
+    "call-search-results": {
+      "x": 61,
+      "y": 125,
+      "w": 406,
+      "h": 72
+    }
+  }
+}

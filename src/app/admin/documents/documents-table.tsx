@@ -90,7 +90,7 @@ export function DocumentsTable({ items }: { items: DocumentListItem[] }) {
 
   return (
     <>
-      <DataTableShell>
+      <DataTableShell data-help="doc-table">
         <DataTableHeaderRow
           columns={["書類番号", "種別", "宛名", "案件名", "金額", "状態", "発行日", ""]}
           gridClassName={GRID_COLS}
@@ -106,6 +106,7 @@ export function DocumentsTable({ items }: { items: DocumentListItem[] }) {
           {items.map((item, index) => (
             <div
               key={item.id}
+              data-help={index === 0 ? "doc-row-first" : undefined}
               role="option"
               aria-selected={index === focusedIndex}
               onClick={() => router.push(`/admin/documents/${item.id}`)}
@@ -125,6 +126,7 @@ export function DocumentsTable({ items }: { items: DocumentListItem[] }) {
                 {canRecordPaymentFromList(item) && (
                   <Button
                     type="button"
+                    data-help="doc-pay-from-list"
                     variant="outline"
                     size="xs"
                     disabled={loadingPaymentId !== null}

@@ -1,0 +1,48 @@
+{
+  "width": 808,
+  "height": 665,
+  "boxes": {
+    "post-actionbar": {
+      "x": 20,
+      "y": 20,
+      "w": 768,
+      "h": 58
+    },
+    "post-save": {
+      "x": 693,
+      "y": 33,
+      "w": 78,
+      "h": 32
+    },
+    "post-title-field": {
+      "x": 20,
+      "y": 102,
+      "w": 768,
+      "h": 59
+    },
+    "post-slug-field": {
+      "x": 20,
+      "y": 181,
+      "w": 768,
+      "h": 88
+    },
+    "post-excerpt-field": {
+      "x": 20,
+      "y": 290,
+      "w": 768,
+      "h": 107
+    },
+    "post-body-field": {
+      "x": 20,
+      "y": 417,
+      "w": 768,
+      "h": 228
+    },
+    "post-preview-toggle": {
+      "x": 664,
+      "y": 417,
+      "w": 124,
+      "h": 24
+    }
+  }
+}

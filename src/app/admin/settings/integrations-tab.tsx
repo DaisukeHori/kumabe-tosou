@@ -147,9 +147,25 @@ function CopyableUrl({ label, url }: { label: string; url: string }) {
 }
 
 function StatusBadge({ status }: { status: IntegrationStatus }) {
-  if (status.source === "db") return <Badge variant="success">設定済み (管理画面)</Badge>;
-  if (status.source === "env") return <Badge variant="info">設定済み (環境変数)</Badge>;
-  return <Badge variant="neutral">未設定</Badge>;
+  // data-help はヘルプのスクリーンショット注釈用 (見た目には影響しない)。
+  const helpKey = `integration-status-${status.provider}`;
+  if (status.source === "db")
+    return (
+      <Badge variant="success" data-help={helpKey}>
+        設定済み (管理画面)
+      </Badge>
+    );
+  if (status.source === "env")
+    return (
+      <Badge variant="info" data-help={helpKey}>
+        設定済み (環境変数)
+      </Badge>
+    );
+  return (
+    <Badge variant="neutral" data-help={helpKey}>
+      未設定
+    </Badge>
+  );
 }
 
 function IntegrationCard({
@@ -190,7 +206,10 @@ function IntegrationCard({
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border border-border p-4">
+    <section
+      data-help={`integration-card-${status.provider}`}
+      className="flex flex-col gap-4 rounded-lg border border-border p-4"
+    >
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold">{view.name}</h3>
@@ -212,7 +231,10 @@ function IntegrationCard({
         )}
       </div>
 
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs">
+      <div
+        data-help={`integration-urls-${status.provider}`}
+        className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs"
+      >
         <p>
           <span className="font-medium text-foreground">取得先: </span>
           {view.portal}
@@ -228,10 +250,10 @@ function IntegrationCard({
         {view.note && <p>{view.note}</p>}
       </div>
 
-      <form action={action} className="max-w-xl">
+      <form action={action} className="max-w-xl" data-help={`integration-form-${status.provider}`}>
         <FieldGroup>
           {view.publicIdLabel && (
-            <Field>
+            <Field data-help={`integration-public-id-${status.provider}`}>
               <FieldLabel htmlFor={`${idPrefix}-public-id`}>{view.publicIdLabel}</FieldLabel>
               <Input
                 id={`${idPrefix}-public-id`}
@@ -243,7 +265,7 @@ function IntegrationCard({
               />
             </Field>
           )}
-          <Field>
+          <Field data-help={`integration-secret-${status.provider}`}>
             <FieldLabel htmlFor={`${idPrefix}-secret`}>{view.secretLabel}</FieldLabel>
             <Input
               id={`${idPrefix}-secret`}
@@ -264,7 +286,7 @@ function IntegrationCard({
         </FieldGroup>
         <FieldError errors={state.error ? [{ message: state.error }] : undefined} className="mt-3" />
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button type="submit" disabled={isPending || isDeleting}>
+          <Button type="submit" disabled={isPending || isDeleting} data-help={`integration-save-${status.provider}`}>
             {isPending ? "保存中..." : "保存"}
           </Button>
           {status.source === "db" && (
@@ -290,7 +312,7 @@ export function IntegrationsTab({
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <div data-help="integrations-intro">
         <h3 className="text-sm font-semibold">外部サービスの認証情報</h3>
         <FieldDescription>
           カレンダー同期・SNS 自動投稿・電話・メール送信に使う外部サービスの認証情報を登録します。

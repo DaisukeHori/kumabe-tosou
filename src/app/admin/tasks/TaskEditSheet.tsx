@@ -70,7 +70,10 @@ export function TaskEditSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full max-w-[90%] overflow-y-auto shadow-sheet sm:max-w-[420px]">
+      <SheetContent
+        data-help="task-edit-sheet"
+        className="w-full max-w-[90%] overflow-y-auto shadow-sheet sm:max-w-[420px]"
+      >
         <SheetHeader>
           <SheetTitle>やることを編集</SheetTitle>
           <SheetDescription>Cmd+S で保存、Esc で閉じます。</SheetDescription>
@@ -78,15 +81,15 @@ export function TaskEditSheet({
         <div className="flex flex-col gap-4 px-4 pb-4">
           {error && <p className="text-sm text-destructive">{error}</p>}
           <FieldGroup>
-            <Field>
+            <Field data-help="task-edit-title">
               <FieldLabel>タイトル</FieldLabel>
               <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </Field>
-            <Field>
+            <Field data-help="task-edit-due">
               <FieldLabel>期日</FieldLabel>
               <DatePicker value={form.due_on} onChange={(v) => setForm({ ...form, due_on: v })} />
             </Field>
-            <Field>
+            <Field data-help="task-edit-deal">
               <FieldLabel>案件 (任意)</FieldLabel>
               <EntityPicker
                 value={dealItem}
@@ -98,7 +101,7 @@ export function TaskEditSheet({
                 placeholder="案件を検索"
               />
             </Field>
-            <Field>
+            <Field data-help="task-edit-customer">
               <FieldLabel>顧客 (任意)</FieldLabel>
               <EntityPicker
                 value={customerItem}
@@ -110,13 +113,13 @@ export function TaskEditSheet({
                 placeholder="顧客を検索"
               />
             </Field>
-            <Field>
+            <Field data-help="task-edit-body">
               <FieldLabel>メモ</FieldLabel>
               <Textarea value={form.body ?? ""} onChange={(e) => setForm({ ...form, body: e.target.value || null })} />
             </Field>
           </FieldGroup>
           <div className="flex gap-2">
-            <Button type="button" disabled={isSaving} onClick={() => void handleSave()}>
+            <Button data-help="task-edit-save" type="button" disabled={isSaving} onClick={() => void handleSave()}>
               {isSaving ? "保存中..." : "保存 (Cmd+S)"}
             </Button>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

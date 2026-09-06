@@ -40,7 +40,7 @@ export function WorksListTable({ items }: { items: AdminWork[] }) {
   }
 
   return (
-    <DataTableShell>
+    <DataTableShell data-help="work-table">
       <DataTableHeaderRow columns={["タイトル", "カテゴリ", "状態", "更新日時"]} gridClassName={GRID_COLS} />
       <div
         role="listbox"
@@ -53,6 +53,7 @@ export function WorksListTable({ items }: { items: AdminWork[] }) {
           <div
             key={item.id}
             role="option"
+            data-help={index === 0 ? "work-row-1" : undefined}
             aria-selected={index === focusedIndex}
             onClick={() => router.push(`/admin/works/${item.id}`)}
             onMouseEnter={() => setFocusedIndex(index)}

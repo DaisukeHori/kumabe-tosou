@@ -147,7 +147,7 @@ export function DealsKanban({
 
   return (
     <div className="flex flex-col gap-4">
-      <Surface className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+      <Surface data-help="deal-pipeline-total" className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
         <span className="text-label text-muted-foreground">
           見込み合計 (加重)
           <span className="ml-2 text-meta text-admin-text-faint">= 各案件の金額 × 確度の合計</span>
@@ -203,7 +203,7 @@ export function DealsKanban({
         ))}
       </KanbanBoard>
 
-      <div className="flex flex-wrap gap-3">
+      <div data-help="deal-closed-columns" className="flex flex-wrap gap-3">
         {[
           { stage: "paid" as const, column: paidColumn, expanded: expandedPaid, setExpanded: setExpandedPaid },
           { stage: "lost" as const, column: lostColumn, expanded: expandedLost, setExpanded: setExpandedLost },

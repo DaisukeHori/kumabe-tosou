@@ -65,16 +65,16 @@ export function InvoiceIssuerForm({
   const v: SettingsValue<"invoice_issuer"> | null = data.value;
 
   return (
-    <form ref={formRef} action={action} className="max-w-xl">
+    <form ref={formRef} action={action} className="max-w-xl" data-help="ii-form">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
       <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} />
       <FieldGroup className="mt-4">
-        <Field>
+        <Field data-help="ii-issuer-name-field">
           <FieldLabel htmlFor="ii-issuer-name">発行者名</FieldLabel>
           <Input id="ii-issuer-name" name="issuer_name" defaultValue={v?.issuer_name ?? ""} required maxLength={80} />
           <FieldDescription>帳票 (見積書・受注書・納品書・請求書) の発行者欄に印字されます。</FieldDescription>
         </Field>
-        <Field>
+        <Field data-help="ii-registration-field">
           <FieldLabel htmlFor="ii-registration-number">適格請求書発行事業者登録番号 (任意)</FieldLabel>
           <Input
             id="ii-registration-number"
@@ -101,7 +101,7 @@ export function InvoiceIssuerForm({
           <FieldDescription>税率区分ごとの消費税額計算 (書類単位で 1 回のみ丸め) に使用します。</FieldDescription>
         </Field>
 
-        <Field>
+        <Field data-help="ii-quote-valid-days-field">
           <FieldLabel htmlFor="ii-quote-valid-days">見積有効期限の既定日数</FieldLabel>
           <Input
             id="ii-quote-valid-days"
@@ -137,7 +137,7 @@ export function InvoiceIssuerForm({
             <FieldLabel htmlFor="ii-bank-account-enabled">振込先を請求書に印字する</FieldLabel>
           </FieldContent>
         </Field>
-        <div className="grid gap-4 rounded-lg border border-border p-3 sm:grid-cols-2">
+        <div data-help="ii-bank-block" className="grid gap-4 rounded-lg border border-border p-3 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="ii-bank-name">銀行名</FieldLabel>
             <Input id="ii-bank-name" name="bank_name" defaultValue={v?.bank_account?.bank_name ?? ""} maxLength={40} />
@@ -186,7 +186,7 @@ export function InvoiceIssuerForm({
           「振込先を請求書に印字する」がオフの場合、上記を入力していても振込先欄は印字されません。
         </FieldDescription>
 
-        <Field>
+        <Field data-help="ii-seal-field">
           <FieldLabel htmlFor="ii-seal-image">角印画像 (任意・PNG または JPEG、2MB 以内)</FieldLabel>
           {sealPreviewUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage の署名 URL (TTL 5分) を直接表示するため next/image のリモートパターン許可リスト対象外
@@ -202,7 +202,7 @@ export function InvoiceIssuerForm({
         </Field>
       </FieldGroup>
       <FieldError errors={state.error ? [{ message: state.error }] : undefined} className="mt-3" />
-      <Button type="submit" disabled={isPending} className="mt-6">
+      <Button type="submit" disabled={isPending} className="mt-6" data-help="ii-save">
         {isPending ? "保存中..." : "保存 (Cmd+S)"}
       </Button>
     </form>

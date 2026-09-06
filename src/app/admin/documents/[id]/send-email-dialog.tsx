@@ -132,7 +132,7 @@ export function SendEmailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px] shadow-modal">
+      <DialogContent data-help="doc-email-dialog" className="sm:max-w-[560px] shadow-modal">
         <DialogHeader>
           <DialogTitle>メールで送付</DialogTitle>
           <DialogDescription>現行版 (v{detail.document.current_version}) の PDF を添付して送信します。</DialogDescription>
@@ -146,7 +146,7 @@ export function SendEmailDialog({
         )}
 
         <FieldGroup>
-          <Field>
+          <Field data-help="doc-email-to">
             <FieldLabel htmlFor="send-email-to">宛先</FieldLabel>
             <Input
               id="send-email-to"
@@ -160,7 +160,7 @@ export function SendEmailDialog({
             <FieldLabel htmlFor="send-email-cc">CC (任意)</FieldLabel>
             <Input id="send-email-cc" type="email" value={cc} onChange={(e) => setCc(e.target.value)} />
           </Field>
-          <Field>
+          <Field data-help="doc-email-subject">
             <FieldLabel htmlFor="send-email-subject">件名</FieldLabel>
             <Input
               id="send-email-subject"
@@ -179,7 +179,7 @@ export function SendEmailDialog({
               maxLength={5000}
             />
           </Field>
-          <Field>
+          <Field data-help="doc-email-attachment">
             <FieldLabel>添付 (現行版・読み取り専用)</FieldLabel>
             <p className="text-sm text-muted-foreground">{attachmentFilename(detail)}</p>
           </Field>
@@ -191,7 +191,7 @@ export function SendEmailDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             キャンセル (Esc)
           </Button>
-          <Button type="button" disabled={isPending} onClick={() => void handleSubmit()}>
+          <Button data-help="doc-email-submit" type="button" disabled={isPending} onClick={() => void handleSubmit()}>
             {isPending ? "送信中..." : "送信する (Cmd/Ctrl+Enter)"}
           </Button>
         </DialogFooter>

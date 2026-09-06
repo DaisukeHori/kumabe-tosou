@@ -1,0 +1,66 @@
+{
+  "width": 1000,
+  "height": 453,
+  "boxes": {
+    "page-header": {
+      "x": 16,
+      "y": 16,
+      "w": 968,
+      "h": 52
+    },
+    "help-button": {
+      "x": 956,
+      "y": 18,
+      "w": 28,
+      "h": 28
+    },
+    "deal-view-toggle": {
+      "x": 731,
+      "y": 16,
+      "w": 131,
+      "h": 32
+    },
+    "deal-new": {
+      "x": 870,
+      "y": 16,
+      "w": 78,
+      "h": 32
+    },
+    "deal-pipeline-total": {
+      "x": 16,
+      "y": 92,
+      "w": 968,
+      "h": 54
+    },
+    "deal-kanban": {
+      "x": 16,
+      "y": 162,
+      "w": 968,
+      "h": 221
+    },
+    "deal-column-estimating": {
+      "x": 284,
+      "y": 162,
+      "w": 256,
+      "h": 213
+    },
+    "deal-card-estimating": {
+      "x": 293,
+      "y": 195,
+      "w": 238,
+      "h": 81
+    },
+    "deal-column-quote-sent": {
+      "x": 552,
+      "y": 162,
+      "w": 256,
+      "h": 213
+    },
+    "deal-closed-columns": {
+      "x": 16,
+      "y": 399,
+      "w": 968,
+      "h": 38
+    }
+  }
+}

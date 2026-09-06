@@ -235,7 +235,7 @@ export function DocumentDetailView({
 
   return (
     <div className="flex flex-col gap-6">
-      <Surface className="flex flex-col gap-3 p-6">
+      <Surface data-help="doc-detail-summary" className="flex flex-col gap-3 p-6">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="font-heading text-xl font-semibold text-foreground">
             {doc.doc_no ?? DOC_TYPE_LABEL[doc.doc_type]}
@@ -265,7 +265,7 @@ export function DocumentDetailView({
         </div>
 
         {(lineage.ancestors.length > 0 || lineage.descendants.length > 0) && (
-          <nav aria-label="系譜" className="flex flex-wrap items-center gap-1.5 text-meta text-admin-text-meta">
+          <nav data-help="doc-detail-lineage" aria-label="系譜" className="flex flex-wrap items-center gap-1.5 text-meta text-admin-text-meta">
             {lineage.ancestors.map((a) => (
               <span key={a.id} className="flex items-center gap-1.5">
                 <Link href={`/admin/documents/${a.id}`} className="underline underline-offset-4">
@@ -287,19 +287,26 @@ export function DocumentDetailView({
         )}
       </Surface>
 
-      <div className="flex flex-wrap gap-2">
+      <div data-help="doc-detail-actions" className="flex flex-wrap gap-2">
         {canAccept(doc.doc_type, doc.status) && (
-          <Button type="button" variant="success" disabled={isPending} onClick={() => void handleAccept()}>
+          <Button data-help="doc-accept" type="button" variant="success" disabled={isPending} onClick={() => void handleAccept()}>
             承諾にする
           </Button>
         )}
         {canDecline(doc.doc_type, doc.status) && (
-          <Button type="button" variant="outline" onClick={() => setDeclineOpen(true)}>
+          <Button data-help="doc-decline" type="button" variant="outline" onClick={() => setDeclineOpen(true)}>
             辞退にする
           </Button>
         )}
         {detail.derivable_to.map((to) => (
-          <Button key={to} type="button" variant="outline" disabled={isPending} onClick={() => void handleDerive(to)}>
+          <Button
+            key={to}
+            data-help="doc-derive"
+            type="button"
+            variant="outline"
+            disabled={isPending}
+            onClick={() => void handleDerive(to)}
+          >
             {DERIVE_LABEL[to]}
           </Button>
         ))}
@@ -307,30 +314,30 @@ export function DocumentDetailView({
           <GenerateBlocksButton documentId={doc.id} dealId={dealId} />
         )}
         {doc.doc_type === "invoice" && doc.status === "issued" && (
-          <Button type="button" onClick={() => setPaymentOpen(true)}>
+          <Button data-help="doc-record-payment" type="button" onClick={() => setPaymentOpen(true)}>
             入金を記録
           </Button>
         )}
-        <Button type="button" variant="outline" onClick={() => void handleOpenPdf(doc.current_version)}>
+        <Button data-help="doc-pdf" type="button" variant="outline" onClick={() => void handleOpenPdf(doc.current_version)}>
           PDF を開く (Cmd/Ctrl+P)
         </Button>
         {canSendEmail(doc.status) && (
-          <Button type="button" variant="outline" onClick={() => setSendEmailOpen(true)}>
+          <Button data-help="doc-send-email" type="button" variant="outline" onClick={() => setSendEmailOpen(true)}>
             メールで送付
           </Button>
         )}
         {canReissue(doc.status) && (
-          <Button type="button" variant="outline" disabled={isPending} onClick={() => void handleReissue()}>
+          <Button data-help="doc-reissue" type="button" variant="outline" disabled={isPending} onClick={() => void handleReissue()}>
             再出力 (版+1)
           </Button>
         )}
         {canRevise(doc.status) && (
-          <Button type="button" variant="outline" onClick={() => setRevisionOpen(true)}>
+          <Button data-help="doc-revise" type="button" variant="outline" onClick={() => setRevisionOpen(true)}>
             訂正発行…
           </Button>
         )}
         {canVoid(doc.doc_type, doc.status) && (
-          <Button type="button" variant="destructive-outline" onClick={() => setVoidOpen(true)}>
+          <Button data-help="doc-void" type="button" variant="destructive-outline" onClick={() => setVoidOpen(true)}>
             取消
           </Button>
         )}
@@ -338,7 +345,7 @@ export function DocumentDetailView({
 
       <FieldError errors={error ? [{ message: error }] : undefined} />
 
-      <Surface className="p-6">
+      <Surface data-help="doc-versions" className="p-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-label font-bold text-admin-text-label">版履歴</h2>
           {detail.versions.length >= 2 && (
@@ -376,7 +383,7 @@ export function DocumentDetailView({
         )}
       </Surface>
 
-      <Surface className="p-6">
+      <Surface data-help="doc-emails" className="p-6">
         <h2 className="mb-3 text-label font-bold text-admin-text-label">送信履歴</h2>
         {detail.emails.length === 0 && <p className="text-sm text-muted-foreground">送信履歴がありません。</p>}
         {detail.emails.length > 0 && (
@@ -400,7 +407,7 @@ export function DocumentDetailView({
       </Surface>
 
       {doc.doc_type === "invoice" && (
-        <Surface className="p-6">
+        <Surface data-help="doc-payments" className="p-6">
           <h2 className="mb-3 text-label font-bold text-admin-text-label">入金履歴</h2>
           {detail.payments.length === 0 && <p className="text-sm text-muted-foreground">入金記録がありません。</p>}
           {detail.payments.length > 0 && (

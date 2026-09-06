@@ -1,0 +1,48 @@
+{
+  "width": 1048,
+  "height": 1223,
+  "boxes": {
+    "settings-tab-invoice_issuer": {
+      "x": 734,
+      "y": 24,
+      "w": 98,
+      "h": 25
+    },
+    "ii-issuer-name-field": {
+      "x": 20,
+      "y": 116,
+      "w": 576,
+      "h": 88
+    },
+    "ii-registration-field": {
+      "x": 20,
+      "y": 224,
+      "w": 576,
+      "h": 88
+    },
+    "ii-quote-valid-days-field": {
+      "x": 20,
+      "y": 441,
+      "w": 576,
+      "h": 88
+    },
+    "ii-bank-block": {
+      "x": 20,
+      "y": 700,
+      "w": 576,
+      "h": 236
+    },
+    "ii-seal-field": {
+      "x": 20,
+      "y": 1013,
+      "w": 576,
+      "h": 133
+    },
+    "ii-save": {
+      "x": 20,
+      "y": 1171,
+      "w": 111,
+      "h": 32
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "width": 1008,
+  "height": 1192,
+  "boxes": {
+    "price-cell-standard-m": {
+      "x": 468,
+      "y": 20,
+      "w": 239,
+      "h": 32
+    },
+    "price-preview": {
+      "x": 20,
+      "y": 885,
+      "w": 968,
+      "h": 215
+    },
+    "price-preview-table": {
+      "x": 37,
+      "y": 938,
+      "w": 934,
+      "h": 145
+    },
+    "price-save": {
+      "x": 20,
+      "y": 1140,
+      "w": 78,
+      "h": 32
+    }
+  }
+}

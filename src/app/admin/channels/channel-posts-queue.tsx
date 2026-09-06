@@ -144,7 +144,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
 
   return (
     <>
-      <Surface className="overflow-x-auto p-0">
+      <Surface className="overflow-x-auto p-0" data-help="queue-table">
       <Table>
         <TableHeader>
           <TableRow>
@@ -184,10 +184,16 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant={statusBadgeVariant(item.status)}>{STATUS_LABELS[item.status]}</Badge>
+                <Badge variant={statusBadgeVariant(item.status)} data-help={`queue-status-${item.status}`}>
+                  {STATUS_LABELS[item.status]}
+                </Badge>
               </TableCell>
               <TableCell>{item.estimated_cost_cents}</TableCell>
-              <TableCell className="max-w-64 truncate text-xs text-muted-foreground" title={item.last_error_detail ?? undefined}>
+              <TableCell
+                className="max-w-64 truncate text-xs text-muted-foreground"
+                title={item.last_error_detail ?? undefined}
+                data-help={item.status === "failed" ? "queue-error" : undefined}
+              >
                 {item.last_error_code ?? "-"}
               </TableCell>
               <TableCell className="flex flex-wrap gap-2">
@@ -195,6 +201,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
                   <Button
                     size="xs"
                     variant="outline"
+                    data-help="queue-cancel"
                     disabled={isPending}
                     onClick={() => runAction(cancelChannelPostAction(item.id))}
                   >
@@ -205,6 +212,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
                   <Button
                     size="xs"
                     variant="outline"
+                    data-help="queue-retry"
                     disabled={isPending}
                     onClick={() => runAction(retryFailedChannelPostAction(item.id))}
                   >
@@ -212,12 +220,18 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
                   </Button>
                 )}
                 {item.status === "manual_required" && item.channel === "note" && item.note_draft_status !== "created" && (
-                  <Button size="xs" variant="outline" disabled={isPending} onClick={() => createNoteDraft(item)}>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    data-help="queue-note-draft"
+                    disabled={isPending}
+                    onClick={() => createNoteDraft(item)}
+                  >
                     note に下書きを作成
                   </Button>
                 )}
                 {item.status === "manual_required" && item.channel === "note" && (
-                  <Button size="xs" variant="outline" onClick={() => void openCopyDialog(item)}>
+                  <Button size="xs" variant="outline" data-help="queue-note-copy" onClick={() => void openCopyDialog(item)}>
                     note へコピー
                   </Button>
                 )}
@@ -225,6 +239,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
                   <>
                     <Button
                       size="xs"
+                      data-help="queue-mark-published"
                       onClick={() => {
                         setExternalUrl("");
                         setManualDialog(item);
@@ -235,6 +250,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
                     <Button
                       size="xs"
                       variant="outline"
+                      data-help="queue-reset-scheduled"
                       disabled={isPending}
                       onClick={() =>
                         runAction(
@@ -267,7 +283,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
       </Surface>
 
       <Dialog open={!!manualDialog} onOpenChange={(open) => !open && setManualDialog(null)}>
-        <DialogContent>
+        <DialogContent data-help="manual-dialog">
           {manualDialog && (
             <>
               <DialogHeader>
@@ -277,6 +293,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
                 </DialogDescription>
               </DialogHeader>
               <Input
+                data-help="manual-url"
                 value={externalUrl}
                 onChange={(e) => setExternalUrl(e.target.value)}
                 placeholder="https://..."
@@ -287,6 +304,7 @@ export function ChannelPostsQueue({ items }: { items: ChannelPostView[] }) {
                   閉じる (Esc)
                 </Button>
                 <Button
+                  data-help="manual-confirm"
                   disabled={isPending || externalUrl.length === 0}
                   onClick={() => {
                     if (!manualDialog) return;

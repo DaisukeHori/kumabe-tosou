@@ -83,6 +83,7 @@ export function ReopenDealDialog({
       }}
     >
       <DialogContent
+        data-help="deal-reopen-dialog"
         className="sm:max-w-[560px] shadow-modal"
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
@@ -94,7 +95,7 @@ export function ReopenDealDialog({
         <DialogHeader>
           <DialogTitle>「{dealTitle}」を再開する</DialogTitle>
           <DialogDescription>
-            帳票・入金記録は変更されません。請求書の取消が必要な場合は帳票画面から行ってください (§4.3-C)。
+            すでに作った見積書・請求書や入金の記録は、そのまま残ります。請求を取り消したいときは、見積書・請求書の画面で操作してください。
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
@@ -105,7 +106,7 @@ export function ReopenDealDialog({
               value={toStage}
               onValueChange={(v) => v && setToStage(v as ReopenTargetStage)}
             >
-              <SelectTrigger id="reopen-deal-to-stage" className="w-full" autoFocus>
+              <SelectTrigger data-help="deal-reopen-stage" id="reopen-deal-to-stage" className="w-full" autoFocus>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -120,6 +121,7 @@ export function ReopenDealDialog({
           <Field>
             <FieldLabel htmlFor="reopen-deal-reason">再開理由 (必須)</FieldLabel>
             <Textarea
+              data-help="deal-reopen-reason"
               id="reopen-deal-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -132,7 +134,7 @@ export function ReopenDealDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             キャンセル (Esc)
           </Button>
-          <Button type="button" disabled={isSaving} onClick={() => void handleConfirm()}>
+          <Button data-help="deal-reopen-submit" type="button" disabled={isSaving} onClick={() => void handleConfirm()}>
             {isSaving ? "処理中..." : "再開する (Cmd+S)"}
           </Button>
         </DialogFooter>

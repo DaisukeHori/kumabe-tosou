@@ -173,8 +173,11 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
       {/* [#126 R5] モックの「保存/公開する」2 ボタンヘッダ。状態遷移 (下書き→レビュー→公開→
           アーカイブ) + 予約公開 datetime を保持したまま保存ボタンを上部に集約する
           (action・バリデーションは不変)。保存ボタンは form={FORM_ID} で form に関連付ける。 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card px-4 py-3 shadow-surface">
-        <div className="flex items-center gap-2 text-sm">
+      <div
+        data-help="voice-header"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card px-4 py-3 shadow-surface"
+      >
+        <div data-help="voice-status" className="flex items-center gap-2 text-sm">
           {mode === "edit" ? (
             <>
               <span className="text-muted-foreground">状態</span>
@@ -187,7 +190,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
         <div className="flex flex-wrap items-center gap-2">
           {mode === "edit" &&
             NEXT_TRANSITIONS[currentStatus].map((to) => (
-              <span key={to} className="flex items-center gap-2">
+              <span key={to} data-help={`voice-transition-${to}`} className="flex items-center gap-2">
                 {to === "published" && currentStatus === "review" && (
                   <input
                     type="datetime-local"
@@ -202,19 +205,19 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
                 </Button>
               </span>
             ))}
-          <Button type="submit" form={FORM_ID} disabled={isPending}>
+          <Button type="submit" data-help="voice-save" form={FORM_ID} disabled={isPending}>
             {mode === "create" ? "作成する" : "保存する (Cmd/Ctrl+S)"}
           </Button>
         </div>
       </div>
 
       {serverError && (
-        <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <div role="alert" data-help="voice-error" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
           {serverError}
         </div>
       )}
       {notice && (
-        <div role="status" className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+        <div role="status" data-help="voice-notice" className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
           {notice}
         </div>
       )}
@@ -222,7 +225,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
       <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
         <FieldGroup>
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field data-invalid={!!errors.customer_initial}>
+            <Field data-help="voice-initial" data-invalid={!!errors.customer_initial}>
               <FieldLabel htmlFor="voice-customer-initial">お客様イニシャル</FieldLabel>
               <Input
                 id="voice-customer-initial"
@@ -233,7 +236,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
               <FieldError errors={errors.customer_initial ? [errors.customer_initial] : undefined} />
             </Field>
 
-            <Field data-invalid={!!errors.region}>
+            <Field data-help="voice-region" data-invalid={!!errors.region}>
               <FieldLabel htmlFor="voice-region">地域</FieldLabel>
               <Input id="voice-region" placeholder="例: 福岡県" aria-invalid={!!errors.region} {...register("region")} />
               <FieldError errors={errors.region ? [errors.region] : undefined} />
@@ -244,7 +247,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
             control={control}
             name="rating"
             render={({ field, fieldState }) => (
-              <Field data-invalid={fieldState.invalid}>
+              <Field data-help="voice-rating" data-invalid={fieldState.invalid}>
                 <FieldLabel>評価</FieldLabel>
                 <StarRatingInput value={field.value} onChange={field.onChange} />
                 <FieldError errors={fieldState.error ? [fieldState.error] : undefined} />
@@ -252,7 +255,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
             )}
           />
 
-          <Field data-invalid={!!errors.body}>
+          <Field data-help="voice-body" data-invalid={!!errors.body}>
             <FieldLabel htmlFor="voice-body">本文</FieldLabel>
             <Textarea id="voice-body" className="min-h-32" aria-invalid={!!errors.body} {...register("body")} />
             <FieldDescription>2000文字以内</FieldDescription>
@@ -260,7 +263,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
           </Field>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field data-invalid={!!errors.item}>
+            <Field data-help="voice-item" data-invalid={!!errors.item}>
               <FieldLabel htmlFor="voice-item">施工品目 (任意)</FieldLabel>
               <Input
                 id="voice-item"
@@ -270,7 +273,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
               <FieldError errors={errors.item ? [errors.item] : undefined} />
             </Field>
 
-            <Field data-invalid={!!errors.sort_order}>
+            <Field data-help="voice-sort-order" data-invalid={!!errors.sort_order}>
               <FieldLabel htmlFor="voice-sort-order">表示順 (小さいほど先頭)</FieldLabel>
               <Input
                 id="voice-sort-order"
@@ -283,7 +286,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
             </Field>
           </div>
 
-          <Field data-invalid={!!errors.photo_media_id}>
+          <Field data-help="voice-photo" data-invalid={!!errors.photo_media_id}>
             <FieldLabel htmlFor="voice-photo-media-id">お客様写真 media_id (任意)</FieldLabel>
             <Input
               id="voice-photo-media-id"
@@ -295,7 +298,7 @@ export function VoiceForm({ mode, voiceId, status, updatedAt, initialValues, med
           </Field>
 
           {mediaItems.length > 0 && (
-            <div className="rounded-lg border border-border p-3">
+            <div data-help="voice-media-list" className="rounded-lg border border-border p-3">
               <p className="mb-2 text-xs text-muted-foreground">
                 既存メディア一覧 (簡易版。id をコピーして写真欄に貼り付けてください)
               </p>

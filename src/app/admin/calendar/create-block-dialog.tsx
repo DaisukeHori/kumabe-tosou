@@ -121,17 +121,17 @@ export function CreateBlockDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onOpenChange(false); }}>
-      <DialogContent className="sm:max-w-[560px] shadow-modal">
+      <DialogContent data-help="create-dialog" className="sm:max-w-[560px] shadow-modal">
         <DialogHeader>
           <DialogTitle>作業ブロックを作る</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <FieldGroup>
-            <Field>
+            <Field data-help="create-deal">
               <FieldLabel>案件リンク</FieldLabel>
               <DealPicker value={dealId} selectedLabel={dealLabel} onChange={(id, label) => { setDealId(id); setDealLabel(label); }} />
             </Field>
-            <Field>
+            <Field data-help="create-type">
               <FieldLabel htmlFor="new-blk-type">種別</FieldLabel>
               <Select
                 items={workTypes.map((wt) => ({ value: wt.id, label: wt.label }))}
@@ -154,7 +154,7 @@ export function CreateBlockDialog({
               <FieldLabel htmlFor="new-blk-title">タイトル (空欄=種別名)</FieldLabel>
               <Input id="new-blk-title" value={title} onChange={(e) => setTitle(e.target.value)} />
             </Field>
-            <Field>
+            <Field data-help="create-hours">
               <FieldLabel htmlFor="new-blk-hours">予定時間 (h)</FieldLabel>
               <Input
                 id="new-blk-hours"
@@ -169,7 +169,7 @@ export function CreateBlockDialog({
               <FieldLabel htmlFor="new-blk-memo">メモ</FieldLabel>
               <Textarea id="new-blk-memo" value={memo} onChange={(e) => setMemo(e.target.value)} />
             </Field>
-            <Field orientation="horizontal">
+            <Field orientation="horizontal" data-help="create-place-now">
               <Checkbox id="new-blk-place-now" checked={placeNow} onCheckedChange={(v) => setPlaceNow(v === true)} />
               <FieldLabel htmlFor="new-blk-place-now">今すぐカレンダーに配置する</FieldLabel>
             </Field>
@@ -186,7 +186,7 @@ export function CreateBlockDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             キャンセル
           </Button>
-          <Button type="button" disabled={isPending} onClick={handleSubmit}>
+          <Button type="button" data-help="create-submit" disabled={isPending} onClick={handleSubmit}>
             {isPending ? "作成中..." : "作成する"}
           </Button>
         </DialogFooter>

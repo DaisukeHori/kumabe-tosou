@@ -71,31 +71,39 @@ export default async function AdminDocumentsPage({
       <PageHeader
         title="帳票"
         description="↑↓ で行移動、Enter で詳細へ、/ で検索にフォーカスします。"
-        actions={<Button render={<Link href="/admin/documents/new" />}>新規作成</Button>}
+        actions={
+          <Button data-help="doc-new" render={<Link href="/admin/documents/new" />}>
+            新規作成
+          </Button>
+        }
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <PillToggle
-          ariaLabel="種別で絞り込み"
-          items={TYPE_FILTERS.map((f) => ({
-            key: f.value || "all",
-            label: f.label,
-            href: filterHref({ type: f.value }),
-            active: (type ?? "") === f.value,
-          }))}
-        />
+        <div data-help="doc-type-filter" className="w-fit">
+          <PillToggle
+            ariaLabel="種別で絞り込み"
+            items={TYPE_FILTERS.map((f) => ({
+              key: f.value || "all",
+              label: f.label,
+              href: filterHref({ type: f.value }),
+              active: (type ?? "") === f.value,
+            }))}
+          />
+        </div>
         <DocumentsSearch initialQuery={q ?? ""} type={type ?? ""} status={status ?? ""} />
       </div>
 
-      <PillToggle
-        ariaLabel="状態で絞り込み"
-        items={STATUS_FILTERS.map((f) => ({
-          key: f.value || "all",
-          label: f.label,
-          href: filterHref({ status: f.value }),
-          active: (status ?? "") === f.value,
-        }))}
-      />
+      <div data-help="doc-status-filter" className="w-fit">
+        <PillToggle
+          ariaLabel="状態で絞り込み"
+          items={STATUS_FILTERS.map((f) => ({
+            key: f.value || "all",
+            label: f.label,
+            href: filterHref({ status: f.value }),
+            active: (status ?? "") === f.value,
+          }))}
+        />
+      </div>
 
       {dealIdFilter && (
         <div className="flex flex-wrap gap-2">

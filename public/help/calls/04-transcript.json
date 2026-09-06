@@ -1,0 +1,24 @@
+{
+  "width": 1008,
+  "height": 382,
+  "boxes": {
+    "call-tab-summary": {
+      "x": 40,
+      "y": 73,
+      "w": 42,
+      "h": 25
+    },
+    "call-tab-full": {
+      "x": 86,
+      "y": 73,
+      "w": 42,
+      "h": 25
+    },
+    "call-transcript-body": {
+      "x": 37,
+      "y": 125,
+      "w": 934,
+      "h": 220
+    }
+  }
+}

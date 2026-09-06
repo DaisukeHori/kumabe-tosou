@@ -1,0 +1,30 @@
+{
+  "width": 1008,
+  "height": 487,
+  "boxes": {
+    "connected-banner": {
+      "x": 20,
+      "y": 161,
+      "w": 968,
+      "h": 48
+    },
+    "connection-status-google": {
+      "x": 425,
+      "y": 250,
+      "w": 54,
+      "h": 20
+    },
+    "connection-detail-google": {
+      "x": 37,
+      "y": 278,
+      "w": 442,
+      "h": 76
+    },
+    "connection-buttons-google": {
+      "x": 37,
+      "y": 366,
+      "w": 442,
+      "h": 28
+    }
+  }
+}

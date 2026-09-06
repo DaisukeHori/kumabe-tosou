@@ -1,0 +1,42 @@
+{
+  "width": 960,
+  "height": 194,
+  "boxes": {
+    "post-actionbar": {
+      "x": 20,
+      "y": 116,
+      "w": 768,
+      "h": 58
+    },
+    "post-status": {
+      "x": 73,
+      "y": 135,
+      "w": 90,
+      "h": 21
+    },
+    "post-schedule": {
+      "x": 314,
+      "y": 129,
+      "w": 200,
+      "h": 32
+    },
+    "post-transition-draft": {
+      "x": 207,
+      "y": 131,
+      "w": 99,
+      "h": 28
+    },
+    "post-transition-published": {
+      "x": 522,
+      "y": 131,
+      "w": 73,
+      "h": 28
+    },
+    "post-save": {
+      "x": 603,
+      "y": 129,
+      "w": 168,
+      "h": 32
+    }
+  }
+}

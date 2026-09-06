@@ -119,10 +119,13 @@ function UpdatedAtHint({
   updatedAt,
   isUnset,
   corrupted,
+  helpKey,
 }: {
   updatedAt: string | null;
   isUnset: boolean;
   corrupted?: boolean;
+  /** ヘルプのスクリーンショット注釈用 (docs/design/admin-help/README.md §5)。表示には影響しない。 */
+  helpKey?: string;
 }) {
   return (
     <>
@@ -132,9 +135,11 @@ function UpdatedAtHint({
         </p>
       )}
       {isUnset ? (
-        <p className="text-xs text-muted-foreground">まだ設定されていません。入力して保存してください。</p>
+        <p data-help={helpKey} className="text-xs text-muted-foreground">
+          まだ設定されていません。入力して保存してください。
+        </p>
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <p data-help={helpKey} className="text-xs text-muted-foreground">
           最終更新: {updatedAt ? new Date(updatedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) : "-"}
         </p>
       )}
@@ -212,9 +217,9 @@ export function SettingsTabs({
         window.history.replaceState(null, "", url);
       }}
     >
-      <TabsList variant="line">
+      <TabsList variant="line" data-help="settings-tabs">
         {(Object.keys(TAB_LABELS) as TabKey[]).map((key) => (
-          <TabsTrigger key={key} value={key}>
+          <TabsTrigger key={key} value={key} data-help={`settings-tab-${key}`}>
             {TAB_LABELS[key]}
           </TabsTrigger>
         ))}
@@ -340,11 +345,16 @@ function CompanyForm({
   const v = data.value;
 
   return (
-    <form ref={formRef} action={action} className="max-w-xl">
+    <form ref={formRef} action={action} className="max-w-xl" data-help="settings-company-form">
       <input type="hidden" name="expected_updated_at" value={data.updatedAt ?? ""} />
-      <UpdatedAtHint updatedAt={data.updatedAt} isUnset={data.isUnset} corrupted={data.corrupted} />
+      <UpdatedAtHint
+        updatedAt={data.updatedAt}
+        isUnset={data.isUnset}
+        corrupted={data.corrupted}
+        helpKey="settings-updated-at"
+      />
       <FieldGroup className="mt-4">
-        <Field>
+        <Field data-help="settings-company-name">
           <FieldLabel htmlFor="company-name">会社名</FieldLabel>
           <Input id="company-name" name="name" defaultValue={v?.name ?? ""} required maxLength={50} />
         </Field>
@@ -384,7 +394,7 @@ function CompanyForm({
         </div>
       </FieldGroup>
       <FieldError errors={state.error ? [{ message: state.error }] : undefined} className="mt-3" />
-      <Button type="submit" disabled={isPending} className="mt-6">
+      <Button type="submit" disabled={isPending} className="mt-6" data-help="settings-company-save">
         {isPending ? "保存中..." : "保存 (Cmd+S)"}
       </Button>
     </form>

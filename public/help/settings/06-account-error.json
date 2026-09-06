@@ -1,0 +1,36 @@
+{
+  "width": 472,
+  "height": 330,
+  "boxes": {
+    "account-current-password": {
+      "x": 12,
+      "y": 12,
+      "w": 448,
+      "h": 59
+    },
+    "account-new-password": {
+      "x": 12,
+      "y": 91,
+      "w": 448,
+      "h": 59
+    },
+    "account-confirm-password": {
+      "x": 12,
+      "y": 171,
+      "w": 448,
+      "h": 59
+    },
+    "account-error": {
+      "x": 12,
+      "y": 242,
+      "w": 448,
+      "h": 20
+    },
+    "account-submit": {
+      "x": 12,
+      "y": 286,
+      "w": 134,
+      "h": 32
+    }
+  }
+}

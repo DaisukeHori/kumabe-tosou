@@ -134,7 +134,7 @@ export function PaymentDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[560px] shadow-modal">
+        <DialogContent data-help="doc-payment-dialog" className="sm:max-w-[560px] shadow-modal">
           <DialogHeader>
             <DialogTitle>入金を記録</DialogTitle>
             <DialogDescription>残高 {formatJpy(balanceJpy)} に対する入金を記録します。</DialogDescription>
@@ -147,15 +147,15 @@ export function PaymentDialog({
             )}
           </DialogHeader>
           <FieldGroup>
-            <Field>
+            <Field data-help="doc-payment-date">
               <FieldLabel>入金日</FieldLabel>
               <DatePicker value={paidOn} onChange={setPaidOn} />
             </Field>
-            <Field>
+            <Field data-help="doc-payment-amount">
               <FieldLabel htmlFor="payment-amount">金額</FieldLabel>
               <Input id="payment-amount" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </Field>
-            <Field>
+            <Field data-help="doc-payment-method">
               <FieldLabel htmlFor="payment-method">方法</FieldLabel>
               <select
                 id="payment-method"
@@ -184,7 +184,7 @@ export function PaymentDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               キャンセル
             </Button>
-            <Button type="button" disabled={isPending} onClick={() => void handleSubmit()}>
+            <Button data-help="doc-payment-submit" type="button" disabled={isPending} onClick={() => void handleSubmit()}>
               {isPending ? "記録中..." : "記録する"}
             </Button>
           </DialogFooter>

@@ -133,6 +133,9 @@ export function AdminNav({ badgeCounts }: { badgeCounts?: Readonly<Record<string
     <nav
       ref={navRef}
       aria-label="管理メニュー"
+      // data-help: ヘルプ用スクリーンショットの注釈座標を取るための目印
+      // (docs/design/admin-help/README.md §5。見た目・挙動には影響しない)。
+      data-help="admin-nav"
       className="flex flex-1 flex-col gap-1"
       onKeyDown={handleKeyDown}
     >
@@ -153,7 +156,7 @@ export function AdminNav({ badgeCounts }: { badgeCounts?: Readonly<Record<string
         const hasActiveItem = group.items.some((item) => isItemActive(item, pathname));
 
         return (
-          <div key={group.id} className="flex flex-col gap-0.5">
+          <div key={group.id} data-help={`nav-group-${group.id}`} className="flex flex-col gap-0.5">
             <button
               type="button"
               data-nav-row=""

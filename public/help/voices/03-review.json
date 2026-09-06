@@ -1,0 +1,42 @@
+{
+  "width": 960,
+  "height": 509,
+  "boxes": {
+    "voice-header": {
+      "x": 20,
+      "y": 72,
+      "w": 768,
+      "h": 58
+    },
+    "voice-status": {
+      "x": 37,
+      "y": 91,
+      "w": 126,
+      "h": 20
+    },
+    "voice-transition-draft": {
+      "x": 207,
+      "y": 87,
+      "w": 99,
+      "h": 28
+    },
+    "voice-transition-published": {
+      "x": 314,
+      "y": 85,
+      "w": 281,
+      "h": 32
+    },
+    "voice-save": {
+      "x": 603,
+      "y": 85,
+      "w": 168,
+      "h": 32
+    },
+    "voice-body": {
+      "x": 20,
+      "y": 305,
+      "w": 768,
+      "h": 184
+    }
+  }
+}

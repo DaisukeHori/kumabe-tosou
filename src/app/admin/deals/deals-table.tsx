@@ -40,7 +40,7 @@ export function DealsTable({ items }: { items: DealListItem[] }) {
   }
 
   return (
-    <DataTableShell>
+    <DataTableShell data-help="deal-table">
       <DataTableHeaderRow columns={["案件名", "顧客", "金額", "ステージ", "見込み完了日"]} gridClassName={GRID_COLS} />
       <div
         role="listbox"
@@ -52,6 +52,7 @@ export function DealsTable({ items }: { items: DealListItem[] }) {
         {items.map((item, index) => (
           <div
             key={item.id}
+            data-help={index === 0 ? "deal-row-1" : undefined}
             role="option"
             aria-selected={index === focusedIndex}
             onClick={() => router.push(`/admin/deals/${item.id}`)}

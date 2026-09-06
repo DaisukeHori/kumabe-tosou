@@ -1,0 +1,42 @@
+{
+  "width": 295,
+  "height": 733,
+  "boxes": {
+    "admin-nav": {
+      "x": 12,
+      "y": 0,
+      "w": 215,
+      "h": 1111
+    },
+    "nav-group-create-customers": {
+      "x": 12,
+      "y": 40,
+      "w": 215,
+      "h": 143
+    },
+    "nav-group-intake": {
+      "x": 12,
+      "y": 186,
+      "w": 215,
+      "h": 105
+    },
+    "nav-group-sales": {
+      "x": 12,
+      "y": 295,
+      "w": 215,
+      "h": 143
+    },
+    "nav-group-production": {
+      "x": 12,
+      "y": 441,
+      "w": 215,
+      "h": 105
+    },
+    "nav-group-misc": {
+      "x": 12,
+      "y": 550,
+      "w": 215,
+      "h": 143
+    }
+  }
+}

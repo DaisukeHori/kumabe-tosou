@@ -44,7 +44,7 @@ export function PostsListTable({ items }: { items: AdminPost[] }) {
   }
 
   return (
-    <DataTableShell>
+    <DataTableShell data-help="post-table">
       <DataTableHeaderRow columns={["タイトル", "種別", "状態", "更新日時"]} gridClassName={GRID_COLS} />
       <div
         role="listbox"
@@ -57,6 +57,7 @@ export function PostsListTable({ items }: { items: AdminPost[] }) {
           <div
             key={item.id}
             role="option"
+            data-help={index === 0 ? "post-row-1" : undefined}
             aria-selected={index === focusedIndex}
             onClick={() => router.push(`/admin/posts/${item.id}`)}
             onMouseEnter={() => setFocusedIndex(index)}

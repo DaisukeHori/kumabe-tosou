@@ -390,14 +390,14 @@ export function CalendarBoard({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Badge variant={capacity && capacity.remaining_hours < 0 ? "destructive" : "outline"}>
+          <Badge data-help="capacity-badge" variant={capacity && capacity.remaining_hours < 0 ? "destructive" : "outline"}>
             今週あと {capacity ? capacity.remaining_hours.toFixed(1) : "-"} 時間
           </Badge>
-          <Button type="button" onClick={() => setCreateOpen(true)}>
+          <Button type="button" data-help="create-block" onClick={() => setCreateOpen(true)}>
             ブロックを作る
           </Button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-help="view-nav">
           <Button
             type="button"
             variant="outline"
@@ -421,7 +421,7 @@ export function CalendarBoard({
             {viewMode === "week" ? `${formatDateOnlyLabel(weekStart)} 〜 ${formatDateOnlyLabel(addDaysJst(weekStart, 6))}` : monthAnchor.slice(0, 7)}
           </span>
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-            <TabsList>
+            <TabsList data-help="view-tabs">
               <TabsTrigger value="week">週 (W)</TabsTrigger>
               <TabsTrigger value="month">月 (M)</TabsTrigger>
             </TabsList>
@@ -430,7 +430,7 @@ export function CalendarBoard({
       </div>
 
       {proposals.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
+        <div data-help="proposal-bar" className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
           <span className="text-sm">自動配置の提案: {proposals.length} 件</span>
           <Button type="button" size="sm" disabled={isBusy} onClick={handleApplyProposals}>
             確定
@@ -463,7 +463,7 @@ export function CalendarBoard({
               gridRef.current?.beginExternalDrag(block, e.pointerId, e.clientX, e.clientY);
             }}
           />
-          <div className="order-1 min-w-0 flex-1" onFocus={() => setFocusRegion("grid")}>
+          <div data-help="week-grid" className="order-1 min-w-0 flex-1" onFocus={() => setFocusRegion("grid")}>
             <CalendarGrid
               ref={gridRef}
               weekStart={weekStart}
@@ -545,10 +545,10 @@ function BacklogTray({
 }) {
   return (
     <div className={className}>
-      <div className="rounded-surface border border-border bg-card p-3 shadow-surface">
+      <div data-help="backlog-tray" className="rounded-surface border border-border bg-card p-3 shadow-surface">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-medium">未配置 ({backlog.length})</p>
-          <Button type="button" size="sm" variant="outline" onClick={onAutoPlace} disabled={backlog.length === 0}>
+          <Button type="button" size="sm" variant="outline" data-help="auto-place" onClick={onAutoPlace} disabled={backlog.length === 0}>
             自動で並べる
           </Button>
         </div>
@@ -624,7 +624,7 @@ function MonthView({
   }, [blocks]);
 
   return (
-    <div className="overflow-hidden rounded-surface border border-border bg-card shadow-surface">
+    <div data-help="month-grid" className="overflow-hidden rounded-surface border border-border bg-card shadow-surface">
       <div className="grid grid-cols-7 border-b border-border bg-muted text-center text-xs font-medium">
         {["月", "火", "水", "木", "金", "土", "日"].map((label) => (
           <div key={label} className="border-l border-border py-1.5 first:border-l-0">

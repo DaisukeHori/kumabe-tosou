@@ -64,6 +64,7 @@ export default async function VoicesListPage({
         title="お客様の声"
         actions={
           <Link
+            data-help="voice-new"
             href="/admin/voices/new"
             className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80"
           >
@@ -73,8 +74,9 @@ export default async function VoicesListPage({
       />
       <SiteSecondaryTabs />
 
-      <form method="get" className="flex flex-wrap items-center gap-3">
+      <form method="get" data-help="voice-filter" className="flex flex-wrap items-center gap-3">
         <input
+          data-help="voice-search"
           type="text"
           name="q"
           defaultValue={params.q ?? ""}
@@ -82,6 +84,7 @@ export default async function VoicesListPage({
           className="h-8 w-64 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         <select
+          data-help="voice-status-filter"
           name="status"
           defaultValue={params.status ?? ""}
           className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"

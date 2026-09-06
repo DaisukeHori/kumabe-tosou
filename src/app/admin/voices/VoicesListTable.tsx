@@ -38,7 +38,7 @@ export function VoicesListTable({ items }: { items: AdminVoice[] }) {
   }
 
   return (
-    <DataTableShell>
+    <DataTableShell data-help="voice-table">
       <DataTableHeaderRow columns={["本文", "地域", "評価", "状態", "更新日時"]} gridClassName={GRID_COLS} />
       <div
         role="listbox"
@@ -50,6 +50,8 @@ export function VoicesListTable({ items }: { items: AdminVoice[] }) {
         {items.map((item, index) => (
           <div
             key={item.id}
+            /* ヘルプの注釈用 (docs/design/admin-help/README.md §5)。見た目には影響しない。 */
+            data-help={`voice-row-${index + 1}`}
             role="option"
             aria-selected={index === focusedIndex}
             onClick={() => router.push(`/admin/voices/${item.id}`)}

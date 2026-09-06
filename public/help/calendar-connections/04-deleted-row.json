@@ -1,0 +1,36 @@
+{
+  "width": 1000,
+  "height": 238,
+  "boxes": {
+    "sync-issue-row-deleted_externally": {
+      "x": 17,
+      "y": 57,
+      "w": 966,
+      "h": 41
+    },
+    "sync-issue-status-deleted_externally": {
+      "x": 258,
+      "y": 68,
+      "w": 78,
+      "h": 20
+    },
+    "sync-issue-actions-deleted_externally": {
+      "x": 585,
+      "y": 57,
+      "w": 398,
+      "h": 40
+    },
+    "sync-issue-actions-conflict-kmb-e724": {
+      "x": 585,
+      "y": 98,
+      "w": 398,
+      "h": 40
+    },
+    "sync-issue-actions-orphaned": {
+      "x": 585,
+      "y": 180,
+      "w": 398,
+      "h": 40
+    }
+  }
+}

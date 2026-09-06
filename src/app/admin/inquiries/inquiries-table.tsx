@@ -110,7 +110,7 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
 
   return (
     <>
-      <DataTableShell>
+      <DataTableShell data-help="inquiry-table">
         <DataTableHeaderRow
           columns={["届いた日", "お名前", "内容", "状態", "リード化"]}
           gridClassName={GRID_COLS}
@@ -127,6 +127,7 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
               <div
                 key={item.id}
                 role="option"
+                data-help={index === 0 ? "inquiry-row" : undefined}
                 ref={(el) => {
                   rowRefs.current[index] = el;
                 }}
@@ -146,10 +147,10 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
                   <span className="text-muted-foreground">【{typeLabel}】</span>
                   {item.body}
                 </div>
-                <div>
+                <div data-help={index === 0 ? "inquiry-status" : undefined}>
                   <Badge variant={STATUS_VARIANT[item.status]}>{STATUS_LABELS[item.status]}</Badge>
                 </div>
-                <div onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()} data-help={index === 0 ? "inquiry-lead" : undefined}>
                   <InquiryLeadButton
                     inquiryId={item.id}
                     name={item.name}
@@ -172,6 +173,7 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
         }}
       >
         <DialogContent
+          data-help="inquiry-dialog"
           className="max-w-[560px]"
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
@@ -199,9 +201,11 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
                     {openItem.item}
                   </p>
                 )}
-                <p className="whitespace-pre-wrap rounded-lg bg-muted p-3 text-foreground">{openItem.body}</p>
+                <p data-help="inquiry-body" className="whitespace-pre-wrap rounded-lg bg-muted p-3 text-foreground">
+                  {openItem.body}
+                </p>
 
-                <div>
+                <div data-help="inquiry-dialog-lead">
                   <InquiryLeadButton
                     inquiryId={openItem.id}
                     name={openItem.name}
@@ -212,7 +216,7 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
                   />
                 </div>
 
-                <div className="mt-2">
+                <div className="mt-2" data-help="inquiry-status-field">
                   <label className="mb-1 block text-xs text-muted-foreground">状態</label>
                   <Select
                     items={(Object.keys(STATUS_LABELS) as InquiryStatus[]).map((s) => ({
@@ -222,7 +226,7 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
                     value={pendingStatus}
                     onValueChange={(v) => setPendingStatus(v as InquiryStatus)}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full" data-help="inquiry-status-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -242,7 +246,7 @@ export function InquiriesTable({ items }: { items: InquiryRow[] }) {
                 <Button variant="outline" onClick={() => setOpenId(null)}>
                   閉じる (Esc)
                 </Button>
-                <Button onClick={handleSave} disabled={isSaving}>
+                <Button onClick={handleSave} disabled={isSaving} data-help="inquiry-save">
                   {isSaving ? "保存中..." : "保存 (Cmd+S)"}
                 </Button>
               </DialogFooter>

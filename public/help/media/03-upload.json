@@ -1,0 +1,36 @@
+{
+  "width": 544,
+  "height": 527,
+  "boxes": {
+    "media-upload-dialog": {
+      "x": 16,
+      "y": 16,
+      "w": 512,
+      "h": 495
+    },
+    "media-dropzone": {
+      "x": 32,
+      "y": 112,
+      "w": 480,
+      "h": 144
+    },
+    "media-upload-tags": {
+      "x": 32,
+      "y": 268,
+      "w": 480,
+      "h": 59
+    },
+    "media-upload-credit": {
+      "x": 32,
+      "y": 339,
+      "w": 480,
+      "h": 59
+    },
+    "media-upload-submit": {
+      "x": 406,
+      "y": 462,
+      "w": 106,
+      "h": 32
+    }
+  }
+}

@@ -19,14 +19,11 @@ import { QuickCreateCustomerDialog } from "@/app/admin/customers/QuickCreateCust
 import { zDealInput, type DealInput } from "@/modules/crm/contracts";
 
 import { createDealAction } from "./actions";
+import { DEAL_SOURCE_LABELS, type DealSource } from "./deal-source-labels";
 
-const SOURCE_OPTIONS: { value: DealInput["source"]; label: string }[] = [
-  { value: "manual", label: "手動" },
-  { value: "form", label: "フォーム" },
-  { value: "simulator", label: "シミュレーター" },
-  { value: "phone", label: "電話" },
-  { value: "migration", label: "移行" },
-];
+const SOURCE_OPTIONS: { value: DealSource; label: string }[] = (
+  Object.keys(DEAL_SOURCE_LABELS) as DealSource[]
+).map((value) => ({ value, label: DEAL_SOURCE_LABELS[value] }));
 
 export function DealForm({ initialCustomer }: { initialCustomer: EntityPickerItem | null }) {
   const router = useRouter();
@@ -83,16 +80,16 @@ export function DealForm({ initialCustomer }: { initialCustomer: EntityPickerIte
         </div>
       )}
 
-      <Surface className="p-5 sm:p-6">
+      <Surface data-help="deal-form" className="p-5 sm:p-6">
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
           <FieldGroup>
-          <Field data-invalid={!!errors.title}>
+          <Field data-help="deal-field-title" data-invalid={!!errors.title}>
             <FieldLabel htmlFor="deal-title">案件名</FieldLabel>
             <Input id="deal-title" aria-invalid={!!errors.title} {...register("title")} />
             <FieldError errors={errors.title ? [errors.title] : undefined} />
           </Field>
 
-          <Field>
+          <Field data-help="deal-field-customer">
             <FieldLabel>顧客</FieldLabel>
             <EntityPicker
               value={customerItem}
@@ -108,7 +105,7 @@ export function DealForm({ initialCustomer }: { initialCustomer: EntityPickerIte
           </Field>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field data-invalid={!!errors.amount_jpy}>
+            <Field data-help="deal-field-amount" data-invalid={!!errors.amount_jpy}>
               <FieldLabel htmlFor="deal-amount">金額 (円、任意)</FieldLabel>
               <Input
                 id="deal-amount"
@@ -121,7 +118,7 @@ export function DealForm({ initialCustomer }: { initialCustomer: EntityPickerIte
               <FieldError errors={errors.amount_jpy ? [errors.amount_jpy] : undefined} />
             </Field>
 
-            <Field>
+            <Field data-help="deal-field-close">
               <FieldLabel>見込み完了日 (任意)</FieldLabel>
               <DatePicker
                 value={watch("expected_close_on")}
@@ -131,7 +128,7 @@ export function DealForm({ initialCustomer }: { initialCustomer: EntityPickerIte
             </Field>
           </div>
 
-          <Field>
+          <Field data-help="deal-field-source">
             <FieldLabel htmlFor="deal-source">流入元</FieldLabel>
             <select
               id="deal-source"
@@ -146,13 +143,13 @@ export function DealForm({ initialCustomer }: { initialCustomer: EntityPickerIte
             </select>
           </Field>
 
-          <Field>
+          <Field data-help="deal-field-notes">
             <FieldLabel htmlFor="deal-notes">メモ</FieldLabel>
             <Textarea id="deal-notes" {...register("notes", { setValueAs: (v: string) => (v === "" ? null : v) })} />
           </Field>
           </FieldGroup>
 
-          <Button type="submit" disabled={isPending}>
+          <Button data-help="deal-submit" type="submit" disabled={isPending}>
             {isPending ? "作成中..." : "作成する (Cmd/Ctrl+S)"}
           </Button>
         </form>

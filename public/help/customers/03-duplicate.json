@@ -1,0 +1,30 @@
+{
+  "width": 440,
+  "height": 299,
+  "boxes": {
+    "customer-duplicate-dialog": {
+      "x": 28,
+      "y": 28,
+      "w": 384,
+      "h": 243
+    },
+    "customer-duplicate-list": {
+      "x": 44,
+      "y": 144,
+      "w": 352,
+      "h": 46
+    },
+    "customer-duplicate-back": {
+      "x": 99,
+      "y": 223,
+      "w": 127,
+      "h": 32
+    },
+    "customer-duplicate-force": {
+      "x": 234,
+      "y": 223,
+      "w": 162,
+      "h": 32
+    }
+  }
+}

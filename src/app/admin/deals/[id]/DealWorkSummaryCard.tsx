@@ -44,7 +44,7 @@ export function DealWorkSummaryCard({
   const restCount = blocks.length - visibleBlocks.length;
 
   return (
-    <Surface className="flex flex-col gap-3 p-4">
+    <Surface data-help="deal-work-blocks" className="flex flex-col gap-3 p-4">
       <h3 className="text-label font-bold text-admin-text-label">作業ブロック</h3>
 
       {!workSummaryResult.ok && (
@@ -79,7 +79,7 @@ export function DealWorkSummaryCard({
       )}
 
       {generatableDocs.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div data-help="deal-generate-blocks" className="flex flex-wrap gap-2">
           {generatableDocs.map((doc) => (
             <GenerateBlocksButton
               key={doc.id}

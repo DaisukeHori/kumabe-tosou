@@ -1,0 +1,60 @@
+{
+  "width": 1008,
+  "height": 882,
+  "boxes": {
+    "page-header": {
+      "x": 20,
+      "y": 20,
+      "w": 968,
+      "h": 28
+    },
+    "customer-kind": {
+      "x": 41,
+      "y": 120,
+      "w": 630,
+      "h": 28
+    },
+    "customer-field-name": {
+      "x": 41,
+      "y": 196,
+      "w": 630,
+      "h": 32
+    },
+    "customer-field-email": {
+      "x": 366,
+      "y": 275,
+      "w": 305,
+      "h": 32
+    },
+    "customer-field-tel": {
+      "x": 41,
+      "y": 354,
+      "w": 305,
+      "h": 32
+    },
+    "customer-field-source": {
+      "x": 366,
+      "y": 354,
+      "w": 305,
+      "h": 32
+    },
+    "customer-field-company": {
+      "x": 41,
+      "y": 483,
+      "w": 630,
+      "h": 32
+    },
+    "customer-field-lifecycle": {
+      "x": 41,
+      "y": 642,
+      "w": 630,
+      "h": 32
+    },
+    "customer-submit": {
+      "x": 41,
+      "y": 809,
+      "w": 168,
+      "h": 32
+    }
+  }
+}

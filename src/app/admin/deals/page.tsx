@@ -64,8 +64,12 @@ export default async function AdminDealsPage({
           description="←→ で列移動、↑↓ でカード移動、Shift+←/→ でステージ移動、Enter で詳細です。"
           actions={
             <>
-              <PillToggle ariaLabel="表示切替" items={viewToggleItems(false)} />
-              <Button render={<Link href="/admin/deals/new" />}>新規案件</Button>
+              <div data-help="deal-view-toggle" className="flex">
+                <PillToggle ariaLabel="表示切替" items={viewToggleItems(false)} />
+              </div>
+              <Button data-help="deal-new" render={<Link href="/admin/deals/new" />}>
+                新規案件
+              </Button>
             </>
           }
         />
@@ -91,22 +95,28 @@ export default async function AdminDealsPage({
         description="↑↓ で移動、Enter で詳細です。"
         actions={
           <>
-            <PillToggle ariaLabel="表示切替" items={viewToggleItems(true)} />
-            <Button render={<Link href="/admin/deals/new" />}>新規案件</Button>
+            <div data-help="deal-view-toggle" className="flex">
+              <PillToggle ariaLabel="表示切替" items={viewToggleItems(true)} />
+            </div>
+            <Button data-help="deal-new" render={<Link href="/admin/deals/new" />}>
+              新規案件
+            </Button>
           </>
         }
       />
 
-      <PillToggle
-        ariaLabel="ステージで絞り込み"
-        className="flex w-full"
-        items={STAGE_FILTERS.map((f) => ({
-          key: String(f.value),
-          label: f.label,
-          href: `/admin/deals?view=table&stage=${f.value}`,
-          active: stage === f.value,
-        }))}
-      />
+      <div data-help="deal-stage-filter">
+        <PillToggle
+          ariaLabel="ステージで絞り込み"
+          className="flex w-full"
+          items={STAGE_FILTERS.map((f) => ({
+            key: String(f.value),
+            label: f.label,
+            href: `/admin/deals?view=table&stage=${f.value}`,
+            active: stage === f.value,
+          }))}
+        />
+      </div>
 
       {!dealsResult.ok && (
         <p className="text-sm text-destructive">

@@ -32,6 +32,14 @@ function lifecycleBadgeVariant(lifecycle: CustomerDetail["lifecycle"]): "success
   if (lifecycle === "archived") return "neutral";
   return "info";
 }
+/** 流入元 (lead source) の日本語ラベル。CustomerForm.tsx の SOURCE_OPTIONS と同じ表記に揃える。 */
+const SOURCE_LABEL: Record<CustomerDetail["source"], string> = {
+  form: "フォーム",
+  simulator: "シミュレーター",
+  phone: "電話",
+  manual: "手動",
+  migration: "移行",
+};
 const KIND_LABEL: Record<CustomerDetail["kind"], string> = {
   person: "個人",
   company_contact: "法人担当者",
@@ -46,20 +54,20 @@ export function CustomerProfileCard({ customer }: { customer: CustomerDetail }) 
   const isMerged = customer.merged_into_customer_id !== null;
 
   return (
-    <Surface className="flex flex-col gap-3 p-4">
+    <Surface data-help="customer-profile" className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="text-section text-foreground">{customer.name}</h2>
           {customer.name_kana && <p className="text-meta text-admin-text-meta">{customer.name_kana}</p>}
         </div>
         <div className="flex shrink-0 gap-1.5">
-          <Badge variant={lifecycleBadgeVariant(customer.lifecycle)}>
+          <Badge data-help="customer-lifecycle-badge" variant={lifecycleBadgeVariant(customer.lifecycle)}>
             {LIFECYCLE_LABEL[customer.lifecycle]}
           </Badge>
         </div>
       </div>
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-label">
+      <dl data-help="customer-profile-fields" className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-label">
         <dt className="text-admin-text-label">種別</dt>
         <dd className="text-foreground">{KIND_LABEL[customer.kind]}</dd>
         <dt className="text-admin-text-label">会社</dt>
@@ -89,7 +97,7 @@ export function CustomerProfileCard({ customer }: { customer: CustomerDetail }) 
           </Fragment>
         ))}
         <dt className="text-admin-text-label">流入元</dt>
-        <dd className="text-foreground">{customer.source}</dd>
+        <dd className="text-foreground">{SOURCE_LABEL[customer.source]}</dd>
         <dt className="text-admin-text-label">登録日</dt>
         <dd className="text-foreground">{formatJstDate(customer.created_at)}</dd>
       </dl>
@@ -100,7 +108,13 @@ export function CustomerProfileCard({ customer }: { customer: CustomerDetail }) 
 
       {!isMerged && (
         <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+          <Button
+            data-help="customer-edit"
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditOpen(true)}
+          >
             編集
           </Button>
           <CustomerDetailActions customer={customer} />

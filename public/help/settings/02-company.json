@@ -1,0 +1,36 @@
+{
+  "width": 1048,
+  "height": 568,
+  "boxes": {
+    "settings-tabs": {
+      "x": 20,
+      "y": 20,
+      "w": 1008,
+      "h": 32
+    },
+    "settings-updated-at": {
+      "x": 20,
+      "y": 84,
+      "w": 576,
+      "h": 16
+    },
+    "settings-company-name": {
+      "x": 20,
+      "y": 116,
+      "w": 576,
+      "h": 59
+    },
+    "settings-company-form": {
+      "x": 20,
+      "y": 84,
+      "w": 576,
+      "h": 464
+    },
+    "settings-company-save": {
+      "x": 20,
+      "y": 516,
+      "w": 111,
+      "h": 32
+    }
+  }
+}

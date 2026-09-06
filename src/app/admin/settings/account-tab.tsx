@@ -26,9 +26,9 @@ export function AccountTab({ email }: { email: string | null }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <div data-help="account-login-info">
         <h3 className="text-sm font-semibold">ログイン情報</h3>
-        <p className="mt-1 text-sm">
+        <p data-help="account-email" className="mt-1 text-sm">
           <span className="text-muted-foreground">メールアドレス: </span>
           <span className="font-medium">{email ?? "-"}</span>
         </p>
@@ -42,9 +42,9 @@ export function AccountTab({ email }: { email: string | null }) {
           </FieldDescription>
         </div>
         {/* React 19 の form action は送信後に form をリセットするため、成功時にパスワード欄が自動で空になる */}
-        <form action={action} className="max-w-md">
+        <form action={action} className="max-w-md" data-help="account-password-form">
           <FieldGroup>
-            <Field>
+            <Field data-help="account-current-password">
               <FieldLabel htmlFor="account-current-password">現在のパスワード</FieldLabel>
               <Input
                 id="account-current-password"
@@ -54,7 +54,7 @@ export function AccountTab({ email }: { email: string | null }) {
                 required
               />
             </Field>
-            <Field>
+            <Field data-help="account-new-password">
               <FieldLabel htmlFor="account-new-password">新しいパスワード</FieldLabel>
               <Input
                 id="account-new-password"
@@ -66,7 +66,7 @@ export function AccountTab({ email }: { email: string | null }) {
                 required
               />
             </Field>
-            <Field>
+            <Field data-help="account-confirm-password">
               <FieldLabel htmlFor="account-confirm-password">新しいパスワード (確認)</FieldLabel>
               <Input
                 id="account-confirm-password"
@@ -80,7 +80,7 @@ export function AccountTab({ email }: { email: string | null }) {
             </Field>
           </FieldGroup>
           <FieldError errors={state.error ? [{ message: state.error }] : undefined} className="mt-3" />
-          <Button type="submit" disabled={isPending} className="mt-6">
+          <Button type="submit" disabled={isPending} className="mt-6" data-help="account-submit">
             {isPending ? "変更中..." : "パスワードを変更"}
           </Button>
         </form>

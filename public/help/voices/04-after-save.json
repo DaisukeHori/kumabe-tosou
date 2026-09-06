@@ -1,0 +1,36 @@
+{
+  "width": 808,
+  "height": 168,
+  "boxes": {
+    "voice-header": {
+      "x": 20,
+      "y": 20,
+      "w": 768,
+      "h": 58
+    },
+    "voice-status": {
+      "x": 37,
+      "y": 39,
+      "w": 90,
+      "h": 20
+    },
+    "voice-transition-archived": {
+      "x": 484,
+      "y": 35,
+      "w": 111,
+      "h": 28
+    },
+    "voice-save": {
+      "x": 603,
+      "y": 33,
+      "w": 168,
+      "h": 32
+    },
+    "voice-notice": {
+      "x": 20,
+      "y": 102,
+      "w": 768,
+      "h": 46
+    }
+  }
+}

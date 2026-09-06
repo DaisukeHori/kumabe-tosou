@@ -1,0 +1,36 @@
+{
+  "width": 1016,
+  "height": 282,
+  "boxes": {
+    "connection-card-google": {
+      "x": 24,
+      "y": 24,
+      "w": 476,
+      "h": 234
+    },
+    "connection-status-google": {
+      "x": 429,
+      "y": 41,
+      "w": 54,
+      "h": 20
+    },
+    "connection-detail-google": {
+      "x": 41,
+      "y": 69,
+      "w": 442,
+      "h": 76
+    },
+    "connection-buttons-google": {
+      "x": 41,
+      "y": 157,
+      "w": 442,
+      "h": 28
+    },
+    "connection-card-microsoft": {
+      "x": 516,
+      "y": 24,
+      "w": 476,
+      "h": 234
+    }
+  }
+}
