@@ -2,7 +2,7 @@ import "server-only";
 
 import { Resend } from "resend";
 
-import { isResendConfigured } from "@/lib/env";
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import { settingsFacade } from "@/modules/settings/facade";
 
 /**
@@ -33,8 +33,9 @@ function fromAddress(): string {
 }
 
 export async function notifyNoteSessionExpired(detail: string): Promise<void> {
-  if (!isResendConfigured()) {
-    console.warn("[KMB-E902] RESEND_API_KEY 未設定のため note セッション失効通知をスキップしました");
+  const resendApiKey = (await resolveIntegrationCredentials("resend")).secret;
+  if (!resendApiKey) {
+    console.warn("[KMB-E902] Resend の API キー未設定 (設定 > 外部連携) のため note セッション失効通知をスキップしました");
     return;
   }
 
@@ -52,7 +53,7 @@ export async function notifyNoteSessionExpired(detail: string): Promise<void> {
   const to = notificationsResult.value.inquiry_to;
 
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = new Resend(resendApiKey);
     const adminUrl = `${siteUrl()}/admin/channels`;
     const text = [
       "note の下書き自動作成に使用しているセッション Cookie が失効している可能性があります。",

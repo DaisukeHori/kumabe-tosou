@@ -291,7 +291,7 @@ export const KMB_ERRORS = {
   "KMB-E644": {
     category: "6xx 帳票メール送付",
     message: "メールの送信に失敗しました。",
-    recovery: "detail を確認。RESEND_API_KEY 未設定なら env 設定が先。送信失敗は台帳に記録済みのため再送してください",
+    recovery: "detail を確認。Resend の API キー未設定なら 設定 > 外部連携 での登録が先。送信失敗は台帳に記録済みのため再送してください",
   },
   "KMB-E645": {
     category: "6xx 帳票メール送付",

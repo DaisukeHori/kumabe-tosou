@@ -18,7 +18,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 const getEnvMock = vi.fn();
 vi.mock("@/lib/env", () => ({
   getEnv: () => getEnvMock(),
-  isTelephonyConfigured: () => true,
+}));
+vi.mock("@/lib/integration-credentials", () => ({
+  isIntegrationConfigured: async () => true,
+  resolveIntegrationCredentials: async () => ({ provider: "twilio", publicId: "AC123", secret: "secret", source: "env" }),
 }));
 
 vi.mock("@/lib/supabase/session", () => ({ getSessionAndClient: vi.fn() }));

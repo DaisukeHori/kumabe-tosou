@@ -2,7 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getEnv, isTelephonyConfigured } from "@/lib/env";
+import { getEnv } from "@/lib/env";
+import { isIntegrationConfigured } from "@/lib/integration-credentials";
 import { normalizeSiteBaseUrl } from "@/lib/site-base-url";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
@@ -130,7 +131,7 @@ export interface TelephonyFacade {
   linkCallToCustomer(callId: string, customerId: string | null, expectedUpdatedAt: string): Promise<Result<void>>;
   /** 設定画面/バナー用 (E802 degrade 表示の判定素材)。staleJobs は getCallAlertCounts.stalled と同一 query。 */
   getTelephonySetupStatus(): Promise<
-    Result<{ envConfigured: boolean; numberConfigured: boolean; forwardConfigured: boolean; staleJobs: number }>
+    Result<{ credentialsConfigured: boolean; numberConfigured: boolean; forwardConfigured: boolean; staleJobs: number }>
   >;
   /** ダッシュボード集計 (§8.4)。呼び出し元は /admin ホーム (crm フェーズの app 層)。E201/E202/E901 */
   getCallAlertCounts(): Promise<Result<{ failed: number; needsReview: number; stalled: number }>>;
@@ -870,7 +871,7 @@ export const telephonyFacade: TelephonyFacade = {
     return {
       ok: true,
       value: {
-        envConfigured: isTelephonyConfigured(),
+        credentialsConfigured: await isIntegrationConfigured("twilio"),
         numberConfigured: telephonySettings.phone_number_e164 !== null,
         forwardConfigured: telephonySettings.forward_to_e164 !== null,
         staleJobs: staleResult.value,

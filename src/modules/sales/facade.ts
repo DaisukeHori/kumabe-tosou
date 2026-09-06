@@ -3,7 +3,8 @@ import "server-only";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getEnv, isPrintTokenSecretConfigured, isResendConfigured, isServiceRoleConfigured } from "@/lib/env";
+import { getEnv, isPrintTokenSecretConfigured, isServiceRoleConfigured } from "@/lib/env";
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type { ExecutionContext, Paged, Pagination, Result, TaxCategory } from "@/modules/platform/contracts";
@@ -216,7 +217,7 @@ export interface SalesFacadeExtended extends SalesFacade {
    * (documents 自体を更新しないため — 送信は document_emails への追記のみで documents.updated_at は
    * 変わらない。issueDocument 等の状態遷移系メソッドとは異なる設計)。
    * 手順: Zod → 帳票状態ガード (draft は E621、voided/declined/expired は E623) →
-   * isResendConfigured() 早期判定 (E644) → 版検索 (E627) → PDF ダウンロード (E641) →
+   * Resend API キー (設定 > 外部連携 / env) の早期判定 (E644) → 版検索 (E627) → PDF ダウンロード (E641) →
    * internal/email.ts 送信 → document_emails へ結果 INSERT (成功/失敗いずれも) →
    * 成功時のみ crmFacade.appendActivity('email', direction:'outbound') (失敗は warn のみ)。
    * エラー: E101(Zod) / E645(宛先不正) / E621 / E623 / E627 / E640 / E641 / E644 / E901。
@@ -2102,8 +2103,13 @@ export function createSalesFacade(
           return { ok: false, code: "KMB-E627", detail: "書類番号が未確定です。" };
         }
 
-        if (!isResendConfigured()) {
-          return { ok: false, code: "KMB-E644", detail: "RESEND_API_KEY が未設定です。メールを送信できません。" };
+        const resendApiKey = (await resolveIntegrationCredentials("resend")).secret;
+        if (!resendApiKey) {
+          return {
+            ok: false,
+            code: "KMB-E644",
+            detail: "Resend の API キーが未設定です (設定 > 外部連携)。メールを送信できません。",
+          };
         }
 
         const serviceClientResult = resolvePdfServiceClient(injectedClient);

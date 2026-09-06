@@ -42,17 +42,17 @@ const PAGINATION = { limit: 20, cursor: null };
 describe("listCompaniesPage の q フィルタ", () => {
   it("name/name_kana の ilike を引用符付きで OR 結合する", async () => {
     const { client, captured } = buildCapturingClient();
-    const result = await listCompaniesPage(client, { q: "熊部" }, PAGINATION);
+    const result = await listCompaniesPage(client, { q: "山岸" }, PAGINATION);
     expect(result.ok).toBe(true);
-    expect(captured.or).toEqual(['name.ilike."%熊部%",name_kana.ilike."%熊部%"']);
+    expect(captured.or).toEqual(['name.ilike."%山岸%",name_kana.ilike."%山岸%"']);
   });
 
   it("カンマ・括弧を含む検索語でも値が引用符で囲まれ、フィルタ区切りとして解釈されない", async () => {
     const { client, captured } = buildCapturingClient();
-    await listCompaniesPage(client, { q: "熊部塗装(株), 本社" }, PAGINATION);
+    await listCompaniesPage(client, { q: "山岸塗装(株), 本社" }, PAGINATION);
     expect(captured.or).toHaveLength(1);
     const filter = captured.or[0];
-    expect(filter).toBe('name.ilike."%熊部塗装(株), 本社%",name_kana.ilike."%熊部塗装(株), 本社%"');
+    expect(filter).toBe('name.ilike."%山岸塗装(株), 本社%",name_kana.ilike."%山岸塗装(株), 本社%"');
     // 引用符の外側にカンマは 1 つ (2 項の区切り) だけ
     expect(filter.replace(/"[^"]*"/g, "").split(",")).toHaveLength(2);
   });

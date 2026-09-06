@@ -4,7 +4,7 @@ import { Resend } from "resend";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { isResendConfigured } from "@/lib/env";
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { zNotificationSettings } from "@/modules/settings/contracts";
 
@@ -113,9 +113,10 @@ export async function notifyInquiryReceived(
   input: InquiryInput,
   inquiryId: string,
 ): Promise<void> {
-  if (!isResendConfigured()) {
+  const resendApiKey = (await resolveIntegrationCredentials("resend")).secret;
+  if (!resendApiKey) {
     console.warn(
-      `[KMB-E902] RESEND_API_KEY 未設定のため問い合わせ通知メールをスキップしました (inquiryId=${inquiryId})`,
+      `[KMB-E902] Resend の API キー未設定 (設定 > 外部連携) のため問い合わせ通知メールをスキップしました (inquiryId=${inquiryId})`,
     );
     return;
   }
@@ -129,7 +130,7 @@ export async function notifyInquiryReceived(
   }
 
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = new Resend(resendApiKey);
     const { text, html } = buildEmailBodies(input, inquiryId);
     const { error } = await resend.emails.send({
       from: fromAddress(),

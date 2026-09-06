@@ -12,10 +12,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const getEnvMock = vi.fn();
-const isTelephonyConfiguredMock = vi.fn();
 vi.mock("@/lib/env", () => ({
   getEnv: () => getEnvMock(),
-  isTelephonyConfigured: () => isTelephonyConfiguredMock(),
+}));
+
+// Twilio 認証情報は src/lib/integration-credentials.ts (設定 > 外部連携 (DB+Vault) 優先・env フォールバック)
+// から解決する。isIntegrationConfigured / resolveIntegrationCredentials の両方をモックし、
+// 「DB に保存された Auth Token で署名検証が通る」経路も固定する。
+const isIntegrationConfiguredMock = vi.fn();
+const resolveIntegrationCredentialsMock = vi.fn();
+vi.mock("@/lib/integration-credentials", () => ({
+  isIntegrationConfigured: (...args: unknown[]) => isIntegrationConfiguredMock(...args),
+  resolveIntegrationCredentials: (...args: unknown[]) => resolveIntegrationCredentialsMock(...args),
 }));
 
 import { normalizeSiteBaseUrl } from "@/lib/site-base-url";
@@ -38,15 +46,18 @@ function buildRequest(pathAndQuery: string, signature: string | null): Request {
   return new Request(`http://internal-host:3000${pathAndQuery}`, { method: "POST", headers, body });
 }
 
+function credentials(secret: string | null, source: "db" | "env" | "none") {
+  return { provider: "twilio", publicId: "AC00000000000000000000000000000000", secret, source };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("TWILIO_AUTH_TOKEN", AUTH_TOKEN);
-  isTelephonyConfiguredMock.mockReturnValue(true);
+  isIntegrationConfiguredMock.mockResolvedValue(true);
+  resolveIntegrationCredentialsMock.mockResolvedValue(credentials(AUTH_TOKEN, "env"));
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
-  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
@@ -94,7 +105,7 @@ describe("verifyTelephonyWebhook: NEXT_PUBLIC_SITE_URL の末尾スラッシュ"
     expect(result).toEqual({ ok: false, status: 403, code: "KMB-E801" });
   });
 
-  it("署名ヘッダ欠落は 403 (KMB-E801)、env 未設定 (isTelephonyConfigured=false) は 503 (KMB-E802)", async () => {
+  it("署名ヘッダ欠落は 403 (KMB-E801)、Twilio 認証情報未設定 (isIntegrationConfigured=false) は 503 (KMB-E802)", async () => {
     getEnvMock.mockReturnValue({ NEXT_PUBLIC_SITE_URL: CANONICAL_SITE_URL });
     expect(await verifyTelephonyWebhook(buildRequest("/api/telephony/voice", null))).toEqual({
       ok: false,
@@ -102,11 +113,47 @@ describe("verifyTelephonyWebhook: NEXT_PUBLIC_SITE_URL の末尾スラッシュ"
       code: "KMB-E801",
     });
 
-    isTelephonyConfiguredMock.mockReturnValue(false);
+    isIntegrationConfiguredMock.mockResolvedValue(false);
     expect(await verifyTelephonyWebhook(buildRequest("/api/telephony/voice", "x"))).toEqual({
       ok: false,
       status: 503,
       code: "KMB-E802",
     });
+    expect(isIntegrationConfiguredMock).toHaveBeenCalledWith("twilio");
+  });
+});
+
+describe("verifyTelephonyWebhook: 認証情報の解決元 (設定 > 外部連携 / env)", () => {
+  it("DB (設定 > 外部連携) に保存された Auth Token で署名検証が通る", async () => {
+    const DB_AUTH_TOKEN = "__telephony_test__db_auth_token_abcdef";
+    getEnvMock.mockReturnValue({ NEXT_PUBLIC_SITE_URL: CANONICAL_SITE_URL });
+    resolveIntegrationCredentialsMock.mockResolvedValue(credentials(DB_AUTH_TOKEN, "db"));
+    const pathAndQuery = "/api/telephony/voice";
+    const signature = computeTwilioSignature(DB_AUTH_TOKEN, `${CANONICAL_SITE_URL}${pathAndQuery}`, PARAMS);
+
+    const result = await verifyTelephonyWebhook(buildRequest(pathAndQuery, signature));
+
+    expect(result).toEqual({ ok: true, params: PARAMS });
+    expect(resolveIntegrationCredentialsMock).toHaveBeenCalledWith("twilio");
+  });
+
+  it("DB の Auth Token と異なるトークンで計算された署名 (env の旧トークン等) は 403 (KMB-E801)", async () => {
+    getEnvMock.mockReturnValue({ NEXT_PUBLIC_SITE_URL: CANONICAL_SITE_URL });
+    resolveIntegrationCredentialsMock.mockResolvedValue(credentials("__telephony_test__db_auth_token_abcdef", "db"));
+    const pathAndQuery = "/api/telephony/voice";
+    const staleSignature = computeTwilioSignature(AUTH_TOKEN, `${CANONICAL_SITE_URL}${pathAndQuery}`, PARAMS);
+
+    const result = await verifyTelephonyWebhook(buildRequest(pathAndQuery, staleSignature));
+
+    expect(result).toEqual({ ok: false, status: 403, code: "KMB-E801" });
+  });
+
+  it("isIntegrationConfigured=true でも secret が null なら 403 (型上の安全網 — as で潰さない)", async () => {
+    getEnvMock.mockReturnValue({ NEXT_PUBLIC_SITE_URL: CANONICAL_SITE_URL });
+    resolveIntegrationCredentialsMock.mockResolvedValue(credentials(null, "none"));
+
+    const result = await verifyTelephonyWebhook(buildRequest("/api/telephony/voice", "x"));
+
+    expect(result).toEqual({ ok: false, status: 403, code: "KMB-E801" });
   });
 });

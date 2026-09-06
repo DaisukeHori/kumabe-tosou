@@ -19,7 +19,7 @@ export interface InquiryFacade {
   /**
    * site-public から呼べる唯一の書き込み。DB 保存成功後に Resend で通知メール
    * (ベストエフォート — 送信失敗は KMB-E902 をログ記録するのみで Result は成功のまま。
-   *  宛先は settings 'notifications'.inquiry_to、RESEND_API_KEY は Vercel env。
+   *  宛先は settings 'notifications'.inquiry_to、Resend の API キーは 設定 > 外部連携 (無ければ env フォールバック)。
    *  Wave1-D 統合分: anon client での INSERT + resend パッケージでの通知に統一)
    */
   submit(input: InquiryInput): Promise<Result<{ id: string }>>;

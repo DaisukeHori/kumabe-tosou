@@ -46,7 +46,7 @@ const FULL_TEXT_MAX_CHARS = 50_000;
 const JST_TIME_ZONE = "Asia/Tokyo";
 
 const HANDLING_LABEL: Record<CallHandling, string> = {
-  forwarded: "転送応答 (熊部さんが直接応答)",
+  forwarded: "転送応答 (代表が直接応答)",
   voicemail: "留守番電話 (営業時間内)",
   after_hours_voicemail: "留守番電話 (営業時間外)",
   missed: "不通 (録音なし)",

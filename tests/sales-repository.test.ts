@@ -1393,7 +1393,7 @@ describe("insertDocumentEmail / listDocumentEmails (document_emails repository �
       subject: "件名",
       body: "本文",
       status: "failed",
-      errorDetail: "KMB-E644: RESEND_API_KEY が未設定です。",
+      errorDetail: "KMB-E644: Resend の API キーが未設定です (設定 > 外部連携)。",
       providerMessageId: null,
       createdBy: null,
     };
@@ -1403,7 +1403,7 @@ describe("insertDocumentEmail / listDocumentEmails (document_emails repository �
     expect(result.ok).toBe(true);
     const insertCall = chain.calls.find((c) => c.method === "insert");
     expect(insertCall?.args[0]).toEqual(
-      expect.objectContaining({ status: "failed", error_detail: "KMB-E644: RESEND_API_KEY が未設定です。" }),
+      expect.objectContaining({ status: "failed", error_detail: "KMB-E644: Resend の API キーが未設定です (設定 > 外部連携)。" }),
     );
   });
 

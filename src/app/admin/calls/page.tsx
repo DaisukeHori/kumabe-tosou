@@ -72,9 +72,9 @@ export default async function AdminCallsPage({
   const nextCursor = listResult.ok ? listResult.value.next_cursor : null;
   const setupStatus = setupStatusResult.ok ? setupStatusResult.value : null;
 
-  // env 未設定 (E802 degrade) — セットアップ未了時は着信そのものが留守電扱いにならず失敗する
+  // Twilio 認証情報未設定 (E802 degrade) — セットアップ未了時は着信そのものが留守電扱いにならず失敗する
   // 恐れがあるため、明示バナーで案内する (§8.1)。
-  const showDegradeBanner = setupStatus !== null && !setupStatus.envConfigured;
+  const showDegradeBanner = setupStatus !== null && !setupStatus.credentialsConfigured;
 
   const handlingPills: PillItem[] = HANDLING_FILTERS.map((f) => ({
     key: String(f.value),

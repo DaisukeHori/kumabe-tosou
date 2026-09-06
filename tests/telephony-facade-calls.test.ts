@@ -51,6 +51,13 @@ vi.mock("@/lib/supabase/service", () => ({
   createSupabaseServiceClient: (...args: unknown[]) => createSupabaseServiceClientMock(...args),
 }));
 
+// Twilio 認証情報の判定は src/lib/integration-credentials.ts (設定 > 外部連携 優先・env フォールバック) に
+// 集約されているため、facade 側は isIntegrationConfigured("twilio") の結果をそのまま返すことだけを検証する。
+const isIntegrationConfiguredMock = vi.fn();
+vi.mock("@/lib/integration-credentials", () => ({
+  isIntegrationConfigured: (...args: unknown[]) => isIntegrationConfiguredMock(...args),
+}));
+
 const listCallsPageMock = vi.fn();
 const getCallByIdMock = vi.fn();
 const listCallRecordingsByCallIdMock = vi.fn();
@@ -164,13 +171,13 @@ describe("listCalls — customer_name 解決 (calls.customer_id 直 join 禁止�
     });
     getCustomerRefMock.mockResolvedValue({
       ok: true,
-      value: { customer_id: "cust-1", name: "熊部太郎", kind: "person", company_id: null, tel_e164: null, email: null, address: null },
+      value: { customer_id: "cust-1", name: "山岸太郎", kind: "person", company_id: null, tel_e164: null, email: null, address: null },
     });
 
     const result = await telephonyFacade.listCalls({ cursor: null });
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.items[0]?.customer_name).toBe("熊部太郎");
+    if (result.ok) expect(result.value.items[0]?.customer_name).toBe("山岸太郎");
     expect(getCustomerRefMock).toHaveBeenCalledWith("cust-1", { mode: "service" });
   });
 
@@ -347,13 +354,13 @@ describe("getCallDetail", () => {
     listCallJobsByCallIdMock.mockResolvedValue({ ok: true, value: [] });
     getCustomerRefMock.mockResolvedValue({
       ok: true,
-      value: { customer_id: "cust-1", name: "熊部花子", kind: "person", company_id: null, tel_e164: null, email: null, address: null },
+      value: { customer_id: "cust-1", name: "山岸花子", kind: "person", company_id: null, tel_e164: null, email: null, address: null },
     });
 
     const result = await telephonyFacade.getCallDetail(CALL_ID);
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.call.customer_name).toBe("熊部花子");
+    if (result.ok) expect(result.value.call.customer_name).toBe("山岸花子");
   });
 });
 
@@ -488,29 +495,28 @@ describe("linkCallToCustomer (§7.2 — CAS 更新 + crm への波及)", () => {
   });
 });
 
-describe("getTelephonySetupStatus (§8.3 — env/番号/転送/staleJobs)", () => {
-  it("TWILIO env 未設定時は envConfigured:false を返す", async () => {
-    vi.stubEnv("TWILIO_ACCOUNT_SID", "");
-    vi.stubEnv("TWILIO_AUTH_TOKEN", "");
+describe("getTelephonySetupStatus (§8.3 — Twilio 認証情報/番号/転送/staleJobs)", () => {
+  it("Twilio 認証情報未設定 (isIntegrationConfigured=false) 時は credentialsConfigured:false を返す", async () => {
+    isIntegrationConfiguredMock.mockResolvedValue(false);
     settingsGetMock.mockResolvedValue({ ok: false, code: "KMB-E901" });
     countStaleCallJobsMock.mockResolvedValue({ ok: true, value: 0 });
 
     const result = await telephonyFacade.getTelephonySetupStatus();
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.envConfigured).toBe(false);
+    if (result.ok) expect(result.value.credentialsConfigured).toBe(false);
+    expect(isIntegrationConfiguredMock).toHaveBeenCalledWith("twilio");
   });
 
-  it("TWILIO env 両方設定済みの場合は envConfigured:true を返す", async () => {
-    vi.stubEnv("TWILIO_ACCOUNT_SID", "AC123");
-    vi.stubEnv("TWILIO_AUTH_TOKEN", "secret");
+  it("Twilio 認証情報設定済み (設定 > 外部連携 または env) の場合は credentialsConfigured:true を返す", async () => {
+    isIntegrationConfiguredMock.mockResolvedValue(true);
     settingsGetMock.mockResolvedValue({ ok: false, code: "KMB-E901" });
     countStaleCallJobsMock.mockResolvedValue({ ok: true, value: 0 });
 
     const result = await telephonyFacade.getTelephonySetupStatus();
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.envConfigured).toBe(true);
+    if (result.ok) expect(result.value.credentialsConfigured).toBe(true);
   });
 
   it("settings 未設定 (E901) は既定値へ degrade しエラーにしない (numberConfigured/forwardConfigured:false)", async () => {
@@ -521,7 +527,7 @@ describe("getTelephonySetupStatus (§8.3 — env/番号/転送/staleJobs)", () =
 
     expect(result).toEqual({
       ok: true,
-      value: { envConfigured: expect.any(Boolean), numberConfigured: false, forwardConfigured: false, staleJobs: 2 },
+      value: { credentialsConfigured: expect.any(Boolean), numberConfigured: false, forwardConfigured: false, staleJobs: 2 },
     });
   });
 

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { SettingsTabs, type SettingsTabsData } from "@/app/admin/settings/settings-forms";
+import type { IntegrationProvider, IntegrationStatus } from "@/lib/integration-credentials";
 
 /**
  * canonical: GitHub Issue #92 「通話設定への誘導リンクを設定画面の『電話』タブへ直接
@@ -23,6 +24,9 @@ import { SettingsTabs, type SettingsTabsData } from "@/app/admin/settings/settin
  * 自動テストの対象外とする (受入基準のうち該当項目は手動/ビルド確認で担保する)。
  */
 
+// @/lib/integration-credentials は server-only のため型のみ import し、provider 集合はここで再掲する。
+const INTEGRATION_PROVIDERS: IntegrationProvider[] = ["google_calendar", "ms_calendar", "x", "meta", "twilio", "resend"];
+
 function unset<T>(): { value: T | null; updatedAt: string | null; isUnset: boolean } {
   return { value: null, updatedAt: null, isUnset: true };
 }
@@ -42,11 +46,22 @@ const DATA: SettingsTabsData = {
 };
 
 const TELEPHONY_SETUP_STATUS = {
-  envConfigured: true,
+  credentialsConfigured: true,
   numberConfigured: true,
   forwardConfigured: true,
   staleJobs: 0,
 };
+
+// 「外部連携」タブ (6 サービス) の未設定状態。secret を含まない表示用ステータスのみ。
+const INTEGRATION_STATUSES: IntegrationStatus[] = INTEGRATION_PROVIDERS.map((provider) => ({
+  provider,
+  configured: false,
+  source: "none",
+  publicId: null,
+  secretSet: false,
+  secretLast4: null,
+  updatedAt: null,
+}));
 
 function renderTabs(initialTab: string | undefined): string {
   return renderToStaticMarkup(
@@ -54,6 +69,9 @@ function renderTabs(initialTab: string | undefined): string {
       data: DATA,
       initialTab,
       aiKeys: [],
+      integrationStatuses: INTEGRATION_STATUSES,
+      oauthEnabled: true,
+      accountEmail: "admin@example.com",
       telephonySetupStatus: TELEPHONY_SETUP_STATUS,
       siteUrl: "https://example.com",
       sealPreviewUrl: null,
@@ -78,6 +96,8 @@ const TAB_MARKERS: Record<string, string> = {
   business_hours: "臨時休業日",
   invoice_issuer: "ii-issuer-name",
   ai: "プロバイダキー管理",
+  integrations: "外部サービスの認証情報",
+  account: "account-current-password",
 };
 
 const ALL_MARKERS = Object.values(TAB_MARKERS);

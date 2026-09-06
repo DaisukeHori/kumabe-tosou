@@ -2,7 +2,7 @@ import "server-only";
 
 import { Resend } from "resend";
 
-import { isResendConfigured } from "@/lib/env";
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import type { ExecutionContext, Result } from "@/modules/platform/contracts";
 import { settingsFacade } from "@/modules/settings/facade";
 
@@ -15,7 +15,7 @@ import type { CrmDigest, TaskListItem, DealListItem } from "../contracts";
  * settings モジュール境界違反を避けるため)。
  *
  * エラー分類 (§6.1 補足・facade.sendDailyDigest のエラー列挙 "E901 (settings 読取不能のみ)" と
- * 1:1 — RESEND_API_KEY 未設定・Resend API 呼び出し失敗はベストエフォート (KMB-E902 をログするのみで
+ * 1:1 — Resend の API キー未設定 (設定 > 外部連携)・Resend API 呼び出し失敗はベストエフォート (KMB-E902 をログするのみで
  * Result は成功のまま) だが、**宛先を決定できない (settings 'notifications' 自体が読めない) のは
  * ダイジェスト送信という処理自体が実行不能な真の失敗であり、これを ok:true で握り潰すと
  * 「メールは送られたはず」という誤った成功扱いになる (facade 境界でのエラー握り潰し禁止規約)。
@@ -104,12 +104,13 @@ function escapeHtml(value: string): string {
 
 /**
  * 呼び出し元 (facade.sendDailyDigest) は常に ctx をそのまま渡す (worker からは service 固定)。
- * RESEND_API_KEY 未設定・Resend 送信失敗はベストエフォート (KMB-E902 ログのみ、ok:true で返す)。
+ * Resend の API キー未設定 (設定 > 外部連携)・Resend 送信失敗はベストエフォート (KMB-E902 ログのみ、ok:true で返す)。
  * settings 'notifications' 自体が読めない場合のみ ok:false (KMB-E901) を返す (上記コメント参照)。
  */
 export async function sendCrmDigestEmail(digest: CrmDigest, ctx: ExecutionContext): Promise<Result<void>> {
-  if (!isResendConfigured()) {
-    console.warn("[KMB-E902] RESEND_API_KEY 未設定のため CRM ダイジェストメールをスキップしました");
+  const resendApiKey = (await resolveIntegrationCredentials("resend")).secret;
+  if (!resendApiKey) {
+    console.warn("[KMB-E902] Resend の API キー未設定 (設定 > 外部連携) のため CRM ダイジェストメールをスキップしました");
     return { ok: true, value: undefined };
   }
 
@@ -124,7 +125,7 @@ export async function sendCrmDigestEmail(digest: CrmDigest, ctx: ExecutionContex
   const inquiryTo = settingsResult.value.inquiry_to;
 
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = new Resend(resendApiKey);
     const { text, html } = buildEmailBodies(digest);
     const { error } = await resend.emails.send({
       from: fromAddress(),

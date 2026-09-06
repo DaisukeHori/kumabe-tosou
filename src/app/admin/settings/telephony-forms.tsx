@@ -64,7 +64,7 @@ function UpdatedAtHint({
 }
 
 export type TelephonySetupStatus = {
-  envConfigured: boolean;
+  credentialsConfigured: boolean;
   numberConfigured: boolean;
   forwardConfigured: boolean;
   staleJobs: number;
@@ -79,7 +79,13 @@ function SetupChecklist({ status, siteUrl }: { status: TelephonySetupStatus | nu
   return (
     <div className="mb-4 flex flex-col gap-1 rounded-lg border border-border bg-muted/40 p-3 text-xs">
       <p className="font-medium text-foreground">セットアップチェックリスト</p>
-      <p>{status.envConfigured ? "✅" : "⬜"} env (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN) 設定済み</p>
+      <p>
+        {status.credentialsConfigured ? "✅" : "⬜"} Twilio の認証情報 (Account SID / Auth Token) 設定済み —{" "}
+        <a href="/admin/settings?tab=integrations" className="underline underline-offset-2">
+          設定 &gt; 外部連携
+        </a>{" "}
+        で登録
+      </p>
       <p>{status.numberConfigured ? "✅" : "⬜"} 電話番号 設定済み</p>
       <p>{status.forwardConfigured ? "✅" : "⬜"} 転送先 設定済み (未設定でも全通話が留守電として成立します)</p>
       <p>{status.staleJobs > 0 ? "⚠️" : "✅"} 処理の滞留: {status.staleJobs} 件 (30分超)</p>
@@ -134,7 +140,7 @@ export function TelephonyForm({
           </Field>
         </div>
         <Field>
-          <FieldLabel htmlFor="tel-forward-to">転送先電話番号 (熊部さんの携帯など)</FieldLabel>
+          <FieldLabel htmlFor="tel-forward-to">転送先電話番号 (代表の携帯など)</FieldLabel>
           <Input
             id="tel-forward-to"
             name="forward_to_e164"

@@ -277,22 +277,22 @@ describe("searchCustomersForLinkAction / createCustomerForCallAction", () => {
   it("createCustomerForCallAction: lifecycle='customer'/source='phone' 固定で crmFacade.createCustomer を呼ぶ", async () => {
     createCustomerMock.mockResolvedValue({ ok: true, value: { customer_id: CUSTOMER_ID } });
 
-    const result = await createCustomerForCallAction({ name: "熊部太郎", telE164: "+819012345678" });
+    const result = await createCustomerForCallAction({ name: "山岸太郎", telE164: "+819012345678" });
 
     expect(result).toEqual({ ok: true, value: { customer_id: CUSTOMER_ID } });
     expect(createCustomerMock).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "熊部太郎", tel_e164: "+819012345678", lifecycle: "customer", source: "phone" }),
+      expect.objectContaining({ name: "山岸太郎", tel_e164: "+819012345678", lifecycle: "customer", source: "phone" }),
     );
   });
 
   it("createCustomerForCallAction: telE164=null (no_number 通話) は source='manual' で呼ぶ (レビュー指摘是正 — email/tel いずれも無いと crm zCustomerInput の refine に落ちて毎回 KMB-E101 になっていた不具合)", async () => {
     createCustomerMock.mockResolvedValue({ ok: true, value: { customer_id: CUSTOMER_ID } });
 
-    const result = await createCustomerForCallAction({ name: "熊部太郎", telE164: null });
+    const result = await createCustomerForCallAction({ name: "山岸太郎", telE164: null });
 
     expect(result).toEqual({ ok: true, value: { customer_id: CUSTOMER_ID } });
     expect(createCustomerMock).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "熊部太郎", tel_e164: null, email: null, lifecycle: "customer", source: "manual" }),
+      expect.objectContaining({ name: "山岸太郎", tel_e164: null, email: null, lifecycle: "customer", source: "manual" }),
     );
   });
 });

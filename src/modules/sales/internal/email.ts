@@ -2,6 +2,7 @@ import "server-only";
 
 import { Resend } from "resend";
 
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import type { Result } from "@/modules/platform/contracts";
 
 import type { DocType } from "../contracts";
@@ -71,16 +72,17 @@ export function buildAttachmentFilename(docType: DocType, docNo: string, version
 }
 
 /**
- * 送信本体。呼び出し元 (facade sendDocumentByEmail) が isResendConfigured() を事前チェック済みの
+ * 送信本体。呼び出し元 (facade sendDocumentByEmail) が Resend API キーの有無を事前チェック済みの
  * 前提で呼ぶ (未設定はここに到達する前に KMB-E644 で早期リターンする設計 — §18 手順4)。
- * それでも RESEND_API_KEY が空の状態で呼ばれた場合は Resend SDK 自体がエラーを返すため、
+ * API キーは 設定 > 外部連携 (DB+Vault) 優先・env フォールバック (src/lib/integration-credentials.ts)。
+ * それでもキーが空の状態で呼ばれた場合は Resend SDK 自体がエラーを返すため、
  * その場合も同じく KMB-E644 に写像する (二重の安全網 — 握り潰さない)。
  */
 export async function sendDocumentEmail(
   params: SendDocumentEmailParams,
 ): Promise<Result<{ provider_message_id: string | null }>> {
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = new Resend((await resolveIntegrationCredentials("resend")).secret ?? undefined);
     const filename = buildAttachmentFilename(params.docType, params.docNo, params.version);
 
     const { data, error } = await resend.emails.send({

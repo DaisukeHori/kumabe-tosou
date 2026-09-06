@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * 検証対象 (issue #101 受入基準・設計「エラー全列挙」と 1:1):
  *  - E621 (draft・帳票不在) / E623 (voided/declined/expired) / E627 (版なし・doc_no 未確定) /
- *    E645 (宛先不正・未指定) / E644 (RESEND_API_KEY 未設定・Resend API エラー)
+ *    E645 (宛先不正・未指定) / E644 (Resend の API キー未設定 (設定 > 外部連携)・Resend API エラー)
  *  - 送信失敗時も document_emails に status='failed' 行が記録されること (E644 を返す前に INSERT 済み)
  *  - 成功時の document_emails 行 (status='sent') + appendActivity('email', direction:'outbound') 呼び出し
  *  - appendActivity 失敗時も送信自体は成功扱い (console.warn 縮退 — issueDocument と同型)
@@ -26,14 +26,12 @@ vi.mock("@/lib/supabase/service", () => ({
   createSupabaseServiceClient: (...args: unknown[]) => createSupabaseServiceClientMock(...args),
 }));
 
-const isResendConfiguredMock = vi.fn();
-vi.mock("@/lib/env", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/env")>();
-  return {
-    ...actual,
-    isResendConfigured: (...args: unknown[]) => isResendConfiguredMock(...args),
-  };
-});
+// Resend の API キーは src/lib/integration-credentials.ts (設定 > 外部連携 (DB+Vault) 優先・env フォールバック)
+// から解決する。facade は resolveIntegrationCredentials("resend").secret の有無で E644 早期判定する。
+const resolveIntegrationCredentialsMock = vi.fn();
+vi.mock("@/lib/integration-credentials", () => ({
+  resolveIntegrationCredentials: (...args: unknown[]) => resolveIntegrationCredentialsMock(...args),
+}));
 
 const appendActivityMock = vi.fn();
 vi.mock("@/modules/crm/facade", () => ({
@@ -130,7 +128,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getSessionAndClientMock.mockResolvedValue({ supabase: {}, user: { id: "user-1" } });
   createSupabaseServiceClientMock.mockReturnValue(SERVICE_CLIENT_MARKER);
-  isResendConfiguredMock.mockReturnValue(true);
+  resolveIntegrationCredentialsMock.mockResolvedValue({ provider: "resend", publicId: null, secret: "re_test_key", source: "db" });
   getIssuedDocumentByVersionMock.mockResolvedValue({
     ok: true,
     value: { id: "issued-doc-1", storage_path: "documents/x/v1.pdf" },
@@ -178,7 +176,7 @@ describe("createSalesFacade().sendDocumentByEmail — 帳票状態ガード", ()
     const facade = createSalesFacade();
     const result = await facade.sendDocumentByEmail(DOC_ID, validInput());
     expect(result).toEqual(expect.objectContaining({ ok: false, code: "KMB-E621" }));
-    expect(isResendConfiguredMock).not.toHaveBeenCalled();
+    expect(resolveIntegrationCredentialsMock).not.toHaveBeenCalled();
   });
 
   it.each(["voided", "declined", "expired"] as const)(
@@ -211,8 +209,8 @@ describe("createSalesFacade().sendDocumentByEmail — Resend 未設定・版な�
     getDocumentByIdMock.mockResolvedValue({ ok: true, value: documentRow() });
   });
 
-  it("RESEND_API_KEY 未設定は KMB-E644 (PDF ダウンロード前に早期リターン)", async () => {
-    isResendConfiguredMock.mockReturnValue(false);
+  it("Resend の API キー未設定 (設定 > 外部連携 にも env にも無い) は KMB-E644 (PDF ダウンロード前に早期リターン)", async () => {
+    resolveIntegrationCredentialsMock.mockResolvedValue({ provider: "resend", publicId: null, secret: null, source: "none" });
     const facade = createSalesFacade();
     const result = await facade.sendDocumentByEmail(DOC_ID, validInput());
     expect(result).toEqual(expect.objectContaining({ ok: false, code: "KMB-E644" }));

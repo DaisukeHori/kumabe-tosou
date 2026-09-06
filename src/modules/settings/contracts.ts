@@ -147,7 +147,7 @@ export const zWorkCapacitySettings = z.object({
 export const zTelephonySettings = z.object({
   phone_number_e164: zTelE164.nullable(),        // 購入した 050 番号 (表示・Phase 2 発信用)
   twilio_number_sid: z.string().max(64).nullable(), // 番号リソース SID (PN...)。運用記録用
-  forward_to_e164: zTelE164.nullable(),          // 営業時間内の転送先 (熊部さん携帯)。null = 転送なし→留守電
+  forward_to_e164: zTelE164.nullable(),          // 営業時間内の転送先 (代表の携帯)。null = 転送なし→留守電
   consent_announcement_enabled: z.boolean(),     // 録音同意アナウンス (既定 true — 裁定 J3)
   consent_announcement_text: z.string().max(300).nullable(), // null = 既定文言 (telephony/internal/twiml.ts の定数)
   in_hours_greeting_text: z.string().max(300).nullable(),    // 営業時間内・転送なし時の留守電導入文言

@@ -1,6 +1,7 @@
 import "server-only";
 
-import { getEnv, isTelephonyConfigured } from "@/lib/env";
+import { getEnv } from "@/lib/env";
+import { isIntegrationConfigured, resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import { normalizeSiteBaseUrl } from "@/lib/site-base-url";
 import { verifyTwilioSignature } from "@/lib/telephony-signature";
 
@@ -22,7 +23,9 @@ export type VerifiedTelephonyWebhook =
 
 /**
  * 04-telephony.md §6.1 手順 1-4:
- * 1. isTelephonyConfigured() でなければ 503 (KMB-E802)
+ * 1. isIntegrationConfigured("twilio") でなければ 503 (KMB-E802)
+ *    (Twilio 認証情報は 設定 > 外部連携 (DB+Vault) 優先、無ければ env にフォールバック —
+ *    src/lib/integration-credentials.ts。webhook の 15 秒制約は同モジュールの 30 秒プロセス内キャッシュで吸収)
  * 2. rawBody を URLSearchParams で parse (空値パラメータも脱落させない)
  * 3. 検証 URL = `${NEXT_PUBLIC_SITE_URL}${pathname}${search}` の固定組み立て
  *    (request.url は Vercel プロキシで http/内部ホストになり得るため生の pathname/search
@@ -30,7 +33,7 @@ export type VerifiedTelephonyWebhook =
  * 4. 署名不一致 → 403 (KMB-E801。console.error のみ・body なし)
  */
 export async function verifyTelephonyWebhook(request: Request): Promise<VerifiedTelephonyWebhook> {
-  if (!isTelephonyConfigured()) {
+  if (!(await isIntegrationConfigured("twilio"))) {
     return { ok: false, status: 503, code: "KMB-E802" };
   }
 
@@ -46,9 +49,9 @@ export async function verifyTelephonyWebhook(request: Request): Promise<Verified
   // (TwiML 側の callback URL 生成 — telephony facade — と同じ normalizeSiteBaseUrl を通す)。
   const verificationUrl = `${normalizeSiteBaseUrl(getEnv().NEXT_PUBLIC_SITE_URL)}${requestUrl.pathname}${requestUrl.search}`;
   const signatureHeader = request.headers.get("X-Twilio-Signature");
-  // isTelephonyConfigured() が true を返した直後のため TWILIO_AUTH_TOKEN は必ず設定済みだが、
-  // 型上は string | undefined のため念のため確認する (as で潰さない)。
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  // isIntegrationConfigured("twilio") が true を返した直後のため Auth Token は必ず設定済み
+  // (同一キャッシュから返る) だが、型上は string | null のため念のため確認する (as で潰さない)。
+  const authToken = (await resolveIntegrationCredentials("twilio")).secret;
   if (!authToken || !verifyTwilioSignature(authToken, signatureHeader, verificationUrl, params)) {
     console.error(`KMB-E801: Twilio 署名検証に失敗しました (${requestUrl.pathname})`);
     return { ok: false, status: 403, code: "KMB-E801" };

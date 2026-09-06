@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getEnv } from "@/lib/env";
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import type { Result } from "@/modules/platform/contracts";
 
 /**
@@ -26,20 +26,21 @@ function basicAuthHeader(accountSid: string, authToken: string): string {
 }
 
 /**
- * TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN (getEnv() — env.ts に既定義。追加不要) の両方が
- * 設定済みであることを確認する。未設定は KMB-E802 (電話連携が未設定です) として返す
+ * Twilio の Account SID / Auth Token (設定 > 外部連携 (DB+Vault) 優先、無ければ env フォールバック —
+ * src/lib/integration-credentials.ts) の両方が設定済みであることを確認する。
+ * 未設定は KMB-E802 (電話連携が未設定です) として返す
  * (worker がこの結果をそのまま不確定 return として扱う設計 — §6.5 共通則)。
  */
-function resolveTwilioCredentials(): Result<{ accountSid: string; authToken: string }> {
-  const env = getEnv();
-  if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN) {
+async function resolveTwilioCredentials(): Promise<Result<{ accountSid: string; authToken: string }>> {
+  const creds = await resolveIntegrationCredentials("twilio");
+  if (!creds.publicId || !creds.secret) {
     return {
       ok: false,
       code: "KMB-E802",
-      detail: "TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN が未設定のため録音を取得できません",
+      detail: "Twilio の認証情報 (Account SID / Auth Token) が未設定のため録音を取得できません (設定 > 外部連携)",
     };
   }
-  return { ok: true, value: { accountSid: env.TWILIO_ACCOUNT_SID, authToken: env.TWILIO_AUTH_TOKEN } };
+  return { ok: true, value: { accountSid: creds.publicId, authToken: creds.secret } };
 }
 
 /**
@@ -50,7 +51,7 @@ function resolveTwilioCredentials(): Result<{ accountSid: string; authToken: str
  * (録音の取得または保存に失敗しました) の ok:false で返す。
  */
 export async function downloadRecording(twilioUrl: string): Promise<Result<DownloadRecordingOutcome>> {
-  const credentials = resolveTwilioCredentials();
+  const credentials = await resolveTwilioCredentials();
   if (!credentials.ok) return credentials;
 
   try {
@@ -87,7 +88,7 @@ export async function downloadRecording(twilioUrl: string): Promise<Result<Downl
  * 既に削除済み (404) は冪等に成功扱いとする (Twilio 側の DELETE は冪等 — §5.5「実行系」)。
  */
 export async function deleteRecording(twilioUrl: string): Promise<Result<void>> {
-  const credentials = resolveTwilioCredentials();
+  const credentials = await resolveTwilioCredentials();
   if (!credentials.ok) return credentials;
 
   try {

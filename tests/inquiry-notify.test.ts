@@ -21,6 +21,18 @@ vi.mock("@/lib/supabase/service", () => ({
   createSupabaseServiceClient: (...args: unknown[]) => createSupabaseServiceClientMock(...args),
 }));
 
+// Resend の API キーは src/lib/integration-credentials.ts (設定 > 外部連携 優先・env フォールバック) から
+// 解決する。実装は service client を経由するため、ここではモジュールごとモックして
+// 「createSupabaseServiceClient が呼ばれない」という本テストの検証観点を汚さないようにする。
+const resolveIntegrationCredentialsMock = vi.fn();
+vi.mock("@/lib/integration-credentials", () => ({
+  resolveIntegrationCredentials: (...args: unknown[]) => resolveIntegrationCredentialsMock(...args),
+}));
+
+function resendCredentials(secret: string | null) {
+  return { provider: "resend", publicId: null, secret, source: secret ? "db" : "none" };
+}
+
 const resendSendMock = vi.fn();
 vi.mock("resend", () => ({
   // new Resend(apiKey) で呼ばれるためコンストラクタ (class) にする必要がある
@@ -49,6 +61,8 @@ const ORIGINAL_ENV = { ...process.env };
 
 beforeEach(() => {
   createSupabaseServiceClientMock.mockReset();
+  resolveIntegrationCredentialsMock.mockReset();
+  resolveIntegrationCredentialsMock.mockResolvedValue(resendCredentials(null));
   resendSendMock.mockReset();
   resendSendMock.mockResolvedValue({ data: { id: "email-1" }, error: null });
 });
@@ -122,8 +136,8 @@ describe("notifyInquiryReceived: getInquiryNotificationEmail が null を返す�
     privacy_agreed: true,
   };
 
-  it("RESEND_API_KEY 未設定なら getInquiryNotificationEmail すら呼ばずスキップする", async () => {
-    delete process.env.RESEND_API_KEY;
+  it("Resend の API キー未設定 (設定 > 外部連携 にも env にも無い) なら getInquiryNotificationEmail すら呼ばずスキップする", async () => {
+    resolveIntegrationCredentialsMock.mockResolvedValue(resendCredentials(null));
 
     await notifyInquiryReceived(baseInput, "inquiry-1");
 
@@ -131,8 +145,8 @@ describe("notifyInquiryReceived: getInquiryNotificationEmail が null を返す�
     expect(resendSendMock).not.toHaveBeenCalled();
   });
 
-  it("RESEND_API_KEY 設定済みだが通知先メール未設定 (service client throw) なら送信をスキップする", async () => {
-    process.env.RESEND_API_KEY = "re_test_key";
+  it("Resend の API キー設定済みだが通知先メール未設定 (service client throw) なら送信をスキップする", async () => {
+    resolveIntegrationCredentialsMock.mockResolvedValue(resendCredentials("re_test_key"));
     createSupabaseServiceClientMock.mockImplementation(() => {
       throw new Error("SUPABASE_SERVICE_ROLE_KEY が未設定です");
     });
@@ -143,7 +157,7 @@ describe("notifyInquiryReceived: getInquiryNotificationEmail が null を返す�
   });
 
   it("正常系: 取得した inquiry_to 宛に Resend で送信する", async () => {
-    process.env.RESEND_API_KEY = "re_test_key";
+    resolveIntegrationCredentialsMock.mockResolvedValue(resendCredentials("re_test_key"));
     const client = buildFakeServiceClient({
       data: { value: { inquiry_to: "owner@example.com", on_publish_failure: false } },
       error: null,
