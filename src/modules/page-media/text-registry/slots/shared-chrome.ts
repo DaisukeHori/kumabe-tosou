@@ -559,9 +559,10 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     route: "/",
     label: "共通 / フッター住所ブロック",
     kind: "lines",
-    maxLen: 60,
-    defaultText: "山岸塗装(代表: 山岸 信之)\n大分県豊後高田市\n郵送受託・全国対応",
+    maxLen: 80,
+    defaultText: "山岸塗装(代表: 山岸 信之)\n〒879-0614 大分県豊後高田市来縄3036-1\nTEL 090-9478-5028 / 郵送受託・全国対応",
     maxLines: 3,
+    maxLineLen: 40,
     affectsAllRoutes: true,
   },
   {

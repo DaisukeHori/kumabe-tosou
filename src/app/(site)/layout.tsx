@@ -27,10 +27,13 @@ function buildLocalBusinessJsonLd(description: string) {
     url: SITE_URL,
     address: {
       "@type": "PostalAddress",
+      postalCode: "879-0614",
       addressRegion: "大分県",
       addressLocality: "豊後高田市",
+      streetAddress: "来縄3036-1",
       addressCountry: "JP",
     },
+    telephone: "+81-90-9478-5028",
     areaServed: "全国",
     priceRange: "¥¥",
   };

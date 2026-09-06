@@ -507,8 +507,8 @@ export const ABOUT_TEXT_SLOTS: readonly PageTextSlot[] = [
     route: "/about",
     label: "会社案内 / 会社概要表 行3 本文",
     kind: "text",
-    maxLen: 20,
-    defaultText: "大分県豊後高田市",
+    maxLen: 40,
+    defaultText: "〒879-0614 大分県豊後高田市来縄3036-1",
   },
   {
     key: "about.profile.table.4.th",
@@ -601,7 +601,7 @@ export const ABOUT_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "会社案内 / LOCATION 注記 (MapNote)",
     kind: "text",
     maxLen: 55,
-    defaultText: "※ 工房の詳細な住所は、ご依頼確定時に発送先としてご案内します。",
+    defaultText: "※ 郵送受託が基本です。ご来訪の際は事前にご連絡ください。",
   },
 
   // ---- GALLERY ----

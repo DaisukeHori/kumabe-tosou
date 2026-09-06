@@ -129,8 +129,8 @@ export const TOKUSHOHO_TEXT_SLOTS: readonly PageTextSlot[] = [
     route: "/tokushoho",
     label: "特商法表記 / SpecTable 行3 内容 主文 (所在地)",
     kind: "text",
-    maxLen: 20,
-    defaultText: "大分県豊後高田市",
+    maxLen: 40,
+    defaultText: "〒879-0614 大分県豊後高田市来縄3036-1",
   },
   {
     key: "tokushoho.spec.address.note",
@@ -140,7 +140,7 @@ export const TOKUSHOHO_TEXT_SLOTS: readonly PageTextSlot[] = [
     kind: "text",
     maxLen: 100,
     defaultText:
-      "※ 番地以下の詳細な所在地は、ご請求があれば遅滞なく開示いたします。ご請求は「相談する」ページの窓口までお願いします。",
+      "※ 郵送でのご依頼を基本としています。ご来訪の際は事前にご連絡ください。",
   },
   {
     key: "tokushoho.spec.tel.th",
@@ -158,7 +158,7 @@ export const TOKUSHOHO_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "特商法表記 / SpecTable 行4 内容 主文 (電話番号)",
     kind: "text",
     maxLen: 40,
-    defaultText: "ご請求があれば遅滞なく開示いたします。",
+    defaultText: "090-9478-5028",
   },
   {
     key: "tokushoho.spec.tel.note",
@@ -167,7 +167,7 @@ export const TOKUSHOHO_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "特商法表記 / SpecTable 行4 小活字開示注記",
     kind: "text",
     maxLen: 60,
-    defaultText: "※ お問い合わせは原則として「相談する」ページの窓口にて承ります。",
+    defaultText: "※ 作業中は電話に出られない場合があります。「相談する」ページの窓口もご利用ください。",
   },
   {
     key: "tokushoho.spec.contact.th",
