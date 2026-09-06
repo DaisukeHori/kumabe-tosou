@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getEnv, isMetaOAuthConfigured } from "@/lib/env";
+import { getEnv } from "@/lib/env";
+import { isIntegrationConfigured, resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import { generateState } from "@/lib/oauth/pkce";
 import { encryptCookiePayload, OAUTH_COOKIE_MAX_AGE_SECONDS } from "@/lib/oauth/state-cookie";
 import { getErrorInfo } from "@/modules/platform/errors";
@@ -20,19 +21,23 @@ export async function GET() {
     );
   }
 
-  if (!isMetaOAuthConfigured()) {
+  if (!(await isIntegrationConfigured("meta"))) {
     return NextResponse.json(
-      { code: "KMB-E901", message: "Meta OAuth が設定されていません (env 未設定 or OAUTH_ENABLED=false)" },
+      {
+        code: "KMB-E901",
+        message: "Instagram (Meta) の認証情報が未設定か、OAuth 接続が無効です (設定 > 外部連携 で登録してください)",
+      },
       { status: 503 },
     );
   }
 
   const env = getEnv();
+  const creds = await resolveIntegrationCredentials("meta");
   const state = generateState();
   const redirectUri = `${env.NEXT_PUBLIC_SITE_URL}/api/oauth/meta/callback`;
 
   const authorizeUrl = new URL("https://www.facebook.com/v21.0/dialog/oauth");
-  authorizeUrl.searchParams.set("client_id", env.META_APP_ID as string);
+  authorizeUrl.searchParams.set("client_id", creds.publicId as string);
   authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set(

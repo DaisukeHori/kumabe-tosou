@@ -7,7 +7,7 @@ import "server-only";
 // Node の素の require() (全プロパティが揃うことを実測済み) に解決を委ねている。
 import * as twitterText from "twitter-text";
 
-import { getEnv } from "@/lib/env";
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getSessionAndClient } from "@/lib/supabase/session";
@@ -500,13 +500,16 @@ async function completeXOAuthCallback(input: {
   codeVerifier: string;
   redirectUri: string;
 }): Promise<Result<{ username: string }>> {
-  const env = getEnv();
-  if (!env.X_CLIENT_ID) return { ok: false, code: "KMB-E901", detail: "X_CLIENT_ID が未設定です" };
+  // 認証情報は DB (設定 > 外部連携) を優先し、無ければ env にフォールバックする
+  const creds = await resolveIntegrationCredentials("x");
+  if (!creds.publicId) {
+    return { ok: false, code: "KMB-E901", detail: "X の認証情報が未設定です (設定 > 外部連携 で登録してください)" };
+  }
 
   try {
     const tokenResult = await exchangeXAuthorizationCode({
-      clientId: env.X_CLIENT_ID,
-      clientSecret: env.X_CLIENT_SECRET,
+      clientId: creds.publicId,
+      clientSecret: creds.secret ?? undefined,
       code: input.code,
       codeVerifier: input.codeVerifier,
       redirectUri: input.redirectUri,
@@ -553,20 +556,26 @@ async function exchangeMetaCodeAndListPages(input: {
   code: string;
   redirectUri: string;
 }): Promise<Result<{ pages: { id: string; name: string; access_token: string }[]; expiresAt: string }>> {
-  const env = getEnv();
-  if (!env.META_APP_ID || !env.META_APP_SECRET) {
-    return { ok: false, code: "KMB-E901", detail: "META_APP_ID / META_APP_SECRET が未設定です" };
+  const creds = await resolveIntegrationCredentials("meta");
+  if (!creds.publicId || !creds.secret) {
+    return {
+      ok: false,
+      code: "KMB-E901",
+      detail: "Instagram (Meta) の認証情報が未設定です (設定 > 外部連携 で登録してください)",
+    };
   }
+  const appId = creds.publicId;
+  const appSecret = creds.secret;
   try {
     const shortResult = await exchangeMetaAuthorizationCode({
-      appId: env.META_APP_ID,
-      appSecret: env.META_APP_SECRET,
+      appId,
+      appSecret,
       code: input.code,
       redirectUri: input.redirectUri,
     });
     const longResult = await exchangeForLongLivedToken({
-      appId: env.META_APP_ID,
-      appSecret: env.META_APP_SECRET,
+      appId,
+      appSecret,
       shortLivedToken: shortResult.shortLivedToken,
     });
     const pages = await listFacebookPages(longResult.accessToken);

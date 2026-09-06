@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getEnv, isXOAuthConfigured } from "@/lib/env";
+import { getEnv } from "@/lib/env";
+import { isIntegrationConfigured, resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import { computeCodeChallenge, generateCodeVerifier, generateState } from "@/lib/oauth/pkce";
 import { encryptCookiePayload, OAUTH_COOKIE_MAX_AGE_SECONDS } from "@/lib/oauth/state-cookie";
 import { getErrorInfo } from "@/modules/platform/errors";
@@ -25,14 +26,18 @@ export async function GET() {
     );
   }
 
-  if (!isXOAuthConfigured()) {
+  if (!(await isIntegrationConfigured("x"))) {
     return NextResponse.json(
-      { code: "KMB-E901", message: "X OAuth が設定されていません (env 未設定 or OAUTH_ENABLED=false)" },
+      {
+        code: "KMB-E901",
+        message: "X の認証情報が未設定か、OAuth 接続が無効です (設定 > 外部連携 で登録してください)",
+      },
       { status: 503 },
     );
   }
 
   const env = getEnv();
+  const creds = await resolveIntegrationCredentials("x");
   const state = generateState();
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = computeCodeChallenge(codeVerifier);
@@ -40,7 +45,7 @@ export async function GET() {
 
   const authorizeUrl = new URL("https://x.com/i/oauth2/authorize");
   authorizeUrl.searchParams.set("response_type", "code");
-  authorizeUrl.searchParams.set("client_id", env.X_CLIENT_ID as string);
+  authorizeUrl.searchParams.set("client_id", creds.publicId as string);
   authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("scope", "tweet.read tweet.write users.read offline.access media.write");
   authorizeUrl.searchParams.set("state", state);

@@ -13,7 +13,7 @@ import type { ChannelAccountRow, ChannelPostRow } from "@/modules/distribution/r
  * 実 X API は叩かず fetch を全面モック、待ち時間は fake timers で進める。
  */
 
-const { serviceClientBox } = vi.hoisted(() => {
+const { serviceClientBox, credentialsBox } = vi.hoisted(() => {
   const OPS_LIMITS = {
     x_monthly_post_limit: 1000,
     ai_monthly_budget_micro_usd: 50_000_000,
@@ -22,6 +22,16 @@ const { serviceClientBox } = vi.hoisted(() => {
   };
   return {
     OPS_LIMITS,
+    // resolveIntegrationCredentials("x") の応答 (DB 優先 / env フォールバックはテストごとに差し替える)
+    credentialsBox: {
+      current: {
+        provider: "x",
+        publicId: "client-id" as string | null,
+        secret: "client-secret" as string | null,
+        source: "env" as "db" | "env" | "none",
+      },
+      calls: [] as { provider: string; hasClient: boolean }[],
+    },
     serviceClientBox: {
       serviceClient: {
         from: (table: string) => {
@@ -34,7 +44,15 @@ const { serviceClientBox } = vi.hoisted(() => {
 });
 
 vi.mock("@/lib/env", () => ({
-  getEnv: () => ({ X_CLIENT_ID: "client-id", X_CLIENT_SECRET: "client-secret", NEXT_PUBLIC_SITE_URL: "https://example.com" }),
+  getEnv: () => ({ NEXT_PUBLIC_SITE_URL: "https://example.com" }),
+}));
+// X の OAuth クライアント認証情報は env 直読みではなく integration-credentials (DB → env) 経由で解決する
+vi.mock("@/lib/integration-credentials", () => ({
+  resolveIntegrationCredentials: async (provider: string, options?: { client?: unknown }) => {
+    credentialsBox.calls.push({ provider, hasClient: options?.client !== undefined });
+    return { ...credentialsBox.current, provider };
+  },
+  isIntegrationConfigured: async () => true,
 }));
 vi.mock("@/lib/supabase/service", () => ({
   createSupabaseServiceClient: () => serviceClientBox.serviceClient as unknown,
@@ -152,6 +170,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   tweetAuthHeaders = [];
+  credentialsBox.current = { provider: "x", publicId: "client-id", secret: "client-secret", source: "env" };
+  credentialsBox.calls = [];
   fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/2/tweets")) {
@@ -263,6 +283,41 @@ describe("getValidXAccessToken: refresh リースの競合 (#7)", () => {
     expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith("/2/oauth2/token"))).toBe(false);
     expect(tweetAuthHeaders).toEqual(["Bearer fresh-from-other"]);
     expect(markPublished).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getValidXAccessToken: OAuth クライアント認証情報の解決 (設定 > 外部連携)", () => {
+  it("DB に保存された認証情報が env より優先され、その client_id / secret で refresh する (service client を渡す)", async () => {
+    // process.env に古い値が残っていても、resolve が返す DB 由来の値だけを使う
+    vi.stubEnv("X_CLIENT_ID", "env-client-id");
+    vi.stubEnv("X_CLIENT_SECRET", "env-client-secret");
+    credentialsBox.current = { provider: "x", publicId: "db-client-id", secret: "db-client-secret", source: "db" };
+    claimTokenRefreshLease.mockResolvedValue({ ok: true, value: true });
+
+    await runWithTimers(0);
+
+    const tokenCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/2/oauth2/token"));
+    expect(tokenCall).toBeDefined();
+    const init = tokenCall?.[1] as RequestInit;
+    expect(new URLSearchParams(String(init.body)).get("client_id")).toBe("db-client-id");
+    const authHeader = String((init.headers as Record<string, string>).Authorization);
+    expect(Buffer.from(authHeader.replace(/^Basic /, ""), "base64").toString()).toBe("db-client-id:db-client-secret");
+    // cron 経由 (セッション無し) のため service client を明示して解決している
+    expect(credentialsBox.calls).toEqual([{ provider: "x", hasClient: true }]);
+    expect(tweetAuthHeaders).toEqual(["Bearer refreshed-token"]);
+    expect(markPublished).toHaveBeenCalledTimes(1);
+    vi.unstubAllEnvs();
+  });
+
+  it("認証情報が未設定 (DB にも env にも無い) なら refresh せず現行トークンで投稿を試みる", async () => {
+    credentialsBox.current = { provider: "x", publicId: null, secret: null, source: "none" };
+    claimTokenRefreshLease.mockResolvedValue({ ok: true, value: true });
+
+    await runWithTimers(0);
+
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith("/2/oauth2/token"))).toBe(false);
+    expect(claimTokenRefreshLease).not.toHaveBeenCalled();
+    expect(tweetAuthHeaders).toEqual(["Bearer stale-token"]);
   });
 });
 

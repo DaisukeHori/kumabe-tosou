@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
 import { NoticePanel, PageHeader } from "@/app/admin/_ui";
-import { isMetaOAuthConfigured, isXOAuthConfigured } from "@/lib/env";
+import { isIntegrationConfigured } from "@/lib/integration-credentials";
 import { decryptCookiePayload } from "@/lib/oauth/state-cookie";
 import type { ChannelPostStatus, StyleProfileView } from "@/modules/distribution/contracts";
 import { distributionFacade } from "@/modules/distribution/facade";
@@ -46,11 +46,14 @@ export default async function AdminChannelsPage({
   const params = await searchParams;
   const statusFilter = toValidStatus(params.status);
 
-  const [accountsResult, queueResult, styleResults, cookieStore] = await Promise.all([
+  const [accountsResult, queueResult, styleResults, cookieStore, xEnabled, metaEnabled] = await Promise.all([
     distributionFacade.listChannelAccounts(),
     distributionFacade.listChannelPosts({ status: statusFilter, cursor: params.cursor ?? null, limit: 50 }),
     Promise.all(STYLE_CHANNELS.map((c) => distributionFacade.getStyleProfile(c))),
     cookies(),
+    // 認証情報は DB (設定 > 外部連携) → env の順に解決する (env 直読みの旧判定は非推奨)
+    isIntegrationConfigured("x"),
+    isIntegrationConfigured("meta"),
   ]);
 
   const styleData: Record<Channel, StyleProfileView | null> = {
@@ -87,8 +90,8 @@ export default async function AdminChannelsPage({
       )}
       <ChannelConnectionCards
         accounts={accountsResult.ok ? accountsResult.value : []}
-        xEnabled={isXOAuthConfigured()}
-        metaEnabled={isMetaOAuthConfigured()}
+        xEnabled={xEnabled}
+        metaEnabled={metaEnabled}
       />
 
       {params.meta_select && pendingPages && <MetaPageSelector pages={pendingPages.pages} />}

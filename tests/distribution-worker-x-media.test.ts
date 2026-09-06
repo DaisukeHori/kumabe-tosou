@@ -41,11 +41,12 @@ const { OPS_LIMITS, opsLimitsRow } = vi.hoisted(() => {
 });
 
 vi.mock("@/lib/env", () => ({
-  getEnv: () => ({
-    X_CLIENT_ID: undefined,
-    X_CLIENT_SECRET: undefined,
-    NEXT_PUBLIC_SITE_URL: "https://example.com",
-  }),
+  getEnv: () => ({ NEXT_PUBLIC_SITE_URL: "https://example.com" }),
+}));
+// X の OAuth クライアント認証情報は DB (設定 > 外部連携) → env の順に解決される。このテストでは未設定にする
+vi.mock("@/lib/integration-credentials", () => ({
+  resolveIntegrationCredentials: async (provider: string) => ({ provider, publicId: null, secret: null, source: "none" }),
+  isIntegrationConfigured: async () => false,
 }));
 
 // checkXBillingGuardExceeded (worker.ts、内部的には distribution/internal/ops-limits.ts の

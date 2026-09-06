@@ -18,6 +18,9 @@ import { CHANNELS_FORM_INITIAL_STATE } from "./form-state";
 // note セッション Cookie の実測有効期間 (research/ai-studio-v2/note-posting.md): 約30日
 const NOTE_COOKIE_EXPIRY_DAYS = 30;
 
+// X / Instagram の OAuth クライアント認証情報を登録する管理画面 (env 名は UI に出さない)
+const INTEGRATIONS_SETTINGS_HREF = "/admin/settings?tab=integrations";
+
 const AUTH_STATUS_LABEL: Record<ChannelAuthStatus, string> = {
   disconnected: "未接続",
   connected: "接続済み",
@@ -64,7 +67,11 @@ export function ChannelConnectionCards({
           <p className="mt-2 text-sm text-muted-foreground">{x?.account_label ?? "未接続"}</p>
           {!xEnabled && (
             <p className="mt-2 text-xs text-status-warning-fg">
-              OAuth 未設定です (OAUTH_ENABLED / X_CLIENT_ID 等の env を設定してください)。
+              認証情報が未設定です。
+              <a href={INTEGRATIONS_SETTINGS_HREF} className="underline underline-offset-2">
+                設定 &gt; 外部連携
+              </a>{" "}
+              で X のクライアント ID とシークレットを登録してください。
             </p>
           )}
           {xEnabled ? (
@@ -88,7 +95,11 @@ export function ChannelConnectionCards({
           <p className="mt-2 text-sm text-muted-foreground">{instagram?.account_label ?? "未接続"}</p>
           {!metaEnabled && (
             <p className="mt-2 text-xs text-status-warning-fg">
-              OAuth 未設定です (OAUTH_ENABLED / META_APP_ID 等の env を設定してください)。
+              認証情報が未設定です。
+              <a href={INTEGRATIONS_SETTINGS_HREF} className="underline underline-offset-2">
+                設定 &gt; 外部連携
+              </a>{" "}
+              で Instagram (Meta) のアプリ ID とシークレットを登録してください。
             </p>
           )}
           {metaEnabled ? (

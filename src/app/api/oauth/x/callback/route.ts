@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { getEnv, isXOAuthConfigured } from "@/lib/env";
+import { getEnv } from "@/lib/env";
+import { isIntegrationConfigured } from "@/lib/integration-credentials";
 import { decryptCookiePayload } from "@/lib/oauth/state-cookie";
 import { distributionFacade } from "@/modules/distribution/facade";
 import { platformFacade } from "@/modules/platform/facade";
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   if (!admin.ok) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
-  if (!isXOAuthConfigured()) {
+  if (!(await isIntegrationConfigured("x"))) {
     return NextResponse.redirect(new URL("/admin/channels?x_error=disabled", request.url));
   }
 

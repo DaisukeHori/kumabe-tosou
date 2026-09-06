@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { getEnv, isMetaOAuthConfigured } from "@/lib/env";
+import { getEnv } from "@/lib/env";
+import { isIntegrationConfigured } from "@/lib/integration-credentials";
 import { decryptCookiePayload, encryptCookiePayload, OAUTH_COOKIE_MAX_AGE_SECONDS } from "@/lib/oauth/state-cookie";
 import { distributionFacade } from "@/modules/distribution/facade";
 import { platformFacade } from "@/modules/platform/facade";
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
   if (!admin.ok) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
-  if (!isMetaOAuthConfigured()) {
+  if (!(await isIntegrationConfigured("meta"))) {
     return NextResponse.redirect(new URL("/admin/channels?meta_error=disabled", request.url));
   }
 

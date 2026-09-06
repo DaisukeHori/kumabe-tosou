@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getEnv } from "@/lib/env";
+import { resolveIntegrationCredentials } from "@/lib/integration-credentials";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { contentFacade } from "@/modules/content/facade";
 import { mediaFacade } from "@/modules/media/facade";
@@ -145,11 +146,14 @@ async function getValidXAccessToken(
     return secret.access_token;
   }
 
-  const env = getEnv();
-  if (!env.X_CLIENT_ID) {
+  // cron 経由 (セッション無し) のため service client で DB (設定 > 外部連携) → env の順に解決する
+  const creds = await resolveIntegrationCredentials("x", { client: serviceClient });
+  const clientId = creds.publicId;
+  if (!clientId) {
     // refresh できないが、まだ厳密には失効していないなら現行トークンで試行を続ける
     return secret.access_token;
   }
+  const clientSecret = creds.secret ?? undefined;
 
   // 複数 worker 起動の同時実行を CAS リースで直列化 (§7.7「advisory lock で単一実行」の代替実装。
   // migration 20260708000009 のコメント参照)。
@@ -164,7 +168,7 @@ async function getValidXAccessToken(
         const current = (await readXVaultSecret(serviceClient, secretName)) ?? secret;
         if (isFreshXSecret(current)) return current.access_token;
 
-        const refreshed = await refreshXToken(env.X_CLIENT_ID, env.X_CLIENT_SECRET, current.refresh_token);
+        const refreshed = await refreshXToken(clientId, clientSecret, current.refresh_token);
         const nextSecret: XVaultSecret = {
           access_token: refreshed.accessToken,
           refresh_token: refreshed.refreshToken,
