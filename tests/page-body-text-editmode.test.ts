@@ -147,7 +147,7 @@ describe("page-body: editMode=false は data-editable-text を出力しない (�
     expect(headerHtml).toContain("ストーリー");
     expect(footerHtml).toContain("3Dプリント造形物の表面処理");
     expect(footerHtml).toContain("山岸塗装(代表: 山岸 信之)");
-    expect(footerHtml).toContain("© 2026 YAMAGISHI TOSO. ALL RIGHTS RESERVED.");
+    expect(footerHtml).toContain("© 2026 YAMAGISHI TOSOU. ALL RIGHTS RESERVED.");
   });
 });
 

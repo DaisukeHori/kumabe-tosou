@@ -46,7 +46,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "共通 / ヘッダーブランド名 (英字)",
     kind: "text",
     maxLen: 20,
-    defaultText: "YAMAGISHI TOSO",
+    defaultText: "YAMAGISHI TOSOU",
     affectsAllRoutes: true,
   },
   {
@@ -592,7 +592,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "共通 / フッター装飾巨大文字",
     kind: "text",
     maxLen: 16,
-    defaultText: "YAMAGISHI TOSO",
+    defaultText: "YAMAGISHI TOSOU",
     affectsAllRoutes: true,
   },
   {
@@ -602,7 +602,7 @@ export const SHARED_CHROME_TEXT_SLOTS: readonly PageTextSlot[] = [
     label: "共通 / フッターコピーライト",
     kind: "text",
     maxLen: 60,
-    defaultText: "© 2026 YAMAGISHI TOSO. ALL RIGHTS RESERVED.",
+    defaultText: "© 2026 YAMAGISHI TOSOU. ALL RIGHTS RESERVED.",
     affectsAllRoutes: true,
   },
   {

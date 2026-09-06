@@ -60,7 +60,7 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
 
   "chrome.footer.tagline": "3Dプリント造形物の表面処理(研磨・塗装)専門工房。積層痕除去から自動車グレードの仕上げまで、郵送で全国からお受けします。",
   "common.header.brand": "山岸塗装",
-  "common.header.brand.en": "YAMAGISHI TOSO",
+  "common.header.brand.en": "YAMAGISHI TOSOU",
   "common.header.nav.1.no": "01",
   "common.header.nav.1.label": "ストーリー",
   "common.header.nav.2.no": "02",
@@ -114,8 +114,8 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "common.footer.address": "山岸塗装(代表: 山岸 信之)\n〒879-0614 大分県豊後高田市来縄3036-1\nTEL 090-9478-5028 / 郵送受託・全国対応",
   "common.footer.legal.tokushoho": "特定商取引法に基づく表記",
   "common.footer.legal.privacy": "プライバシーポリシー",
-  "common.footer.giant": "YAMAGISHI TOSO",
-  "common.footer.copyright": "© 2026 YAMAGISHI TOSO. ALL RIGHTS RESERVED.",
+  "common.footer.giant": "YAMAGISHI TOSOU",
+  "common.footer.copyright": "© 2026 YAMAGISHI TOSOU. ALL RIGHTS RESERVED.",
   "common.footer.copyright.sub": "3D PRINT SURFACE FINISHING — OITA, JAPAN",
 
   "home.statement.heading": "デザインモデルの品質は、\n表面処理で決まる。\nそれでも、表面処理を高い水準で\n内製できる会社は、多くない。\nその空白のために、この工房がある。",

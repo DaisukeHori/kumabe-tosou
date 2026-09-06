@@ -145,7 +145,7 @@
 - `privacy.hero.lead` [lead/単行/max160] 「山岸塗装（以下「当工房」といいます）は、お問い合わせ・お見積もり・施工のご依頼にあたってお預かりする個人情報を...」 — 法的リード文、tier C確定
 - `privacy.specTable` [body/複数行/max0] 「1.事業者情報/2.取得する個人情報/3.利用目的/4.第三者提供/5.保存期間/6.開示・訂正・削除等の請求/7.Co」 — プライバシーポリシー本文全8項、法的文言のためtier C確定
 - `privacy.mapNote` [body/複数行/max100] 「制定日・改定日：2026年7月7日 / 本ページは開業準備中のドラフトです...」 — 法的注記(制定日を含む)、tier C確定
-- `chrome.header.brandEn` [caption/単行/max16] 「YAMAGISHI TOSO」 — 社名のローマ字装飾ブランドマーク。site_settings.company.nameにローマ字専用フィールドが無く、デザイン意匠として維持
+- `chrome.header.brandEn` [caption/単行/max16] 「YAMAGISHI TOSOU」 — 社名のローマ字装飾ブランドマーク。site_settings.company.nameにローマ字専用フィールドが無く、デザイン意匠として維持
 - `chrome.header.menuAriaLabel` [label/単行/max16] 「メニューを開く」 — aria-labelのみ、画面には表示されない
 - `chrome.header.navAriaLabel` [label/単行/max20] 「メインナビゲーション」 — aria-labelのみ、画面には表示されない
 - `chrome.footer.sitemapLabel` [label/単行/max14] 「SITEMAP」 — footerナビ見出しの英語装飾ラベル
@@ -157,8 +157,8 @@
 - `chrome.footer.marquee.2` [caption/単行/max24] 「NATIONWIDE MAIL-IN」 — マーキー装飾文言(英語)
 - `chrome.footer.marquee.3` [caption/単行/max24] 「OITA BUNGOTAKADA」 — マーキー装飾文言(英語、所在地のローマ字表記)
 - `chrome.footer.marquee.4` [caption/単行/max24] 「試作1点 — ブリッジ生産1,000個」 — マーキー装飾文言、数量(1,000個)を含みpricing/QUOTE_VARSの数値と整合が必要
-- `chrome.footer.brandGiant` [caption/単行/max16] 「YAMAGISHI TOSO」 — footer最下部の巨大装飾テキスト(kt-footer-giant)、overflow-hidden/whitespace-nowrap前提のCSS意匠、社名ローマ字表記と重複
-- `chrome.footer.copyright` [caption/単行/max50] 「© 2026 YAMAGISHI TOSO. ALL RIGHTS RESERVED.」 — 著作権表記、法的/技術的性質のため編集不可
+- `chrome.footer.brandGiant` [caption/単行/max16] 「YAMAGISHI TOSOU」 — footer最下部の巨大装飾テキスト(kt-footer-giant)、overflow-hidden/whitespace-nowrap前提のCSS意匠、社名ローマ字表記と重複
+- `chrome.footer.copyright` [caption/単行/max50] 「© 2026 YAMAGISHI TOSOU. ALL RIGHTS RESERVED.」 — 著作権表記、法的/技術的性質のため編集不可
 - `chrome.footer.tagEn` [caption/単行/max50] 「3D PRINT SURFACE FINISHING — OITA, JAPAN」 — 英語装飾サブコピー(フッター最下段)
 
 ## DB 由来 (スロット化しない)
