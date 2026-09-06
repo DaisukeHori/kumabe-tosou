@@ -348,6 +348,12 @@ export const zEditDraftReq = z
 /** channel_drafts の approved 状態のみ distribution へ渡す射影 (ApprovedDraft, §4.9) */
 export type ApprovedDraft = {
   draft_id: string;
+  /**
+   * channel_drafts.run_id。site_blog 配信 (ContentFacade.createBlogPostFromDraft の
+   * source_run_id) に必須のため契約に昇格 (2026-09-06。従来は worker が実行時の拡張フィールドとして
+   * 防御的に読んでおり、常に manual_required に倒れていた)。
+   */
+  run_id: string;
   channel: Channel;
   content: ChannelContent[Channel];
   approved_at: string;

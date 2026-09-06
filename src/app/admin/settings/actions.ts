@@ -310,7 +310,7 @@ export async function updateNotificationsAction(
  * のため社印が匿名取得可能になる事故を防ぐため。branding-assets は private バケット)。
  * "use server" ファイルは async 関数以外を export できないため非 export の内部ヘルパとする。
  */
-async function uploadInvoiceIssuerSeal(file: File): Promise<Result<{ storagePath: string }>> {
+function validateInvoiceIssuerSealFile(file: File): Result<void> {
   if (file.size === 0) {
     return { ok: false, code: "KMB-E101", detail: "画像ファイルを選択してください。" };
   }
@@ -320,6 +320,12 @@ async function uploadInvoiceIssuerSeal(file: File): Promise<Result<{ storagePath
   if (!SEAL_ALLOWED_MIME_TYPES.has(file.type)) {
     return { ok: false, code: "KMB-E302", detail: "角印画像は PNG または JPEG 形式のみアップロードできます。" };
   }
+  return { ok: true, value: undefined };
+}
+
+async function uploadInvoiceIssuerSeal(file: File): Promise<Result<{ storagePath: string }>> {
+  const validated = validateInvoiceIssuerSealFile(file);
+  if (!validated.ok) return validated;
 
   let serviceClient: ReturnType<typeof createSupabaseServiceClient>;
   try {
@@ -347,6 +353,15 @@ async function uploadInvoiceIssuerSeal(file: File): Promise<Result<{ storagePath
  * updated_at が古くなり次の保存が KMB-E103 になる」楽観排他の競合を構造的に踏むため
  * (実装計画書 issue-51.md の角印アップロード節「注意・地雷」参照 ── 単一フォーム化はその節が
  * 挙げた 2 案のうち安全側 [競合が原理的に起きない] を選んだ実装者判断)。
+ *
+ * 2 段階保存 (順序が重要): 角印は固定パスへ upsert:true で上書きするため、Storage へ先に
+ * アップロードしてから zod / 楽観排他 (KMB-E103) で保存が弾かれると「DB は旧設定のまま・
+ * Storage の角印だけ新しい画像に差し替わる」不整合が残る。そこで
+ *  1) 角印ファイルは形式・サイズの事前検証だけ行い (副作用なし)、現在の seal_storage_path のまま
+ *     schema.safeParse + settingsFacade.update の CAS を先に通す。
+ *  2) 1) が成功した場合のみアップロードし、成功後に seal_storage_path を CAS 付きで更新する
+ *     (1) 直後の updated_at は getWithMeta で読み直す)。
+ * 2) のアップロード失敗時は他項目の保存自体は成立しているので、その旨を error に含めて返す。
  */
 export async function updateInvoiceIssuerSettingsAction(
   _prevState: SettingsFormState,
@@ -357,18 +372,19 @@ export async function updateInvoiceIssuerSettingsAction(
     return { error: getErrorInfo(admin.code).message, conflict: false, success: false };
   }
 
-  let sealStoragePath = emptyToNull(formData.get("seal_storage_path"));
-  const sealFile = formData.get("seal_image");
-  if (sealFile instanceof File && sealFile.size > 0) {
-    const uploaded = await uploadInvoiceIssuerSeal(sealFile);
-    if (!uploaded.ok) {
+  const currentSealStoragePath = emptyToNull(formData.get("seal_storage_path"));
+  const sealFileRaw = formData.get("seal_image");
+  const sealFile = sealFileRaw instanceof File && sealFileRaw.size > 0 ? sealFileRaw : null;
+  if (sealFile) {
+    // 副作用のない事前検証のみ (アップロードは CAS 成功後)。
+    const validated = validateInvoiceIssuerSealFile(sealFile);
+    if (!validated.ok) {
       return {
-        error: uploaded.detail ?? getErrorInfo(uploaded.code).message,
+        error: validated.detail ?? getErrorInfo(validated.code).message,
         conflict: false,
         success: false,
       };
     }
-    sealStoragePath = uploaded.value.storagePath;
   }
 
   const bankAccountEnabled = formData.get("bank_account_enabled") === "on";
@@ -386,13 +402,55 @@ export async function updateInvoiceIssuerSettingsAction(
         }
       : null,
     transfer_fee_note: emptyToNull(formData.get("transfer_fee_note")),
-    seal_storage_path: sealStoragePath,
+    seal_storage_path: currentSealStoragePath,
     quote_valid_days: Number(formData.get("quote_valid_days") ?? 30),
   };
-  return submitSettingsForm(
+  // 段階 1: 現在の seal_storage_path のまま zod + CAS を通す (失敗時は Storage に一切触れない)。
+  const saved = await submitSettingsForm(
     "invoice_issuer",
     zInvoiceIssuerSettings,
     raw,
     String(formData.get("expected_updated_at") ?? ""),
   );
+  if (!saved.success || !sealFile) return saved;
+
+  // 段階 2: アップロード → seal_storage_path を CAS 付きで更新。
+  const uploaded = await uploadInvoiceIssuerSeal(sealFile);
+  if (!uploaded.ok) {
+    return {
+      error: `他の項目は保存されましたが、角印画像のアップロードに失敗しました: ${
+        uploaded.detail ?? getErrorInfo(uploaded.code).message
+      }`,
+      conflict: false,
+      success: false,
+    };
+  }
+  if (uploaded.value.storagePath === currentSealStoragePath) return saved;
+
+  const meta = await settingsFacade.getWithMeta("invoice_issuer");
+  if (!meta.ok || meta.value.updatedAt === null) {
+    return {
+      error: "角印画像はアップロードされましたが、設定への反映に失敗しました。ページを再読み込みして再度保存してください。",
+      conflict: false,
+      success: false,
+    };
+  }
+  const withSeal = await settingsFacade.update(
+    "invoice_issuer",
+    { ...zInvoiceIssuerSettings.parse(raw), seal_storage_path: uploaded.value.storagePath },
+    meta.value.updatedAt,
+  );
+  if (!withSeal.ok) {
+    if (withSeal.code === "KMB-E103") {
+      return {
+        error: "角印画像のアップロード後に他の人がこの内容を更新しています。ページを再読み込みして最新の内容を確認してください。",
+        conflict: true,
+        success: false,
+      };
+    }
+    return { error: withSeal.detail ?? getErrorInfo(withSeal.code).message, conflict: false, success: false };
+  }
+  revalidatePath("/admin/settings");
+  revalidateTag(SITE_SETTINGS_CACHE_TAG);
+  return { error: null, conflict: false, success: true };
 }

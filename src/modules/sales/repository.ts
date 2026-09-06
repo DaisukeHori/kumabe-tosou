@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { ilikeContainsFilter } from "@/lib/postgrest-filter";
 import type { Paged, Pagination, Result } from "@/modules/platform/contracts";
 import { KMB_ERRORS, type KmbErrorCode } from "@/modules/platform/errors";
 
@@ -84,11 +85,6 @@ function resolveJstYear(issueDate: string | null): number {
     year: "numeric",
   }).format(new Date());
   return Number.parseInt(jstYear, 10);
-}
-
-/** ILIKE パターン中のワイルドカード (`%`/`_`/`\`) をエスケープする (crm/content repository と同型) */
-function escapeLikePattern(value: string): string {
-  return value.replace(/[%_\\]/g, (c) => `\\${c}`);
 }
 
 type CreatedAtCursor = { createdAt: string; id: string };
@@ -335,8 +331,11 @@ export async function listDocumentsPage(
   if (filter.status) query = query.eq("status", filter.status);
   if (filter.deal_id) query = query.eq("deal_id", filter.deal_id);
   if (filter.q) {
-    const escaped = escapeLikePattern(filter.q);
-    query = query.or(`doc_no.ilike.%${escaped}%,billing_name.ilike.%${escaped}%`);
+    // 検索語にカンマ・括弧が含まれると PostgREST の or フィルタ構文が壊れる (PGRST100) ため、
+    // 共通ヘルパで LIKE エスケープ + 二重引用符囲みを両方適用する (src/lib/postgrest-filter.ts)。
+    query = query.or(
+      [ilikeContainsFilter("doc_no", filter.q), ilikeContainsFilter("billing_name", filter.q)].join(","),
+    );
   }
 
   const cursor = decodeCreatedAtCursor(pagination.cursor);

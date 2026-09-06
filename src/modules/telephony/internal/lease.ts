@@ -13,6 +13,11 @@ export type AcquireLeaseRawResult = {
   id: string;
   status: CallJobStatus;
   lease_expires_at: string | null;
+  /** acquire 時に RPC が発行する lease 保持者トークン (migration 20260906000050)。
+   *  heartbeat / checkpoint / commit はこの値の一致を WHERE に含めて「自分の lease」に
+   *  対してのみ書き込む (失効後に他プロセスへ渡った lease を旧保持者が延長・上書きしない)。
+   *  acquired 以外 (held/terminal 等) では他者のトークンを返さず null。 */
+  lease_token: string | null;
   stage_attempts: number;
   call_id: string;
   recording_id: string;

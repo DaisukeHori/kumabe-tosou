@@ -10,6 +10,12 @@ import type { EstimateInput, PriceTable } from "@/modules/pricing/contracts";
 import { computeEstimate } from "@/modules/pricing/estimate";
 
 import { savePricingAction, type AdminGradeRow, type AdminOptionRow } from "./actions";
+import {
+  dropMatrixCellsForSize,
+  pruneOrphanMatrixCells,
+  rekeyMatrixGrade,
+  rekeyMatrixSize,
+} from "./draft-matrix";
 
 type DraftSize = {
   key: string;
@@ -183,7 +189,13 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
   function handleSave() {
     setMessage(null);
     startTransition(async () => {
-      const result = await savePricingAction({ grades, sizes, matrix, tiers, options });
+      // 最終防衛: 現在のグレード / サイズ帯に属さない孤児セルは送らない (FK 違反の予防)
+      const prunedMatrix = pruneOrphanMatrixCells(
+        matrix,
+        grades.map((g) => g.key),
+        sizes.map((s) => s.key),
+      );
+      const result = await savePricingAction({ grades, sizes, matrix: prunedMatrix, tiers, options });
       if (result.ok) {
         setMessage({ type: "success", text: "保存しました。" });
         router.refresh();
@@ -218,11 +230,15 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
                   <td className="p-2">
                     <Input
                       value={g.key}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const nextKey = e.target.value;
+                        const prevKey = g.key;
                         setGrades((prev) =>
-                          prev.map((row, idx) => (idx === i ? { ...row, key: e.target.value } : row)),
-                        )
-                      }
+                          prev.map((row, idx) => (idx === i ? { ...row, key: nextKey } : row)),
+                        );
+                        // 旧 key のままのセルを残すと FK 違反になるため、セルも新 key に追随させる
+                        setMatrix((prev) => rekeyMatrixGrade(prev, prevKey, nextKey));
+                      }}
                       className="w-28"
                     />
                   </td>
@@ -328,11 +344,14 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
                   <td className="p-2">
                     <Input
                       value={s.key}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const nextKey = e.target.value;
+                        const prevKey = s.key;
                         setSizes((prev) =>
-                          prev.map((row, idx) => (idx === i ? { ...row, key: e.target.value } : row)),
-                        )
-                      }
+                          prev.map((row, idx) => (idx === i ? { ...row, key: nextKey } : row)),
+                        );
+                        setMatrix((prev) => rekeyMatrixSize(prev, prevKey, nextKey));
+                      }}
                       className="w-20"
                     />
                   </td>
@@ -395,7 +414,12 @@ export function PriceTableEditor({ initialTable }: { initialTable: PriceTable })
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setSizes((prev) => prev.filter((_, idx) => idx !== i))}
+                      onClick={() => {
+                        const removedKey = s.key;
+                        setSizes((prev) => prev.filter((_, idx) => idx !== i));
+                        // 削除したサイズ帯のセルを state から落とす (残すと保存時に FK 違反)
+                        setMatrix((prev) => dropMatrixCellsForSize(prev, removedKey));
+                      }}
                     >
                       削除
                     </Button>

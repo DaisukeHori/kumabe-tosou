@@ -64,12 +64,16 @@ vi.mock("@/modules/distribution/internal/ai-studio-bridge", () => ({
 
 const insertChannelPost = vi.fn();
 const getMonthlyXCostCentsSum = vi.fn();
+// 2026-09-06 #2: 重複予約の事前チェック (既存 active 行の照会)。本ファイルの観点 (課金ガード) では
+// 常に「重複なし」を返す。重複検出の観点は tests/distribution-schedule-posts-duplicate.test.ts。
+const listActiveChannelPostsByDraftIds = vi.fn();
 vi.mock("@/modules/distribution/repository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/distribution/repository")>();
   return {
     ...actual,
     insertChannelPost: (...args: unknown[]) => insertChannelPost(...args),
     getMonthlyXCostCentsSum: (...args: unknown[]) => getMonthlyXCostCentsSum(...args),
+    listActiveChannelPostsByDraftIds: (...args: unknown[]) => listActiveChannelPostsByDraftIds(...args),
   };
 });
 
@@ -78,6 +82,7 @@ import { distributionFacade } from "@/modules/distribution/facade";
 function xDraft(): ApprovedDraft {
   return {
     draft_id: "draft-1",
+    run_id: "run-1",
     channel: "x",
     content: { thread: [{ text: "hello", media_id: null }] } as unknown as ApprovedDraft["content"],
     approved_at: new Date().toISOString(),
@@ -128,6 +133,7 @@ beforeEach(() => {
   };
   getApprovedDraft.mockResolvedValue({ ok: true, value: xDraft() });
   getMonthlyXCostCentsSum.mockResolvedValue({ ok: true, value: 0 });
+  listActiveChannelPostsByDraftIds.mockResolvedValue({ ok: true, value: [] });
   insertChannelPost.mockResolvedValue({ ok: true, value: fakePostRow() });
 });
 
@@ -176,6 +182,7 @@ describe("schedulePosts: X 課金ガード (fail-closed / 読取不能ブラン�
       ok: true,
       value: {
         draft_id: "draft-1",
+        run_id: "run-1",
         channel: "site_blog",
         content: {} as unknown as ApprovedDraft["content"],
         approved_at: new Date().toISOString(),

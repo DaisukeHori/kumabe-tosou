@@ -2,6 +2,7 @@ import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getEnv, isRevalidateSecretConfigured } from "@/lib/env";
+import { secretEquals } from "@/lib/secret-compare";
 import { zRevalidateReq } from "@/modules/platform/contracts";
 
 /**
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
 
   const providedSecret = request.headers.get("x-revalidate-secret");
   const env = getEnv();
-  if (!providedSecret || providedSecret !== env.REVALIDATE_SECRET) {
+  if (!secretEquals(providedSecret, env.REVALIDATE_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

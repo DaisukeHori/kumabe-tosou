@@ -160,10 +160,18 @@ describe("ai-studio lease stage_attempts リセット (実 Postgres 16 で cross
 
   const RUNNABLE = new Set(["pending", "extracting", "researching", "drafting", "image_generation"]);
 
-  /** ai_run_acquire_lease の CAS 意味論の複製 (lease 期限切れは常に想定、held 判定は対象外)。 */
-  function simulateAcquire(run: SimRun): { result: "acquired" | "exhausted" | "terminal"; run: SimRun } {
+  /**
+   * ai_run_acquire_lease の CAS 意味論の複製。
+   * 2026-09-06 (migration 20260906000042、#8): held 判定 (lease 保持中) を exhausted 判定より先に行う。
+   * leaseHeld=true は「lease_expires_at >= now()」の複製 (本シミュレータでは失効を時間で追わず、
+   * commit / 解放で false に戻る)。
+   */
+  function simulateAcquire(run: SimRun): { result: "acquired" | "held" | "exhausted" | "terminal"; run: SimRun } {
     if (!RUNNABLE.has(run.status)) {
       return { result: "terminal", run };
+    }
+    if (run.leaseHeld) {
+      return { result: "held", run };
     }
     if (run.stageAttempts >= MAX_ATTEMPTS) {
       return { result: "exhausted", run: { ...run, status: "failed", leaseHeld: false } };
@@ -242,12 +250,33 @@ describe("ai-studio lease stage_attempts リセット (実 Postgres 16 で cross
       const r = simulateAcquire(run);
       expect(r.result).toBe("acquired");
       expect(r.run.stageAttempts).toBe(i);
-      run = r.run;
+      // commit されないまま lease が失効した (プロセスクラッシュ) 状況の複製。
+      // 保持中なら held (次の it を参照) であり、exhausted 判定は失効後にのみ到達する (#8)。
+      run = { ...r.run, leaseHeld: false };
     }
 
     const exhausted = simulateAcquire(run);
     expect(exhausted.result).toBe("exhausted");
     expect(exhausted.run.status).toBe("failed");
+  });
+
+  it("判定順 (#8): 3 回目の試行が実行中 (lease 保持中) に別プロセスが acquire しても held であり、failed (exhausted) に倒さない", () => {
+    // 3 回目の acquire が成功して実行中 (stage_attempts=3, lease 保持中)
+    const running: SimRun = { status: "drafting", stageAttempts: MAX_ATTEMPTS, leaseHeld: true };
+
+    // 旧 SQL は stage_attempts >= 3 を先に見て exhausted (failed/KMB-E402) にしていた。
+    const concurrent = simulateAcquire(running);
+    expect(concurrent.result).toBe("held");
+    expect(concurrent.run.status).toBe("drafting");
+
+    // 実行中プロセスが commit すれば前進し、lease は解放される
+    const committed = simulateCommit(running, "drafting", "ready_for_review");
+    expect(committed.status).toBe("ready_for_review");
+    expect(committed.leaseHeld).toBe(false);
+
+    // lease が失効 (leaseHeld=false) したまま commit されなかった場合のみ、4 回目で exhausted
+    const expired: SimRun = { ...running, leaseHeld: false };
+    expect(simulateAcquire(expired).result).toBe("exhausted");
   });
 
   it("冪等性: commit の CAS 不一致 (no-op) 経路では stage_attempts がリセットされない", () => {

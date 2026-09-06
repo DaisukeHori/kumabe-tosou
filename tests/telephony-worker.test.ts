@@ -39,6 +39,7 @@ const getCallRecordingByIdMock = vi.fn();
 const updateCallRecordingStorageMock = vi.fn();
 const getCallJobByIdMock = vi.fn();
 const updateCallJobTranscriptPartialMock = vi.fn();
+const updateCallJobTaskIdsCheckpointMock = vi.fn();
 const listCallRecordingsByCallIdMock = vi.fn();
 const reflectLinkResultToCallsMock = vi.fn();
 const getCallByIdMock = vi.fn();
@@ -55,6 +56,7 @@ vi.mock("@/modules/telephony/repository", async (importOriginal) => {
     updateCallRecordingStorage: (...args: unknown[]) => updateCallRecordingStorageMock(...args),
     getCallJobById: (...args: unknown[]) => getCallJobByIdMock(...args),
     updateCallJobTranscriptPartial: (...args: unknown[]) => updateCallJobTranscriptPartialMock(...args),
+    updateCallJobTaskIdsCheckpoint: (...args: unknown[]) => updateCallJobTaskIdsCheckpointMock(...args),
     listCallRecordingsByCallId: (...args: unknown[]) => listCallRecordingsByCallIdMock(...args),
     reflectLinkResultToCalls: (...args: unknown[]) => reflectLinkResultToCallsMock(...args),
     getCallById: (...args: unknown[]) => getCallByIdMock(...args),
@@ -126,6 +128,7 @@ type RawRow = {
   id: string;
   status: CallJobStatus;
   lease_expires_at: string | null;
+  lease_token: string;
   stage_attempts: number;
   call_id: string;
   recording_id: string;
@@ -139,6 +142,7 @@ function makeRow(overrides: Partial<RawRow> = {}): RawRow {
     id: "job-1",
     status: "downloading",
     lease_expires_at: new Date().toISOString(),
+    lease_token: "lease-1",
     stage_attempts: 1,
     call_id: "call-1",
     recording_id: "rec-1",
@@ -205,6 +209,8 @@ function makeJobRow(overrides: Partial<CallJobRow> = {}): CallJobRow {
     ai_cost_micro_usd: 0,
     stage_attempts: 1,
     lease_expires_at: new Date().toISOString(),
+    lease_token: "lease-1",
+    task_ids_checkpoint: null,
     created_at: "2026-07-01T01:00:00.000Z",
     updated_at: "2026-07-01T01:00:00.000Z",
     ...overrides,
@@ -243,6 +249,7 @@ beforeEach(() => {
   listCallRecordingsByCallIdMock.mockResolvedValue({ ok: true, value: [] });
   updateCallRecordingStorageMock.mockResolvedValue({ ok: true, value: makeRecordingRow() });
   updateCallJobTranscriptPartialMock.mockResolvedValue({ ok: true, value: undefined });
+  updateCallJobTaskIdsCheckpointMock.mockResolvedValue({ ok: true, value: undefined });
   reflectLinkResultToCallsMock.mockResolvedValue({ ok: true, value: { skipped: false } });
   downloadRecordingMock.mockResolvedValue({ ok: true, value: { notFound: true } });
   deleteRecordingMock.mockResolvedValue({ ok: true, value: undefined });
@@ -376,7 +383,7 @@ describe("advanceCallJob: heartbeat タイマーの開始/停止", () => {
 
       await vi.advanceTimersByTimeAsync(CALL_JOB_HEARTBEAT_INTERVAL_MS);
       expect(heartbeatCallJobLeaseMock).toHaveBeenCalledTimes(1);
-      expect(heartbeatCallJobLeaseMock).toHaveBeenCalledWith(fakeClient, "job-1");
+      expect(heartbeatCallJobLeaseMock).toHaveBeenCalledWith(fakeClient, "job-1", "lease-1");
 
       await vi.advanceTimersByTimeAsync(CALL_JOB_HEARTBEAT_INTERVAL_MS);
       expect(heartbeatCallJobLeaseMock).toHaveBeenCalledTimes(2);
@@ -455,6 +462,41 @@ describe("advanceCallJob: heartbeat タイマーの開始/停止", () => {
     } finally {
       STAGE_HANDLERS.downloading = originalHandler;
     }
+  });
+});
+
+describe("advanceCallJob: lease_token (migration 20260906000050) の伝搬", () => {
+  it("acquired だが lease_token が null (RPC/DDL 不整合): heartbeat/ステージ dispatch へ進まず KMB-E901 を返す", async () => {
+    acquireCallJobLeaseMock.mockResolvedValue({
+      ok: true,
+      value: { ...makeRow({ status: "downloading", result_kind: "acquired" }), lease_token: null },
+    });
+
+    const result = await advanceCallJob(fakeClient, "job-1");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("KMB-E901");
+    expect(heartbeatCallJobLeaseMock).not.toHaveBeenCalled();
+    expect(getCallRecordingByIdMock).not.toHaveBeenCalled();
+    expect(commitCallJobStageMock).not.toHaveBeenCalled();
+  });
+
+  it("acquired 行の lease_token が STAGE_HANDLERS へ渡り、commit に leaseToken として伝搬する", async () => {
+    acquireCallJobLeaseMock.mockResolvedValue({
+      ok: true,
+      value: makeRow({ status: "downloading", result_kind: "acquired", lease_token: "lease-xyz" }),
+    });
+    getCallRecordingByIdMock.mockResolvedValue({ ok: true, value: makeRecordingRow({ storage_path: "call-1/rec.wav" }) });
+    commitCallJobStageMock.mockResolvedValue({ ok: true, value: "transcribing" });
+
+    await advanceCallJob(fakeClient, "job-1");
+
+    expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
+      jobId: "job-1",
+      leaseToken: "lease-xyz",
+      expectedStatus: "downloading",
+      nextStatus: "transcribing",
+    });
   });
 });
 
@@ -548,6 +590,7 @@ describe("handleDownloading (§6.5.1)", () => {
     expect(downloadRecordingMock).not.toHaveBeenCalled();
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "downloading",
       nextStatus: "transcribing",
     });
@@ -591,6 +634,7 @@ describe("handleDownloading (§6.5.1)", () => {
 
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "downloading",
       nextStatus: "failed",
       errorCode: "KMB-E805",
@@ -611,6 +655,7 @@ describe("handleDownloading (§6.5.1)", () => {
     expect(storageUploadMock).not.toHaveBeenCalled();
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "downloading",
       nextStatus: "failed",
       errorCode: "KMB-E805",
@@ -638,6 +683,7 @@ describe("handleDownloading (§6.5.1)", () => {
     expect(deleteRecordingMock).not.toHaveBeenCalled();
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "downloading",
       nextStatus: "transcribing",
     });
@@ -660,6 +706,7 @@ describe("handleDownloading (§6.5.1)", () => {
     expect(secondCallPatch.twilio_deleted_at).not.toBeNull();
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "downloading",
       nextStatus: "transcribing",
     });
@@ -712,6 +759,7 @@ describe("handleTranscribing (§6.5.2、最難関)", () => {
     expect(transcribeMock).not.toHaveBeenCalled();
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "transcribing",
       nextStatus: "analyzing",
       transcript: SAMPLE_TRANSCRIPT,
@@ -729,6 +777,7 @@ describe("handleTranscribing (§6.5.2、最難関)", () => {
     expect(segmentCallRecordingMock).not.toHaveBeenCalled();
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "transcribing",
       nextStatus: "failed",
       errorCode: "KMB-E822",
@@ -766,6 +815,7 @@ describe("handleTranscribing (§6.5.2、最難関)", () => {
 
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "transcribing",
       nextStatus: "failed",
       errorCode: "KMB-E822",
@@ -797,6 +847,7 @@ describe("handleTranscribing (§6.5.2、最難関)", () => {
     expect(transcribeCallArgs.filename).toContain("c0-s1"); // index1 のみ (index0 はcheckpoint済み)
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "transcribing",
       nextStatus: "analyzing",
       transcript: {
@@ -822,6 +873,7 @@ describe("handleTranscribing (§6.5.2、最難関)", () => {
 
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "transcribing",
       nextStatus: "failed",
       errorCode: "KMB-E407",
@@ -862,6 +914,7 @@ describe("handleTranscribing (§6.5.2、最難関)", () => {
 
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "transcribing",
       nextStatus: "transcribing",
       aiCostDeltaMicroUsd: 3,
@@ -883,6 +936,7 @@ describe("handleTranscribing (§6.5.2、最難関)", () => {
     expect(transcribeMock).toHaveBeenCalledTimes(2);
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "transcribing",
       nextStatus: "analyzing",
       transcript: { segments: [{ channel: 0, index: 0, text: "リトライ成功" }], full_text: "リトライ成功" },
@@ -905,6 +959,7 @@ describe("handleTranscribing (§6.5.2、最難関)", () => {
     expect(transcribeMock).toHaveBeenCalledTimes(2);
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "transcribing",
       nextStatus: "failed",
       errorCode: "KMB-E820",
@@ -939,6 +994,7 @@ describe("handleTranscribing (§6.5.2、最難関)", () => {
     expect(transcribeMock).toHaveBeenCalledTimes(1); // segment1 には着手しない
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "transcribing",
       nextStatus: "transcribing",
       aiCostDeltaMicroUsd: 9,
@@ -999,6 +1055,7 @@ describe("handleAnalyzing (§6.5.3)", () => {
     expect(generateTextMock).not.toHaveBeenCalled();
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "analyzing",
       nextStatus: "linking",
       analysis: VALID_ANALYSIS,
@@ -1033,6 +1090,7 @@ describe("handleAnalyzing (§6.5.3)", () => {
     expect(generateTextMock).toHaveBeenCalledTimes(1);
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "analyzing",
       nextStatus: "failed",
       errorCode: "KMB-E407",
@@ -1062,6 +1120,7 @@ describe("handleAnalyzing (§6.5.3)", () => {
     expect(generateTextMock).toHaveBeenCalledTimes(1);
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "analyzing",
       nextStatus: "failed",
       errorCode: "KMB-E821",
@@ -1101,6 +1160,7 @@ describe("handleAnalyzing (§6.5.3)", () => {
     expect(generateTextMock).toHaveBeenCalledTimes(2);
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "analyzing",
       nextStatus: "linking",
       analysis: VALID_ANALYSIS,
@@ -1133,6 +1193,7 @@ describe("handleAnalyzing (§6.5.3)", () => {
     expect(generateTextMock).toHaveBeenCalledTimes(2);
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "analyzing",
       nextStatus: "failed",
       errorCode: "KMB-E821",
@@ -1165,6 +1226,7 @@ describe("handleAnalyzing (§6.5.3)", () => {
 
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "analyzing",
       nextStatus: "linking",
       analysis: VALID_ANALYSIS,
@@ -1186,6 +1248,7 @@ describe("handleAnalyzing (§6.5.3)", () => {
 
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "analyzing",
       nextStatus: "failed",
       errorCode: "KMB-E407",
@@ -1233,6 +1296,7 @@ describe("handleAnalyzing (§6.5.3)", () => {
     expect(generateTextMock.mock.calls[0][1]).toEqual({ mode: "service" });
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "analyzing",
       nextStatus: "linking",
       analysis: VALID_ANALYSIS,
@@ -1274,6 +1338,7 @@ describe("handleLinking (§6.5.4)", () => {
     expect(createTaskMock).not.toHaveBeenCalled();
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "linking",
       nextStatus: "done",
       linkResult: existingLinkResult,
@@ -1498,6 +1563,117 @@ describe("handleLinking (§6.5.4)", () => {
     expect(result).toEqual({ ok: true, value: { status: "done" } });
   });
 
+  it("【タスク起票チェックポイント】createTask 1 件成功ごとに task_ids_checkpoint を lease_token 付きで保存する (analysis.tasks の順)", async () => {
+    const twoTaskAnalysis: CallAnalysis = {
+      ...VALID_ANALYSIS,
+      tasks: [
+        { title: "タスク1", detail: null, due_hint: null },
+        { title: "タスク2", detail: null, due_hint: null },
+      ],
+    };
+    getCallJobByIdMock.mockResolvedValue({
+      ok: true,
+      value: makeJobRow({ status: "linking", analysis: twoTaskAnalysis, link_result: null, task_ids_checkpoint: null }),
+    });
+    getCallByIdMock.mockResolvedValue({ ok: true, value: makeCallRow({ from_e164: null }) }); // no_number 経路
+    createTaskMock.mockResolvedValueOnce({ ok: true, value: { task_id: "task-1" } }).mockResolvedValueOnce({ ok: true, value: { task_id: "task-2" } });
+    // worker は同一配列を push しながら渡すため、呼び出し時点のスナップショットを記録して検証する
+    // (repository 側は [...taskIds] でコピーして DB へ書く)。
+    const snapshots: Array<{ taskIds: string[]; leaseToken: string }> = [];
+    updateCallJobTaskIdsCheckpointMock.mockImplementation(async (_c: unknown, _jobId: string, taskIds: string[], leaseToken: string) => {
+      snapshots.push({ taskIds: [...taskIds], leaseToken });
+      return { ok: true, value: undefined };
+    });
+
+    const result = await STAGE_HANDLERS.linking({ client: fakeClient, jobId: "job-1", row: makeRow({ status: "linking" }) });
+
+    expect(snapshots).toEqual([
+      { taskIds: ["task-1"], leaseToken: "lease-1" },
+      { taskIds: ["task-1", "task-2"], leaseToken: "lease-1" },
+    ]);
+    expect(result).toEqual({ ok: true, value: { status: "done" } });
+  });
+
+  it("【冪等性・no_number 経路】再入時に task_ids_checkpoint が全件分あれば createTask を一切呼ばず、保存済み task_ids を link_result に採用する", async () => {
+    const twoTaskAnalysis: CallAnalysis = {
+      ...VALID_ANALYSIS,
+      tasks: [
+        { title: "タスク1", detail: null, due_hint: null },
+        { title: "タスク2", detail: null, due_hint: null },
+      ],
+    };
+    getCallJobByIdMock.mockResolvedValue({
+      ok: true,
+      value: makeJobRow({
+        status: "linking",
+        analysis: twoTaskAnalysis,
+        link_result: null,
+        task_ids_checkpoint: ["task-a", "task-b"], // 前回 (commit 直前クラッシュ) の起票済み分
+      }),
+    });
+    getCallByIdMock.mockResolvedValue({ ok: true, value: makeCallRow({ from_e164: null }) }); // no_number (activity なし)
+
+    const result = await STAGE_HANDLERS.linking({ client: fakeClient, jobId: "job-1", row: makeRow({ status: "linking" }) });
+
+    expect(createTaskMock).not.toHaveBeenCalled();
+    expect(updateCallJobTaskIdsCheckpointMock).not.toHaveBeenCalled();
+    const commitArgs = commitCallJobStageMock.mock.calls[0][1] as { linkResult: CallJobLinkResult };
+    expect(commitArgs.linkResult.outcome).toBe("no_number");
+    expect(commitArgs.linkResult.task_ids).toEqual(["task-a", "task-b"]);
+    expect(result).toEqual({ ok: true, value: { status: "done" } });
+  });
+
+  it("【冪等性・ambiguous 経路】チェックポイントが途中まで (1/2 件) なら残りだけ起票し、保存済み分と連結する", async () => {
+    const twoTaskAnalysis: CallAnalysis = {
+      ...VALID_ANALYSIS,
+      tasks: [
+        { title: "タスク1", detail: null, due_hint: null },
+        { title: "タスク2", detail: null, due_hint: null },
+      ],
+    };
+    getCallJobByIdMock.mockResolvedValue({
+      ok: true,
+      value: makeJobRow({ status: "linking", analysis: twoTaskAnalysis, link_result: null, task_ids_checkpoint: ["task-a"] }),
+    });
+    matchCustomerByPhoneMock.mockResolvedValue({ ok: false, code: "KMB-E601", detail: "候補 2 件" }); // ambiguous
+    createTaskMock.mockResolvedValue({ ok: true, value: { task_id: "task-b" } });
+
+    const result = await STAGE_HANDLERS.linking({ client: fakeClient, jobId: "job-1", row: makeRow({ status: "linking" }) });
+
+    expect(appendActivityMock).not.toHaveBeenCalled();
+    expect(createTaskMock).toHaveBeenCalledTimes(1);
+    expect(createTaskMock).toHaveBeenCalledWith(expect.objectContaining({ title: "タスク2", source_activity_id: null }), { mode: "service" });
+    expect(updateCallJobTaskIdsCheckpointMock).toHaveBeenCalledTimes(1);
+    expect(updateCallJobTaskIdsCheckpointMock).toHaveBeenCalledWith(fakeClient, "job-1", ["task-a", "task-b"], "lease-1");
+    const commitArgs = commitCallJobStageMock.mock.calls[0][1] as { linkResult: CallJobLinkResult };
+    expect(commitArgs.linkResult.outcome).toBe("ambiguous");
+    expect(commitArgs.linkResult.task_ids).toEqual(["task-a", "task-b"]);
+    expect(result).toEqual({ ok: true, value: { status: "done" } });
+  });
+
+  it("チェックポイント保存が失敗した場合は不確定 return にする (保存できないまま次のタスクへ進むと再入時に二重起票になるため)", async () => {
+    const twoTaskAnalysis: CallAnalysis = {
+      ...VALID_ANALYSIS,
+      tasks: [
+        { title: "タスク1", detail: null, due_hint: null },
+        { title: "タスク2", detail: null, due_hint: null },
+      ],
+    };
+    getCallJobByIdMock.mockResolvedValue({
+      ok: true,
+      value: makeJobRow({ status: "linking", analysis: twoTaskAnalysis, link_result: null }),
+    });
+    getCallByIdMock.mockResolvedValue({ ok: true, value: makeCallRow({ from_e164: null }) });
+    const failure = { ok: false, code: "KMB-E901", detail: "conn reset" };
+    updateCallJobTaskIdsCheckpointMock.mockResolvedValueOnce(failure);
+
+    const result = await STAGE_HANDLERS.linking({ client: fakeClient, jobId: "job-1", row: makeRow({ status: "linking" }) });
+
+    expect(createTaskMock).toHaveBeenCalledTimes(1); // 2 件目には進まない
+    expect(commitCallJobStageMock).not.toHaveBeenCalled();
+    expect(result).toEqual(failure);
+  });
+
   it("linkResult / commit: task_ids が createTask の返り値から組み立てられ、expectedStatus=linking/nextStatus=doneでcommitする", async () => {
     matchCustomerByPhoneMock.mockResolvedValue({ ok: true, value: { customer_id: "cust-1" } });
     appendActivityMock.mockResolvedValue({ ok: true, value: { activity_id: "act-1", created: true } });
@@ -1507,6 +1683,7 @@ describe("handleLinking (§6.5.4)", () => {
 
     expect(commitCallJobStageMock).toHaveBeenCalledWith(fakeClient, {
       jobId: "job-1",
+      leaseToken: "lease-1",
       expectedStatus: "linking",
       nextStatus: "done",
       linkResult: {

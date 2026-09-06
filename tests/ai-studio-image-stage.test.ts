@@ -80,6 +80,7 @@ function acquiredRow(overrides: {
     source_id: "source-1",
     brief: overrides.brief ?? { theme: "耐候クリアの魅力", topics: ["塗装"], audience: "一般", keywords: [], claims: [] },
     research_notes: null,
+    lease_token: "lease-token-1",
     result_kind: "acquired",
   };
 }

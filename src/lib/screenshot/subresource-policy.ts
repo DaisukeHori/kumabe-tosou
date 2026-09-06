@@ -36,9 +36,9 @@ export type SubresourceAllowlistOptions = {
  *   その他スキーム、パース不能な URL) — fail-closed
  *
  * 注意: この関数はあくまで「document (最初のナビゲーション) 以外」の subresource 用の判定。
- * document (メインフレームのナビゲーション。リダイレクトの各ホップ含む) は capture.ts 側の
- * request interception ハンドラで一律 continue() され、ナビゲーション完了後に
- * 最終 URL のオリジンを siteOrigin と突き合わせる別の検証 (リダイレクト検証) に委ねる。
+ * document (メインフレームのナビゲーション) は decideMainFrameDocumentRequest で判定する
+ * (最初のホップは continue、リダイレクトホップは自オリジンのみ continue)。ナビゲーション
+ * 完了後の最終 URL 検証 (isSameOriginAsSite) は最終防衛線として併用する。
  */
 export function isAllowedSubresource(url: string, options: SubresourceAllowlistOptions): boolean {
   let parsed: URL;
@@ -57,6 +57,25 @@ export function isAllowedSubresource(url: string, options: SubresourceAllowlistO
   }
 
   return parsed.origin === options.siteOrigin || parsed.origin === options.storageOrigin;
+}
+
+/**
+ * メインフレームの document リクエストを continue するか abort するかを判定する
+ * (§11「リダイレクトは同一オリジンのみ許可」を各ホップで適用する)。
+ *
+ * - 最初のナビゲーション (redirectChainLength === 0) は URL 検証済み (route-key.ts) のため continue。
+ * - リダイレクトホップ (redirectChainLength > 0) は遷移先 URL が自オリジンのときだけ continue、
+ *   別オリジン (外部・内部メタデータサーバー等) は abort する。旧実装は全ホップを無条件に
+ *   continue し、撮影直前の page.url() 検証だけに頼っていたため、リダイレクト先への
+ *   リクエスト自体 (= SSRF の egress) は発生してしまっていた。
+ */
+export function decideMainFrameDocumentRequest(
+  url: string,
+  redirectChainLength: number,
+  siteOrigin: string,
+): "continue" | "abort" {
+  if (redirectChainLength <= 0) return "continue";
+  return isSameOriginAsSite(url, siteOrigin) ? "continue" : "abort";
 }
 
 /**

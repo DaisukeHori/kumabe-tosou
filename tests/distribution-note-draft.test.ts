@@ -118,6 +118,7 @@ function noteAccount(overrides: Partial<ChannelAccountRow> = {}): ChannelAccount
 function draftWithNote(overrides: Partial<{ title: string; body_md: string; hashtags: string[] }> = {}): ApprovedDraft {
   return {
     draft_id: "draft-1",
+    run_id: "run-1",
     channel: "note",
     content: { title: "テスト記事", body_md: "本文です".repeat(20), hashtags: ["塗装"], ...overrides } as unknown as ApprovedDraft["content"],
     approved_at: new Date().toISOString(),

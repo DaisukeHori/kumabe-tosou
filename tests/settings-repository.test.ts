@@ -12,8 +12,8 @@ import { upsertSetting } from "@/modules/settings/repository";
  * (例 "2026-07-08T07:38:52.287Z")、下 3 桁が失われる。この結果 `.eq("updated_at", ...)` が
  * 常に不一致になり、他者が誰も編集していなくても毎回 conflict (KMB-E103) が誤発火する。
  *
- * content/repository.ts の updateWithOptimisticLock, pricing/repository.ts の upsertGrade
- * と同じ「生文字列比較」方式に統一したことを検証する。
+ * content/repository.ts の updateWithOptimisticLock, pricing の pricing_replace_all RPC
+ * (expected_updated_at を生文字列で渡す) と同じ「生文字列比較」方式に統一したことを検証する。
  */
 
 type EqCall = [string, unknown];

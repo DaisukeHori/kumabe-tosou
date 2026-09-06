@@ -372,6 +372,7 @@ export function formatGradeCardPrice(table: PriceTable | null, gradeKey: string)
 | getActivePriceTable | `(): Promise<Result<PriceTable>>` | KMB-E901 (取得失敗) |
 | estimate | `(input: EstimateInput): Result<EstimateResult>` | KMB-E101 (検証 — quantity 1000 是正後の境界に注意) / KMB-E901 (表未取得) |
 | (admin 拡張 6 本) | getFullPriceTable / savePriceGrade / savePriceOption / replacePriceSizeClasses / replacePriceMatrix / replacePriceQuantityTiers | E101 / E103 (楽観排他) / E901。**変更なし** |
+| (2026-09-06 追記) | 上記のうち書き込み 5 本は **replaceAllPricing(input: PricingReplaceInput)** に統合 (security definer RPC `pricing_replace_all(jsonb)`、migration 20260906000010 — 5 テーブル置換を単一トランザクション化)。price_matrix の FK は on update / on delete cascade 化 | E101 / E103 / E202 / E901 |
 
 実装内部の変更は §2.4 P2 (unstable_cache オプション) と `price-display.ts` の追加のみ。facade interface・module-contracts §5 は不変。
 
@@ -430,19 +431,21 @@ route が呼ぶ facade メソッドと、各 `Result<T>` エラーの**全列挙
 POST /api/shop/lead
  0-a. body JSON parse (JSON として不正 → 400 {ok:false, code:"KMB-E101"})
  0-b. stealth 前段判定 — zSimulatorLeadReq のフル検証より**先**に行う (contact actions.ts の
-      判定順序 honeypot→最小送信時間→rate limit→契約検証 を踏襲 — v1.1 是正。v1.0 は strict parse が
+      判定順序 honeypot→最小送信時間→契約検証→rate limit を踏襲 — v1.1 是正。v1.0 は strict parse が
       先で、honeypot 充填 bot に 400 + Zod 詳細を返してしまい stealth 方針が破れていた):
       緩い前段スキーマ z.object({ honeypot: z.string().catch("x"),
       form_rendered_at: z.number().int().positive().catch(0) }).passthrough() で 2 項のみ読み取り、
       isHoneypotFilled(honeypot) || form_rendered_at === 0 || (Date.now() − form_rendered_at) < 3000ms
       → bot とみなし 200 {ok:true} を返して破棄 (stealth — 学習させない。catch により honeypot が
       文字列でない/長すぎる・form_rendered_at 欠落/型不正も bot 側に倒す)。
-      余剰キー等それ以外の契約違反は 0-d の通常 400 (stealth 対象は既存 contact と同じ 2 シグナルのみ)
- 0-c. checkAndRecordRateLimit(hashIp(ip, salt), now, "shop_lead")
-      超過 → 429 {ok:false, code:"KMB-E105", message:"短時間に送信が集中しています。…"}
- 0-d. zSimulatorLeadReq.safeParse (strict)
+      余剰キー等それ以外の契約違反は 0-c の通常 400 (stealth 対象は既存 contact と同じ 2 シグナルのみ)
+ 0-c. zSimulatorLeadReq.safeParse (strict)
       失敗 → 400 {ok:false, code:"KMB-E101", message:"入力内容をご確認ください。"}
       (フィールド単位の Zod 詳細は応答に載せない — スキーマ形状を学習させない)
+ 0-d. checkAndRecordRateLimit(hashIp(ip, salt), now, "shop_lead")
+      超過 → 429 {ok:false, code:"KMB-E105", message:"短時間に送信が集中しています。…"}
+      (2026-09-06 順序是正: strict 検証を通過した送信だけをカウントし、契約違反の再送で枠を消費させない。
+      加算は RPC rate_limit_increment による原子カウント — cms-ai-pipeline.md §3.3)
  0-e. サーバ再計算 (正本 snapshot の組み立て — クライアント金額・ラベルを信頼しない。v1.1 新設):
       getActivePriceTable() → computeEstimate(table, {grade_key, size_key, quantity, option_keys})
       → buildSimEstimateSnapshot (§4.3) で grade_label / size_label / applied_tier / breakdown /

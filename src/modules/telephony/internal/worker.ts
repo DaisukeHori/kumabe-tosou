@@ -46,6 +46,7 @@ import {
   listCallRecordingsByCallId,
   listDueCallJobs,
   reflectLinkResultToCalls,
+  updateCallJobTaskIdsCheckpoint,
   updateCallJobTranscriptPartial,
   updateCallRecordingStorage,
   type CallRecordingRow,
@@ -79,11 +80,14 @@ import { deleteRecording, downloadRecording } from "./twilio-api";
  * 3 回失敗すると acquire 自身が stage_attempts>=3 を検知して exhausted (KMB-E806) に倒す)。
  */
 
+/** acquire 成功 (result_kind='acquired') 直後の行。lease_token は RPC が必ず発行するため非 null に絞る。 */
+export type AcquiredLeaseRow = NonNullable<AcquireLeaseRawResult> & { lease_token: string };
+
 export type CallStageHandlerArgs = {
   client: SupabaseClient;
   jobId: string;
-  /** acquire で取得済みの行 (pending→downloading の bootstrap 後の status を含む)。 */
-  row: NonNullable<AcquireLeaseRawResult>;
+  /** acquire で取得済みの行 (pending→downloading の bootstrap 後の status と lease_token を含む)。 */
+  row: AcquiredLeaseRow;
 };
 
 /**
@@ -118,13 +122,15 @@ async function resolveTelephonySettings(): Promise<TelephonySettings> {
   return result.ok ? result.value : DEFAULT_TELEPHONY_SETTINGS;
 }
 
-/** commitCallJobStage を呼び、CallStageHandler の戻り値形 (`Result<{status}>`) に変換する。 */
+/** commitCallJobStage を呼び、CallStageHandler の戻り値形 (`Result<{status}>`) に変換する。
+ *  jobId / leaseToken は acquire 済みの row から採る (lease_token 一致が commit RPC の CAS 条件 —
+ *  失効後に他プロセスへ渡った lease を旧保持者が commit で上書きしない)。 */
 async function commitAdvance(
   client: SupabaseClient,
-  jobId: string,
-  input: Omit<CommitCallJobStageInput, "jobId">,
+  row: AcquiredLeaseRow,
+  input: Omit<CommitCallJobStageInput, "jobId" | "leaseToken">,
 ): Promise<Result<{ status: CallJobStatus }>> {
-  const result = await commitCallJobStage(client, { jobId, ...input });
+  const result = await commitCallJobStage(client, { jobId: row.id, leaseToken: row.lease_token, ...input });
   if (!result.ok) return result;
   return { ok: true, value: { status: result.value } };
 }
@@ -133,7 +139,7 @@ async function commitAdvance(
 // §6.5.1 downloading
 // ============================================================
 
-const handleDownloading: CallStageHandler = async ({ client, jobId, row }) => {
+const handleDownloading: CallStageHandler = async ({ client, row }) => {
   const recordingResult = await getCallRecordingById(client, row.recording_id);
   if (!recordingResult.ok) return recordingResult;
   const recording = recordingResult.value;
@@ -144,7 +150,7 @@ const handleDownloading: CallStageHandler = async ({ client, jobId, row }) => {
   // 再入ガード (§6.5.1 手順1): 前回クラッシュが commit 直前だった場合、DL をスキップして
   // 前進のみ行う。
   if (recording.storage_path !== null) {
-    return commitAdvance(client, jobId, { expectedStatus: "downloading", nextStatus: "transcribing" });
+    return commitAdvance(client, row, { expectedStatus: "downloading", nextStatus: "transcribing" });
   }
 
   const downloadResult = await downloadRecording(recording.twilio_url);
@@ -155,7 +161,7 @@ const handleDownloading: CallStageHandler = async ({ client, jobId, row }) => {
     // なら worker 自身が確定させる (E805/E806 の使い分けを成立させる唯一の経路 — worker は
     // 404 回数を保持しないため)。それ以外は Twilio 側の録音生成遅延の可能性があるため不確定 return。
     if (row.stage_attempts >= CALL_JOB_MAX_ATTEMPTS) {
-      return commitAdvance(client, jobId, {
+      return commitAdvance(client, row, {
         expectedStatus: "downloading",
         nextStatus: "failed",
         errorCode: "KMB-E805",
@@ -166,7 +172,7 @@ const handleDownloading: CallStageHandler = async ({ client, jobId, row }) => {
 
   const { bytes, contentType } = downloadResult.value;
   if (bytes.length > DOWNLOAD_MAX_BYTES) {
-    return commitAdvance(client, jobId, {
+    return commitAdvance(client, row, {
       expectedStatus: "downloading",
       nextStatus: "failed",
       errorCode: "KMB-E805",
@@ -207,7 +213,7 @@ const handleDownloading: CallStageHandler = async ({ client, jobId, row }) => {
     }
   }
 
-  return commitAdvance(client, jobId, { expectedStatus: "downloading", nextStatus: "transcribing" });
+  return commitAdvance(client, row, { expectedStatus: "downloading", nextStatus: "transcribing" });
 };
 
 // ============================================================
@@ -232,7 +238,7 @@ const handleTranscribing: CallStageHandler = async ({ client, jobId, row }) => {
   // 再入ガード (§6.5.2 手順1): transcript が既に確定済みなら次ステージへ前進するのみ。
   if (row.transcript !== null) {
     const transcript = zCallTranscript.parse(row.transcript);
-    return commitAdvance(client, jobId, { expectedStatus: "transcribing", nextStatus: "analyzing", transcript });
+    return commitAdvance(client, row, { expectedStatus: "transcribing", nextStatus: "analyzing", transcript });
   }
 
   const wakeStartedAt = Date.now();
@@ -248,7 +254,7 @@ const handleTranscribing: CallStageHandler = async ({ client, jobId, row }) => {
   const telephonySettings = await resolveTelephonySettings();
   const maxProcessingSeconds = telephonySettings.max_processing_minutes * 60;
   if (recording.duration_seconds > maxProcessingSeconds) {
-    return commitAdvance(client, jobId, { expectedStatus: "transcribing", nextStatus: "failed", errorCode: "KMB-E822" });
+    return commitAdvance(client, row, { expectedStatus: "transcribing", nextStatus: "failed", errorCode: "KMB-E822" });
   }
 
   const storagePath = recording.storage_path;
@@ -270,7 +276,7 @@ const handleTranscribing: CallStageHandler = async ({ client, jobId, row }) => {
 
   const segmentsResult = segmentCallRecording(wavBytes);
   if (!segmentsResult.ok) {
-    return commitAdvance(client, jobId, { expectedStatus: "transcribing", nextStatus: "failed", errorCode: "KMB-E822" });
+    return commitAdvance(client, row, { expectedStatus: "transcribing", nextStatus: "failed", errorCode: "KMB-E822" });
   }
   const segments = segmentsResult.value;
 
@@ -293,7 +299,7 @@ const handleTranscribing: CallStageHandler = async ({ client, jobId, row }) => {
     const elapsedMs = Date.now() - wakeStartedAt;
     if (elapsedMs + TRANSCRIBE_SEGMENT_WORST_MS > TELEPHONY_WAKE_SOFT_BUDGET_MS) {
       if (completedThisWake === 0) return { ok: true, value: { status: row.status } };
-      return commitAdvance(client, jobId, {
+      return commitAdvance(client, row, {
         expectedStatus: "transcribing",
         nextStatus: "transcribing",
         aiCostDeltaMicroUsd: aiCostThisWakeMicroUsd,
@@ -303,7 +309,7 @@ const handleTranscribing: CallStageHandler = async ({ client, jobId, row }) => {
     let transcribeResult = await callTranscribeSegment(jobId, recording, segment);
     if (!transcribeResult.ok) {
       if (transcribeResult.code === "KMB-E407") {
-        return commitAdvance(client, jobId, {
+        return commitAdvance(client, row, {
           expectedStatus: "transcribing",
           nextStatus: "failed",
           errorCode: "KMB-E407",
@@ -312,7 +318,7 @@ const handleTranscribing: CallStageHandler = async ({ client, jobId, row }) => {
       }
       if (transcribeResult.code === "KMB-E408") {
         if (completedThisWake === 0) return transcribeResult; // 不確定 return (attempts 経由で再試行)
-        return commitAdvance(client, jobId, {
+        return commitAdvance(client, row, {
           expectedStatus: "transcribing",
           nextStatus: "transcribing",
           aiCostDeltaMicroUsd: aiCostThisWakeMicroUsd,
@@ -321,7 +327,7 @@ const handleTranscribing: CallStageHandler = async ({ client, jobId, row }) => {
       // その他の転写失敗 (§6.5.2 手順4末尾): セグメント単位で 1 回だけ再試行する。
       transcribeResult = await callTranscribeSegment(jobId, recording, segment);
       if (!transcribeResult.ok) {
-        return commitAdvance(client, jobId, {
+        return commitAdvance(client, row, {
           expectedStatus: "transcribing",
           nextStatus: "failed",
           errorCode: "KMB-E820",
@@ -336,7 +342,12 @@ const handleTranscribing: CallStageHandler = async ({ client, jobId, row }) => {
       ...checkpointSegments,
       { channel: segment.channel, index: segment.index, text: transcribeResult.value.text },
     ];
-    const checkpointResult = await updateCallJobTranscriptPartial(client, jobId, { segments: checkpointSegments });
+    const checkpointResult = await updateCallJobTranscriptPartial(
+      client,
+      jobId,
+      { segments: checkpointSegments },
+      row.lease_token,
+    );
     if (!checkpointResult.ok) return checkpointResult;
   }
 
@@ -346,7 +357,7 @@ const handleTranscribing: CallStageHandler = async ({ client, jobId, row }) => {
     segments: orderedSegments,
     full_text: orderedSegments.map((s) => s.text).join("\n"),
   };
-  return commitAdvance(client, jobId, {
+  return commitAdvance(client, row, {
     expectedStatus: "transcribing",
     nextStatus: "analyzing",
     transcript,
@@ -435,7 +446,7 @@ const handleAnalyzing: CallStageHandler = async ({ client, jobId, row }) => {
   // 再入ガード (§6.5.3 手順1)
   const existingAnalysis = jobRow.analysis;
   if (existingAnalysis !== null) {
-    return commitAdvance(client, jobId, {
+    return commitAdvance(client, row, {
       expectedStatus: "analyzing",
       nextStatus: "linking",
       analysis: existingAnalysis,
@@ -468,12 +479,12 @@ const handleAnalyzing: CallStageHandler = async ({ client, jobId, row }) => {
   const first = await attemptCallAnalysis(jobId, transcript, callMeta);
   if (first.kind === "failed") {
     if (first.result.code === "KMB-E407") {
-      return commitAdvance(client, jobId, { expectedStatus: "analyzing", nextStatus: "failed", errorCode: "KMB-E407" });
+      return commitAdvance(client, row, { expectedStatus: "analyzing", nextStatus: "failed", errorCode: "KMB-E407" });
     }
     return first.result; // E408 その他 → 不確定 return (attempts 経由で再試行)
   }
   if (first.kind === "success") {
-    return commitAdvance(client, jobId, {
+    return commitAdvance(client, row, {
       expectedStatus: "analyzing",
       nextStatus: "linking",
       analysis: first.analysis,
@@ -485,7 +496,7 @@ const handleAnalyzing: CallStageHandler = async ({ client, jobId, row }) => {
   // 1 回だけ再生成する (§6.5.3 手順3)。
   const accruedCostMicroUsd = first.costMicroUsd;
   if (first.kind === "refusal") {
-    return commitAdvance(client, jobId, {
+    return commitAdvance(client, row, {
       expectedStatus: "analyzing",
       nextStatus: "failed",
       errorCode: "KMB-E821",
@@ -496,7 +507,7 @@ const handleAnalyzing: CallStageHandler = async ({ client, jobId, row }) => {
   const retry = await attemptCallAnalysis(jobId, transcript, callMeta);
   if (retry.kind === "failed") {
     if (retry.result.code === "KMB-E407") {
-      return commitAdvance(client, jobId, {
+      return commitAdvance(client, row, {
         expectedStatus: "analyzing",
         nextStatus: "failed",
         errorCode: "KMB-E407",
@@ -506,7 +517,7 @@ const handleAnalyzing: CallStageHandler = async ({ client, jobId, row }) => {
     return retry.result; // E408 その他 → 不確定 return
   }
   if (retry.kind === "success") {
-    return commitAdvance(client, jobId, {
+    return commitAdvance(client, row, {
       expectedStatus: "analyzing",
       nextStatus: "linking",
       analysis: retry.analysis,
@@ -515,7 +526,7 @@ const handleAnalyzing: CallStageHandler = async ({ client, jobId, row }) => {
   }
 
   // refusal または invalid が再度返った → E821 で確定。
-  return commitAdvance(client, jobId, {
+  return commitAdvance(client, row, {
     expectedStatus: "analyzing",
     nextStatus: "failed",
     errorCode: "KMB-E821",
@@ -569,7 +580,7 @@ const handleLinking: CallStageHandler = async ({ client, jobId, row }) => {
   // 再入ガード (§6.5.4 手順1)
   const existingLinkResult = jobRow.link_result;
   if (existingLinkResult !== null) {
-    return commitAdvance(client, jobId, { expectedStatus: "linking", nextStatus: "done", linkResult: existingLinkResult });
+    return commitAdvance(client, row, { expectedStatus: "linking", nextStatus: "done", linkResult: existingLinkResult });
   }
 
   const analysis = jobRow.analysis;
@@ -673,11 +684,16 @@ const handleLinking: CallStageHandler = async ({ client, jobId, row }) => {
     activityCreated = appendResult.value.created;
   }
 
-  // タスク起票 (§6.5.4 手順4)。全経路 (matched/created/ambiguous/no_number) で常に再実行する
-  // (v1.0 の「activity created:true のときのみ起票」ガードは廃止済み — DB 側の
-  // (source_activity_id, title) 一意 index が冪等性を担う)。
-  const taskIds: string[] = [];
-  for (const task of analysis.tasks) {
+  // タスク起票 (§6.5.4 手順4)。全経路 (matched/created/ambiguous/no_number) で行う。
+  // 冪等性は call_jobs.task_ids_checkpoint (migration 20260906000051) が担う: 1 件起票するごとに
+  // 起票済み task_id を analysis.tasks の順で保存し、commit 前にクラッシュして再入した場合は保存済み
+  // 分を再利用して createTask をスキップする。matched/created 経路は DB 側の
+  // (source_activity_id, title) 一意 index でも守られるが、ambiguous/no_number 経路は
+  // source_activity_id が null のため index が効かず (NULL は重複扱いにならない)、
+  // 旧実装では再入のたびに同じタスクが二重起票されていた。
+  const checkpointTaskIds = jobRow.task_ids_checkpoint ?? [];
+  const taskIds: string[] = checkpointTaskIds.slice(0, analysis.tasks.length);
+  for (const task of analysis.tasks.slice(taskIds.length)) {
     const createTaskResult = await crmFacade.createTask(
       {
         title: task.title,
@@ -692,6 +708,10 @@ const handleLinking: CallStageHandler = async ({ client, jobId, row }) => {
     );
     if (!createTaskResult.ok) return createTaskResult; // 不確定 return
     taskIds.push(createTaskResult.value.task_id);
+    // 起票直後にチェックポイント保存 (失敗は不確定 return — 保存できないまま次のタスクへ進むと
+    // 再入時にこの task_id が失われて二重起票になるため)。
+    const checkpointResult = await updateCallJobTaskIdsCheckpoint(client, jobId, taskIds, row.lease_token);
+    if (!checkpointResult.ok) return checkpointResult;
   }
 
   // calls 反映 (§6.5.4 手順5)。手動確定保護ガードは repository.reflectLinkResultToCalls 側で実装済み。
@@ -715,7 +735,7 @@ const handleLinking: CallStageHandler = async ({ client, jobId, row }) => {
     warning,
   };
 
-  return commitAdvance(client, jobId, { expectedStatus: "linking", nextStatus: "done", linkResult });
+  return commitAdvance(client, row, { expectedStatus: "linking", nextStatus: "done", linkResult });
 };
 
 export const STAGE_HANDLERS: Record<DispatchableStage, CallStageHandler> = {
@@ -761,14 +781,26 @@ export async function advanceCallJob(
     }
 
     // outcome.kind === "acquired"
+    const leaseToken = outcome.row.lease_token;
+    if (leaseToken === null) {
+      // migration 20260906000050 適用後の RPC は acquired で必ず lease_token を発行する。null は
+      // RPC/DDL の不整合 (適用漏れ) なので、トークン無しで heartbeat/commit を進めず明示的に失敗させる。
+      return {
+        ok: false,
+        code: "KMB-E901",
+        detail: `call_job_acquire_lease が lease_token を返しませんでした (migration 20260906000050 未適用の疑い): ${jobId}`,
+      };
+    }
+    const acquiredRow: AcquiredLeaseRow = { ...outcome.row, lease_token: leaseToken };
+
     heartbeatTimer = setInterval(() => {
-      heartbeatCallJobLease(client, jobId).catch(() => {
+      heartbeatCallJobLease(client, jobId, leaseToken).catch(() => {
         // heartbeat 失敗はベストエフォート。lease が自然失効してもクラッシュ再開
         // (§5.1 不変条件 6) の仕組みで次の advance が回収する。
       });
     }, CALL_JOB_HEARTBEAT_INTERVAL_MS);
 
-    const stage = outcome.row.status;
+    const stage = acquiredRow.status;
     if (!isDispatchableStage(stage)) {
       // 理論上到達しない防御分岐 (acquire は pending を downloading へ bootstrap 済みであり、
       // terminal/exhausted は上で既に return している)。
@@ -778,7 +810,7 @@ export async function advanceCallJob(
         detail: `call_job_acquire_lease が想定外の status を返しました: ${stage}`,
       };
     }
-    return await STAGE_HANDLERS[stage]({ client, jobId, row: outcome.row });
+    return await STAGE_HANDLERS[stage]({ client, jobId, row: acquiredRow });
   } catch (err) {
     return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
   } finally {

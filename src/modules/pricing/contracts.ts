@@ -75,6 +75,39 @@ export const zPriceOptionInput = z
   );
 export type PriceOptionInput = z.infer<typeof zPriceOptionInput>;
 
+/**
+ * /admin/prices の一括保存入力 (pricing_replace_all RPC — migration 20260906000010 と 1:1)。
+ * 5 テーブル (grades/sizes/matrix/tiers/options) の置換を単一トランザクションで行う。
+ * grades は id + expected_updated_at による楽観排他 (KMB-E103 は RPC 内で判定)、
+ * options は id の有無で update / insert。sizes / matrix / tiers は全置換。
+ */
+export const zPricingGradeReplaceInput = zPriceGradeInput.safeExtend({
+  id: z.string().uuid().nullable(),
+  expected_updated_at: z.string().min(1).nullable(),
+});
+export const zPricingOptionReplaceInput = zPriceOptionInput.safeExtend({
+  id: z.string().uuid().nullable(),
+});
+export const zPricingReplaceInput = z
+  .object({
+    grades: z.array(zPricingGradeReplaceInput).max(100),
+    sizes: z.array(zPriceSizeClassInput).max(100),
+    matrix: z.array(zPriceMatrixCellInput).max(10_000),
+    tiers: z.array(zQuantityTierInput).max(100),
+    options: z.array(zPricingOptionReplaceInput).max(100),
+  })
+  .strict()
+  .refine(
+    (p) => {
+      // 行列セルは payload 内のグレード key / サイズ key を参照していること (FK 違反の事前検知)
+      const gradeKeys = new Set(p.grades.map((g) => g.key));
+      const sizeKeys = new Set(p.sizes.map((s) => s.key));
+      return p.matrix.every((c) => gradeKeys.has(c.grade_key) && sizeKeys.has(c.size_key));
+    },
+    { message: "価格行列に存在しないグレード / サイズ帯を参照するセルがあります", path: ["matrix"] },
+  );
+export type PricingReplaceInput = z.infer<typeof zPricingReplaceInput>;
+
 export const zEstimateInput = z
   .object({
     grade_key: z.string(),

@@ -1,4 +1,5 @@
 import type { PostInput, PostKind } from "@/modules/content/contracts";
+import { requireAdminPage } from "@/app/admin/_lib/require-admin-page";
 import { PageHeader } from "@/app/admin/_ui";
 import { listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
 
@@ -15,6 +16,16 @@ export default async function NewPostPage({
 }: {
   searchParams: Promise<{ kind?: string }>;
 }) {
+  // 契約書 §3.5: page 先頭でも requireAdmin (E201/E202 は /admin/login へ redirect)
+  const auth = await requireAdminPage("/admin/posts/new");
+  if (!auth.ok) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-destructive">認可の確認に失敗しました ({auth.code}): {auth.detail}</p>
+      </div>
+    );
+  }
+
   const params = await searchParams;
   const kind: PostKind = isPostKind(params.kind) ? params.kind : "reading";
 

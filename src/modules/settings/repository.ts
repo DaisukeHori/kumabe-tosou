@@ -47,8 +47,9 @@ export type UpdateSettingResult =
  * 注意: expectedUpdatedAt は DB から読み取った updated_at の**生文字列**をそのまま渡すこと。
  * Postgres の timestamptz はマイクロ秒精度で保存されるが `Date.toISOString()` はミリ秒精度
  * までしか表現できず、経由すると下 3 桁が失われ `.eq` が恒久的に不一致になる
- * (content/repository.ts の updateWithOptimisticLock, pricing/repository.ts の upsertGrade と
- * 同じ「生文字列比較」方式に統一する — KMB-E103 誤爆の実バグ修正)。
+ * (content/repository.ts の updateWithOptimisticLock, pricing の pricing_replace_all RPC
+ * (expected_updated_at を生文字列のまま渡す) と同じ「生文字列比較」方式に統一する —
+ * KMB-E103 誤爆の実バグ修正)。
  */
 export async function upsertSetting(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,

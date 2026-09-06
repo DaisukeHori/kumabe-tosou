@@ -4,7 +4,7 @@ import { getEnv } from "@/lib/env";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSessionAndClient } from "@/lib/supabase/session";
-import type { Paged, Pagination, Result } from "@/modules/platform/contracts";
+import type { ExecutionContext, Paged, Pagination, Result } from "@/modules/platform/contracts";
 
 import { zMediaPatch, type MediaItem, type MediaPatch } from "./contracts";
 import { processImageToJpeg } from "./internal/image-processing";
@@ -41,8 +41,12 @@ export interface MediaFacade {
    * getJpegRenditionUrl で ensure する。§4.2 注記どおり、既存の非同期 ensure 版とは別メソッドとして共存)。
    */
   getPublicJpegUrl(mediaId: string): Result<string>;
-  /** IG 用。未生成なら生成 */
-  getJpegRenditionUrl(mediaId: string): Promise<Result<string>>;
+  /**
+   * IG 用。未生成なら生成。
+   * ctx: 省略時 = cookie セッション。`{ mode: "service" }` は publish worker (pg_cron 起動、
+   * cookie なし) 用で、注入 client (省略時は service client) で Storage/media 行を扱う。
+   */
+  getJpegRenditionUrl(mediaId: string, ctx?: ExecutionContext): Promise<Result<string>>;
   /** ai-studio の画像候補提案用 */
   listByTags(tags: string[]): Promise<Result<MediaItem[]>>;
   /** 参照ゼロ検証 (E301) */
@@ -187,9 +191,10 @@ export const mediaFacade: MediaFacadeExtended = {
     }
   },
 
-  async getJpegRenditionUrl(mediaId) {
+  async getJpegRenditionUrl(mediaId, ctx) {
     try {
-      const supabase = await createSupabaseServerClient();
+      const supabase =
+        ctx?.mode === "service" ? (ctx.client ?? createSupabaseServiceClient()) : await createSupabaseServerClient();
       const path = renditionPathFor(mediaId, "jpg");
       const exists = await renditionExists(supabase, path);
       if (!exists) {

@@ -64,6 +64,10 @@ const upsertPendingPushLinkMock = vi.fn();
 const getRecentDoneBlocksForWorkLogResendMock = vi.fn();
 const vaultReadSecretMock = vi.fn();
 const rollCalendarSyncWindowMock = vi.fn();
+const getCalendarEventLinkByIdMock = vi.fn();
+const deleteCalendarEventLinkMock = vi.fn();
+const saveLinkExternalIdentityMock = vi.fn();
+const markLinkPendingPushMock = vi.fn();
 
 vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/scheduling/repository")>();
@@ -91,6 +95,10 @@ vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
     getRecentDoneBlocksForWorkLogResend: (...args: unknown[]) => getRecentDoneBlocksForWorkLogResendMock(...args),
     vaultReadSecret: (...args: unknown[]) => vaultReadSecretMock(...args),
     rollCalendarSyncWindow: (...args: unknown[]) => rollCalendarSyncWindowMock(...args),
+    getCalendarEventLinkById: (...args: unknown[]) => getCalendarEventLinkByIdMock(...args),
+    deleteCalendarEventLink: (...args: unknown[]) => deleteCalendarEventLinkMock(...args),
+    saveLinkExternalIdentity: (...args: unknown[]) => saveLinkExternalIdentityMock(...args),
+    markLinkPendingPush: (...args: unknown[]) => markLinkPendingPushMock(...args),
   };
 });
 
@@ -111,6 +119,7 @@ vi.mock("@/modules/scheduling/internal/token", async (importOriginal) => {
 
 const googleGetBusyMock = vi.fn();
 const googleCalendarExistsMock = vi.fn();
+const googleFindByLinkIdMock = vi.fn();
 vi.mock("@/modules/scheduling/internal/google-api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/scheduling/internal/google-api")>();
   return {
@@ -119,6 +128,7 @@ vi.mock("@/modules/scheduling/internal/google-api", async (importOriginal) => {
       ...actual.googleCalendarAdapter,
       getBusy: (...args: unknown[]) => googleGetBusyMock(...args),
       calendarExists: (...args: unknown[]) => googleCalendarExistsMock(...args),
+      findByLinkId: (...args: unknown[]) => googleFindByLinkIdMock(...args),
     },
   };
 });
@@ -192,6 +202,9 @@ beforeEach(() => {
   msGetBusyMock.mockResolvedValue([]);
   googleCalendarExistsMock.mockResolvedValue(true);
   msCalendarExistsMock.mockResolvedValue(true);
+  deleteCalendarEventLinkMock.mockResolvedValue({ ok: true, value: undefined });
+  saveLinkExternalIdentityMock.mockResolvedValue({ ok: true, value: undefined });
+  markLinkPendingPushMock.mockResolvedValue({ ok: true, value: undefined });
 });
 
 describe("createSchedulingFacade().generateBlocksFromLines", () => {
@@ -490,6 +503,26 @@ describe("createSchedulingFacade().updateBlock", () => {
     const facade = createSchedulingFacade();
     const result = await facade.updateBlock("block-1", updateInput(), "2026-01-01T00:00:00.000Z");
     expect(result).toEqual({ ok: true, value: undefined });
+  });
+
+  it("配置済み (starts_at 非NULL) ブロックの編集は接続済み provider の links を pending_push 化する (タイトル変更を外部へ再送)", async () => {
+    getWorkBlockByIdMock.mockResolvedValue(currentBlock());
+    updateWorkBlockDetailMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue({ ok: true, value: { provider: "google", status: "connected" } });
+    const facade = createSchedulingFacade();
+    const result = await facade.updateBlock("block-1", updateInput(), "2026-01-01T00:00:00.000Z");
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "block-1", "google");
+  });
+
+  it("未配置 (starts_at NULL) ブロックの編集は pending_push 化しない (外部イベントが存在しない)", async () => {
+    getWorkBlockByIdMock.mockResolvedValue({ ...currentBlock(), status: "backlog", starts_at: null, ends_at: null });
+    updateWorkBlockDetailMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockResolvedValue({ ok: true, value: { provider: "google", status: "connected" } });
+    const facade = createSchedulingFacade();
+    const result = await facade.updateBlock("block-1", updateInput(), "2026-01-01T00:00:00.000Z");
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(upsertPendingPushLinkMock).not.toHaveBeenCalled();
   });
 });
 
@@ -912,5 +945,142 @@ describe("createSchedulingFacade().runCalendarMaintenance — Graph ローリン
 
     expect(result).toEqual({ ok: true, value: undefined });
     expect(rollCalendarSyncWindowMock).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// 2026-09 修正分: resolveExternalDeletion の他 provider 伝播 / reconcilePushUnknown の pending_push 復帰
+// ============================================================================
+
+function linkRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "link-1",
+    work_block_id: "block-1",
+    provider: "google" as const,
+    external_event_id: "ext-1",
+    external_ical_uid: null,
+    etag_or_change_key: "etag-1",
+    external_updated_at: null,
+    last_written_hash: null,
+    sync_status: "deleted_externally" as const,
+    push_attempts: 0,
+    push_claimed_at: null,
+    last_error_code: null,
+    last_pushed_at: null,
+    last_pulled_at: null,
+    deleted_externally_at: "2026-07-01T00:00:00.000Z",
+    created_at: "2026-06-01T00:00:00.000Z",
+    updated_at: "2026-07-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("createSchedulingFacade().resolveExternalDeletion — 他 provider への削除マーク伝播", () => {
+  it("'unschedule' はブロック未配置化後、接続済み provider の links に削除マーク (pending_push) を立ててから当該 link を削除する", async () => {
+    getCalendarEventLinkByIdMock.mockResolvedValue({ ok: true, value: linkRow() });
+    getWorkBlockByIdMock.mockResolvedValue(scheduledBlockRow());
+    unscheduleWorkBlockMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve({ ok: true, value: { provider, status: "connected" } }),
+    );
+    const facade = createSchedulingFacade();
+
+    const result = await facade.resolveExternalDeletion("link-1", "unschedule");
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(unscheduleWorkBlockMock).toHaveBeenCalledWith("block-1", "2026-01-01T00:00:00.000Z");
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "block-1", "google");
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "block-1", "microsoft");
+    expect(deleteCalendarEventLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "link-1");
+    // 伝播 (upsert) → 当該 link 削除の順 (削除後に upsert すると消したはずの link が復活する)
+    const upsertOrder = upsertPendingPushLinkMock.mock.invocationCallOrder[0] ?? Infinity;
+    const deleteOrder = deleteCalendarEventLinkMock.mock.invocationCallOrder[0] ?? 0;
+    expect(upsertOrder).toBeLessThan(deleteOrder);
+  });
+
+  it("'cancel_block' も同様に伝播してから link を削除する", async () => {
+    getCalendarEventLinkByIdMock.mockResolvedValue({ ok: true, value: linkRow() });
+    getWorkBlockByIdMock.mockResolvedValue(scheduledBlockRow());
+    transitionWorkBlockStatusMock.mockResolvedValue({ updated_at: "2026-01-02T00:00:00.000Z" });
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(provider === "microsoft" ? { ok: true, value: { provider, status: "connected" } } : DISCONNECTED),
+    );
+    const facade = createSchedulingFacade();
+
+    const result = await facade.resolveExternalDeletion("link-1", "cancel_block");
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(transitionWorkBlockStatusMock).toHaveBeenCalledWith("block-1", "cancelled", "2026-01-01T00:00:00.000Z");
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledTimes(1);
+    expect(upsertPendingPushLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "block-1", "microsoft");
+    expect(deleteCalendarEventLinkMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "link-1");
+  });
+
+  it("'repush' はブロックを触らず伝播もしない (resetLinkForRepush のみ — 既存挙動の固定)", async () => {
+    getCalendarEventLinkByIdMock.mockResolvedValue({ ok: true, value: linkRow() });
+    const facade = createSchedulingFacade();
+    // resetLinkForRepush は実体 (FAKE_SERVICE_CLIENT に .from が無い) → KMB-E901 だが、ここで見たいのは
+    // ブロック操作・伝播・link 削除が一切走らないこと
+    await facade.resolveExternalDeletion("link-1", "repush");
+    expect(unscheduleWorkBlockMock).not.toHaveBeenCalled();
+    expect(upsertPendingPushLinkMock).not.toHaveBeenCalled();
+    expect(deleteCalendarEventLinkMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("createSchedulingFacade().reconcilePushUnknown — 発見時は synced にせず pending_push に戻す", () => {
+  it("findByLinkId が発見 → external_event_id/etag を採用して pending_push (toPendingPush=true)、resolved=true", async () => {
+    getCalendarEventLinkByIdMock.mockResolvedValue({
+      ok: true,
+      value: linkRow({ sync_status: "conflict", last_error_code: "KMB-E724", external_event_id: null, etag_or_change_key: null }),
+    });
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(provider === "google" ? connectedRow("google") : DISCONNECTED),
+    );
+    googleFindByLinkIdMock.mockResolvedValue({
+      externalEventId: "ext-found",
+      etagOrChangeKey: "etag-found",
+      icalUid: "ical-found",
+      externalUpdatedAt: "2026-07-12T00:00:00.000Z",
+      title: "研磨",
+      startsAt: "2026-07-12T00:00:00.000Z",
+      endsAt: "2026-07-12T03:00:00.000Z",
+      removed: false,
+      isAllDay: false,
+      appLinkId: "link-1",
+      appBlockId: "block-1",
+      recurringEventId: null,
+    });
+    const facade = createSchedulingFacade();
+
+    const result = await facade.reconcilePushUnknown("link-1");
+
+    expect(result).toEqual({ ok: true, value: { resolved: true } });
+    expect(googleFindByLinkIdMock).toHaveBeenCalledWith("cal-app-1", "link-1", expect.any(Object));
+    expect(saveLinkExternalIdentityMock).toHaveBeenCalledWith(
+      FAKE_SERVICE_CLIENT,
+      "link-1",
+      { external_event_id: "ext-found", etag_or_change_key: "etag-found", external_updated_at: "2026-07-12T00:00:00.000Z", external_ical_uid: "ical-found" },
+      { toPendingPush: true },
+    );
+    expect(getWorkBlockByIdMock).not.toHaveBeenCalled(); // synced 化 (hash 再計算) 経路は使わない
+  });
+
+  it("未発見 → markLinkPendingPush で再送 (resolved=false — 既存挙動の固定)", async () => {
+    getCalendarEventLinkByIdMock.mockResolvedValue({
+      ok: true,
+      value: linkRow({ sync_status: "conflict", last_error_code: "KMB-E724", external_event_id: null }),
+    });
+    getCalendarConnectionMock.mockImplementation((_client: unknown, provider: string) =>
+      Promise.resolve(provider === "google" ? connectedRow("google") : DISCONNECTED),
+    );
+    googleFindByLinkIdMock.mockResolvedValue(null);
+    const facade = createSchedulingFacade();
+
+    const result = await facade.reconcilePushUnknown("link-1");
+
+    expect(result).toEqual({ ok: true, value: { resolved: false } });
+    expect(markLinkPendingPushMock).toHaveBeenCalledWith(FAKE_SERVICE_CLIENT, "link-1");
+    expect(saveLinkExternalIdentityMock).not.toHaveBeenCalled();
   });
 });

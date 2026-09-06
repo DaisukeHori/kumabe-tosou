@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyEscapeCancel,
+  blockDragDurationMinutes,
   createSelection,
   shouldCancelDragOnEscape,
   shouldCommitCreate,
@@ -217,5 +218,31 @@ describe("shouldIgnoreBlockPointerUp", () => {
 
     // 4. 対応する document 側の pointerup (commitDrag) では canceled のため何も作成されない
     expect(shouldCommitCreate(afterEscape!.canceled, false)).toBe(false);
+  });
+});
+
+/**
+ * blockDragDurationMinutes: 週グリッドの move/tray ドラッグの札の長さ。配置済みブロックは
+ * ends_at − starts_at (実際の配置長) を使い、planned_hours から再計算しない (move で長さが戻る回帰の防止)。
+ */
+describe("blockDragDurationMinutes", () => {
+  it("配置済みブロックは ends_at − starts_at を使う (planned_hours と乖離していても実長を維持)", () => {
+    expect(
+      blockDragDurationMinutes({ starts_at: "2026-01-05T00:00:00.000Z", ends_at: "2026-01-05T04:30:00.000Z", planned_hours: 3 }),
+    ).toBe(270);
+  });
+
+  it("配置済みで実長が 30 分未満でも最低 1 行 (30 分) を返す", () => {
+    expect(
+      blockDragDurationMinutes({ starts_at: "2026-01-05T00:00:00.000Z", ends_at: "2026-01-05T00:10:00.000Z", planned_hours: 3 }),
+    ).toBe(30);
+  });
+
+  it("未配置 (tray) ブロックは planned_hours×60 を使う", () => {
+    expect(blockDragDurationMinutes({ starts_at: null, ends_at: null, planned_hours: 2.5 })).toBe(150);
+  });
+
+  it("未配置で planned_hours=0 でも最低 30 分を返す", () => {
+    expect(blockDragDurationMinutes({ starts_at: null, ends_at: null, planned_hours: 0 })).toBe(30);
   });
 });

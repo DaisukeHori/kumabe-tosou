@@ -11,6 +11,7 @@ import {
   DEFAULT_CONSENT_TEXT,
   DEFAULT_IN_HOURS_GREETING_TEXT,
   escapeXml,
+  SAY_VOICE,
 } from "@/modules/telephony/internal/twiml";
 
 /**
@@ -40,9 +41,9 @@ function expectedRecordFlow(sayText: string, voicemailMaxSeconds: number, baseUr
   return (
     XML_HEADER +
     "<Response>" +
-    `<Say language="ja-JP">${escapeXml(sayText)}</Say>` +
+    `<Say voice="${SAY_VOICE}" language="ja-JP">${escapeXml(sayText)}</Say>` +
     `<Record maxLength="${voicemailMaxSeconds}" playBeep="true" finishOnKey="#" recordingStatusCallback="${escapeXml(baseUrl)}/api/telephony/recording-status" recordingStatusCallbackEvent="completed" action="${escapeXml(baseUrl)}/api/telephony/voice?step=recorded" method="POST"/>` +
-    `<Say language="ja-JP">${escapeXml(RECORD_FAILURE_TEXT)}</Say>` +
+    `<Say voice="${SAY_VOICE}" language="ja-JP">${escapeXml(RECORD_FAILURE_TEXT)}</Say>` +
     "</Response>"
   );
 }
@@ -74,7 +75,7 @@ describe("buildForwardTwiml ((a) 営業時間内 + 転送先あり)", () => {
 
   it("consentEnabled=true, consentText=null → 既定文言 (DEFAULT_CONSENT_TEXT) で <Say> が先頭に入る", () => {
     const twiml = buildForwardTwiml({ ...base, consentEnabled: true, consentText: null });
-    const expectedSay = `<Say language="ja-JP">${escapeXml(GREETING_PREFIX + DEFAULT_CONSENT_TEXT)}</Say>`;
+    const expectedSay = `<Say voice="${SAY_VOICE}" language="ja-JP">${escapeXml(GREETING_PREFIX + DEFAULT_CONSENT_TEXT)}</Say>`;
     const expected =
       XML_HEADER +
       "<Response>" +
@@ -265,7 +266,7 @@ describe("buildHangupTwiml / buildRecordedAckTwiml / buildEmptyTwiml (固定 Twi
 
   it("buildRecordedAckTwiml はお礼文言 + <Hangup/> を返す (step=recorded)", () => {
     expect(buildRecordedAckTwiml()).toBe(
-      `${XML_HEADER}<Response><Say language="ja-JP">${escapeXml(RECORDED_ACK_TEXT)}</Say><Hangup/></Response>`,
+      `${XML_HEADER}<Response><Say voice="${SAY_VOICE}" language="ja-JP">${escapeXml(RECORDED_ACK_TEXT)}</Say><Hangup/></Response>`,
     );
   });
 
@@ -304,5 +305,43 @@ describe("XML エスケープの統合確認 (設定文言に特殊文字が含�
     });
     expect(twiml).not.toContain("<script>");
     expect(twiml).toContain(escapeXml(`<script>alert('x')</script>`));
+  });
+});
+
+describe("<Say> の voice 属性 (全 <Say> に Polly.Mizuki を明示 — 既定の英語音声で日本語文言を読ませない)", () => {
+  const SAY_OPEN = `<Say voice="Polly.Mizuki" language="ja-JP">`;
+
+  it("SAY_VOICE 定数は Polly.Mizuki", () => {
+    expect(SAY_VOICE).toBe("Polly.Mizuki");
+  });
+
+  it.each([
+    ["forward (同意あり)", () => buildForwardTwiml({ consentEnabled: true, consentText: null, forwardToE164: "+819012345678", baseUrl: BASE_URL })],
+    ["voicemail (b)", () => buildVoicemailTwiml({ greetingText: null, consentEnabled: true, consentText: null, fromDialFallback: false, voicemailMaxSeconds: 120, baseUrl: BASE_URL })],
+    ["voicemail (c) dial fallback", () => buildVoicemailTwiml({ greetingText: null, consentEnabled: false, consentText: null, fromDialFallback: true, voicemailMaxSeconds: 120, baseUrl: BASE_URL })],
+    ["after-hours (d)", () => buildAfterHoursTwiml({ afterHoursGreetingText: null, consentEnabled: false, consentText: null, voicemailMaxSeconds: 120, baseUrl: BASE_URL })],
+    ["recorded ack", () => buildRecordedAckTwiml()],
+  ])("%s: 出現する全ての <Say> が voice 属性付き (voice なしの <Say> が 1 つも無い)", (_label, build) => {
+    const twiml = build();
+    const sayCount = (twiml.match(/<Say\b/g) ?? []).length;
+    const voicedSayCount = twiml.split(SAY_OPEN).length - 1;
+    expect(sayCount).toBeGreaterThan(0);
+    expect(voicedSayCount).toBe(sayCount);
+  });
+});
+
+describe("baseUrl の末尾スラッシュ正規化 (NEXT_PUBLIC_SITE_URL='https://x/' でも callback URL が // にならない)", () => {
+  it("buildForwardTwiml: 末尾スラッシュ付き baseUrl でも action/recordingStatusCallback が単一スラッシュになる", () => {
+    const twiml = buildForwardTwiml({ consentEnabled: false, consentText: null, forwardToE164: "+819012345678", baseUrl: `${BASE_URL}/` });
+    expect(twiml).toContain(`action="${BASE_URL}/api/telephony/voice?step=dial_result"`);
+    expect(twiml).toContain(`recordingStatusCallback="${BASE_URL}/api/telephony/recording-status"`);
+    expect(twiml).not.toContain("//api/");
+  });
+
+  it("buildVoicemailTwiml / buildAfterHoursTwiml: 末尾スラッシュ付き (複数個でも) の baseUrl は末尾なしと同一の TwiML になる", () => {
+    const vmParams = { greetingText: null, consentEnabled: true, consentText: null, fromDialFallback: false, voicemailMaxSeconds: 120 };
+    expect(buildVoicemailTwiml({ ...vmParams, baseUrl: `${BASE_URL}//` })).toBe(buildVoicemailTwiml({ ...vmParams, baseUrl: BASE_URL }));
+    const ahParams = { afterHoursGreetingText: null, consentEnabled: true, consentText: null, voicemailMaxSeconds: 120 };
+    expect(buildAfterHoursTwiml({ ...ahParams, baseUrl: `${BASE_URL}/` })).toBe(buildAfterHoursTwiml({ ...ahParams, baseUrl: BASE_URL }));
   });
 });

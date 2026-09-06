@@ -203,13 +203,17 @@ export async function acquireLease(supabase: Supa, runId: string): Promise<Acqui
   return (row ?? null) as AcquireLeaseRawResult;
 }
 
-/** heartbeat (§7.6: 20 秒ごとに lease を延長)。lease を保持中の場合のみ延長する単純な CAS。 */
-export async function heartbeatLease(supabase: Supa, runId: string): Promise<void> {
+/**
+ * heartbeat (§7.6: 20 秒ごとに lease を延長)。自分の lease_token を保持中の場合のみ延長する CAS
+ * (migration 20260906000042: 失効後に別プロセスが取り直した lease を古いプロセスが延長しない)。
+ */
+export async function heartbeatLease(supabase: Supa, runId: string, leaseToken: string): Promise<void> {
   const leaseUntil = new Date(Date.now() + 90_000).toISOString();
   const { error } = await supabase
     .from("ai_runs")
     .update({ lease_expires_at: leaseUntil })
     .eq("id", runId)
+    .eq("lease_token", leaseToken)
     .not("lease_expires_at", "is", null);
   if (error) throw new Error(`lease heartbeat に失敗しました (${runId}): ${error.message}`);
 }
@@ -219,12 +223,19 @@ export async function heartbeatLease(supabase: Supa, runId: string): Promise<voi
  * lease を解放して error_code を記録する。status・stage_attempts は変更しない
  * (同じ stage を次の advance が再試行できるようにするため。上限は
  * ai_run_acquire_lease の stage_attempts>=3 判定が担う)。
+ * lease_token 一致を条件に含めるため、別プロセスが取り直した lease を誤って解放しない。
  */
-export async function releaseLeaseAfterFailure(supabase: Supa, runId: string, errorCode: string): Promise<void> {
+export async function releaseLeaseAfterFailure(
+  supabase: Supa,
+  runId: string,
+  errorCode: string,
+  leaseToken: string,
+): Promise<void> {
   const { error } = await supabase
     .from("ai_runs")
-    .update({ lease_expires_at: null, error_code: errorCode })
-    .eq("id", runId);
+    .update({ lease_expires_at: null, lease_token: null, error_code: errorCode })
+    .eq("id", runId)
+    .eq("lease_token", leaseToken);
   if (error) throw new Error(`lease 解放 (失敗時) に失敗しました (${runId}): ${error.message}`);
 }
 
@@ -246,6 +257,8 @@ export async function commitStage(
     tokenUsageDelta?: unknown;
     channelDrafts?: ChannelDraftCommitInput[];
     errorCode?: string;
+    /** acquire 時に発行された lease_token (migration 20260906000042)。不一致なら commit は no-op */
+    leaseToken: string;
   },
 ): Promise<string> {
   const { data, error } = await supabase.rpc("ai_run_commit_stage", {
@@ -257,6 +270,7 @@ export async function commitStage(
     p_token_usage_delta: params.tokenUsageDelta ?? null,
     p_channel_drafts: params.channelDrafts ?? null,
     p_error_code: params.errorCode ?? null,
+    p_lease_token: params.leaseToken,
   });
   if (error) throw new Error(`stage commit RPC に失敗しました (${params.runId}): ${error.message}`);
   return data as string;
@@ -276,6 +290,8 @@ export async function commitImageStage(
     nextStatus: string;
     imageCandidates?: ImageCandidate[];
     errorCode?: string;
+    /** acquire 時に発行された lease_token (migration 20260906000042)。不一致なら commit は no-op */
+    leaseToken: string;
   },
 ): Promise<string> {
   const { data, error } = await supabase.rpc("ai_run_commit_image_stage", {
@@ -284,6 +300,7 @@ export async function commitImageStage(
     p_next_status: params.nextStatus,
     p_image_candidates: params.imageCandidates ?? null,
     p_error_code: params.errorCode ?? null,
+    p_lease_token: params.leaseToken,
   });
   if (error) throw new Error(`image stage commit RPC に失敗しました (${params.runId}): ${error.message}`);
   return data as string;

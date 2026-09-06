@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { z } from "zod";
 
 import { getRateLimitIpSalt } from "@/lib/env";
 import { zInquiryInput } from "@/modules/inquiry/contracts";
@@ -23,6 +24,25 @@ import {
  * InquiryFacade.submit (契約書 §5) を経由する — site-public から書き込み系 facade を
  * import できる唯一の例外 (module-contracts.md §2)。
  */
+
+/**
+ * payload の入口検証。Server Action の引数はクライアントから任意の形で呼び出せる
+ * (型は TypeScript 上の約束にすぎない) ため、`payload.phone.trim()` のような
+ * 形前提のアクセスは欠落時に TypeError で 500 になる。先頭で zod パースして形を保証し、
+ * 失敗は {status:"invalid"} で返す。任意項目 (phone / targetItem / honeypot) は
+ * optional + default で欠落を許容する。
+ */
+const zContactFormPayload = z.object({
+  name: z.string(),
+  email: z.string(),
+  phone: z.string().optional().default(""),
+  inquiryType: z.string(),
+  targetItem: z.string().optional().default(""),
+  message: z.string(),
+  agree: z.boolean(),
+  honeypot: z.string().optional().default(""),
+  formRenderedAt: z.number(),
+});
 
 export type ContactFormPayload = {
   name: string;
@@ -47,9 +67,18 @@ export type SubmitContactResult =
   | { status: "rate_limited" }
   | { status: "error" };
 
+const INVALID_MESSAGE = "入力内容をご確認ください。";
+
 export async function submitContactFormAction(
-  payload: ContactFormPayload,
+  rawPayload: ContactFormPayload,
 ): Promise<SubmitContactResult> {
+  // 0) payload の形検証 (欠落・型不正は TypeError にせず invalid で返す)。
+  const parsedPayload = zContactFormPayload.safeParse(rawPayload);
+  if (!parsedPayload.success) {
+    return { status: "invalid", message: INVALID_MESSAGE };
+  }
+  const payload = parsedPayload.data;
+
   // 1) honeypot: 入力があれば bot とみなす。学習させないよう成功したふりをする (stealth)。
   if (isHoneypotFilled(payload.honeypot)) {
     console.warn("[contact] honeypot が入力されていたため送信を無視しました (spam 扱い)");
@@ -64,19 +93,9 @@ export async function submitContactFormAction(
     return { status: "success" };
   }
 
-  // 3) rate limit (IP ごと 5 件/時)。
-  const requestHeaders = await headers();
-  const ip = extractClientIp(
-    requestHeaders.get("x-forwarded-for"),
-    requestHeaders.get("x-real-ip"),
-  );
-  const ipHash = hashIp(ip, getRateLimitIpSalt());
-  const rateLimitResult = await checkAndRecordRateLimit(ipHash, new Date(submittedAt));
-  if (!rateLimitResult.ok) {
-    return { status: "rate_limited" };
-  }
-
-  // 4) 契約検証 (zInquiryInput) — フォームの空文字 → null 変換をここで行う。
+  // 3) 契約検証 (zInquiryInput) — フォームの空文字 → null 変換をここで行う。
+  //    rate limit より先に行い、契約違反の送信は枠を消費しない (入力ミスの再送で
+  //    正当な利用者が締め出されないようにする)。
   const candidate = {
     name: payload.name,
     email: payload.email,
@@ -89,7 +108,19 @@ export async function submitContactFormAction(
 
   const parsed = zInquiryInput.safeParse(candidate);
   if (!parsed.success) {
-    return { status: "invalid", message: "入力内容をご確認ください。" };
+    return { status: "invalid", message: INVALID_MESSAGE };
+  }
+
+  // 4) rate limit (IP ごと 5 件/時)。検証を通過した送信だけをカウントする。
+  const requestHeaders = await headers();
+  const ip = extractClientIp(
+    requestHeaders.get("x-forwarded-for"),
+    requestHeaders.get("x-real-ip"),
+  );
+  const ipHash = hashIp(ip, getRateLimitIpSalt());
+  const rateLimitResult = await checkAndRecordRateLimit(ipHash, new Date(submittedAt));
+  if (!rateLimitResult.ok) {
+    return { status: "rate_limited" };
   }
 
   // 5) 保存 + 通知メール (ベストエフォート。inquiryFacade.submit 内部で実施)。

@@ -25,9 +25,21 @@ vi.mock("@/modules/platform/facade", () => ({
 }));
 
 const settingsUpdateMock = vi.fn();
+const settingsGetWithMetaMock = vi.fn();
 vi.mock("@/modules/settings/facade", () => ({
   SITE_SETTINGS_CACHE_TAG: "site_settings",
-  settingsFacade: { update: (...args: unknown[]) => settingsUpdateMock(...args) },
+  settingsFacade: {
+    update: (...args: unknown[]) => settingsUpdateMock(...args),
+    getWithMeta: (...args: unknown[]) => settingsGetWithMetaMock(...args),
+  },
+}));
+
+// 角印アップロード (updateInvoiceIssuerSettingsAction) が使う service client の Storage を最小フェイク化。
+const storageUploadMock = vi.fn();
+vi.mock("@/lib/supabase/service", () => ({
+  createSupabaseServiceClient: () => ({
+    storage: { from: () => ({ upload: (...args: unknown[]) => storageUploadMock(...args) }) },
+  }),
 }));
 
 const getJpegRenditionUrlMock = vi.fn();
@@ -42,6 +54,7 @@ vi.mock("@/modules/media/facade", () => ({
 import {
   updateAnalyticsSettingsAction,
   updateBrandingSettingsAction,
+  updateInvoiceIssuerSettingsAction,
   updateSeoDefaultsAction,
 } from "@/app/admin/settings/actions";
 import { SETTINGS_FORM_INITIAL_STATE } from "@/app/admin/settings/form-state";
@@ -269,5 +282,135 @@ describe("updateSeoDefaultsAction (§6.2 JPEG ensure + 寸法 warning)", () => {
     expect(result.success).toBe(false);
     expect(getJpegRenditionUrlMock).not.toHaveBeenCalled();
     expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================
+// updateInvoiceIssuerSettingsAction (02-sales.md §8.6 角印アップロードの 2 段階保存)
+// 回帰: 角印は固定パスに upsert:true で上書きするため、CAS (KMB-E103) / zod で保存が弾かれる前に
+// アップロードすると「DB は旧設定のまま Storage の角印だけ差し替わる」不整合になる。
+// ============================================================
+
+describe("updateInvoiceIssuerSettingsAction (角印アップロードは CAS 成功後)", () => {
+  const CURRENT_SEAL = "invoice-issuer/seal";
+  const NEW_UPDATED_AT = "2026-07-14T00:00:01.000000+00:00";
+
+  function issuerFormData(extra: Record<string, string> = {}, sealFile?: File): FormData {
+    const fd = makeFormData({
+      issuer_name: "山岸塗装",
+      registration_number: "",
+      tax_rounding: "floor",
+      transfer_fee_note: "",
+      seal_storage_path: extra.seal_storage_path ?? "",
+      quote_valid_days: "30",
+      expected_updated_at: EXPECTED_UPDATED_AT,
+      ...extra,
+    });
+    if (sealFile) fd.set("seal_image", sealFile);
+    return fd;
+  }
+
+  function pngFile(): File {
+    return new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "seal.png", { type: "image/png" });
+  }
+
+  it("楽観排他 (KMB-E103) で保存が弾かれた場合、Storage へは一切アップロードしない (既存角印を上書きしない)", async () => {
+    settingsUpdateMock.mockResolvedValue({ ok: false, code: "KMB-E103" });
+
+    const result = await updateInvoiceIssuerSettingsAction(
+      SETTINGS_FORM_INITIAL_STATE,
+      issuerFormData({ seal_storage_path: CURRENT_SEAL }, pngFile()),
+    );
+
+    expect(result.conflict).toBe(true);
+    expect(result.success).toBe(false);
+    expect(storageUploadMock).not.toHaveBeenCalled();
+    expect(settingsUpdateMock).toHaveBeenCalledTimes(1);
+    // 段階 1 の保存は現在の seal_storage_path のまま
+    expect(settingsUpdateMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ seal_storage_path: CURRENT_SEAL }),
+    );
+  });
+
+  it("zod で弾かれた場合 (issuer_name 空) も update / アップロードは呼ばれない", async () => {
+    const result = await updateInvoiceIssuerSettingsAction(
+      SETTINGS_FORM_INITIAL_STATE,
+      issuerFormData({ issuer_name: "", seal_storage_path: CURRENT_SEAL }, pngFile()),
+    );
+
+    expect(result.success).toBe(false);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+    expect(storageUploadMock).not.toHaveBeenCalled();
+  });
+
+  it("角印ファイルが許可 MIME 以外なら CAS 前に KMB-E302 で止める (update もアップロードも呼ばない)", async () => {
+    const gif = new File([new Uint8Array([0x47, 0x49, 0x46])], "seal.gif", { type: "image/gif" });
+
+    const result = await updateInvoiceIssuerSettingsAction(SETTINGS_FORM_INITIAL_STATE, issuerFormData({}, gif));
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("PNG または JPEG");
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+    expect(storageUploadMock).not.toHaveBeenCalled();
+  });
+
+  it("成功時: 現在値で CAS 保存 → アップロード → 新しい updated_at で seal_storage_path を更新する順序", async () => {
+    settingsUpdateMock.mockResolvedValue({ ok: true, value: undefined });
+    storageUploadMock.mockResolvedValue({ data: { path: CURRENT_SEAL }, error: null });
+    settingsGetWithMetaMock.mockResolvedValue({
+      ok: true,
+      value: { value: null, updatedAt: NEW_UPDATED_AT, isUnset: false },
+    });
+
+    const result = await updateInvoiceIssuerSettingsAction(SETTINGS_FORM_INITIAL_STATE, issuerFormData({}, pngFile()));
+
+    expect(result).toEqual({ error: null, conflict: false, success: true });
+    expect(settingsUpdateMock).toHaveBeenCalledTimes(2);
+    // 1 回目: seal_storage_path は現在値 (未設定なので null)、hidden field の updated_at で CAS
+    expect(settingsUpdateMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ seal_storage_path: null }));
+    expect(settingsUpdateMock.mock.calls[0]?.[2]).toBe(EXPECTED_UPDATED_AT);
+    // 2 回目: アップロード後のパスを、getWithMeta で読み直した updated_at で CAS 更新
+    expect(settingsUpdateMock.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ seal_storage_path: CURRENT_SEAL }));
+    expect(settingsUpdateMock.mock.calls[1]?.[2]).toBe(NEW_UPDATED_AT);
+    // 呼び出し順: update(1) → upload → update(2)
+    const firstUpdate = settingsUpdateMock.mock.invocationCallOrder[0] ?? 0;
+    const upload = storageUploadMock.mock.invocationCallOrder[0] ?? 0;
+    const secondUpdate = settingsUpdateMock.mock.invocationCallOrder[1] ?? 0;
+    expect(firstUpdate).toBeLessThan(upload);
+    expect(upload).toBeLessThan(secondUpdate);
+    expect(storageUploadMock).toHaveBeenCalledWith(
+      CURRENT_SEAL,
+      expect.anything(),
+      expect.objectContaining({ contentType: "image/png", upsert: true }),
+    );
+  });
+
+  it("角印なしの保存は 1 回の update で完結し、アップロードも getWithMeta も呼ばない", async () => {
+    settingsUpdateMock.mockResolvedValue({ ok: true, value: undefined });
+
+    const result = await updateInvoiceIssuerSettingsAction(
+      SETTINGS_FORM_INITIAL_STATE,
+      issuerFormData({ seal_storage_path: CURRENT_SEAL }),
+    );
+
+    expect(result).toEqual({ error: null, conflict: false, success: true });
+    expect(settingsUpdateMock).toHaveBeenCalledTimes(1);
+    expect(settingsUpdateMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ seal_storage_path: CURRENT_SEAL }));
+    expect(storageUploadMock).not.toHaveBeenCalled();
+    expect(settingsGetWithMetaMock).not.toHaveBeenCalled();
+  });
+
+  it("アップロードが失敗した場合、他項目は保存済みである旨のエラーを返し seal_storage_path の更新はしない", async () => {
+    settingsUpdateMock.mockResolvedValue({ ok: true, value: undefined });
+    storageUploadMock.mockResolvedValue({ data: null, error: { message: "bucket unavailable" } });
+
+    const result = await updateInvoiceIssuerSettingsAction(SETTINGS_FORM_INITIAL_STATE, issuerFormData({}, pngFile()));
+
+    expect(result.success).toBe(false);
+    expect(result.conflict).toBe(false);
+    expect(result.error).toContain("他の項目は保存されました");
+    expect(result.error).toContain("bucket unavailable");
+    expect(settingsUpdateMock).toHaveBeenCalledTimes(1);
+    expect(settingsGetWithMetaMock).not.toHaveBeenCalled();
   });
 });

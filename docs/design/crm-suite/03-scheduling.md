@@ -376,6 +376,7 @@ create table calendar_connections (
   last_pulled_at timestamptz,
   last_pushed_at timestamptz,
   last_full_resync_at timestamptz,
+  full_resync_started_at timestamptz,  -- フル再同期ラウンドの開始時刻 (§8.5 逆方向突合の基準。ラウンド中のみ非 NULL — migration 20260906000030)
   last_error_code text,
   last_error_detail text,
   connected_at timestamptz,
@@ -1184,6 +1185,7 @@ createBlock(input: WorkBlockInput): Promise<Result<{ block_id: string }>>;
   // E101 / E701 / E702 (work_type 不在・無効) / E201・E202
 updateBlock(blockId: string, input: UpdateWorkBlockInput, expectedUpdatedAt: string):
   Promise<Result<void>>;   // 種別変更時 consumes_capacity 再スナップショット。E101/E103/E702/E703(done 編集不可)
+  // 配置済み (starts_at 非 NULL) なら接続済み provider の links を pending_push 化 (タイトル/種別変更を外部へ再送)
 unscheduleBlock(blockId: string, expectedUpdatedAt: string): Promise<Result<void>>;
   // scheduled → backlog。外部イベント削除は links を pending 削除マーク → 次回 sync (E703/E103)
 transitionBlock(blockId: string, to: z.infer<typeof zBlockTransition>, expectedUpdatedAt: string):
@@ -1220,6 +1222,7 @@ listSyncIssues(): Promise<Result<SyncIssueItem[]>>;
   // deleted_externally / conflict / orphaned の一覧 (バッジ・解決 UI 用)
 resolveExternalDeletion(linkId: string, action: z.infer<typeof zExternalDeletionResolution>):
   Promise<Result<void>>;   // §9.2。E101/E703 (対象 link が deleted_externally でない)
+  // unschedule/cancel_block はブロック更新後、接続済み他 provider の links に削除マークを立ててから当該 link を削除
 reconcilePushUnknown(linkId: string): Promise<Result<{ resolved: boolean }>>;
   // E724 **専用**の手動照合 (§8.7)。Google: privateExtendedProperty 検索 / MS: transactionId 再送。
   // 照合失敗 (API 到達不能) は E723/E724 を返し conflict 継続
@@ -1457,7 +1460,8 @@ X の `getValidXAccessToken` (integrations §3.1) の移植:
 2. 期限接近 → CAS リース: `update calendar_connections set token_refresh_lease_expires_at = now() + interval '30 seconds' where provider = $1 and (token_refresh_lease_expires_at is null or token_refresh_lease_expires_at < now())` — affected=1 のみ refresh 実行。取れなければ 1.5 秒 sleep → Vault 再読 (他プロセスが更新済み想定)
 3. refresh 実行: `grant_type=refresh_token` → 新 secret を構成して **Vault 全体上書き**
    - **Google**: 応答に refresh_token が無ければ既存値を維持 (非ローテーション)
-   - **Microsoft (MSA)**: 応答の refresh_token を**必ず**採用 (ローテーション式 — 拘束条件。応答に無い場合のみ既存値維持) + meta.token_expires_at 更新
+   - **Microsoft (MSA)**: 応答の refresh_token を**必ず**採用 (ローテーション式 — 拘束条件。応答に無い場合のみ既存値維持)
+   - 両 provider 共通: Vault 保存後に `meta.token_expires_at` を新期限へ更新 (RPC `set_calendar_connection_token_expires_at` の jsonb マージ — migration 20260906000031。失敗はログのみで refresh 自体は成功扱い)
 4. finally でリース解放 (NULL に戻す)
 5. `invalid_grant` / 400 系の確定失敗 → connection status='expired' + last_error_code='KMB-E720' → UI 再連携バナー。**自動リトライしない**
 6. **`invalid_client` は E720 と区別する** (MS クライアントシークレットの最長 24 ヶ月失効 — §18 R9): connection status='error' + last_error_code='KMB-E723' + detail「クライアントシークレットの更新 (env) が必要です」。再連携では直らないため再連携バナーへ誘導しない (誤誘導防止)
@@ -1499,6 +1503,9 @@ for link in pending_push:
                                     → sync_status='deleted_externally' + deleted_externally_at
     401 (AuthExpiredError)       → refresh 1 回 → 再試行 → なお 401 → connection 'expired' (E720)、
                                     この provider の残り links はスキップ
+    成功時の link 更新 (markLinkSynced) は CAS: sync_status='pending_push' かつ updated_at=取得時
+      (claim 刻印後はその直後の値)。0 行 = 外部 API 中に再 pending_push 化された → external_event_id/
+      etag のみ保存し pending_push を維持 (直近変更を次回 push で必ず送る)
     その他 4xx/5xx (確定エラー)   → push_attempts+1。>=3 → 'conflict' + 'KMB-E723' (手動リトライ待ち)
     timeout / ネットワーク断 (結果不明) → 'conflict' + 'KMB-E724'。push_attempts は増やさない。
                                     **自動再開禁止** (§8.7 の照合のみが解除経路)
@@ -1516,6 +1523,7 @@ connection ごと (status='connected' のみ):
   cursor = sync_page_cursor ?? null / token = sync_token ?? null (null = フル同期)
   loop (最大 20 ページ / 起床):
     page = adapter.pullChanges(app_calendar_id, token, cursor, window, secret)
+    401 → refresh 1 回 → 同ページ再試行 → 同一 loop で再び 401 → connection 'expired' (E720) + 中断 (push §8.4 と対称)
     410 Gone → KMB-E722: sync_token/sync_page_cursor を NULL 化 → フル再同期を即時開始
                (report.full_resync=true。links は保持 — 照合キーは external_event_id/iCalUID/
                 出所マーキングの 3 経路。部分一意 index が二重採用を拒否)
@@ -1529,7 +1537,10 @@ connection ごと (status='connected' のみ):
              ?? (Google のみ) appLinkId (出所マーキング) → link_id 直接解決
       appLinkId 解決した link が**別の** external_event_id を既に持つ場合 (kill 後再 create 等で
         生まれた重複イベント): link の既存 id を正とし、change 側のイベントを deleteEvent
-        (重複掃除 — 部分一意 index は二重採用を防ぐだけで外部の重複表示は消えないため)
+        (重複掃除 — 部分一意 index は二重採用を防ぐだけで外部の重複表示は消えないため)。
+        ただし change.recurringEventId (Google recurringEventId / Graph seriesMasterId) === link.external_event_id
+        の繰り返しインスタンスは重複ではなく自イベントの派生 → 削除せず、時刻も取り込まず (removed でも
+        deleted_externally にせず) link を pending_push 化して次回 push で単発イベントへ復元
       link なし → Google で kumabe_origin='app' かつ appBlockId (kumabe_block_id) が実在の
         配置済みブロックを指し、(block, provider) に link が無い場合は link を**再構築**
         (external_event_id/etag を採用し synced — disconnect→再接続後の二重イベント防止 §6.2)。
@@ -1549,10 +1560,14 @@ connection ごと (status='connected' のみ):
                     'synced' のまま / 'conflict'(E721) だった場合 → 'pending_push' に戻し
                     アプリ側内容 (タイトル等) を次回 push で再送 (E721 の自動解決)
         タイトルのみ変更 → 内容はアプリが正 (P18): etag 類だけ記録し block は不変
+                  ('conflict'(E721) だった場合はここでも 'pending_push' に戻す — 新 etag 観測で競合原因は解消済み)
   ラウンド完了 (nextSyncToken / deltaLink 受領) → sync_token 更新 + sync_page_cursor=NULL
   **フル再同期のラウンド完了時のみ** (410/E722・窓切り直し・再接続後初回 — sync_token=NULL からの
-  ラウンド): 開始時に snapshot した既存 link 集合 (external_event_id 非 NULL) のうち今回の全件で
-  **未観測**のものを sync_status='orphaned' へ遷移 (逆方向突合 — §5.3 orphaned の生成経路。
+  ラウンド): ラウンド開始 (sync_page_cursor=NULL からの開始/410) 時に connection.full_resync_started_at=now()
+  を刻み、観測した link には last_pulled_at を刻む (エコー棄却分も含む)。完了時に既存 link 集合
+  (external_event_id 非 NULL) のうち `last_pulled_at < full_resync_started_at (or NULL)` = ラウンド中に
+  **未観測**のものを sync_status='orphaned' へ遷移し、full_resync_started_at を NULL に戻す
+  (DB 基準の突合 — ラウンドが複数起床にまたがっても前起床で観測済みの link を誤 orphaned 化しない) (逆方向突合 — §5.3 orphaned の生成経路。
   token 失効中に外部で削除/別カレンダー移動されたイベントの検出。removed として観測済みのものは
   deleted_externally が優先。Graph は sync_window 外の starts_at を持つ block の link を突合対象外
   とする — 窓外の未来/過去イベントを誤 orphaned 化しない)
@@ -1578,7 +1593,7 @@ pull した change がアプリ自身の直前 push の反響かを 3 段で判�
 - 発生: push の timeout / ネットワーク断 (応答を受信できていない — 外部に書けたか不明)
 - 処置: `sync_status='conflict'` + `last_error_code='KMB-E724'`。**worker は以後この link を自動処理しない**
 - UI: /admin/calendar/connections の「同期の問題」一覧 (§10.4) に表示。「照合して再開」ボタン → `reconcilePushUnknown(linkId)`:
-  - **Google**: `events.list?privateExtendedProperty=kumabe_link_id%3D{linkId}` で検索 (syncToken 非併用の単発クエリ)。発見 → 外部 id/etag を採用し synced。未発見 → pending_push に戻して再送
+  - **Google**: `events.list?privateExtendedProperty=kumabe_link_id%3D{linkId}` で検索 (syncToken 非併用の単発クエリ)。発見 → 外部 id/etag を採用し **pending_push に戻す** (synced にはしない — 結果不明の create 以降に block が動いている可能性があり、次回 push の updateEvent で現在内容を必ず反映する)。未発見 → pending_push に戻して再送
   - **Microsoft**: `transactionId` により再送が二重作成にならないため、pending_push に戻して再送 (= 照合を再送で代替。既に作成済みなら Graph が既存イベントを返す)
 - E723 (確定エラー 3 回) の link も同じ一覧に出し、「再送」ボタン → `resendConflictedLink(linkId)` (§6.2) で push_attempts=0 + pending_push に戻す (admin 明示操作)。外部 API を呼ばない軽量 DB 操作であり、外部照合を行う reconcilePushUnknown (E724 専用) とはメソッドを分離する — 流用すると E723 に不要な privateExtendedProperty 検索が走る
 

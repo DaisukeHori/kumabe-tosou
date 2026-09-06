@@ -10,3 +10,16 @@ const ALLOWED_NEXT_PREFIXES = ["/admin", "/edit"] as const;
 export function isAllowedLoginNext(next: string): boolean {
   return ALLOWED_NEXT_PREFIXES.some((prefix) => next.startsWith(prefix));
 }
+
+/**
+ * /admin/login?reason=... の説明文言 (純関数)。
+ * requireAdminPage / admin layout (src/app/admin/_lib/require-admin-page.ts) は KMB-E202
+ * (認証済みだが profiles に無い = 管理者ではない) を `reason=forbidden` 付きで送ってくる。
+ * この場合はログインし直しても解決しないため、その旨を明示する。未知の reason は null (何も出さない)。
+ */
+export function loginReasonMessage(reason: string | undefined | null): string | null {
+  if (reason === "forbidden") {
+    return "このアカウントは管理者として登録されていません。管理担当者に登録を依頼するか、別のアカウントでログインしてください。";
+  }
+  return null;
+}

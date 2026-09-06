@@ -761,7 +761,8 @@ export type Paged<T> = { items: T[]; next_cursor: string | null };
 export type ContentKind = "work" | "voice" | PostKind;   export type PostKind = "reading" | "news" | "blog";
 export type PublishedItem<K extends ContentKind> = /* kind 別の公開表示用射影 */ …;
 export type MediaItem = { id: string; url: string; alt: string; width: number; height: number; tags: string[]; is_placeholder: boolean };
-export type ApprovedDraft = { draft_id: string; channel: Channel; content: ChannelContent; approved_at: string };
+export type ApprovedDraft = { draft_id: string; run_id: string; channel: Channel; content: ChannelContent; approved_at: string };
+// run_id: 2026-09-06 追加 (channel_drafts.run_id)。site_blog 配信 (createBlogPostFromDraft の source_run_id) に必須のため契約に昇格
 export type PriceTable = {
   grades: PriceGrade[];
   size_classes: PriceSizeClass[];   // v2.8 是正: 旧記述 sizes は実装と乖離 (裁定 #18)
@@ -1373,7 +1374,8 @@ v2.8: `ctx?: ExecutionContext` を取るメソッドのみ service 文脈から�
 ```ts
 // content/facade.ts
 export interface ContentFacade {
-  createBlogPostFromDraft(input: BlogPostContent & { source_run_id: string }): Promise<Result<{ post_id: string; slug: string }>>;
+  createBlogPostFromDraft(input: BlogPostContent & { source_run_id: string }, ctx?: ExecutionContext): Promise<Result<{ post_id: string; slug: string }>>;
+  // ctx: 2026-09-06 追加 (§3 の 1 の形)。publish worker (pg_cron、cookie なし) が site_blog 配信で { mode: "service" } で呼ぶ
   // BlogPostContent は content 側に定義する構造的同型 (zSiteBlogContent と同形)。
   // ai-studio の型を import すると依存方向 §2 に逆流するため独立定義 (Wave 0 実装で確定)
   publish(kind: PostKind | "work" | "voice", id: string, publishedAt?: Date): Promise<Result<void>>;
@@ -1414,7 +1416,7 @@ export interface PageMediaFacade {
 // media/facade.ts
 export interface MediaFacade {
   getPublicUrl(mediaId: string): Result<string>;
-  getJpegRenditionUrl(mediaId: string): Promise<Result<string>>; // IG 用。未生成なら生成
+  getJpegRenditionUrl(mediaId: string, ctx?: ExecutionContext): Promise<Result<string>>; // IG 用。未生成なら生成。ctx: 2026-09-06 追加 (publish worker が service 文脈で呼ぶ)
   listByTags(tags: string[]): Promise<Result<MediaItem[]>>;      // ai-studio の画像候補提案用
   assertDeletable(mediaId: string): Promise<Result<void>>;        // 参照ゼロ検証 (E301)
   // サーバ内生成画像 (AI 画像生成) の保存。バイナリ→Storage サーバサイド upload→media 行 insert。
@@ -1441,7 +1443,7 @@ export interface AiStudioFacade {
   editDraft(draftId: string, content: unknown): Promise<Result<{ revision: number }>>; // human revision を積む
   approveDraft(draftId: string): Promise<Result<void>>;
   rejectDraft(draftId: string): Promise<Result<void>>;
-  getApprovedDraft(draftId: string): Promise<Result<ApprovedDraft>>; // distribution 専用。approved 以外は拒否
+  getApprovedDraft(draftId: string, ctx?: ExecutionContext): Promise<Result<ApprovedDraft>>; // distribution 専用。approved 以外は拒否。ctx: 2026-09-06 追加 (publish worker が service 文脈で呼ぶ。省略時は cookie セッション)
 }
 
 // distribution/facade.ts
@@ -1452,7 +1454,7 @@ export interface DistributionFacade {
   // 依存を作らないため)。v2.9: Wave2-E の暫定ハードコード (旧 ai-studio/internal/prompts.ts の
   // DEFAULT_STYLE_PROFILES) は Issue #20 で解消済み — startRun の styleProfiles 引数へ配線し
   // ai_runs.style_profiles (jsonb) に確定保存する (未接続チャネルも既定文体で 4 チャネル全件を返す)
-  schedulePosts(entries: ScheduleEntry[]): Promise<Result<{ post_ids: string[] }>>; // entry = {draft_id, scheduled_at|null}
+  schedulePosts(entries: ScheduleEntry[]): Promise<Result<{ post_ids: string[] }>>; // entry = {draft_id, scheduled_at|null}。同一 draft の重複予約 (entries 内重複 / 既存 active 行 / unique index 20260906000040) は KMB-E102
   cancel(postId: string): Promise<Result<void>>;
   markNotePublished(postId: string, externalUrl: string): Promise<Result<void>>;
   getMonthlyXPostCount(): Promise<Result<number>>; // 課金ガード用
@@ -1519,12 +1521,11 @@ export interface PricingFacade {
   // 実装は createPricingFacade() ファクトリ経由 (getActivePriceTable で読んだ PriceTable を facade
   // インスタンスに閉じ込め estimate() が使う設計 — pricing/facade.ts の乖離注記を格上げ)。
   getFullPriceTable(): Promise<Result<PriceTable>>;                        // is_active に関わらず全件 (キャッシュ非経由)
-  savePriceGrade(input: PriceGradeInput, id: string | null,
-    expectedUpdatedAt: string | null): Promise<Result<{ id: string }>>;   // 楽観排他 E103
-  savePriceOption(input: PriceOptionInput, id: string | null): Promise<Result<{ id: string }>>;
-  replacePriceSizeClasses(input: PriceSizeClassInput[]): Promise<Result<void>>;
-  replacePriceMatrix(input: PriceMatrixCellInput[]): Promise<Result<void>>;
-  replacePriceQuantityTiers(input: QuantityTierInput[]): Promise<Result<void>>;
+  // 2026-09-06: 旧 5 メソッド (savePriceGrade / savePriceOption / replacePriceSizeClasses /
+  // replacePriceMatrix / replacePriceQuantityTiers) はテーブル別書き込みで非原子だったため廃止し、
+  // security definer RPC pricing_replace_all(jsonb) (migration 20260906000010) を 1 回呼ぶ以下に統合。
+  // grades の楽観排他 (E103) は RPC 内で判定。price_matrix の FK は on update / on delete cascade 化。
+  replaceAllPricing(input: PricingReplaceInput): Promise<Result<void>>;   // E101 / E103 / E202 / E901
 }
 
 // ---------- v2.8 追加 facade (CRM スイート) ----------

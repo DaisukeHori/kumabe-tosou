@@ -160,6 +160,21 @@ function snapMinutes(minutes: number): number {
 }
 
 /**
+ * ドラッグプレビュー (move/tray) の札の長さ (分) を返す純関数。配置済みブロック (starts_at/ends_at
+ * あり) は **実際の配置長 ends_at − starts_at** を使う — planned_hours から再計算すると、リサイズや
+ * 外部カレンダー側の変更で planned_hours と乖離した長さのブロックを move した瞬間に長さが勝手に
+ * 戻ってしまう (move は位置だけを動かす操作)。未配置 (tray) は planned_hours×60 を使う。
+ * いずれも最低 1 行 (30 分) を確保する。
+ */
+export function blockDragDurationMinutes(block: Pick<WorkBlockView, "starts_at" | "ends_at" | "planned_hours">): number {
+  if (block.starts_at && block.ends_at) {
+    const actual = Math.round((new Date(block.ends_at).getTime() - new Date(block.starts_at).getTime()) / 60_000);
+    return Math.max(ROW_MINUTES, actual);
+  }
+  return Math.max(ROW_MINUTES, block.planned_hours * 60);
+}
+
+/**
  * 空白ドラッグ作成 (#95) の選択範囲を計算する純関数。anchorMinutes (pointerdown 位置) と
  * currentMinutes (現在の pointer 位置。生の連続値でよい — 内部で 30 分境界へ floor/ceil する)
  * から、双方向ドラッグに対応した [startMinutes, startMinutes+durationMinutes) を返す。
@@ -272,7 +287,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
         const { startMinutes, durationMinutes } = createSelection(prev.drag.anchorMinutes, pos.rawMinutes);
         return { ...prev, preview: { dayOffset: prev.preview.dayOffset, startMinutes, durationMinutes } };
       }
-      const duration = prev.drag.block.planned_hours * 60 || ROW_MINUTES;
+      const duration = blockDragDurationMinutes(prev.drag.block);
       const startMinutes = snapMinutes(pos.minutes - prev.grabOffsetMinutes);
       return { ...prev, preview: { dayOffset: pos.dayOffset, startMinutes, durationMinutes: duration } };
     });
@@ -346,7 +361,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
         drag: { kind: "tray", block },
         pointerId,
         grabOffsetMinutes: 0,
-        preview: { dayOffset: pos.dayOffset, startMinutes: pos.minutes, durationMinutes: Math.max(ROW_MINUTES, block.planned_hours * 60) },
+        preview: { dayOffset: pos.dayOffset, startMinutes: pos.minutes, durationMinutes: blockDragDurationMinutes(block) },
       });
     },
   }));
@@ -365,7 +380,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
       preview: {
         dayOffset: weekdayOffset(weekStart, block.starts_at),
         startMinutes,
-        durationMinutes: block.planned_hours * 60 || ROW_MINUTES,
+        durationMinutes: blockDragDurationMinutes(block),
       },
     });
   }

@@ -92,7 +92,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       return jsonResponse({ ok: true }, 200);
     }
 
-    // 0-c: rate limit (route='shop_lead' — contact フォームとは独立集計)
+    // 0-c: strict 契約検証 (Zod 詳細は応答に載せない)。rate limit より先。
+    const parsedReq = zSimulatorLeadReq.safeParse(json);
+    if (!parsedReq.success) {
+      return jsonResponse({ ok: false, code: "KMB-E101", message: INVALID_MESSAGE }, 400);
+    }
+    const { contact, message, estimate: clientEstimate } = parsedReq.data;
+
+    // 0-d: rate limit (route='shop_lead' — contact フォームとは独立集計)。
+    // strict 契約検証を通過した送信だけをカウントする (契約違反の再送で枠を消費させない)。
     const requestHeaders = request.headers;
     const ip = extractClientIp(
       requestHeaders.get("x-forwarded-for"),
@@ -110,13 +118,6 @@ export async function POST(request: Request): Promise<NextResponse> {
         429,
       );
     }
-
-    // 0-d: strict 契約検証 (Zod 詳細は応答に載せない)
-    const parsedReq = zSimulatorLeadReq.safeParse(json);
-    if (!parsedReq.success) {
-      return jsonResponse({ ok: false, code: "KMB-E101", message: INVALID_MESSAGE }, 400);
-    }
-    const { contact, message, estimate: clientEstimate } = parsedReq.data;
 
     // 0-e: サーバ再計算 (正本 snapshot の組み立て — クライアント金額・ラベルを信頼しない)。
     let serverEstimate: SimEstimateSnapshot | null = null;

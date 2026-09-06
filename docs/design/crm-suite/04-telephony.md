@@ -530,6 +530,8 @@ grant execute on function public.call_job_retry(uuid) to authenticated;
 
 heartbeat (lease 延長) は RPC 化しない: worker が service client で `update call_jobs set lease_expires_at = now() + 90s where id = ... and lease_expires_at is not null` を 20 秒毎に直接実行 (ai-studio と同じ判断 — 単純 CAS のため。0009:126-128 前例)。
 
+**lease 保持者検証 (migration 20260906000050 — 実装同期)**: `call_jobs.lease_token uuid` を追加。acquire RPC が acquired 時に `gen_random_uuid()` で発行して RETURNS TABLE で返し (acquired 以外は null)、heartbeat / transcript_partial / task_ids_checkpoint の直接 UPDATE と commit RPC (`p_lease_token` 追加) は WHERE に `lease_token = <acquire で得た値>` を含める (失効後に他プロセスへ渡った lease を旧保持者が延長・上書き・commit しない)。commit 成功 / retry / exhausted で null に解放する。
+
 ### 2.4 migration 0034 — pg_cron ジョブ登録 (全文)
 
 ```sql
@@ -724,6 +726,7 @@ export const zDialResultWebhook = z.object({
     v => v ?? null,
     z.coerce.number().int().min(0).nullable(),
   ),
+  CallStatus: z.string().max(30).nullable(), // 親通話の状態 (実装同期 2026-09): 'completed' = 発信者が転送中に切断 → missed。route は pick 対象に含める
 }).strict();
 
 /* ---------- linking ステージの成果物 (call_jobs.link_result jsonb) ---------- */
@@ -902,11 +905,11 @@ calls は単一の状態機械ではなく、独立に遷移する 3 軸を持�
 |---|---|---|
 | null | 着信直後 (未確定) | voice webhook (root) 時点 |
 | forwarded | 営業時間内 + 転送先あり → `<Dial>` で転送 (成立) | `?step=dial_result` で DialCallStatus='completed'/'answered' |
-| voicemail | 営業時間内の留守電 (転送なし or 転送不成立フォールバック) | root で転送なし分岐時 / dial_result で busy・no-answer・failed 時 |
+| voicemail | 営業時間内の留守電 (転送なし or 転送不成立フォールバック) | root で転送なし分岐時 / 転送不成立フォールバックでは dial_result 時点で確定せず **`?step=recorded` 到達 (handleRecorded) または 1ch 録音の recording-status (registerRecording) で確定** (実装同期 2026-09: 発信者が案内文の途中で切ると留守電は成立しないため)。dial_result で親 CallStatus='completed' (転送中に発信者が切断) → missed |
 | after_hours_voicemail | 時間外留守電 | root の時間外分岐時 |
 | missed | 録音もつながりもなかった (発信者が録音前に切断等) | status callback で通話終了時、**handling が null のまま終了した場合のみ**確定 (§6.3 が正)。voicemail 系は録音有無を問わず missed へ倒さない — recording callback は status callback より後に届くのが通例で、「録音 0 件」を遷移条件にすると正常な留守電が誤判定される。録音なし留守電の区別は一覧の表示条件 (録音バッジなし) で表現し、handling 遷移には含めない |
 
-不変条件: handling は null → 非 null の一方向。一度 forwarded になったら voicemail へ倒れない (dial_result より前に root で forwarded を書かない — dial_result で初めて確定する)。
+不変条件: handling は null → 非 null の一方向。一度 forwarded になったら voicemail へ倒れない (dial_result より前に root で forwarded を書かない — dial_result で初めて確定する)。唯一の例外は missed → voicemail (status callback が先着して missed にした後に 1ch 録音 / recorded step が届いた場合の是正 — 録音が存在する以上「録音もつながりもなかった」は誤り)。
 
 **(c) match_status** — 顧客紐づけ (§6.5.4 linking の結果):
 
@@ -1057,6 +1060,9 @@ zCallStatusWebhook parse → handleCallStatus(input, {mode:'service'}):
  1. call_sid で calls を検索。無ければ KMB-E804 を console.error し 200 応答
     (Twilio に 4xx/5xx を返しても意味がない — 業務エラーは吸収する)
  2. twilio_status / duration_seconds / ended_at (終了系イベント時 now()) を更新
+    (実装同期 2026-09: **非終端イベント** (initiated/ringing/in-progress) は twilio_status のみ更新し、
+    duration/ended_at/cost/handling には触れない。ended_at 設定済みの通話への非終端イベントは無視 —
+    遅延到達した in-progress が completed の duration/cost を 0 に巻き戻す事故の防止)
  3. handling 確定: handling が null のまま終了 (root 応答後すぐ切断) → 'missed'。
     handling='voicemail'/'after_hours_voicemail' で終了 → そのまま (録音有無は問わない —
     録音なし留守電も「かかってきた事実」として一覧に残る)
@@ -1162,7 +1168,8 @@ const result = await aiProvidersFacade.generateText({
    - 冪等: 再実行は created:false で既存 activity_id が返る (二重掲載なし)
 4. タスク起票 (v1.1 是正 — created:true ガードは廃止):
    - matched/created 経路: analysis.tasks (≤10) を順に `CrmFacade.createTask({ title, body: detail + (due_hint ? '(期日ヒント: ...)' : ''), due_on: null, deal_id: null, customer_id (matched/created 時), origin:'ai_call', source_activity_id: activity_id }, { mode:'service' })` を**常に再実行する** — 冪等は DB が担う (07-delta 裁定 #10 + v1.5: tasks の (source_activity_id, title) 一意 index (非部分一意・NULLS DISTINCT) で再送は既存 task_id が返る)。title は analyzing で commit 済みの analysis.tasks から取るためリトライ間で安定 (D8 の「非決定生成 title は先に永続化」前提を満たす)。activity 先行 → createTask の順序 (source_activity_id の取得に必須 — 07-delta §7.5) は不変。v1.0 の「activity created:true のときのみ起票」ガードは、appendActivity 成功後・createTask 完走前のクラッシュ (lease 失効 / maxDuration 打切り) で再入時 created:false となり**残りタスクが恒久喪失する at-most-once 化**のため廃止
-   - ambiguous/no_number でもタスクは起票する (customer_id null・source_activity_id null。折り返し漏れの方が重罪) — この経路は source_activity_id null のため **DB 冪等の対象外** (NULLS DISTINCT — NULL キー行は互いに衝突しない = 常に新規)。再入ガードは link_result 有無のみで、link_result commit 前のクラッシュ再入では重複起票があり得る (残余リスク — §5.5 / §15 R3)
+   - ambiguous/no_number でもタスクは起票する (customer_id null・source_activity_id null。折り返し漏れの方が重罪) — この経路は source_activity_id null のため **DB 冪等の対象外** (NULLS DISTINCT — NULL キー行は互いに衝突しない = 常に新規)。
+   - **タスク起票チェックポイント (migration 20260906000051 — 実装同期)**: `call_jobs.task_ids_checkpoint jsonb` (uuid 文字列配列、analysis.tasks と同順) に createTask 1 件成功ごとに起票済み task_id を保存 (lease 保持中の直接 UPDATE、lease_token 一致)。再入時は保存済み分を再利用して残りだけ起票するため、link_result commit 前のクラッシュ再入でも重複起票しない (旧 §5.5 / §15 R3 の残余リスクは解消)
 5. calls 反映 (service client): customer_id / match_status / ai_cost_micro_usd (call_jobs の累計を合算転記)
    - **手動確定の保護ガード (v1.1 — §5.2.2 不変条件)**: 反映前に現在値を確認し、`calls.match_status='manual'` (または customer_id 既設定かつ match_status が pending 以外) の場合は customer_id / match_status への反映を**スキップ**し link_result.warning にその旨を記録する (ai_cost の転記のみ行う)。E407 failed → admin 手動紐づけ → retry 再走 (§9) や同一通話 2 ジョブ (§10-15) で、worker の自動結果が admin の手動確定を上書きする事故を防ぐ (manual からの自動遷移は §5.2.2 に存在しない)
 6. zCallJobLinkResult 組み立て → commit('linking' → 'done', link_result)

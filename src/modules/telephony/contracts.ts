@@ -188,6 +188,11 @@ export const zDialResultWebhook = z.object({
     (v) => v ?? null,
     z.coerce.number().int().min(0).nullable(),
   ),
+  /** 親通話 (発信者側) の CallStatus。転送呼び出し中に発信者が切った場合は Dial 不成立
+   *  (canceled 等) と同時に 'completed' で届く — この場合は留守電へ遷移しない (発信者は既に
+   *  いない) ため handling='missed' を確定し、'in-progress' のときのみ留守電フォールバックへ進む。
+   *  route の欠落キー null 補完に備え nullable (Twilio は常に送る想定)。 */
+  CallStatus: z.string().max(30).nullable(),
 }).strict();
 
 export type CallStatusWebhook = z.infer<typeof zCallStatusWebhook>;

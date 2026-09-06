@@ -96,6 +96,7 @@ function acquiredDraftingRow(targetChannels: string[], profiles: StyleProfilesBy
     brief: BRIEF,
     research_notes: null,
     style_profiles: profiles,
+    lease_token: "lease-token-1",
     result_kind: "acquired",
   };
 }

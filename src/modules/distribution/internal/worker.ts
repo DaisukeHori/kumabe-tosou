@@ -12,13 +12,17 @@ import type {
   SiteBlogContent,
   XContent,
 } from "@/modules/ai-studio/contracts";
+import type { ExecutionContext } from "@/modules/platform/contracts";
 
 import { resolveAiStudioFacade, tryResolveAiStudioWatchdogSweep } from "./ai-studio-bridge";
 import { exceedsMonthlyBillingGuard } from "./billing";
 import {
   createCarouselContainer,
   createMediaContainer,
+  InstagramContainerNotReadyError,
+  isInstagramTokenExpiredError,
   publishContainer,
+  waitForContainerReady,
 } from "./instagram-api";
 import { currentJstMonthRangeUtc } from "./month-window";
 import { getOpsLimitsForService } from "./ops-limits";
@@ -35,6 +39,9 @@ import type { ChannelAccountRow, ChannelPostRow } from "../repository";
 const WATCHDOG_STALE_MS = 10 * 60 * 1000; // publishing 10 分超停滞 (設計書 §4.3)
 const X_TOKEN_REFRESH_MARGIN_MS = 10 * 60 * 1000; // 期限 10 分前で refresh (設計書 §7.7)
 const X_REFRESH_LEASE_TTL_MS = 30_000;
+/** リースが取れなかった側が「リース解放 / Vault 更新」をポーリングする間隔と上限 (合計 ≒ TTL 相当) */
+export const X_REFRESH_WAIT_POLL_MS = 1_000;
+export const X_REFRESH_WAIT_MAX_ATTEMPTS = 30;
 const MAX_BATCH_SIZE = 5; // X rate limit 保護 (設計書 §7.5)
 
 function sleep(ms: number): Promise<void> {
@@ -48,15 +55,13 @@ async function downloadBytes(url: string): Promise<Buffer> {
 }
 
 /**
- * ai-studio の ApprovedDraft (契約書 §4.9) は run_id を含まない。site_blog 配信
- * (ContentFacade.createBlogPostFromDraft) には source_run_id が必須のため、
- * ai-studio 実装が channel_drafts.run_id を追加フィールドとして実行時に含めていることを
- * 期待し、防御的に読み取る (型上は保証されない拡張フィールド。
- * 未対応の場合は manual_required に倒し、オーケストレーターへ契約ギャップとして報告済み)。
+ * worker は pg_cron (/api/jobs/publish) から起動され cookie セッションを持たない。
+ * ai-studio / media / content の facade を cookie 前提 (createSupabaseServerClient) のまま呼ぶと
+ * RLS で行が見えず全件 KMB-E101 になるため、service 文脈 (ExecutionContext) を明示して呼ぶ
+ * (ai-providers / crm の resolveExecutionClient と同じ流儀。module-contracts.md §3 の 1 の形)。
  */
-function extractRunId(draft: ApprovedDraft): string | null {
-  const withRunId = draft as unknown as { run_id?: unknown };
-  return typeof withRunId.run_id === "string" ? withRunId.run_id : null;
+function serviceCtx(serviceClient: SupabaseClient): ExecutionContext {
+  return { mode: "service", client: serviceClient };
 }
 
 /**
@@ -67,8 +72,12 @@ function extractRunId(draft: ApprovedDraft): string | null {
  * - { blocked: true, reason: "unreadable" }: ops_limits 行が読めない (missing/invalid)。
  *   上限を確認できないため安全側 (投稿ブロック) に倒すが、真の上限超過ではないため
  *   KMB-E505 ではなく KMB-E901 (システムエラー) として区別して顕在化させる。
+ * - { blocked: true, reason: "sum_unreadable" }: 当月合算 (channel_posts) が読めない。
+ *   従来は 0 とみなして通していた (fail-open) が、ops_limits 不読と同じく KMB-E901 で拒否する。
  */
-type XBillingGuardResult = { blocked: false } | { blocked: true; reason: "exceeded" | "unreadable" };
+type XBillingGuardResult =
+  | { blocked: false }
+  | { blocked: true; reason: "exceeded" | "unreadable" | "sum_unreadable"; detail?: string };
 
 async function checkXBillingGuardExceeded(client: SupabaseClient): Promise<XBillingGuardResult> {
   const opsLimitsResult = await getOpsLimitsForService(client);
@@ -81,15 +90,45 @@ async function checkXBillingGuardExceeded(client: SupabaseClient): Promise<XBill
   }
   const range = currentJstMonthRangeUtc();
   const sumResult = await repo.getMonthlyXCostCentsSum(client, range);
-  const currentSum = sumResult.ok ? sumResult.value : 0;
+  if (!sumResult.ok) {
+    // 合算が読めないのに 0 とみなすと上限ガードが無効化される (fail-open)。fail-closed にする。
+    return { blocked: true, reason: "sum_unreadable", detail: sumResult.detail ?? sumResult.code };
+  }
   // 対象の post 自身の estimated_cost_cents は既に status='publishing' として合算に含まれるため
   // additionalCents=0 で「現在の合算が上限を超えていないか」だけを再確認する。
   const exceeded = exceedsMonthlyBillingGuard({
-    currentMonthCentsSum: currentSum,
+    currentMonthCentsSum: sumResult.value,
     additionalCents: 0,
     limitCents: opsLimitsResult.limits.x_monthly_post_limit,
   });
   return exceeded ? { blocked: true, reason: "exceeded" } : { blocked: false };
+}
+
+/**
+ * X トークン refresh のリースを他プロセスが保持したまま上限時間内に解放されなかった。
+ * まだ何も投稿していないため、呼び出し元は post を scheduled に戻して次回起動に回す。
+ */
+export class XTokenRefreshBusyError extends Error {
+  constructor() {
+    super("X トークンの refresh を他プロセスが実行中のため、今回の起動では投稿を見送りました");
+    this.name = "XTokenRefreshBusyError";
+  }
+}
+
+async function readXVaultSecret(serviceClient: SupabaseClient, secretName: string): Promise<XVaultSecret | null> {
+  const result = await repo.vaultReadSecret(serviceClient, secretName);
+  if (!result.ok || !result.value) return null;
+  return JSON.parse(result.value) as XVaultSecret;
+}
+
+function isFreshXSecret(secret: XVaultSecret): boolean {
+  return new Date(secret.expires_at).getTime() - Date.now() > X_TOKEN_REFRESH_MARGIN_MS;
+}
+
+async function isXRefreshLeaseHeld(serviceClient: SupabaseClient): Promise<boolean> {
+  const accountResult = await repo.getChannelAccount(serviceClient, "x");
+  const leaseUntil = accountResult.ok ? accountResult.value?.token_refresh_lease_expires_at : null;
+  return Boolean(leaseUntil && new Date(leaseUntil).getTime() > Date.now());
 }
 
 async function getValidXAccessToken(
@@ -97,14 +136,12 @@ async function getValidXAccessToken(
   account: ChannelAccountRow,
 ): Promise<string> {
   const secretName = account.vault_secret_name ?? VAULT_SECRET_NAMES.x;
-  const secretResult = await repo.vaultReadSecret(serviceClient, secretName);
-  if (!secretResult.ok || !secretResult.value) {
+  const secret = await readXVaultSecret(serviceClient, secretName);
+  if (!secret) {
     throw new Error("X の Vault シークレットが読み取れません (未接続の可能性があります)");
   }
-  const secret = JSON.parse(secretResult.value) as XVaultSecret;
 
-  const msUntilExpiry = new Date(secret.expires_at).getTime() - Date.now();
-  if (msUntilExpiry > X_TOKEN_REFRESH_MARGIN_MS) {
+  if (isFreshXSecret(secret)) {
     return secret.access_token;
   }
 
@@ -116,29 +153,54 @@ async function getValidXAccessToken(
 
   // 複数 worker 起動の同時実行を CAS リースで直列化 (§7.7「advisory lock で単一実行」の代替実装。
   // migration 20260708000009 のコメント参照)。
-  const leaseResult = await repo.claimTokenRefreshLease(serviceClient, "x", X_REFRESH_LEASE_TTL_MS);
-  if (!leaseResult.ok || !leaseResult.value) {
-    // 他プロセスが refresh 中。少し待って Vault の更新後の値を読み直す。
-    await sleep(1500);
-    const retryResult = await repo.vaultReadSecret(serviceClient, secretName);
-    if (retryResult.ok && retryResult.value) {
-      return (JSON.parse(retryResult.value) as XVaultSecret).access_token;
+  // リースが取れなかった側は固定 1.5 秒待ちではなく、リース解放 (または Vault の更新) を
+  // ポーリングして待つ。従来は refresh 完了前に古い値を読み直して 401 → 誤って expired 化していた。
+  for (let attempt = 0; attempt < X_REFRESH_WAIT_MAX_ATTEMPTS; attempt++) {
+    const leaseResult = await repo.claimTokenRefreshLease(serviceClient, "x", X_REFRESH_LEASE_TTL_MS);
+    if (leaseResult.ok && leaseResult.value) {
+      // 自分がリースを取った。ただし待っている間に他プロセスが refresh 済みなら二重 refresh しない
+      // (X の refresh token は使い捨てのため、古い refresh_token での再 refresh は失敗する)。
+      try {
+        const current = (await readXVaultSecret(serviceClient, secretName)) ?? secret;
+        if (isFreshXSecret(current)) return current.access_token;
+
+        const refreshed = await refreshXToken(env.X_CLIENT_ID, env.X_CLIENT_SECRET, current.refresh_token);
+        const nextSecret: XVaultSecret = {
+          access_token: refreshed.accessToken,
+          refresh_token: refreshed.refreshToken,
+          expires_at: refreshed.expiresAt,
+        };
+        await repo.vaultUpsertSecret(serviceClient, secretName, JSON.stringify(nextSecret));
+        return refreshed.accessToken;
+      } finally {
+        await repo.releaseTokenRefreshLease(serviceClient, "x");
+      }
     }
-    return secret.access_token;
+
+    // 他プロセスが refresh 中。解放を待ってから再判定する。
+    await sleep(X_REFRESH_WAIT_POLL_MS);
+    if (await isXRefreshLeaseHeld(serviceClient)) continue;
+    const updated = await readXVaultSecret(serviceClient, secretName);
+    if (updated && isFreshXSecret(updated)) return updated.access_token;
+    // リースは解放されたが Vault が新しくない (他プロセスの refresh 失敗等) → ループ先頭で自分が取りにいく
   }
 
-  try {
-    const refreshed = await refreshXToken(env.X_CLIENT_ID, env.X_CLIENT_SECRET, secret.refresh_token);
-    const nextSecret: XVaultSecret = {
-      access_token: refreshed.accessToken,
-      refresh_token: refreshed.refreshToken,
-      expires_at: refreshed.expiresAt,
-    };
-    await repo.vaultUpsertSecret(serviceClient, secretName, JSON.stringify(nextSecret));
-    return refreshed.accessToken;
-  } finally {
-    await repo.releaseTokenRefreshLease(serviceClient, "x");
-  }
+  throw new XTokenRefreshBusyError();
+}
+
+/**
+ * 401 を受けた直後に Vault の現在値を読み直し、使用中のトークンと異なれば (=並行プロセスが
+ * refresh 済み) その値で 1 回だけ再試行する。同じ値なら本当に失効している。
+ */
+async function readRotatedXAccessToken(
+  serviceClient: SupabaseClient,
+  account: ChannelAccountRow,
+  usedToken: string,
+): Promise<string | null> {
+  const secretName = account.vault_secret_name ?? VAULT_SECRET_NAMES.x;
+  const current = await readXVaultSecret(serviceClient, secretName);
+  if (!current || current.access_token === usedToken) return null;
+  return current.access_token;
 }
 
 function buildTweetUrl(username: string | undefined, tweetId: string | undefined): string | null {
@@ -153,8 +215,8 @@ function buildTweetUrl(username: string | undefined, tweetId: string | undefined
  * §7 P0: 画像なしで勝手に投稿しない — 旧実装はここを catch で握りつぶし「画像なしで投稿される」
  * 形で症状が顕在化していた。research/ai-studio-v2/sns-image-posting.md §2.1 の指摘どおり)。
  */
-async function uploadTweetImage(accessToken: string, mediaId: string): Promise<string> {
-  const urlResult = await mediaFacade.getJpegRenditionUrl(mediaId);
+async function uploadTweetImage(serviceClient: SupabaseClient, accessToken: string, mediaId: string): Promise<string> {
+  const urlResult = await mediaFacade.getJpegRenditionUrl(mediaId, serviceCtx(serviceClient));
   if (!urlResult.ok) {
     throw new Error(
       `画像 (media_id=${mediaId}) の JPEG レンディション取得に失敗しました: ${urlResult.detail ?? urlResult.code}`,
@@ -186,6 +248,11 @@ async function publishXPost(
   try {
     accessToken = await getValidXAccessToken(serviceClient, account);
   } catch (err) {
+    if (err instanceof XTokenRefreshBusyError) {
+      // まだ何も投稿していない。scheduled に戻して次回起動に回す (manual_required にしない)。
+      await repo.revertPublishingToScheduled(serviceClient, post.id, { code: "KMB-E503", detail: err.message });
+      return;
+    }
     await repo.markManualRequired(serviceClient, post.id, {
       code: "KMB-E503",
       detail: err instanceof Error ? err.message : String(err),
@@ -197,16 +264,32 @@ async function publishXPost(
   const startIndex = nextThreadIndex(ref);
   const usernameMeta = zXAccountMeta.safeParse(account.meta);
 
+  // 401 → expired 化は「Vault の現在値で再試行しても再度 401」のときだけ (並行 refresh 直後の
+  // 旧トークン使用を失効と誤判定しないため)。post 全体で再試行は 1 回まで。
+  let rotatedRetryUsed = false;
+  const tryRotateToken = async (): Promise<boolean> => {
+    if (rotatedRetryUsed) return false;
+    const rotated = await readRotatedXAccessToken(serviceClient, account, accessToken);
+    if (!rotated) return false;
+    rotatedRetryUsed = true;
+    accessToken = rotated;
+    return true;
+  };
+
   for (let i = startIndex; i < thread.length; i++) {
     const tweet = thread[i];
     const mediaIds: string[] = [];
     if (tweet.media_id) {
       try {
-        mediaIds.push(await uploadTweetImage(accessToken, tweet.media_id));
+        mediaIds.push(await uploadTweetImage(serviceClient, accessToken, tweet.media_id));
       } catch (err) {
         // 401 (invalid_token = トークン失効) は postTweet の 401 分岐と同一の扱いに統一する
         // (チャネル自体が失効しているため、テキスト投稿時の失敗と区別する理由がない)。
         if (err instanceof ConfirmedApiError && err.status === 401) {
+          if (await tryRotateToken()) {
+            i -= 1; // 同じツイートを新トークンでやり直す
+            continue;
+          }
           await repo.markChannelAccountExpired(serviceClient, "x");
           await repo.flagScheduledPostsForExpiredChannel(serviceClient, "x");
           await repo.markFailed(serviceClient, post.id, {
@@ -244,6 +327,10 @@ async function publishXPost(
       await repo.updateXThreadProgress(serviceClient, post.id, ref);
     } catch (err) {
       if (err instanceof ConfirmedApiError && err.status === 401) {
+        if (await tryRotateToken()) {
+          i -= 1; // 同じツイートを新トークンでやり直す
+          continue;
+        }
         await repo.markChannelAccountExpired(serviceClient, "x");
         await repo.flagScheduledPostsForExpiredChannel(serviceClient, "x");
         await repo.markFailed(serviceClient, post.id, {
@@ -318,7 +405,7 @@ async function publishInstagramPost(
   try {
     const imageUrls: string[] = [];
     for (const mediaId of content.media_ids) {
-      const urlResult = await mediaFacade.getJpegRenditionUrl(mediaId);
+      const urlResult = await mediaFacade.getJpegRenditionUrl(mediaId, serviceCtx(serviceClient));
       if (!urlResult.ok) throw new Error(`media ${mediaId} の JPEG レンディション取得に失敗しました`);
       imageUrls.push(urlResult.value);
     }
@@ -343,13 +430,30 @@ async function publishInstagramPost(
       creationId = await createCarouselContainer(igUserId, secret.access_token, childIds, caption);
     }
 
+    // コンテナは非同期処理されるため、publish 前に status_code=FINISHED を確認する
+    // (ERROR/EXPIRED → ConfirmedApiError → failed、上限超過 → InstagramContainerNotReadyError → manual_required)。
+    await waitForContainerReady(secret.access_token, creationId);
+
     const mediaId = await publishContainer(igUserId, secret.access_token, creationId);
     await repo.markPublished(serviceClient, post.id, { externalId: mediaId, externalUrl: null });
   } catch (err) {
-    if (err instanceof ConfirmedApiError && err.status === 401) {
+    // 401 だけでなく、Graph API 流儀の失効 (400 + error.code=190 / type=OAuthException) も同じ経路に流す
+    if (isInstagramTokenExpiredError(err)) {
       await repo.markChannelAccountExpired(serviceClient, "instagram");
       await repo.flagScheduledPostsForExpiredChannel(serviceClient, "instagram");
-      await repo.markFailed(serviceClient, post.id, { code: "KMB-E503", detail: "Instagram トークンが失効しました" });
+      await repo.markFailed(serviceClient, post.id, {
+        code: "KMB-E503",
+        detail: `Instagram トークンが失効しました (${err instanceof Error ? err.message : String(err)})`,
+      });
+      return;
+    }
+    if (err instanceof InstagramContainerNotReadyError) {
+      // コンテナは Meta 側に残っており後から publish 可能になりうる。自動再開で二重投稿しないよう人間照合へ
+      await repo.markManualRequired(serviceClient, post.id, {
+        code: "KMB-E506",
+        detail: err.message,
+        externalId: err.creationId,
+      });
       return;
     }
     const kind = classifyPublishFailure(err);
@@ -368,18 +472,11 @@ async function publishSiteBlogPost(
   draft: ApprovedDraft,
 ): Promise<void> {
   const content = draft.content as SiteBlogContent;
-  const runId = extractRunId(draft);
-  if (!runId) {
-    await repo.markManualRequired(serviceClient, post.id, {
-      code: "KMB-E901",
-      detail:
-        "ApprovedDraft に run_id が含まれていないため site_blog 配信を実行できません " +
-        "(ai-studio 側の ApprovedDraft 拡張待ち。オーケストレーターへ契約ギャップとして報告済み)",
-    });
-    return;
-  }
-
-  const result = await contentFacade.createBlogPostFromDraft({ ...content, source_run_id: runId });
+  // ApprovedDraft.run_id は契約 (ai-studio/contracts.ts §4.9) に昇格済み (2026-09-06)。
+  const result = await contentFacade.createBlogPostFromDraft(
+    { ...content, source_run_id: draft.run_id },
+    serviceCtx(serviceClient),
+  );
   if (!result.ok) {
     await repo.markFailed(serviceClient, post.id, { code: result.code, detail: result.detail ?? result.code });
     return;
@@ -396,6 +493,11 @@ async function publishSingleChannelPost(serviceClient: SupabaseClient, post: Cha
         await repo.markFailed(serviceClient, post.id, {
           code: "KMB-E505",
           detail: "X の月間コスト上限 (ops_limits.x_monthly_post_limit) を超過しています",
+        });
+      } else if (guard.reason === "sum_unreadable") {
+        await repo.markFailed(serviceClient, post.id, {
+          code: "KMB-E901",
+          detail: `当月の X コスト合算が読めないため投稿を見送りました (fail-closed): ${guard.detail ?? ""}`,
         });
       } else {
         // 真の上限超過ではなく、ops_limits 行が読めない (missing/invalid) ケース。
@@ -420,7 +522,8 @@ async function publishSingleChannelPost(serviceClient: SupabaseClient, post: Cha
     return;
   }
 
-  const draftResult = await aiStudio.getApprovedDraft(post.draft_id);
+  // service 文脈で呼ぶ (cookie セッションが無い worker で従来は全件 KMB-E101 になっていた)
+  const draftResult = await aiStudio.getApprovedDraft(post.draft_id, serviceCtx(serviceClient));
   if (!draftResult.ok) {
     await repo.markFailed(serviceClient, post.id, {
       code: draftResult.code,

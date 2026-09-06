@@ -281,7 +281,7 @@ export async function listActiveWorkTemplatesForExpand(): Promise<TemplateExpand
  * アクティブ combo (grade_key, size_key) 重複は work_templates 側の部分一意 index 違反 (23505)
  * として throwTypedPgError が UniqueViolationError に変換する (facade が KMB-E101 に変換)。
  *
- * 非トランザクション (pricing/repository.ts replaceMatrix 等の既存パターンと同じ制約): delete
+ * 非トランザクション (delete + insert を別クエリで発行。pricing 側は 2026-09-06 に pricing_replace_all RPC で単一 tx 化済み): delete
  * 成功後の insert 失敗時、items は空のまま残り得る。本 Issue のスコープでは許容する既存の作法。
  */
 export async function upsertWorkTemplate(
@@ -930,6 +930,8 @@ export type CalendarConnectionRow = {
   last_pulled_at: string | null;
   last_pushed_at: string | null;
   last_full_resync_at: string | null;
+  /** フル再同期ラウンドの開始時刻 (§8.5 逆方向突合の基準。ラウンド中のみ非 NULL — 0030 migration 20260906000030) */
+  full_resync_started_at: string | null;
   last_error_code: string | null;
   last_error_detail: string | null;
   connected_at: string | null;
@@ -939,7 +941,7 @@ export type CalendarConnectionRow = {
 // 1 本の文字列リテラルにする (`+` 連結すると widen されて `string` 型になり、
 // Supabase の select() の型推論 (リテラル型必須) が効かず GenericStringError に落ちるため)。
 const CALENDAR_CONNECTION_COLUMNS =
-  "provider, status, vault_secret_name, sync_token, sync_page_cursor, meta, token_refresh_lease_expires_at, sync_lease_expires_at, pull_requested_at, last_pulled_at, last_pushed_at, last_full_resync_at, last_error_code, last_error_detail, connected_at, updated_at";
+  "provider, status, vault_secret_name, sync_token, sync_page_cursor, meta, token_refresh_lease_expires_at, sync_lease_expires_at, pull_requested_at, last_pulled_at, last_pushed_at, last_full_resync_at, full_resync_started_at, last_error_code, last_error_detail, connected_at, updated_at";
 
 export async function getCalendarConnection(
   client: SupabaseClient,
@@ -1018,6 +1020,8 @@ export async function updateCalendarConnectionAfterPull(
     sync_token: string | null;
     sync_page_cursor: string | null;
     last_full_resync_at?: string;
+    /** フル再同期ラウンド完了時に null へ戻す (§8.5)。省略時は触らない (ラウンド継続中) */
+    full_resync_started_at?: string | null;
     last_error_code?: string | null;
     last_error_detail?: string | null;
   },
@@ -1028,6 +1032,7 @@ export async function updateCalendarConnectionAfterPull(
     last_pulled_at: new Date().toISOString(),
   };
   if (patch.last_full_resync_at !== undefined) updatePayload.last_full_resync_at = patch.last_full_resync_at;
+  if (patch.full_resync_started_at !== undefined) updatePayload.full_resync_started_at = patch.full_resync_started_at;
   if (patch.last_error_code !== undefined) updatePayload.last_error_code = patch.last_error_code;
   if (patch.last_error_detail !== undefined) updatePayload.last_error_detail = patch.last_error_detail;
   const { error } = await serviceClient.from("calendar_connections").update(updatePayload).eq("provider", provider);
@@ -1059,6 +1064,43 @@ export async function rollCalendarSyncWindow(
     updatePayload.last_error_detail = null;
   }
   const { error } = await serviceClient.from("calendar_connections").update(updatePayload).eq("provider", provider);
+  if (error) return pgErrorToCalendarResult(error);
+  return { ok: true, value: undefined };
+}
+
+/**
+ * フル再同期ラウンドの開始を記録する (§8.5 逆方向突合の基準時刻)。sync_token=NULL かつ
+ * sync_page_cursor=NULL からラウンドを始めるとき (再接続後初回 / 窓切り直し / 410=KMB-E722) に
+ * 呼ぶ。ページ上限で途中終了 → 次起床で継続する場合は呼ばない (基準時刻を進めると前起床で
+ * 観測済みの link が「未観測」に見えて誤 orphaned 化するため)。
+ */
+export async function markFullResyncStarted(
+  serviceClient: SupabaseClient,
+  provider: CalendarProvider,
+  startedAtIso: string,
+): Promise<Result<void>> {
+  const { error } = await serviceClient
+    .from("calendar_connections")
+    .update({ full_resync_started_at: startedAtIso })
+    .eq("provider", provider);
+  if (error) return pgErrorToCalendarResult(error);
+  return { ok: true, value: undefined };
+}
+
+/**
+ * refresh 成功時の meta.token_expires_at 更新 (§8.3 手順 3)。meta 全体を read-modify-write せず、
+ * RPC (migration 20260906000031) の jsonb マージで当該キーのみ原子的に更新する — 同時に走る
+ * sync_window の切り直し等、他キーの更新を巻き戻さないため。
+ */
+export async function setCalendarConnectionTokenExpiresAt(
+  serviceClient: SupabaseClient,
+  provider: CalendarProvider,
+  expiresAtIso: string,
+): Promise<Result<void>> {
+  const { error } = await serviceClient.rpc("set_calendar_connection_token_expires_at", {
+    p_provider: provider,
+    p_expires_at: expiresAtIso,
+  });
   if (error) return pgErrorToCalendarResult(error);
   return { ok: true, value: undefined };
 }
@@ -1350,14 +1392,19 @@ export async function listSyncIssueLinks(client: SupabaseClient): Promise<Result
   };
 }
 
-/** push の作成直前に単一 UPDATE で刻印する claim (§8.4 の push_claimed_at)。 */
-export async function claimPushForLink(serviceClient: SupabaseClient, linkId: string): Promise<Result<void>> {
-  const { error } = await serviceClient
+/** push の作成直前に単一 UPDATE で刻印する claim (§8.4 の push_claimed_at)。
+ *  claim 自体が updated_at (moddatetime) を進めるため、後続の markLinkSynced の CAS 条件に使う
+ *  新しい updated_at を返す。 */
+export async function claimPushForLink(serviceClient: SupabaseClient, linkId: string): Promise<Result<{ updated_at: string }>> {
+  const { data, error } = await serviceClient
     .from("calendar_event_links")
     .update({ push_claimed_at: new Date().toISOString() })
-    .eq("id", linkId);
+    .eq("id", linkId)
+    .select("updated_at")
+    .maybeSingle();
   if (error) return pgErrorToCalendarResult(error);
-  return { ok: true, value: undefined };
+  if (!data) return { ok: false, code: "KMB-E901", detail: "push claim 対象の link が見つかりません" };
+  return { ok: true, value: { updated_at: (data as { updated_at: string }).updated_at } };
 }
 
 export type MarkLinkSyncedPatch = {
@@ -1368,14 +1415,22 @@ export type MarkLinkSyncedPatch = {
   last_written_hash: string;
 };
 
-/** push 成功時の単一 UPDATE (§5.3 不変条件4/5 — 成功時のみ push_attempts を 0 リセットし
- *  push_claimed_at を NULL 化する)。 */
+/**
+ * push 成功時の単一 UPDATE (§5.3 不変条件4/5 — 成功時のみ push_attempts を 0 リセットし
+ * push_claimed_at を NULL 化する)。
+ * CAS: `sync_status='pending_push' かつ updated_at = expectedUpdatedAt` (push 対象を取得した時点、
+ * または claim 直後の値) の行だけを synced 化する。外部 API 呼び出し中に placeBlock 等が link を
+ * 再 pending_push 化 (updated_at が進む) していた場合は 0 行 (applied=false) を返し、呼び出し元は
+ * saveLinkExternalIdentity で external_event_id/etag だけ保存して pending_push を維持する
+ * (無条件上書きすると直近の変更が外部へ二度と送られない)。
+ */
 export async function markLinkSynced(
   serviceClient: SupabaseClient,
   linkId: string,
   patch: MarkLinkSyncedPatch,
-): Promise<Result<void>> {
-  const { error } = await serviceClient
+  expectedUpdatedAt: string,
+): Promise<Result<{ applied: boolean }>> {
+  const { data, error } = await serviceClient
     .from("calendar_event_links")
     .update({
       external_event_id: patch.external_event_id,
@@ -1388,7 +1443,50 @@ export async function markLinkSynced(
       push_attempts: 0,
       push_claimed_at: null,
     })
-    .eq("id", linkId);
+    .eq("id", linkId)
+    .eq("sync_status", "pending_push")
+    .eq("updated_at", expectedUpdatedAt)
+    .select("id")
+    .maybeSingle();
+  if (error) return pgErrorToCalendarResult(error);
+  return { ok: true, value: { applied: Boolean(data) } };
+}
+
+export type LinkExternalIdentityPatch = {
+  external_event_id: string;
+  etag_or_change_key: string | null;
+  external_updated_at: string | null;
+  external_ical_uid: string | null;
+};
+
+/**
+ * 外部イベントとの紐付け (external_event_id/etag/ical_uid/external_updated_at) だけを保存する。
+ * - markLinkSynced の CAS が 0 行だった場合 (push 中に link が再 pending_push 化された):
+ *   toPendingPush=false — sync_status は触らず (pending_push を維持)、次回 push が updateEvent で
+ *   最新内容を送れるよう id/etag だけ採用する。push_claimed_at は create 完了済みなので NULL 化。
+ * - reconcilePushUnknown (§8.7) で findByLinkId が外部イベントを発見した場合:
+ *   toPendingPush=true — synced にはせず pending_push に戻す。発見したイベントの内容が現在の
+ *   block 内容と一致する保証が無い (結果不明の create 以降に block が動いている可能性) ため、
+ *   次回 push の updateEvent で必ず現在内容を反映させる。
+ */
+export async function saveLinkExternalIdentity(
+  serviceClient: SupabaseClient,
+  linkId: string,
+  patch: LinkExternalIdentityPatch,
+  options: { toPendingPush: boolean },
+): Promise<Result<void>> {
+  const updatePayload: Record<string, unknown> = {
+    external_event_id: patch.external_event_id,
+    etag_or_change_key: patch.etag_or_change_key,
+    external_updated_at: patch.external_updated_at,
+    external_ical_uid: patch.external_ical_uid,
+    push_claimed_at: null,
+  };
+  if (options.toPendingPush) {
+    updatePayload.sync_status = "pending_push";
+    updatePayload.push_attempts = 0;
+  }
+  const { error } = await serviceClient.from("calendar_event_links").update(updatePayload).eq("id", linkId);
   if (error) return pgErrorToCalendarResult(error);
   return { ok: true, value: undefined };
 }
@@ -1479,6 +1577,18 @@ export async function applyPullObservedFields(
   };
   if (patch.sync_status) updatePayload.sync_status = patch.sync_status;
   const { error } = await serviceClient.from("calendar_event_links").update(updatePayload).eq("id", linkId);
+  if (error) return pgErrorToCalendarResult(error);
+  return { ok: true, value: undefined };
+}
+
+/** pull が link を「観測した」ことだけを刻む (last_pulled_at=now)。自己エコーとして棄却した change
+ *  でも外部にイベントが実在する証拠なので、フル再同期の逆方向突合 (§8.5 — last_pulled_at <
+ *  full_resync_started_at の link を orphaned 化) で誤 orphaned 化しないために必要。 */
+export async function touchLinkPulledAt(serviceClient: SupabaseClient, linkId: string): Promise<Result<void>> {
+  const { error } = await serviceClient
+    .from("calendar_event_links")
+    .update({ last_pulled_at: new Date().toISOString() })
+    .eq("id", linkId);
   if (error) return pgErrorToCalendarResult(error);
   return { ok: true, value: undefined };
 }
@@ -1641,27 +1751,37 @@ export async function upsertPendingPushLink(
 }
 
 /**
- * フル再同期開始時のスナップショット取得 (§8.5 逆方向突合)。external_event_id が非 NULL の
- * link のみが対象 (突合は「外部に存在するはずのイベント」の消失検知のため)。
- * `sync_status in ('deleted_externally','orphaned')` は除外する — 既に「外部で削除された」
- * ことが判明済み/既に orphaned 化済みの link を再突合すると、より情報量の多い
- * deleted_externally を orphaned で上書きしてしまう (admin への誤情報) ため。
- * `sync_status='conflict' and last_error_code='KMB-E724'` (結果不明。自動再開禁止 —
- * §5.3 不変条件3) も除外する。orphaned への遷移も worker による自動処理の一種であり、
- * E724 link を worker が勝手に動かしてはならない不変条件に抵触するため。
+ * フル再同期ラウンド完了時の逆方向突合 (§8.5) の対象抽出。ラウンド開始 (full_resync_started_at)
+ * 以降に一度も観測されなかった link = `last_pulled_at is null or last_pulled_at < since` を返す。
+ * DB 上の観測マーカー (last_pulled_at) を基準にするため、ラウンドが複数起床にまたがっても前起床で
+ * 観測済みの link を誤って orphaned 化しない (旧実装のプロセス内メモリ突合の欠陥を修正)。
+ * - external_event_id が非 NULL の link のみ (突合は「外部に存在するはずのイベント」の消失検知)。
+ * - `sync_status in ('deleted_externally','orphaned')` は除外 — 既に判明済みの deleted_externally を
+ *   情報量の少ない orphaned で上書きしない (admin への誤情報防止)。
+ * - `conflict + KMB-E724` (結果不明。自動再開禁止 — §5.3 不変条件3) も除外 — orphaned への遷移も
+ *   worker の自動処理であり、E724 link を worker が勝手に動かしてはならない。
+ * - window 指定時 (Microsoft — calendarView/delta は時間窓内しか返さない): work_blocks.starts_at ∈
+ *   [window.start, window.end) の link のみ対象 (§8.5「Graph は sync_window 外の starts_at を持つ
+ *   block の link を突合対象外とする」— 窓外の未来/過去イベントを誤 orphaned 化しない)。
  */
-export async function listLinksWithExternalEventId(
+export async function listLinksNotPulledSince(
   client: SupabaseClient,
   provider: CalendarProvider,
+  params: { since: string; window: { start: string; end: string } | null },
 ): Promise<Result<Array<{ id: string; external_event_id: string }>>> {
-  const { data, error } = await client
+  let query = client
     .from("calendar_event_links")
-    .select("id, external_event_id, sync_status, last_error_code")
+    .select("id, external_event_id, sync_status, last_error_code, work_blocks!inner(starts_at)")
     .eq("provider", provider)
     .not("external_event_id", "is", null)
-    .not("sync_status", "in", "(deleted_externally,orphaned)");
+    .not("sync_status", "in", "(deleted_externally,orphaned)")
+    .or(`last_pulled_at.is.null,last_pulled_at.lt.${params.since}`);
+  if (params.window) {
+    query = query.gte("work_blocks.starts_at", params.window.start).lt("work_blocks.starts_at", params.window.end);
+  }
+  const { data, error } = await query;
   if (error) return pgErrorToCalendarResult(error);
-  const rows = (data ?? []) as Array<{
+  const rows = (data ?? []) as unknown as Array<{
     id: string;
     external_event_id: string;
     sync_status: EventLinkSyncStatus;

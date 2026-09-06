@@ -14,7 +14,7 @@
 | 事実 | 根拠 |
 |---|---|
 | 公開フォーム入力契約は name/email/tel/inquiry_type('construction'\|'estimate'\|'material'\|'other')/item/body/privacy_agreed のみ。添付・材質・寸法フィールドは無い | `src/modules/inquiry/contracts.ts:10-24` |
-| `InquiryFacade.submit` = anon が触る唯一の書き込み。保存成功後 `notifyInquiryReceived` を void で呼ぶベストエフォート通知(失敗は KMB-E902 ログのみ) | `src/modules/inquiry/facade.ts:37-50` |
+| `InquiryFacade.submit` = anon が触る唯一の書き込み。保存成功後 `notifyInquiryReceived` をベストエフォート通知(失敗は KMB-E902 ログのみ)。2026-09-06 是正: `next/server` の `after()` で応答後実行を予約し (Vercel の応答後打ち切り対策)、リクエストスコープ外で `after` が throw する文脈のみ従来の void 呼び出しにフォールバック | `src/modules/inquiry/facade.ts:37-50` |
 | 通知メールは **管理者宛のみ**(宛先 = site_settings 'notifications'.inquiry_to)。**顧客宛の自動返信は存在しない** | `src/modules/inquiry/internal/notify.ts:112-148`(宛先取得 50-72) |
 | 差出人は `no-reply@<NEXT_PUBLIC_SITE_URL のホスト名>` をコード導出。ドメイン認証前提の env 上書き手段は無い | `src/modules/inquiry/internal/notify.ts:31-38` |
 | contact_inquiries DDL: name/email/tel/inquiry_type/item/body/status/handled_at のみ。添付テーブル無し | `supabase/migrations/20260708000001_init_schema.sql:144-156` |

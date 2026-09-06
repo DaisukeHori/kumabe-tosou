@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { escapeLikePattern, ilikeContainsFilter, quotePostgrestValue } from "@/lib/postgrest-filter";
 import type { Paged, Pagination, Result } from "@/modules/platform/contracts";
 import { KMB_ERRORS, type KmbErrorCode } from "@/modules/platform/errors";
 
@@ -64,12 +65,6 @@ function pgErrorToResult(error: PgError): { ok: false; code: KmbErrorCode; detai
     return { ok: false, code: "KMB-E202", detail: error.message };
   }
   return { ok: false, code: "KMB-E901", detail: error.message };
-}
-
-/** ILIKE パターン中のワイルドカード (`%`/`_`/`\`) をエスケープし、
- *  ILIKE を「大文字小文字を無視する完全一致」として使う (content/repository.ts の確立パターン踏襲)。 */
-function escapeLikePattern(value: string): string {
-  return value.replace(/[%_\\]/g, (c) => `\\${c}`);
 }
 
 type CreatedAtCursor = { createdAt: string; id: string };
@@ -264,8 +259,8 @@ export async function listCompaniesPage(
     .limit(pagination.limit + 1);
 
   if (filter.q) {
-    const escaped = escapeLikePattern(filter.q);
-    query = query.or(`name.ilike.%${escaped}%,name_kana.ilike.%${escaped}%`);
+    // 検索語にカンマ・括弧が含まれても .or() の構文が壊れないよう値を引用符で囲む (src/lib/postgrest-filter.ts)
+    query = query.or([ilikeContainsFilter("name", filter.q), ilikeContainsFilter("name_kana", filter.q)].join(","));
   }
   const cursor = decodeCreatedAtCursor(pagination.cursor);
   if (cursor) {
@@ -410,6 +405,12 @@ export type CustomerListQuery = {
   // repository 内部専用のフィルタとして追加した (型のみの内部拡張。契約書改訂は不要という plan の
   // 判断基準どおり)。省略時は undefined 扱いでフィルタなし (既存呼び出し元は無変更で動作)。
   companyId?: string | null;
+  /**
+   * 電話番号検索 (E.164 前方一致)。facade.listCustomers が q を normalizeJpPhoneToE164 で正規化できた
+   * 場合にセットする (例 '+819012345678')。セット時は tel_e164 like '<prefix>%' を名前/かな/email の
+   * 部分一致と OR で併用し、q の tel_e164 部分一致は行わない。省略/null で従来どおり。
+   */
+  telE164Prefix?: string | null;
 };
 
 export async function listCustomersPage(
@@ -435,11 +436,25 @@ export async function listCustomersPage(
   if (filter.companyId) {
     query = query.eq("company_id", filter.companyId);
   }
-  if (filter.q) {
-    const escaped = escapeLikePattern(filter.q);
-    query = query.or(
-      `name.ilike.%${escaped}%,name_kana.ilike.%${escaped}%,email.ilike.%${escaped}%,tel_e164.ilike.%${escaped}%`,
-    );
+  if (filter.q || filter.telE164Prefix) {
+    // 検索語にカンマ・括弧が含まれても .or() の構文が壊れないよう値を引用符で囲む (src/lib/postgrest-filter.ts)。
+    // 電話は facade が E.164 に正規化できた場合のみ tel_e164 の前方一致 (like '+8190...%') — 名前/かな/email
+    // の部分一致とは OR で併用する (zCustomerListFilter.q の注記どおり)。正規化できない q は従来どおり
+    // tel_e164 も部分一致の対象にする (ハイフン無し下 4 桁などの部分入力を救う)。
+    const terms: string[] = [];
+    if (filter.q) {
+      terms.push(
+        ilikeContainsFilter("name", filter.q),
+        ilikeContainsFilter("name_kana", filter.q),
+        ilikeContainsFilter("email", filter.q),
+      );
+    }
+    if (filter.telE164Prefix) {
+      terms.push(`tel_e164.like.${quotePostgrestValue(`${escapeLikePattern(filter.telE164Prefix)}%`)}`);
+    } else if (filter.q) {
+      terms.push(ilikeContainsFilter("tel_e164", filter.q));
+    }
+    query = query.or(terms.join(","));
   }
   const cursor = decodeCreatedAtCursor(pagination.cursor);
   if (cursor) {

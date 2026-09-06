@@ -665,3 +665,34 @@ describe("fetchMsAccountEmail: mail ?? userPrincipalName (§8.2 手順3)", () =>
     await expect(fetchMsAccountEmail("at")).rejects.toThrow();
   });
 });
+
+describe("pullChanges: seriesMasterId (繰り返しシリーズのインスタンス) を recurringEventId に載せる", () => {
+  it("occurrence/exception は recurringEventId=seriesMasterId、単発イベントは null (§8.5 重複掃除の除外判定)", async () => {
+    fetchMock.mockImplementation(async (input: string | URL, init?: RequestInit) => {
+      record(input, init);
+      return jsonResponse(200, {
+        value: [
+          {
+            id: "occ-1",
+            seriesMasterId: "master-1",
+            changeKey: "ck-1",
+            start: { dateTime: "2026-07-19T09:00:00.0000000", timeZone: "Asia/Tokyo" },
+            end: { dateTime: "2026-07-19T12:00:00.0000000", timeZone: "Asia/Tokyo" },
+          },
+          {
+            id: "single-1",
+            changeKey: "ck-2",
+            start: { dateTime: "2026-07-19T09:00:00.0000000", timeZone: "Asia/Tokyo" },
+            end: { dateTime: "2026-07-19T12:00:00.0000000", timeZone: "Asia/Tokyo" },
+          },
+        ],
+        "@odata.deltaLink": "https://graph.microsoft.com/v1.0/delta-final",
+      });
+    });
+
+    const page = await msCalendarAdapter.pullChanges(CALENDAR_ID, null, null, WINDOW, SECRET);
+
+    expect(page.changes[0].recurringEventId).toBe("master-1");
+    expect(page.changes[1].recurringEventId).toBeNull();
+  });
+});

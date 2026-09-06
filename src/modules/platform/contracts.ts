@@ -91,8 +91,26 @@ export const zCreateUploadUrlReq = z
         ? v.size_bytes <= 50 * 1024 * 1024
         : v.size_bytes <= 10 * 1024 * 1024,
     "kind 別サイズ上限 (audio 50MB / media 10MB) を超えています",
+  )
+  // kind 別の MIME 制約: media (media-originals バケット) は image/*、audio は audio/* のみ。
+  // 署名付き URL は Storage 側で content-type を検証しないため、ここが唯一の入口検証になる。
+  // `when` で前段 (型・size 上限) に issue が無いときだけ評価し、二重報告を避ける。
+  .refine(
+    (v) => isAllowedUploadContentType(v.kind, v.content_type),
+    {
+      message: "content_type が kind と一致しません (media は image/*、audio は audio/* のみ)",
+      path: ["content_type"],
+      when: (payload) => payload.issues.length === 0,
+    },
   );
 export type CreateUploadUrlInput = z.infer<typeof zCreateUploadUrlReq>;
+
+/** zCreateUploadUrlReq の kind 別 MIME 判定 (小文字化して prefix 比較。パラメータ付き `image/png; q=1` も可) */
+export function isAllowedUploadContentType(kind: "audio" | "media", contentType: string): boolean {
+  const mime = contentType.trim().toLowerCase();
+  const prefix = kind === "audio" ? "audio/" : "image/";
+  return mime.startsWith(prefix) && mime.length > prefix.length;
+}
 
 export const zRevalidateReq = z.object({ tags: z.array(z.string()).min(1).max(20) }).strict();
 

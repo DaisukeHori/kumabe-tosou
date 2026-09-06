@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getEnv, isTelephonyConfigured } from "@/lib/env";
+import { normalizeSiteBaseUrl } from "@/lib/site-base-url";
 import { verifyTwilioSignature } from "@/lib/telephony-signature";
 
 /**
@@ -41,7 +42,9 @@ export async function verifyTelephonyWebhook(request: Request): Promise<Verified
   }
 
   const requestUrl = new URL(request.url);
-  const verificationUrl = `${getEnv().NEXT_PUBLIC_SITE_URL}${requestUrl.pathname}${requestUrl.search}`;
+  // NEXT_PUBLIC_SITE_URL が末尾スラッシュ付きでも `//api/telephony/...` にならないよう正規化する
+  // (TwiML 側の callback URL 生成 — telephony facade — と同じ normalizeSiteBaseUrl を通す)。
+  const verificationUrl = `${normalizeSiteBaseUrl(getEnv().NEXT_PUBLIC_SITE_URL)}${requestUrl.pathname}${requestUrl.search}`;
   const signatureHeader = request.headers.get("X-Twilio-Signature");
   // isTelephonyConfigured() が true を返した直後のため TWILIO_AUTH_TOKEN は必ず設定済みだが、
   // 型上は string | undefined のため念のため確認する (as で潰さない)。

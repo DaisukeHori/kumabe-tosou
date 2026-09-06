@@ -42,6 +42,11 @@ export type ExternalEventChange = {
                                // 時刻としては取り込まず §8.5 が pending_push 化して再送復元
   appLinkId: string | null;    // 出所マーキングから復元できた場合 (Google のみ確実)
   appBlockId: string | null;   // kumabe_block_id (Google のみ)。再接続後の link 再構築用 (§8.5)
+  recurringEventId: string | null; // 繰り返しシリーズのインスタンスなら親 (master) の id
+                               // (Google: recurringEventId / Graph: seriesMasterId)。アプリは単発
+                               // イベントしか生成しない (§1.3) ため、外部でシリーズ化された自イベントの
+                               // インスタンスを「重複イベント」として削除したり時刻として取り込んだり
+                               // しないための判定に使う (§8.5)
 };
 
 export type PullPage = {

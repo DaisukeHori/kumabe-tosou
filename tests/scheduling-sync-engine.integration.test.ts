@@ -46,8 +46,12 @@ const repoMocks = {
   updateWorkBlockExternalTimeChange: vi.fn(),
   applyPullObservedFields: vi.fn(),
   markLinkPendingPush: vi.fn(),
-  listLinksWithExternalEventId: vi.fn(),
+  listLinksNotPulledSince: vi.fn(),
   markLinksOrphaned: vi.fn(),
+  markFullResyncStarted: vi.fn(),
+  saveLinkExternalIdentity: vi.fn(),
+  touchLinkPulledAt: vi.fn(),
+  setCalendarConnectionTokenExpiresAt: vi.fn(),
   updateCalendarConnectionAfterPull: vi.fn(),
   vaultReadSecret: vi.fn(),
   vaultUpsertSecret: vi.fn(),
@@ -80,8 +84,12 @@ vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
     updateWorkBlockExternalTimeChange: (...a: unknown[]) => repoMocks.updateWorkBlockExternalTimeChange(...a),
     applyPullObservedFields: (...a: unknown[]) => repoMocks.applyPullObservedFields(...a),
     markLinkPendingPush: (...a: unknown[]) => repoMocks.markLinkPendingPush(...a),
-    listLinksWithExternalEventId: (...a: unknown[]) => repoMocks.listLinksWithExternalEventId(...a),
+    listLinksNotPulledSince: (...a: unknown[]) => repoMocks.listLinksNotPulledSince(...a),
     markLinksOrphaned: (...a: unknown[]) => repoMocks.markLinksOrphaned(...a),
+    markFullResyncStarted: (...a: unknown[]) => repoMocks.markFullResyncStarted(...a),
+    saveLinkExternalIdentity: (...a: unknown[]) => repoMocks.saveLinkExternalIdentity(...a),
+    touchLinkPulledAt: (...a: unknown[]) => repoMocks.touchLinkPulledAt(...a),
+    setCalendarConnectionTokenExpiresAt: (...a: unknown[]) => repoMocks.setCalendarConnectionTokenExpiresAt(...a),
     updateCalendarConnectionAfterPull: (...a: unknown[]) => repoMocks.updateCalendarConnectionAfterPull(...a),
     vaultReadSecret: (...a: unknown[]) => repoMocks.vaultReadSecret(...a),
     vaultUpsertSecret: (...a: unknown[]) => repoMocks.vaultUpsertSecret(...a),
@@ -103,6 +111,8 @@ const CAL_BASE = `https://www.googleapis.com/calendar/v3/calendars/${CAL_ID}`;
 // のケース用に別定数を足す (§8.1 Microsoft 列: calendarView/delta は時間窓必須)。
 const GRAPH_CAL_BASE = `https://graph.microsoft.com/v1.0/me/calendars/${CAL_ID}`;
 const OK: { ok: true; value: undefined } = { ok: true, value: undefined };
+/** claimPushForLink が返す claim 直後の updated_at (moddatetime で進む) — markLinkSynced の CAS 期待値 */
+const CLAIMED_UPDATED_AT = "2026-07-12T00:00:01.000Z";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -128,6 +138,7 @@ function connectionRow(overrides: Partial<CalendarConnectionRow> = {}): Calendar
     last_pulled_at: null,
     last_pushed_at: null,
     last_full_resync_at: null,
+    full_resync_started_at: null,
     last_error_code: null,
     last_error_detail: null,
     connected_at: "2026-01-01T00:00:00.000Z",
@@ -215,8 +226,8 @@ beforeEach(() => {
   // 妥当なデフォルト (各テストで必要な分だけ上書きする)
   repoMocks.getCalendarConnection.mockResolvedValue({ ok: true, value: connectionRow() });
   repoMocks.listPendingPushLinks.mockResolvedValue({ ok: true, value: [] });
-  repoMocks.claimPushForLink.mockResolvedValue(OK);
-  repoMocks.markLinkSynced.mockResolvedValue(OK);
+  repoMocks.claimPushForLink.mockResolvedValue({ ok: true, value: { updated_at: CLAIMED_UPDATED_AT } });
+  repoMocks.markLinkSynced.mockResolvedValue({ ok: true, value: { applied: true } });
   repoMocks.deleteCalendarEventLink.mockResolvedValue(OK);
   repoMocks.updateCalendarConnectionStatus.mockResolvedValue(OK);
   repoMocks.markLinkDeletedExternally.mockResolvedValue(OK);
@@ -234,8 +245,12 @@ beforeEach(() => {
   repoMocks.updateWorkBlockExternalTimeChange.mockResolvedValue(OK);
   repoMocks.applyPullObservedFields.mockResolvedValue(OK);
   repoMocks.markLinkPendingPush.mockResolvedValue(OK);
-  repoMocks.listLinksWithExternalEventId.mockResolvedValue({ ok: true, value: [] });
+  repoMocks.listLinksNotPulledSince.mockResolvedValue({ ok: true, value: [] });
   repoMocks.markLinksOrphaned.mockResolvedValue(OK);
+  repoMocks.markFullResyncStarted.mockResolvedValue(OK);
+  repoMocks.saveLinkExternalIdentity.mockResolvedValue(OK);
+  repoMocks.touchLinkPulledAt.mockResolvedValue(OK);
+  repoMocks.setCalendarConnectionTokenExpiresAt.mockResolvedValue(OK);
   repoMocks.updateCalendarConnectionAfterPull.mockResolvedValue(OK);
   repoMocks.vaultReadSecret.mockResolvedValue({ ok: true, value: VALID_SECRET_JSON });
   repoMocks.vaultUpsertSecret.mockResolvedValue(OK);
@@ -270,13 +285,19 @@ describe("runPush: create成功 (external_event_id NULL, push_claimed_at NULL)",
       endsAt: "2026-07-12T03:00:00.000Z",
       title: "研磨予定",
     });
-    expect(repoMocks.markLinkSynced).toHaveBeenCalledWith(FAKE_CLIENT, "link-1", {
-      external_event_id: "ext-new",
-      etag_or_change_key: "etag-new",
-      external_updated_at: "2026-07-12T00:00:00.000Z",
-      external_ical_uid: "ical-new",
-      last_written_hash: expectedHash,
-    });
+    expect(repoMocks.markLinkSynced).toHaveBeenCalledWith(
+      FAKE_CLIENT,
+      "link-1",
+      {
+        external_event_id: "ext-new",
+        etag_or_change_key: "etag-new",
+        external_updated_at: "2026-07-12T00:00:00.000Z",
+        external_ical_uid: "ical-new",
+        last_written_hash: expectedHash,
+      },
+      CLAIMED_UPDATED_AT, // claim が進めた updated_at を CAS 条件にする (取得時の値ではない)
+    );
+    expect(repoMocks.saveLinkExternalIdentity).not.toHaveBeenCalled();
     expect(repoMocks.touchCalendarConnectionAfterPush).toHaveBeenCalled();
   });
 });
@@ -318,6 +339,7 @@ describe("runPush: push_claimed_at 非NULL (kill疑い) → findByLinkId 照合�
       FAKE_CLIENT,
       "link-1",
       expect.objectContaining({ external_event_id: "ext-found", etag_or_change_key: "etag-updated" }),
+      "2026-07-12T00:00:00.000Z", // claim を刻印しない経路は取得時の updated_at が CAS 条件
     );
     expect(calls.some((c) => c.method === "POST")).toBe(false);
     expect(calls.some((c) => c.method === "PUT")).toBe(true);
@@ -773,7 +795,7 @@ describe("runPull: 重複掃除 (appLinkId で解決した link が既に別の 
 describe("runPull: 410 → KMB-E722 でフル再同期即時開始 + 逆方向突合で未観測linkをorphaned化 (C7)", () => {
   it("410 検知後、同一ラウンド内でフル再同期を継続し、観測されなかった既存 link を orphaned にする", async () => {
     repoMocks.getCalendarConnection.mockResolvedValue({ ok: true, value: connectionRow({ sync_token: "stale-token" }) });
-    repoMocks.listLinksWithExternalEventId.mockResolvedValue({
+    repoMocks.listLinksNotPulledSince.mockResolvedValue({
       ok: true,
       value: [{ id: "link-old-1", external_event_id: "ext-old-1" }],
     });
@@ -795,6 +817,10 @@ describe("runPull: 410 → KMB-E722 でフル再同期即時開始 + 逆方向�
     const result = await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
 
     expect(result.full_resync).toBe(true);
+    // 410 = 新ラウンド開始 → full_resync_started_at を刻み、その時刻を基準に未観測 link を抽出する
+    expect(repoMocks.markFullResyncStarted).toHaveBeenCalledWith(FAKE_CLIENT, "google", expect.any(String));
+    const startedAt = repoMocks.markFullResyncStarted.mock.calls[0]?.[2] as string;
+    expect(repoMocks.listLinksNotPulledSince).toHaveBeenCalledWith(FAKE_CLIENT, "google", { since: startedAt, window: null });
     expect(repoMocks.markLinksOrphaned).toHaveBeenCalledWith(FAKE_CLIENT, ["link-old-1"]);
     expect(repoMocks.updateCalendarConnectionAfterPull).toHaveBeenCalledWith(
       FAKE_CLIENT,
@@ -803,6 +829,7 @@ describe("runPull: 410 → KMB-E722 でフル再同期即時開始 + 逆方向�
         sync_token: "brand-new-token",
         sync_page_cursor: null,
         last_full_resync_at: expect.any(String),
+        full_resync_started_at: null, // ラウンド完了で基準時刻を消す
         last_error_code: "KMB-E722",
       }),
     );
@@ -994,5 +1021,294 @@ describe("runPull (provider=google, #55 回帰確認): ページ上限に達し�
     const updateCall = repoMocks.updateCalendarConnectionAfterPull.mock.calls[0] as [unknown, unknown, Record<string, unknown>];
     expect(updateCall[2].last_error_code).toBeUndefined();
     expect(updateCall[2].sync_token).toBe("existing-sync-token");
+  });
+});
+
+// ===========================================================================
+// 2026-09 修正分 (フル再同期の起床跨ぎ / CAS / E721 自動解消 / 繰り返しインスタンス / pull 401 連続)
+// ===========================================================================
+
+describe("runPull: フル再同期が複数起床にまたがっても観測済み link を一括 orphaned 化しない (DB 基準の逆方向突合)", () => {
+  it("1 起床目 (cursor=null からの開始): full_resync_started_at を刻み、ページ上限で途中終了しても orphaned 化しない", async () => {
+    repoMocks.getCalendarConnection.mockResolvedValue({
+      ok: true,
+      value: connectionRow({ sync_token: null, sync_page_cursor: null }),
+    });
+    recordAndRoute((url, method) => {
+      if (url.startsWith(`${CAL_BASE}/events?`) && method === "GET") {
+        return jsonResponse(200, { items: [], nextPageToken: "page-2" });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    const result = await runPull(FAKE_CLIENT, "google", googleCalendarAdapter, { maxPages: 1 });
+
+    expect(result.full_resync).toBe(true);
+    expect(repoMocks.markFullResyncStarted).toHaveBeenCalledWith(FAKE_CLIENT, "google", expect.any(String));
+    expect(repoMocks.listLinksNotPulledSince).not.toHaveBeenCalled();
+    expect(repoMocks.markLinksOrphaned).not.toHaveBeenCalled();
+    const patch = repoMocks.updateCalendarConnectionAfterPull.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(patch.sync_page_cursor).toBe("page-2");
+    expect(patch).not.toHaveProperty("full_resync_started_at"); // 途中終了は基準時刻を保持する
+  });
+
+  it("2 起床目 (cursor 継続): 基準時刻を刻み直さず、前起床の full_resync_started_at を基準に未観測 link だけを orphaned 化する", async () => {
+    const startedAt = "2026-07-12T00:00:00.000Z";
+    repoMocks.getCalendarConnection.mockResolvedValue({
+      ok: true,
+      value: connectionRow({ sync_token: null, sync_page_cursor: "page-2", full_resync_started_at: startedAt }),
+    });
+    repoMocks.listLinksNotPulledSince.mockResolvedValue({ ok: true, value: [{ id: "link-stale", external_event_id: "ext-stale" }] });
+    recordAndRoute((url, method) => {
+      if (url.startsWith(`${CAL_BASE}/events?`) && method === "GET") {
+        expect(url).toContain("pageToken=page-2");
+        return jsonResponse(200, { items: [], nextSyncToken: "fresh-token" });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
+
+    expect(repoMocks.markFullResyncStarted).not.toHaveBeenCalled();
+    expect(repoMocks.listLinksNotPulledSince).toHaveBeenCalledWith(FAKE_CLIENT, "google", { since: startedAt, window: null });
+    expect(repoMocks.markLinksOrphaned).toHaveBeenCalledWith(FAKE_CLIENT, ["link-stale"]);
+    expect(repoMocks.updateCalendarConnectionAfterPull).toHaveBeenCalledWith(
+      FAKE_CLIENT,
+      "google",
+      expect.objectContaining({ sync_token: "fresh-token", sync_page_cursor: null, full_resync_started_at: null }),
+    );
+  });
+
+  it("継続起床で full_resync_started_at が無い (旧データ) 場合は安全側に倒して orphaned 化を行わない", async () => {
+    repoMocks.getCalendarConnection.mockResolvedValue({
+      ok: true,
+      value: connectionRow({ sync_token: null, sync_page_cursor: "page-2", full_resync_started_at: null }),
+    });
+    recordAndRoute((url, method) => {
+      if (url.startsWith(`${CAL_BASE}/events?`) && method === "GET") {
+        return jsonResponse(200, { items: [], nextSyncToken: "fresh-token" });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
+
+    expect(repoMocks.listLinksNotPulledSince).not.toHaveBeenCalled();
+    expect(repoMocks.markLinksOrphaned).not.toHaveBeenCalled();
+  });
+
+  it("自己エコーとして棄却した change でも link.last_pulled_at を刻む (観測済みの証拠 — 誤 orphaned 化防止)", async () => {
+    repoMocks.findLinkByExternalEventId.mockResolvedValue({ ok: true, value: eventLink({ etag_or_change_key: "etag-match" }) });
+    recordAndRoute((url, method) => {
+      if (url.startsWith(`${CAL_BASE}/events?`) && method === "GET") {
+        return jsonResponse(200, {
+          items: [{ id: "ext-1", status: "confirmed", etag: "etag-match", updated: "2026-07-12T00:00:05.000Z" }],
+          nextSyncToken: "new-token",
+        });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    const result = await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
+
+    expect(result.echoes_rejected).toBe(1);
+    expect(repoMocks.touchLinkPulledAt).toHaveBeenCalledWith(FAKE_CLIENT, "link-1");
+  });
+});
+
+describe("runPull (provider=microsoft): フル再同期の逆方向突合は sync_window 内の block の link のみ対象", () => {
+  it("listLinksNotPulledSince に meta の時間窓を渡す (窓外の未来/過去イベントを誤 orphaned 化しない)", async () => {
+    repoMocks.getCalendarConnection.mockResolvedValue({
+      ok: true,
+      value: msConnectionRow({ sync_token: null, sync_page_cursor: null }),
+    });
+    recordAndRoute((url, method) => {
+      if (url.startsWith(`${GRAPH_CAL_BASE}/calendarView/delta?`) && method === "GET") {
+        return jsonResponse(200, { value: [], "@odata.deltaLink": `${GRAPH_CAL_BASE}/calendarView/delta?$deltatoken=fresh` });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    await runPull(FAKE_CLIENT, "microsoft", msCalendarAdapter);
+
+    const startedAt = repoMocks.markFullResyncStarted.mock.calls[0]?.[2] as string;
+    expect(repoMocks.listLinksNotPulledSince).toHaveBeenCalledWith(FAKE_CLIENT, "microsoft", {
+      since: startedAt,
+      window: { start: "2026-06-11T00:00:00Z", end: "2026-12-08T00:00:00Z" },
+    });
+  });
+});
+
+describe("runPush: markLinkSynced の CAS 不成立 (push 中に link が再 pending_push 化) → id/etag のみ保存し pending_push を維持", () => {
+  it("applied=false なら saveLinkExternalIdentity(toPendingPush=false) を呼び、synced に上書きしない", async () => {
+    repoMocks.listPendingPushLinks.mockResolvedValue({ ok: true, value: [pendingLink({ external_event_id: "ext-a", etag_or_change_key: "etag-a" })] });
+    repoMocks.markLinkSynced.mockResolvedValue({ ok: true, value: { applied: false } });
+    recordAndRoute((url, method) => {
+      if (url === `${CAL_BASE}/events/ext-a` && method === "PUT") {
+        return jsonResponse(200, { id: "ext-a", etag: "etag-a2", updated: "2026-07-12T00:10:00.000Z", iCalUID: "ical-a" });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    const result = await runPush(FAKE_CLIENT, "google", googleCalendarAdapter);
+
+    expect(result).toEqual({ pushed: 1, conflicts: 0 });
+    expect(repoMocks.markLinkSynced).toHaveBeenCalledWith(FAKE_CLIENT, "link-1", expect.any(Object), "2026-07-12T00:00:00.000Z");
+    expect(repoMocks.saveLinkExternalIdentity).toHaveBeenCalledWith(
+      FAKE_CLIENT,
+      "link-1",
+      { external_event_id: "ext-a", etag_or_change_key: "etag-a2", external_updated_at: "2026-07-12T00:10:00.000Z", external_ical_uid: "ical-a" },
+      { toPendingPush: false },
+    );
+  });
+});
+
+describe("runPull: conflict(E721) はタイトルのみの外部変更 (P18) でも pending_push に自動復帰する", () => {
+  it("時刻が同じでも E721 なら applyPullObservedFields に sync_status='pending_push' を渡す (E723 は据え置き)", async () => {
+    const pageForTitleChange = (url: string, method: string) => {
+      if (url.startsWith(`${CAL_BASE}/events?`) && method === "GET") {
+        return jsonResponse(200, {
+          items: [
+            {
+              id: "ext-1",
+              status: "confirmed",
+              etag: "etag-new",
+              updated: "2026-07-12T01:00:00.000Z",
+              summary: "タイトルだけ変更",
+              start: { dateTime: "2026-07-12T09:00:00+09:00" },
+              end: { dateTime: "2026-07-12T12:00:00+09:00" },
+            },
+          ],
+          nextSyncToken: "new-token",
+        });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    };
+
+    repoMocks.findLinkByExternalEventId.mockResolvedValue({
+      ok: true,
+      value: eventLink({ sync_status: "conflict", last_error_code: "KMB-E721", etag_or_change_key: "etag-old" }),
+    });
+    recordAndRoute(pageForTitleChange);
+    await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
+    expect(repoMocks.updateWorkBlockExternalTimeChange).not.toHaveBeenCalled();
+    expect(repoMocks.applyPullObservedFields).toHaveBeenCalledWith(FAKE_CLIENT, "link-1", expect.objectContaining({ sync_status: "pending_push" }));
+
+    vi.clearAllMocks();
+    repoMocks.applyPullObservedFields.mockResolvedValue(OK);
+    repoMocks.claimCalendarSyncLease.mockResolvedValue({ ok: true, value: true });
+    repoMocks.releaseCalendarSyncLease.mockResolvedValue(OK);
+    repoMocks.updateCalendarConnectionAfterPull.mockResolvedValue(OK);
+    repoMocks.vaultReadSecret.mockResolvedValue({ ok: true, value: VALID_SECRET_JSON });
+    repoMocks.getCalendarConnection.mockResolvedValue({ ok: true, value: connectionRow() });
+    repoMocks.getWorkBlockTimes.mockResolvedValue({ ok: true, value: { starts_at: "2026-07-12T00:00:00.000Z", ends_at: "2026-07-12T03:00:00.000Z" } });
+    repoMocks.findLinkByExternalEventId.mockResolvedValue({
+      ok: true,
+      value: eventLink({ sync_status: "conflict", last_error_code: "KMB-E723", etag_or_change_key: "etag-old" }),
+    });
+    recordAndRoute(pageForTitleChange);
+    await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
+    const callArgs = repoMocks.applyPullObservedFields.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(callArgs).not.toHaveProperty("sync_status");
+  });
+});
+
+describe("runPull: 外部で繰り返しシリーズ化された自イベントのインスタンス (recurringEventId=link の id) は重複掃除しない", () => {
+  it("出所マーキングで親 link に解決されても deleteEvent せず、時刻も取り込まず pending_push 化する", async () => {
+    repoMocks.getCalendarEventLinkById.mockResolvedValue({ ok: true, value: eventLink({ id: "link-1", external_event_id: "ext-master" }) });
+    recordAndRoute((url, method) => {
+      if (url.startsWith(`${CAL_BASE}/events?`) && method === "GET") {
+        return jsonResponse(200, {
+          items: [
+            {
+              id: "ext-master_20260719T000000Z",
+              recurringEventId: "ext-master",
+              status: "confirmed",
+              etag: "etag-instance",
+              iCalUID: "ical-1",
+              updated: "2026-07-12T01:00:00.000Z",
+              start: { dateTime: "2026-07-19T09:00:00+09:00" },
+              end: { dateTime: "2026-07-19T12:00:00+09:00" },
+              extendedProperties: { private: { kumabe_link_id: "link-1", kumabe_block_id: "block-1" } },
+            },
+          ],
+          nextSyncToken: "new-token",
+        });
+      }
+      throw new Error(`unexpected call (インスタンスが重複イベントとして削除された疑い): ${method} ${url}`);
+    });
+
+    const result = await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
+
+    expect(result.pulled).toBe(0);
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+    expect(repoMocks.updateWorkBlockExternalTimeChange).not.toHaveBeenCalled();
+    expect(repoMocks.applyPullObservedFields).not.toHaveBeenCalled(); // インスタンスの etag を親のものとして記録しない
+    expect(repoMocks.markLinkPendingPush).toHaveBeenCalledWith(FAKE_CLIENT, "link-1");
+  });
+
+  it("iCalUID で親 link に解決されたインスタンスの cancelled 通知は deleted_externally にしない", async () => {
+    repoMocks.findLinkByIcalUid.mockResolvedValue({ ok: true, value: eventLink({ id: "link-1", external_event_id: "ext-master" }) });
+    recordAndRoute((url, method) => {
+      if (url.startsWith(`${CAL_BASE}/events?`) && method === "GET") {
+        return jsonResponse(200, {
+          items: [{ id: "ext-master_20260719T000000Z", recurringEventId: "ext-master", iCalUID: "ical-1", status: "cancelled" }],
+          nextSyncToken: "new-token",
+        });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
+
+    expect(repoMocks.markLinkDeletedExternally).not.toHaveBeenCalled();
+    expect(repoMocks.markLinkPendingPush).not.toHaveBeenCalled();
+  });
+});
+
+describe("runPull: 401 → refresh 1回 → 再試行も 401 → connection expired + KMB-E720 で中断 (§8.4 push と対称)", () => {
+  it("同一 loop で 2 回目の 401 は再 refresh せず expired 化して break する", async () => {
+    let eventsGetCount = 0;
+    let tokenPostCount = 0;
+    recordAndRoute((url, method) => {
+      if (url === "https://oauth2.googleapis.com/token" && method === "POST") {
+        tokenPostCount += 1;
+        return jsonResponse(200, { access_token: "access-refreshed", expires_in: 3600 });
+      }
+      if (url.startsWith(`${CAL_BASE}/events?`) && method === "GET") {
+        eventsGetCount += 1;
+        return new Response("unauthorized", { status: 401 });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    const result = await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
+
+    expect(result.pulled).toBe(0);
+    expect(eventsGetCount).toBe(2);
+    expect(tokenPostCount).toBe(1);
+    expect(repoMocks.updateCalendarConnectionStatus).toHaveBeenCalledWith(FAKE_CLIENT, "google", "expired", "KMB-E720", expect.any(String));
+    expect(repoMocks.releaseCalendarSyncLease).toHaveBeenCalled();
+  });
+
+  it("401 → refresh → 再試行成功なら expired 化しない (既存挙動の固定)", async () => {
+    let eventsGetCount = 0;
+    recordAndRoute((url, method) => {
+      if (url === "https://oauth2.googleapis.com/token" && method === "POST") {
+        return jsonResponse(200, { access_token: "access-refreshed", expires_in: 3600 });
+      }
+      if (url.startsWith(`${CAL_BASE}/events?`) && method === "GET") {
+        eventsGetCount += 1;
+        if (eventsGetCount === 1) return new Response("unauthorized", { status: 401 });
+        return jsonResponse(200, { items: [], nextSyncToken: "new-token" });
+      }
+      throw new Error(`unexpected call: ${method} ${url}`);
+    });
+
+    await runPull(FAKE_CLIENT, "google", googleCalendarAdapter);
+
+    expect(eventsGetCount).toBe(2);
+    expect(repoMocks.updateCalendarConnectionStatus).not.toHaveBeenCalled();
+    expect(repoMocks.setCalendarConnectionTokenExpiresAt).toHaveBeenCalledWith(FAKE_CLIENT, "google", expect.any(String));
   });
 });

@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import { Noto_Sans_JP } from "next/font/google";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { Toaster } from "@/components/ui/sonner";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { NAV_BADGE_HREFS } from "@/modules/nav-badges/contracts";
 import { navBadgesFacade } from "@/modules/nav-badges/facade";
+import { platformFacade } from "@/modules/platform/facade";
+
+import { buildLoginRedirect } from "./_lib/require-admin-page";
 
 import { AdminNav } from "./admin-nav";
 import { logoutAction } from "./actions";
@@ -52,6 +56,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Toaster />
       </div>
     );
+  }
+
+  // 契約書 §3.5: middleware は Cookie の有無しか見ないため、認証済みでも admin (profiles) で
+  // ないユーザー (KMB-E202) はここで /admin/login へ戻す (E201 も同様。E901 = 認証基盤の
+  // 一時障害は redirect せず、各 page の requireAdminPage が個別にエラー表示する)。
+  const adminGate = await platformFacade.requireAdmin();
+  if (!adminGate.ok && (adminGate.code === "KMB-E201" || adminGate.code === "KMB-E202")) {
+    redirect(buildLoginRedirect(pathname, adminGate.code));
   }
 
   const supabase = await createSupabaseServerClient();

@@ -133,7 +133,9 @@ async function resolveIntakeCustomer(
   if (dedup.value.kind === "single") {
     const candidate = dedup.value.candidate;
     if (candidate.lifecycle === "archived") {
-      // 採用行が手動 archived なら lifecycle を 'lead' に戻す (再問い合わせ = 取引再開のシグナル)。
+      // 採用行が手動 archived なら lifecycle を戻す (再問い合わせ = 取引再開のシグナル)。戻し先は新規作成時と
+      // 同じ規則: 通常取込は 'lead'、「deal なし取込」(§12.1 done 移行行) は 'customer' (過去完了案件を
+      // 見込みとして復活させない)。
       const current = await getCustomerById(client, candidate.customer_id);
       if (!current.ok) return current;
       if (current.value) {
@@ -149,7 +151,7 @@ async function resolveIntakeCustomer(
             company_id: current.value.company_id,
             address: current.value.address,
             notes: current.value.notes,
-            lifecycle: "lead",
+            lifecycle,
             custom_fields: current.value.custom_fields,
             billing_info: current.value.billing_info,
             shipping_info: current.value.shipping_info,

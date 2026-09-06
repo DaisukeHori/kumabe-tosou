@@ -111,12 +111,17 @@ describe("hashIp", () => {
 });
 
 describe("extractClientIp", () => {
-  it("x-forwarded-for の先頭 IP を採用する (プロキシ経由の複数 IP)", () => {
-    expect(extractClientIp("203.0.113.1, 10.0.0.1", null)).toBe("203.0.113.1");
+  it("x-real-ip があれば x-forwarded-for より優先する (XFF はクライアントが前置詐称できるため)", () => {
+    expect(extractClientIp("198.51.100.7, 10.0.0.1", "203.0.113.9")).toBe("203.0.113.9");
   });
 
-  it("x-forwarded-for が無ければ x-real-ip を使う", () => {
-    expect(extractClientIp(null, "203.0.113.9")).toBe("203.0.113.9");
+  it("x-real-ip が無ければ x-forwarded-for の先頭 IP を採用する (プロキシ経由の複数 IP)", () => {
+    expect(extractClientIp("203.0.113.1, 10.0.0.1", null)).toBe("203.0.113.1");
+    expect(extractClientIp("203.0.113.1, 10.0.0.1", "  ")).toBe("203.0.113.1");
+  });
+
+  it("x-real-ip 単独でも使える (前後空白は除去)", () => {
+    expect(extractClientIp(null, " 203.0.113.9 ")).toBe("203.0.113.9");
   });
 
   it("どちらも無ければ unknown を返す", () => {

@@ -271,7 +271,7 @@ create index on ai_budget_reservations (month, settled, expires_at);
 - ai_provider_keys / ai_usage_log / ai_image_generations は **RLS admin only** (anon 不可 — page_media と違い公開する理由がない)
 - 生成系 Server Action / Route Handler はすべて requireAdmin 先頭
 - プロンプトインジェクション: §3 の **JSON 決定的シリアライズ (JSON.stringify) + untrusted policy** + structured output (資料タグ方式ではない — `</tag>` 混入で境界を破れないため JSON 文字列で渡す)。**サイトコンテンツ由来のテキストを system prompt に入れない**
-- SSRF 対策 (MAJOR-5 で強化): スクショ API は **URL を受け取らない**。`routeKey` (EDITABLE_ROUTES のキー) のみを受け、URL はサーバー側で `new URL(route, SITE_URL)` により構築。絶対 URL・`//`・エンコード済みスラッシュ・クエリ付き入力は Zod で拒否。Puppeteer 側は request interception で **自オリジン + Supabase Storage 以外の全 subresource をブロック**、リダイレクトは同一オリジンのみ許可
+- SSRF 対策 (MAJOR-5 で強化): スクショ API は **URL を受け取らない**。`routeKey` (EDITABLE_ROUTES のキー) のみを受け、URL はサーバー側で `new URL(route, SITE_URL)` により構築。絶対 URL・`//`・エンコード済みスラッシュ・クエリ付き入力は Zod で拒否。Puppeteer 側は request interception で **自オリジン + Supabase Storage 以外の全 subresource をブロック**、リダイレクトは同一オリジンのみ許可 (メインフレーム document の各リダイレクトホップ `redirectChain().length > 0` も同一オリジンのときだけ continue、別オリジンは abort。撮影直前の最終 URL 検証は最終防衛線として併用 — `decideMainFrameDocumentRequest`)
 
 ## 12. フェーズ分割 (常に動く状態を保つ順序)
 

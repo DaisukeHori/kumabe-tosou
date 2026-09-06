@@ -221,3 +221,33 @@ describe("proposePlacements (非拘束ブロック — 直前ブロック終了�
     expect(result[1]?.ends_at).toBe(jstIso(2026, 7, 13, 14, 0));
   });
 });
+
+describe("proposePlacements (planned_hours=0 — 工数未定ブロック)", () => {
+  it("拘束ブロック: 長さ 0 の提案 (starts_at===ends_at → placeBlock で KMB-E701) にせず最小 30 分を確保する", () => {
+    const result = proposePlacements({
+      targets: [target({ block_id: "a", planned_hours: 0 })],
+      from: jstIso(2026, 7, 13, 9, 0),
+      existingBookedBlocks: [],
+      externalBusy: [],
+    });
+    expect(result).toEqual([
+      {
+        block_id: "a",
+        starts_at: jstIso(2026, 7, 13, 9, 0),
+        ends_at: jstIso(2026, 7, 13, 9, 30),
+        expected_updated_at: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("非拘束ブロック: planned_hours=0 でも 30 分のスパンを置き、後続ブロックのカーソルを進める", () => {
+    const result = proposePlacements({
+      targets: [target({ block_id: "a", planned_hours: 0, consumes_capacity: false }), target({ block_id: "b", planned_hours: 1 })],
+      from: jstIso(2026, 7, 13, 9, 0),
+      existingBookedBlocks: [],
+      externalBusy: [],
+    });
+    expect(result[0]?.ends_at).toBe(jstIso(2026, 7, 13, 9, 30));
+    expect(result[1]?.starts_at).toBe(jstIso(2026, 7, 13, 9, 30));
+  });
+});

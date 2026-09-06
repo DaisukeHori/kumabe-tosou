@@ -541,6 +541,7 @@ JSONB カラムは**必ず契約書 (module-contracts.md §4) のスキーマで
 - 全テーブル `enable row level security`。
 - admin 判定は `exists (select 1 from profiles where id = auth.uid())` を共通関数 `is_admin()` (security definer) に切り出す。
 - `contact_inquiries` の anon INSERT は **rate limit を Server Action 側で実施** (IP ごと 5 件/時)。実装は `rate_limits` テーブル (§2.2、IP は salt 付き hash で生 IP は保持しない) + **honeypot フィールド + 送信最小時間** (表示から 3 秒未満の submit を拒否)。RLS はカラム制約のみ (status='new' 固定)。
+  - rate_limits の加算は RPC `rate_limit_increment(ip_hash, route, window_start, limit)` (security definer、service_role のみ execute。migration 20260906000001) の `insert … on conflict do update … returning count` 1 文で原子的に行い、返った count が上限を超えていれば KMB-E105 で拒否する (read-then-write の lost update を排除)。判定順序は honeypot → 最小送信時間 → Zod 契約検証 → rate limit → 保存 (契約違反の送信は枠を消費しない)。クライアント IP は x-real-ip を優先し、無い場合のみ x-forwarded-for の先頭を使う。
 - **管理者ブートストラップ**: Supabase Auth の public signup は**無効化** (Dashboard 設定を 1a 手順書に含める)。管理者作成は `scripts/bootstrap-admin.ts` (service role) が auth.users + profiles を同時作成し、**site_settings 'notifications'.inquiry_to を同メールアドレスで初期化** (§6.3 — 通知先未設定のまま運用が始まる事故を防ぐ)。profiles への INSERT は service のみ (RLS)。※ 仮に signup が開いていても profiles 行がなければ `is_admin()` は false であり権限昇格はしない (Codex 指摘の BLOCKER 評価は過大) が、多層防御として signup 自体を閉じる。
 - SNS トークンは **テーブルに置かない**。Supabase Vault に保存し、Edge Function / Route Handler (service role) だけが `vault.decrypted_secrets` を読む。クライアントには auth_status のみ返す。
 
@@ -564,7 +565,7 @@ Route Handlers (Server Actions 以外の HTTP 境界) の全量。リクエス�
 |---|---|---|---|---|---|
 | /api/transcribe | POST | admin セッション | zTranscribeReq | { raw_text } | E303, E405 |
 | /api/ai/sources | POST | admin | zCreateSourceReq | { source_id } | E101 |
-| /api/upload-url | POST | admin | zCreateUploadUrlReq | { upload_url, storage_path } | E302, E303 |
+| /api/upload-url | POST | admin | zCreateUploadUrlReq (kind=media は `image/*`、kind=audio は `audio/*` の content_type のみ受理。違反は E101) | { upload_url, storage_path } | E101, E302, E303 |
 | /api/ai/clean | POST | admin | zCleanReq | zCleanedTranscript | E401-403, E406 |
 | /api/ai/clean/confirm | POST | admin | zConfirmCleanReq | { ok } | E101 |
 | /api/ai/runs | POST | admin | zStartRunReq | { run_id } | E101, E401 |
@@ -643,6 +644,8 @@ scheduled → publishing → published
 | `failed` | last_error_code 記録。自動リトライは **しない** (SNS の二重投稿リスク > 遅延リスク)。admin が内容確認の上、手動リトライ |
 | `manual_required` | note (常時) と、X/IG の**結果不明失敗** (E506) 用。note はコピペ支援画面へ誘導。結果不明は admin が SNS 上の実投稿有無を確認し「投稿済み → published」or「未投稿 → scheduled へ戻す」を選択 |
 | `cancelled` | 終端 |
+
+- **draft 単位の一意性 (2026-09-06)**: 同一 draft の有効な予約 (scheduled/publishing/published/manual_required) は 1 件まで (partial unique index `channel_posts_active_draft_uniq`、migration 20260906000040)。failed/cancelled 後の再予約は許可。違反は schedulePosts が事前チェックまたは 23505 変換で KMB-E102。
 
 ### 4.4 周辺リソースのライフサイクル
 
@@ -727,6 +730,9 @@ or テキスト直書き   確認・手修正            researching…         
 - 公開ページは Server Components で Supabase (anon key) から fetch。`unstable_cache` + **タグ方式**: `works` / `posts:reading` / `posts:news` / `posts:blog` / `voices` / `prices` / `settings`。
 - admin の保存アクション (Server Actions) 完了時に `revalidateTag()` を呼ぶ → 公開側は即時反映。
 - 予約公開 (`published_at` が未来) は pg_cron (毎分) が到来分を検知して Next.js の revalidate Webhook (`/api/revalidate`, secret 付き) を叩く。
+  - 実体: migration `20260906000060_scheduled_publish_revalidate.sql` の `trigger_scheduled_publish_revalidate()` (cron ジョブ `kmb-scheduled-publish-revalidate`)。works / posts / voices のうち直前 2 分以内に `published_at` が到来した行の tag (`works` / `posts:{kind}` / `voices`) だけを `net.http_post` する。Vault に `cron_site_url` と `cron_revalidate_secret` (= Vercel env `REVALIDATE_SECRET`) が必要 (未設定時は notice のみで空振り)。
+  - 公開側 repository (`listPublishedRows`) も `published_at <= now()` をクエリで明示する (admin セッションの client で呼ばれても予約分が漏れない)。
+- work_images のギャラリー全置換は migration `20260906000061_work_images_replace.sql` の RPC `work_images_replace(p_work_id uuid, p_media_ids uuid[])` (security definer + `is_admin()` ガード、delete + insert を単一トランザクション) で行う。FK 違反は `KMB-E101` として raise される。
 
 ### 6.2 ダミー → CMS の置換ポイント
 
@@ -835,7 +841,8 @@ const stream = anthropic.messages.stream({
 
 - **lease 取得**: advance (契約書 §7.1) は `lease_expires_at IS NULL OR lease_expires_at < now()` の run のみ取得できる (CAS)。取得時に `lease_expires_at = now() + 90s`、`stage_attempts + 1`。実行中は 20 秒ごとの heartbeat で延長。取得失敗は 409 応答 (UI は待機して再試行)。
 - **クラッシュ再開**: 実行プロセスが死ぬと lease が自然失効し、次の advance が**同じ stage を再実行**する。stage 成果物は (run_id, stage) キーの UPSERT で冪等 (部分書き込みが残っても上書き)。成果物 commit・status 前進・lease 解放は**同一トランザクション**。
-- **上限**: stage_attempts > 3 で failed (KMB-E402)。UI は「再実行 (新 run 作成)」導線 (§4.2 の immutable log 原則)。
+- **上限**: stage_attempts > 3 で failed (KMB-E402)。UI は「再実行 (新 run 作成)」導線 (§4.2 の immutable log 原則)。判定順は **held (lease 保持中) → exhausted** (migration 20260906000042。実行中の run を並行 advance が failed に倒さない)。
+- **lease_token (2026-09-06)**: acquire ごとに `ai_runs.lease_token` (uuid) を発行。heartbeat・失敗時解放・commit RPC はこの一致を条件に含め、失効後に別プロセスが取り直した lease を古いプロセスが延長・解放・commit できない。成功 commit は `error_code = p_error_code` (前回失敗のコードを残さない)。
 - **SSE は観測専用**: 切断→再接続時は snapshot イベント (契約書 §4.6) で復元。実行は advance が担うため「監視だけになって進まない」状態は構造的に発生しない。
 - **watchdog**: /api/jobs/watchdog (pg_cron 5 分毎起床) が lease 失効かつ 15 分無進捗の run を検査 (通常は次の advance が回収するため保険)。
 - **並行実行**: 同一 source に対する run の並行作成は許可 (比較実験用途)。ただし UI は実行中 run がある場合に確認ダイアログを出す。
@@ -847,7 +854,7 @@ const stream = anthropic.messages.stream({
 - **PKCE 必須** (調査確定: app-only トークンでは投稿不可)。scope は `tweet.read tweet.write users.read offline.access` (offline.access が refresh token 発行条件)。
 - **state / code_verifier の保管**: サーバセッションを持たないため、暗号化 httpOnly cookie (TTL 10 分, SameSite=Lax)。callback で state 不一致は KMB-E501。
 - **redirect URI**: `{NEXT_PUBLIC_SITE_URL}/api/oauth/x/callback` を X App 設定に事前登録。Preview 環境では OAuth 接続機能を無効化 (本番 URL のみ登録し、環境変数 `OAUTH_ENABLED` でガード)。
-- **refresh 戦略**: X の refresh token は使い捨て (ローテーション式)。publish-worker が有効期限 10 分前を検知したら advisory lock 下で refresh し、新ペアを同一トランザクションで Vault 上書き (§3.6)。lock 待ちのプロセスは更新後のトークンを再読して続行。
+- **refresh 戦略**: X の refresh token は使い捨て (ローテーション式)。publish-worker が有効期限 10 分前を検知したら advisory lock 下で refresh し、新ペアを同一トランザクションで Vault 上書き (§3.6)。lock 待ちのプロセスは更新後のトークンを再読して続行。実装 (2026-09-06): lock は channel_accounts.token_refresh_lease_expires_at の CAS リース。取れなかった側は 1 秒間隔・最大 30 回リース解放/Vault 更新をポーリングし、超過時は post を scheduled に戻して次回起動へ (何も投稿しない)。401 → expired 化は Vault の現在値で 1 回再試行して再度 401 のときだけ。
 - **Instagram**: 長期トークン (60 日) を使用。worker が期限 7 日前に自動延長 (`GET /refresh_access_token`)。延長失敗は auth_status='expired'。
 
 ---
@@ -870,13 +877,16 @@ const stream = anthropic.messages.stream({
 - **整合性モデル**: 外部 SNS への exactly-once は原理的に保証不能 (投稿成功後・external_id 保存前のクラッシュが判別できない — Codex 指摘)。**at-least-once + 人間照合**を正式モデルとする: (1) publishing への CAS (affected rows=1 のみ進行) で同時実行を排除、(2) ツイート成功応答ごとに external_id を即 UPDATE、(3) **結果不明の失敗 (timeout/接続断) は E506 で manual_required に倒し自動再開禁止** — admin が SNS 上の実投稿を確認してから「投稿済み」or「scheduled へ戻す」を選ぶ。idempotency_key は自システム内の二重取得防止用。
 - **失敗時**: 自動リトライしない (§4.3)。エラー本文を last_error_detail に保存し、ダッシュボードに通知バッジ。
 - **課金ガード (X)**: 予約作成時に `tweet_count` / `url_count` / `estimated_cost_cents` (投稿単価と URL 付き単価から算出) を保存。ガードは**当月の published + publishing + scheduled の estimated_cost_cents 合算**が ops_limits の上限を超えたら scheduled への遷移をブロック (KMB-E505)。旧設計の「published 行数のみカウント」はスレッド内ツイート数・URL 有無・予定分を見落とすため廃止 (Codex 指摘)。X の usage 実測との月次照合はダッシュボードの運用タスクとする。
-- **トークン失効**: publish-worker が 401 を受けたら channel_accounts.auth_status='expired' に更新し、該当チャネルの scheduled を全部 manual_required 相当の警告表示に。admin が再接続後に手動で再スケジュール。
+- **トークン失効**: publish-worker が 401 を受けたら channel_accounts.auth_status='expired' に更新し、該当チャネルの scheduled を全部 manual_required 相当の警告表示に。admin が再接続後に手動で再スケジュール。Instagram は Graph API 流儀 (HTTP 400 + `error.code=190` または `error.type=OAuthException`) も同じ失効経路に流す (2026-09-06)。
+- **Instagram コンテナ状態確認 (2026-09-06)**: media_publish の前に `GET /{creation_id}?fields=status_code` を短いバックオフ (1s→2s→4s→8s、最大 8 回) でポーリングし、FINISHED で publish。ERROR/EXPIRED は failed (KMB-E502)、上限超過はコンテナが残っているため manual_required (KMB-E506、creation_id を external_id に記録)。
+- **worker の実行文脈 (2026-09-06)**: worker は cookie セッションを持たないため、AiStudioFacade.getApprovedDraft / MediaFacade.getJpegRenditionUrl / ContentFacade.createBlogPostFromDraft を `{ mode: "service", client }` (ExecutionContext) で呼ぶ。
 
 ### 8.3 note 半自動フロー
 
 1. note の draft は schedulePosts で `scheduled_at: null` 必須 (契約書 §4.7 — null 以外は KMB-E101)。channel_posts は scheduled を経由せず**即 `manual_required`** で作られる (チャネル別 scheduling policy)。
 2. /admin/studio の配信タブに「note へコピー」ボタン: タイトル / 本文 (note の Markdown 方言に整形済み) / ハッシュタグを個別コピー + note の投稿画面を新規タブで開く。
 3. admin が投稿後、投稿 URL を貼り付けて「投稿済みにする」→ published へ遷移 (external_url 記録)。
+4. note 下書き自動作成 (ai-studio-v2.md §8) の `creating` 固着回収 (2026-09-06): `note_draft_claimed_at` (migration 20260906000041) を記録し、creating のまま 10 分超経過した行は CAS の遷移元に含める。回収側は下書き一覧と照合 (reconcile) してから再作成する。
 
 ### 8.4 X スレッド分割規約
 

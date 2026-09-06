@@ -106,6 +106,12 @@ async function checkCalendarExists(
   }
 }
 
+/**
+ * push 成功後の link 更新。markLinkSynced は CAS (sync_status='pending_push' かつ
+ * updated_at = expectedUpdatedAt) — 外部 API 呼び出し中に placeBlock/unscheduleBlock 等が link を
+ * 再 pending_push 化していた場合 (updated_at が進む) は synced に上書きせず、external_event_id/etag
+ * だけを保存して pending_push を維持する (直近の変更を次回 push で必ず送るため)。
+ */
 async function finalizePushSuccess(
   serviceClient: SupabaseClient,
   link: PendingPushLinkRow,
@@ -113,17 +119,25 @@ async function finalizePushSuccess(
   title: string,
   startsAt: string,
   endsAt: string,
+  expectedUpdatedAt: string,
 ): Promise<void> {
   const hash = computeWrittenHash({ startsAt, endsAt, title });
-  const markResult = await repo.markLinkSynced(serviceClient, link.id, {
+  const identity = {
     external_event_id: outcome.externalEventId,
     etag_or_change_key: outcome.etagOrChangeKey,
     external_updated_at: outcome.externalUpdatedAt,
     external_ical_uid: outcome.icalUid,
-    last_written_hash: hash,
-  });
+  };
+  const markResult = await repo.markLinkSynced(serviceClient, link.id, { ...identity, last_written_hash: hash }, expectedUpdatedAt);
   if (!markResult.ok) {
     throw new Error(`push 成功後の link 更新に失敗しました: ${markResult.code} ${markResult.detail ?? ""}`);
+  }
+  if (markResult.value.applied) return;
+
+  // CAS 不成立: push 中に link が動いた (再 pending_push 化等)。id/etag のみ保存し状態は維持する。
+  const saveResult = await repo.saveLinkExternalIdentity(serviceClient, link.id, identity, { toPendingPush: false });
+  if (!saveResult.ok) {
+    throw new Error(`push 成功後の link 紐付け保存に失敗しました: ${saveResult.code} ${saveResult.detail ?? ""}`);
   }
 }
 
@@ -154,6 +168,9 @@ async function pushOneLink(
   const endsAt = link.block_ends_at as string;
   const input: ExternalEventInput = { linkId: link.id, blockId: link.work_block_id, title, startsAt, endsAt };
 
+  // markLinkSynced の CAS 条件 (取得時点の updated_at。claim を刻印した場合はその直後の値)
+  let expectedUpdatedAt = link.updated_at;
+
   let outcome: WriteOutcome;
   if (!link.external_event_id) {
     if (link.push_claimed_at) {
@@ -167,19 +184,20 @@ async function pushOneLink(
         // push されなくなる (外部カレンダーが黙って古いまま)。adapter.updateEvent を必ず経由して
         // 現在の block 内容 (input) を外部へ反映してから finalizePushSuccess する。
         outcome = await adapter.updateEvent(appCalendarId, found.externalEventId, input, found.etagOrChangeKey, secret);
-        await finalizePushSuccess(serviceClient, link, outcome, title, startsAt, endsAt);
+        await finalizePushSuccess(serviceClient, link, outcome, title, startsAt, endsAt, expectedUpdatedAt);
         return "pushed";
       }
       // 未発見 → create へ進む (claim 刻印し直し)
     }
     const claimResult = await repo.claimPushForLink(serviceClient, link.id);
     if (!claimResult.ok) throw new Error(`push claim に失敗しました: ${claimResult.code} ${claimResult.detail ?? ""}`);
+    expectedUpdatedAt = claimResult.value.updated_at; // claim 自体が updated_at を進めるため差し替える
     outcome = await adapter.createEvent(appCalendarId, input, secret);
   } else {
     outcome = await adapter.updateEvent(appCalendarId, link.external_event_id, input, link.etag_or_change_key, secret);
   }
 
-  await finalizePushSuccess(serviceClient, link, outcome, title, startsAt, endsAt);
+  await finalizePushSuccess(serviceClient, link, outcome, title, startsAt, endsAt, expectedUpdatedAt);
   return "pushed";
 }
 
@@ -392,6 +410,11 @@ async function propagateTimeChangeToOtherProviders(
   }
 }
 
+/** change が link の外部イベント (master) から派生した繰り返しインスタンスか (§8.5)。 */
+function isRecurringInstanceOfLink(change: ExternalEventChange, link: CalendarEventLinkRow): boolean {
+  return change.recurringEventId !== null && link.external_event_id !== null && change.recurringEventId === link.external_event_id;
+}
+
 async function resolveLinkForChange(
   serviceClient: SupabaseClient,
   provider: CalendarProvider,
@@ -421,6 +444,13 @@ async function resolveLinkForChange(
     }
     if (byAppLinkId.value) {
       if (byAppLinkId.value.external_event_id && byAppLinkId.value.external_event_id !== change.externalEventId) {
+        if (isRecurringInstanceOfLink(change, byAppLinkId.value)) {
+          // 外部でアプリのイベントが繰り返しシリーズ化された場合、各インスタンスは親の
+          // extendedProperties (kumabe_link_id) を継承して別 id で届く。これは重複イベントではなく
+          // 自イベントの派生なので削除しない (processOneChange の繰り返しインスタンス分岐で
+          // pending_push 化 → 次回 push が単発イベントとして復元する)。
+          return byAppLinkId.value;
+        }
         // link は既に別の external_event_id を持つ (kill 後再 create 等の重複)。link の既存 id を
         // 正とし、change 側のイベントを削除する (§8.5 重複掃除)。
         if (!change.removed) {
@@ -478,6 +508,21 @@ async function processOneChange(
     return "skipped"; // P19: アプリ管理外の手作りイベント
   }
 
+  if (isRecurringInstanceOfLink(change, link)) {
+    // 外部でアプリのイベントが繰り返しシリーズ化された (§1.3: アプリは単発のみ生成)。インスタンスは
+    // 親と iCalUID/出所マーキングを共有するため link に解決されるが、時刻としては取り込まない
+    // (master と別日の時刻で block を動かしてしまう) し、removed でも deleted_externally にしない
+    // (単発へ復元した push の後にインスタンスの cancelled が届く)。etag も親のものではないため記録せず、
+    // pending_push 化だけして次回 push (updateEvent) で単発イベントへ復元する。E724 は自動処理しない。
+    if (!change.removed && !isAutoProcessLocked(link) && link.sync_status !== "pending_push") {
+      const markResult = await repo.markLinkPendingPush(serviceClient, link.id);
+      if (!markResult.ok) {
+        console.error(`[scheduling] runPull: 繰り返しインスタンスの pending_push 化に失敗しました (link=${link.id}): ${markResult.code} ${markResult.detail ?? ""}`);
+      }
+    }
+    return "skipped";
+  }
+
   // 自己エコー判定 (§8.6)
   if (
     isSelfEcho(
@@ -491,6 +536,12 @@ async function processOneChange(
       link,
     )
   ) {
+    // エコーでも外部にイベントが実在する観測なので last_pulled_at を刻む (フル再同期の逆方向突合で
+    // 「未観測 → orphaned」と誤判定しないため。§8.5)
+    const touchResult = await repo.touchLinkPulledAt(serviceClient, link.id);
+    if (!touchResult.ok) {
+      console.error(`[scheduling] runPull: last_pulled_at の刻印に失敗しました (link=${link.id}): ${touchResult.code} ${touchResult.detail ?? ""}`);
+    }
     return "echo";
   }
 
@@ -569,11 +620,16 @@ async function processOneChange(
     return "pulled";
   }
 
-  // タイトルのみ変更 (P18): 内容はアプリが正。etag 類だけ記録し block/sync_status は不変
+  // タイトルのみ変更 (P18): 内容はアプリが正。etag 類だけ記録し block は不変。
+  // sync_status も原則不変だが、conflict+E721 (If-Match 不一致) は「外部の新しい etag を観測した」
+  // 時点で競合の原因が解消しているため、時刻変更でなくても pending_push に戻してアプリ側内容を
+  // 再送する (E721 の自動解決 — 時刻以外の外部変更で E721 が永久に残らないようにする。
+  // E723/E724 は据え置き — internal/sync-state.ts)。
   const applyResult = await repo.applyPullObservedFields(serviceClient, link.id, {
     etag_or_change_key: change.etagOrChangeKey,
     external_updated_at: change.externalUpdatedAt,
     external_ical_uid: change.icalUid,
+    ...(canAutoRevertConflictOnPull(link) ? { sync_status: "pending_push" as const } : {}),
   });
   if (!applyResult.ok) {
     console.error(`[scheduling] runPull: link 更新 (etag のみ) に失敗しました (link=${link.id}): ${applyResult.code} ${applyResult.detail ?? ""}`);
@@ -581,13 +637,19 @@ async function processOneChange(
   return "pulled";
 }
 
-/** フル再同期の逆方向突合用スナップショットを読み込む (§8.5)。external_event_id → link.id。 */
-async function loadResyncSnapshot(serviceClient: SupabaseClient, provider: CalendarProvider): Promise<Map<string, string>> {
-  const snapshotResult = await repo.listLinksWithExternalEventId(serviceClient, provider);
-  if (!snapshotResult.ok) {
-    throw new Error(`フル再同期スナップショットの取得に失敗しました: ${snapshotResult.code} ${snapshotResult.detail ?? ""}`);
+/**
+ * フル再同期ラウンドの開始を DB に記録し、基準時刻を返す (§8.5 逆方向突合)。
+ * 記録に失敗した場合は null を返す (= このラウンドでは orphaned 判定を行わない。基準時刻なしで
+ * 突合すると誤 orphaned 化の危険があるため安全側に倒す。ログは残す)。
+ */
+async function beginFullResyncRound(serviceClient: SupabaseClient, provider: CalendarProvider): Promise<string | null> {
+  const startedAt = new Date().toISOString();
+  const markResult = await repo.markFullResyncStarted(serviceClient, provider, startedAt);
+  if (!markResult.ok) {
+    console.error(`[scheduling] runPull: full_resync_started_at の記録に失敗しました (provider=${provider}): ${markResult.code} ${markResult.detail ?? ""}`);
+    return null;
   }
-  return new Map(snapshotResult.value.map((l) => [l.external_event_id, l.id]));
+  return startedAt;
 }
 
 async function runPullLoop(
@@ -605,16 +667,22 @@ async function runPullLoop(
   let cursor = connection.sync_page_cursor;
   let fullResyncTriggered = token === null;
 
-  // フル再同期の逆方向突合用スナップショット (§8.5 地雷4: ラウンド完了時のみ使う)
-  let snapshotLinkIds: Map<string, string> | null = null; // external_event_id -> link.id
-  const observedExternalEventIds = new Set<string>();
-
-  if (fullResyncTriggered) snapshotLinkIds = await loadResyncSnapshot(serviceClient, provider);
+  // フル再同期の逆方向突合 (§8.5 地雷4: ラウンド完了時のみ使う) の基準時刻。
+  // ラウンドは複数起床にまたがり得る (ページ上限 → sync_page_cursor 保存 → 次起床で継続) ため、
+  // 観測集合をプロセス内メモリに持たず DB の観測マーカー (link.last_pulled_at) と
+  // connection.full_resync_started_at で突合する。cursor=null からの開始時のみ基準時刻を刻み、
+  // 継続時は前起床が刻んだ値を引き継ぐ (旧データ等で null なら安全側に突合を行わない)。
+  let fullResyncStartedAt: string | null = null;
+  if (fullResyncTriggered) {
+    fullResyncStartedAt = cursor === null ? await beginFullResyncRound(serviceClient, provider) : connection.full_resync_started_at;
+  }
 
   let pulled = 0;
   let echoesRejected = 0;
   let roundCompleted = false;
   let lastError: { code: string; detail: string } | null = null;
+  // pull 側の 401 → refresh 1 回 → 再試行 → なお 401 → connection expired (§8.5。push 側 §8.4 と対称)
+  let authRefreshAttempted = false;
 
   // Graph 安全弁 (P22/§8.5)。「同一 skiptoken が2回連続」or「ページ上限に達してもラウンド未完了」
   // を無限ページングの兆候とみなし KMB-E725 で中断する。Google の syncToken 方式にはこの種の
@@ -638,11 +706,30 @@ async function runPullLoop(
         // ページ系列が仕切り直しになるため、直前ラウンドの nextPageCursor との比較 (Graph 安全弁) も
         // リセットする — 旧系列の cursor と新系列の cursor がたまたま一致して誤検知しないように。
         previousPageCursor = null;
-        if (!snapshotLinkIds) snapshotLinkIds = await loadResyncSnapshot(serviceClient, provider);
+        // 410 はページ系列の仕切り直し = 新しいフル再同期ラウンドの開始 (基準時刻を刻み直す)
+        fullResyncStartedAt = await beginFullResyncRound(serviceClient, provider);
         lastError = { code: "KMB-E722", detail: "sync token expired (410)。フル再同期を実行しました" };
         continue;
       }
       if (err instanceof AuthExpiredError) {
+        if (authRefreshAttempted) {
+          // refresh 済みの新トークンでも 401 → 資格情報そのものが失効。expired+KMB-E720 にして中断
+          // (refresh を繰り返して無限に 401 を踏まない)。
+          const updateResult = await repo.updateCalendarConnectionStatus(
+            serviceClient,
+            provider,
+            "expired",
+            "KMB-E720",
+            "アクセストークンの更新後も401が続きました",
+          );
+          if (!updateResult.ok) {
+            console.error(
+              `[scheduling] runPull: connection expired 更新に失敗しました (provider=${provider}): ${updateResult.code} ${updateResult.detail ?? ""}`,
+            );
+          }
+          break;
+        }
+        authRefreshAttempted = true;
         try {
           secret = await forceRefreshCalendarSecret(serviceClient, provider, adapter, resolveProviderEnv(provider));
           continue; // 同じページを新トークンで再試行
@@ -666,7 +753,6 @@ async function runPullLoop(
     previousPageCursor = pullPage.nextPageCursor;
 
     for (const change of pullPage.changes) {
-      observedExternalEventIds.add(change.externalEventId);
       const result = await processOneChange(serviceClient, provider, adapter, appCalendarId, secret, change);
       if (result === "pulled") pulled++;
       if (result === "echo") echoesRejected++;
@@ -712,13 +798,25 @@ async function runPullLoop(
   }
 
   let fullResyncCompleted = false;
-  if (roundCompleted && fullResyncTriggered && snapshotLinkIds) {
-    const orphanedLinkIds = [...snapshotLinkIds.entries()]
-      .filter(([externalEventId]) => !observedExternalEventIds.has(externalEventId))
-      .map(([, linkId]) => linkId);
-    const markResult = await repo.markLinksOrphaned(serviceClient, orphanedLinkIds);
-    if (!markResult.ok) {
-      console.error(`[scheduling] runPull: markLinksOrphaned に失敗しました: ${markResult.code} ${markResult.detail ?? ""}`);
+  if (roundCompleted && fullResyncTriggered) {
+    if (fullResyncStartedAt) {
+      // 逆方向突合: ラウンド開始以降に一度も観測されなかった link (last_pulled_at < 開始時刻 or NULL)
+      // だけを orphaned 化する。Microsoft は sync_window 内の block の link のみ対象 (窓外は
+      // calendarView/delta に現れないため観測されなくて当然 — 誤 orphaned 化しない)。
+      const staleResult = await repo.listLinksNotPulledSince(serviceClient, provider, { since: fullResyncStartedAt, window });
+      if (!staleResult.ok) {
+        console.error(`[scheduling] runPull: 逆方向突合の対象取得に失敗しました: ${staleResult.code} ${staleResult.detail ?? ""}`);
+      } else {
+        const markResult = await repo.markLinksOrphaned(
+          serviceClient,
+          staleResult.value.map((l) => l.id),
+        );
+        if (!markResult.ok) {
+          console.error(`[scheduling] runPull: markLinksOrphaned に失敗しました: ${markResult.code} ${markResult.detail ?? ""}`);
+        }
+      }
+    } else {
+      console.warn(`[scheduling] runPull: full_resync_started_at が無いため逆方向突合を省略しました (provider=${provider})`);
     }
     fullResyncCompleted = true;
   }
@@ -726,6 +824,8 @@ async function runPullLoop(
   const updateResult = await repo.updateCalendarConnectionAfterPull(serviceClient, provider, {
     sync_token: token,
     sync_page_cursor: roundCompleted ? null : cursor,
+    // ラウンド完了 (フル再同期の有無を問わず) で基準時刻を消す。途中終了時は継続のため保持する
+    ...(roundCompleted ? { full_resync_started_at: null } : {}),
     ...(fullResyncCompleted ? { last_full_resync_at: new Date().toISOString() } : {}),
     ...(lastError ? { last_error_code: lastError.code, last_error_detail: lastError.detail } : {}),
   });

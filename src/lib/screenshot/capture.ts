@@ -9,7 +9,11 @@ import type { Result } from "@/modules/platform/contracts";
 
 import { launchChromium } from "./chromium";
 import { buildScreenshotTargetUrl } from "./route-key";
-import { isAllowedSubresource, isSameOriginAsSite } from "./subresource-policy";
+import {
+  decideMainFrameDocumentRequest,
+  isAllowedSubresource,
+  isSameOriginAsSite,
+} from "./subresource-policy";
 
 /**
  * フルページスクショ基盤 (canonical: docs/design/ai-studio-v2.md §5、入力資料:
@@ -78,18 +82,28 @@ function routeKeyToStoragePath(routeKey: string): string {
  * (img/script/link/xhr/fetch 等) 経由で任意ホストにリクエストさせる余地が別途残るため、
  * request interception で自オリジン + Supabase Storage オリジン以外を全てブロックする。
  *
- * メインフレームの document リクエスト (最初のナビゲーション、リダイレクトの各ホップ含む) は
- * ここでは無条件に continue() し、ナビゲーション完了後に page.url() の最終オリジンを
- * siteOrigin と突き合わせる (isSameOriginAsSite)。iframe 等サブフレームの document
- * リクエストは「document」種別であってもメインフレームではないため subresource と同様に
- * isAllowedSubresource で判定する (埋め込み iframe 経由の SSRF を防ぐ)。
+ * メインフレームの document リクエストは、最初のナビゲーション (route-key.ts で検証済み) は
+ * continue() し、リダイレクトホップ (redirectChain().length > 0) は遷移先が自オリジンの
+ * ときだけ continue()、それ以外は abort() する (decideMainFrameDocumentRequest)。
+ * ナビゲーション完了後の page.url() 検証 (isSameOriginAsSite) は最終防衛線として残す。
+ * iframe 等サブフレームの document リクエストは「document」種別であってもメインフレームでは
+ * ないため subresource と同様に isAllowedSubresource で判定する (埋め込み iframe 経由の SSRF を防ぐ)。
  */
 function installSubresourceGuard(page: Page, siteOrigin: string, storageOrigin: string): void {
   page.on("request", (request) => {
     const isMainFrameDocument =
       request.resourceType() === "document" && request.frame() === page.mainFrame();
     if (isMainFrameDocument) {
-      void request.continue();
+      const decision = decideMainFrameDocumentRequest(
+        request.url(),
+        request.redirectChain().length,
+        siteOrigin,
+      );
+      if (decision === "continue") {
+        void request.continue();
+      } else {
+        void request.abort("blockedbyclient");
+      }
       return;
     }
     if (isAllowedSubresource(request.url(), { siteOrigin, storageOrigin })) {

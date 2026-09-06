@@ -19,6 +19,13 @@ export type AcquireLeaseRawResult = {
   research_notes: unknown;
   /** Issue #20: migration 20260714000036 で ai_run_acquire_lease の返り値に追加。 */
   style_profiles: unknown;
+  /**
+   * migration 20260906000042 で追加。acquire ごとに発行される lease の所有者トークン。
+   * heartbeat / releaseLeaseAfterFailure / commit はこの値の一致を条件に含め、lease 失効後に
+   * 別プロセスが取得した lease を古いプロセスが延長・解放・commit できないようにする。
+   * acquired 以外 (held/exhausted/terminal/not_found) では null。
+   */
+  lease_token: string | null;
   result_kind: "acquired" | "held" | "exhausted" | "terminal" | "not_found";
 } | null;
 

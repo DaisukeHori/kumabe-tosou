@@ -162,6 +162,7 @@ function basePost(overrides: Partial<ChannelPostRow> = {}): ChannelPostRow {
 function draftWithThread(thread: { text: string; media_id: string | null }[]): ApprovedDraft {
   return {
     draft_id: "draft-1",
+    run_id: "run-1",
     channel: "x",
     content: { thread } as unknown as ApprovedDraft["content"],
     approved_at: new Date().toISOString(),

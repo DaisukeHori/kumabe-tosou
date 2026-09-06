@@ -11,7 +11,7 @@ import { loginAction, type LoginState } from "./actions";
 
 const INITIAL_STATE: LoginState = { error: null, email: "", attempt: 0 };
 
-export function LoginForm({ next }: { next: string }) {
+export function LoginForm({ next, notice = null }: { next: string; notice?: string | null }) {
   const [state, formAction, isPending] = useActionState(loginAction, INITIAL_STATE);
 
   return (
@@ -33,6 +33,15 @@ export function LoginForm({ next }: { next: string }) {
         </div>
       </CardHeader>
       <CardContent>
+        {notice ? (
+          // requireAdminPage が reason=forbidden (KMB-E202: 非 admin) で送ってきた場合の説明
+          <p
+            role="status"
+            className="mb-4 rounded-md border border-admin-border bg-muted px-3 py-2 text-xs text-admin-text-meta"
+          >
+            {notice}
+          </p>
+        ) : null}
         <form action={formAction}>
           <input type="hidden" name="next" value={next} />
           <FieldGroup>

@@ -401,15 +401,32 @@ export async function markManualRequired(
  * 意味する。status (manual_required 等) など note_draft_status/note_draft_url 以外のカラムは
  * 変更しない。service client 専用 (RLS 上 admin は cancel 遷移のみ許可のため)。
  */
+/**
+ * 'creating' のまま固着した行を回収できる期間 (migration 20260906000041 の note_draft_claimed_at)。
+ * note API のタイムアウトは 20 秒級なので、10 分超の creating はプロセスクラッシュ等で
+ * 終端遷移 (created/failed/unknown) に到達できなかった行とみなす。
+ */
+export const NOTE_DRAFT_CREATING_STALE_MS = 10 * 60 * 1000;
+
+/**
+ * note 下書き作成の CAS (none/failed/unknown → creating)。
+ * 加えて creating かつ note_draft_claimed_at が 10 分超前 (または旧行で null) の行も遷移元に含める
+ * (従来は creating から二度と抜け出せず、UI の「note 下書きを作成」が永久に「作成中」を返していた)。
+ */
 export async function claimNoteDraftCreating(
   serviceClient: SupabaseClient,
   id: string,
+  now: Date = new Date(),
 ): Promise<Result<boolean>> {
+  const staleBefore = new Date(now.getTime() - NOTE_DRAFT_CREATING_STALE_MS).toISOString();
   const { data, error } = await serviceClient
     .from("channel_posts")
-    .update({ note_draft_status: "creating", note_draft_url: null })
+    .update({ note_draft_status: "creating", note_draft_url: null, note_draft_claimed_at: now.toISOString() })
     .eq("id", id)
-    .in("note_draft_status", ["none", "failed", "unknown"])
+    .or(
+      `note_draft_status.in.(none,failed,unknown),` +
+        `and(note_draft_status.eq.creating,or(note_draft_claimed_at.is.null,note_draft_claimed_at.lt.${staleBefore}))`,
+    )
     .select("id")
     .maybeSingle();
   if (error) return pgErrorToResult(error);
@@ -435,6 +452,44 @@ export async function updateNoteDraftStatus(
     .eq("id", id);
   if (error) return pgErrorToResult(error);
   return { ok: true, value: undefined };
+}
+
+/**
+ * X トークン refresh のリース待ちが上限を超えた場合など、「まだ何も投稿していない」ことが確実な
+ * 時点で publishing を scheduled へ戻し、次回の worker 起動に回す (attempt_count は保持)。
+ * CAS: status='publishing' の行のみ。
+ */
+export async function revertPublishingToScheduled(
+  serviceClient: SupabaseClient,
+  id: string,
+  reason: { code: string; detail: string },
+): Promise<Result<boolean>> {
+  const { data, error } = await serviceClient
+    .from("channel_posts")
+    .update({ status: "scheduled", last_error_code: reason.code, last_error_detail: reason.detail })
+    .eq("id", id)
+    .eq("status", "publishing")
+    .select("id")
+    .maybeSingle();
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: Boolean(data) };
+}
+
+/** 重複予約の事前チェック用: 同一 draft_id で active (partial unique index と同じ状態集合) な行 */
+export const ACTIVE_DRAFT_POST_STATUSES = ["scheduled", "publishing", "published", "manual_required"] as const;
+
+export async function listActiveChannelPostsByDraftIds(
+  client: SupabaseClient,
+  draftIds: string[],
+): Promise<Result<{ id: string; draft_id: string; status: string }[]>> {
+  if (draftIds.length === 0) return { ok: true, value: [] };
+  const { data, error } = await client
+    .from("channel_posts")
+    .select("id, draft_id, status")
+    .in("draft_id", draftIds)
+    .in("status", ACTIVE_DRAFT_POST_STATUSES as unknown as string[]);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: (data ?? []) as { id: string; draft_id: string; status: string }[] };
 }
 
 /** watchdog: publishing のまま停滞している行 (10 分超) を検出 */

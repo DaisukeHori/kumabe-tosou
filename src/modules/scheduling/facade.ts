@@ -58,7 +58,6 @@ import {
   derivePlacementStatus,
 } from "./internal/block-state";
 import { computeWeeklyCapacity, isJstMonday, resolveWeekRangeJst } from "./internal/capacity";
-import { computeWrittenHash } from "./internal/echo";
 import { decodeGoogleIdTokenEmail, exchangeGoogleAuthorizationCode, googleCalendarAdapter } from "./internal/google-api";
 import { MANUAL_SYNC_PULL_PAGES, MANUAL_SYNC_PUSH_LIMIT } from "./internal/lease";
 import { exchangeMsAuthorizationCode, fetchMsAccountEmail, msCalendarAdapter } from "./internal/ms-api";
@@ -79,7 +78,6 @@ import {
   ForeignKeyViolationError,
   getCalendarConnection,
   getCalendarEventLinkById,
-  markLinkSynced,
   OptimisticLockError,
   resetLinkForRepush,
   resetLinkForResend,
@@ -112,6 +110,7 @@ import {
   markLinkPendingPush,
   recordWorkBlockActual,
   rollCalendarSyncWindow,
+  saveLinkExternalIdentity,
   transitionWorkBlockStatus,
   unscheduleWorkBlock,
   updateCalendarConnectionStatus,
@@ -657,6 +656,13 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
           return { ok: false, code: "KMB-E703", detail: "実績確定済みのブロックは編集できません" };
         }
         await updateWorkBlockDetail(blockId, parsed.data, expectedUpdatedAt);
+        // 配置済みブロックの内容編集 (タイトル/種別) は外部イベントのタイトルに影響する
+        // (push は title = block.title ?? work_type.label を送る — §8.4)。placeBlock と同様に接続済み
+        // provider の links を pending_push 化して次回 push で反映する。未配置 (starts_at NULL) は
+        // 外部イベントが存在しないため不要。
+        if (current.starts_at !== null) {
+          await markConnectedProvidersPendingPush(blockId);
+        }
         return { ok: true, value: undefined };
       } catch (err) {
         if (err instanceof OptimisticLockError) {
@@ -1106,6 +1112,11 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
           throw err;
         }
 
+        // ブロックを未配置/キャンセルにしたので、他 provider (両 provider 接続時) の外部イベントも
+        // 削除が必要 — unscheduleBlock/transitionBlock('cancelled') と同じく接続済み provider の links に
+        // 削除マーク (pending_push) を立てる (§8.4 isDeletionMark)。当該 provider の link はその後
+        // 物理削除する (外部側で既に消えているため deleteEvent 不要)。
+        await markConnectedProvidersPendingPush(block.id);
         return await deleteCalendarEventLink(serviceClient, linkId);
       } catch (err) {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };
@@ -1165,26 +1176,23 @@ export function createSchedulingFacade(): SchedulingFacadeCore {
           return { ok: true, value: { resolved: false } };
         }
 
-        // 発見 → 外部 id/etag を採用して synced 化。hash は現在のブロック内容から再計算する
-        // (finalizePushSuccess (sync-engine.ts) と同じ正規化関数 computeWrittenHash を使う —
-        // 別の正規化を使うと以後のエコー判定が壊れる)。
-        const block = await getWorkBlockById(link.work_block_id);
-        if (!block || block.starts_at === null || block.ends_at === null) {
-          // ブロックが見つからない/未配置化されている (競合) → 安全側で pending_push に戻す
-          const result = await markLinkPendingPush(serviceClient, linkId);
-          if (!result.ok) return result;
-          return { ok: true, value: { resolved: false } };
-        }
-        const title = block.title ?? block.work_types?.label ?? "";
-        const hash = computeWrittenHash({ startsAt: block.starts_at, endsAt: block.ends_at, title });
-        const markResult = await markLinkSynced(serviceClient, linkId, {
-          external_event_id: found.externalEventId,
-          etag_or_change_key: found.etagOrChangeKey,
-          external_updated_at: found.externalUpdatedAt,
-          external_ical_uid: found.icalUid,
-          last_written_hash: hash,
-        });
-        if (!markResult.ok) return markResult;
+        // 発見 → 外部 id/etag を採用するが synced にはせず pending_push に戻す。結果不明の create
+        // からこの照合までの間に block が動いている可能性があり、発見したイベントの内容が現在の
+        // block 内容と一致する保証が無い (synced にすると外部が古いまま二度と push されない)。
+        // 次回 push が採用した id/etag で updateEvent を行い、現在内容を確実に反映する
+        // (§8.4 の kill 疑い recovery と同じ方針)。
+        const saveResult = await saveLinkExternalIdentity(
+          serviceClient,
+          linkId,
+          {
+            external_event_id: found.externalEventId,
+            etag_or_change_key: found.etagOrChangeKey,
+            external_updated_at: found.externalUpdatedAt,
+            external_ical_uid: found.icalUid,
+          },
+          { toPendingPush: true },
+        );
+        if (!saveResult.ok) return saveResult;
         return { ok: true, value: { resolved: true } };
       } catch (err) {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };

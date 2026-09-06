@@ -6,6 +6,7 @@ import { getSessionAndClient } from "@/lib/supabase/session";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type { ExecutionContext, Paged, Pagination, Result } from "@/modules/platform/contracts";
 import { zPagination, zTelE164 } from "@/modules/platform/contracts";
+import { platformFacade } from "@/modules/platform/facade";
 import { normalizeJpPhoneToE164 } from "@/modules/platform/text";
 
 import {
@@ -271,6 +272,34 @@ async function resolveExecutionClient(
   const { supabase, user } = await getSessionAndClient();
   if (!user) return { ok: false, code: "KMB-E201" };
   return { ok: true, value: { client: supabase, userId: user.id } };
+}
+
+/**
+ * task_event activity を task の customer_id / deal_id へリンクする (createTask/completeTask/cancelTask 共通)。
+ * どちらも NULL の task (紐付けなしの手動タスク) では何もしない。
+ */
+async function linkTaskEventActivity(
+  client: SupabaseClient,
+  activityId: string,
+  task: { customer_id: string | null; deal_id: string | null },
+): Promise<Result<void>> {
+  if (task.customer_id !== null) {
+    const linked = await linkActivityRow(client, activityId, {
+      customer_id: task.customer_id,
+      company_id: null,
+      deal_id: null,
+    });
+    if (!linked.ok) return linked;
+  }
+  if (task.deal_id !== null) {
+    const linked = await linkActivityRow(client, activityId, {
+      customer_id: null,
+      company_id: null,
+      deal_id: task.deal_id,
+    });
+    if (!linked.ok) return linked;
+  }
+  return { ok: true, value: undefined };
 }
 
 function toCustomerRef(row: CustomerRow): CustomerRef {
@@ -822,9 +851,14 @@ export const crmFacade: CrmFacadeExtended = {
         }
       }
 
-      // 呼び出し元の認可確認 (session ならログイン確認、service ならそのまま許可)
+      // 呼び出し元の認可確認 (session ならログイン + admin 確認、service ならそのまま許可)。
+      // 以降は service client で全置換するため RLS が効かない — session モードでは admin (profiles 行あり)
+      // であることを明示確認する (契約表 §6.1: E201・E202 (session 時))。
       const caller = await resolveExecutionClient(ctx);
       if (!caller.ok) return caller;
+      if (caller.value.userId !== null && !(await platformFacade.isAdmin(caller.value.userId))) {
+        return { ok: false, code: "KMB-E202" };
+      }
 
       // 全置換は service 実行 (§6.7 手順 4 — RLS の「note のリンクのみ」直接操作制約を widen しない)
       let serviceClient: SupabaseClient;
@@ -987,6 +1021,9 @@ export const crmFacade: CrmFacadeExtended = {
         user.id,
       );
       if (!event.ok) return event;
+      // createTask と同様に task の customer_id / deal_id へリンクする (顧客/案件タイムラインに完了を出す)
+      const linked = await linkTaskEventActivity(supabase, event.value.row.id, task.value);
+      if (!linked.ok) return linked;
 
       return { ok: true, value: undefined };
     } catch (err) {
@@ -1005,9 +1042,18 @@ export const crmFacade: CrmFacadeExtended = {
       const { supabase, user } = await getSessionAndClient();
       if (!user) return { ok: false, code: "KMB-E201" };
 
+      // 電話番号検索: q が日本の電話番号として E.164 に正規化できる場合 (090-1234-5678 / 09012345678 /
+      // +819012345678 等) は tel_e164 の前方一致で検索する (契約 zCustomerListFilter.q の注記「電話は E.164
+      // 正規化後に前方一致」)。名前/かな/email の部分一致は従来どおり併用する (repository 側で OR 結合)。
+      const telE164Prefix = filter.data.q !== null ? normalizeJpPhoneToE164(filter.data.q) : null;
       const page = await listCustomersPage(
         supabase,
-        { q: filter.data.q, lifecycle: filter.data.lifecycle, includeMerged: filter.data.include_merged },
+        {
+          q: filter.data.q,
+          lifecycle: filter.data.lifecycle,
+          includeMerged: filter.data.include_merged,
+          telE164Prefix,
+        },
         pagination.data,
       );
       if (!page.ok) return page;
@@ -1793,6 +1839,9 @@ export const crmFacade: CrmFacadeExtended = {
         user.id,
       );
       if (!event.ok) return event;
+      // createTask と同様に task の customer_id / deal_id へリンクする (顧客/案件タイムラインに取消を出す)
+      const linked = await linkTaskEventActivity(supabase, event.value.row.id, task.value);
+      if (!linked.ok) return linked;
       return { ok: true, value: undefined };
     } catch (err) {
       return { ok: false, code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };

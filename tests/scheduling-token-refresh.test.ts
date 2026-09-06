@@ -16,6 +16,7 @@ const vaultUpsertSecretMock = vi.fn();
 const claimCalendarTokenRefreshLeaseMock = vi.fn();
 const releaseCalendarTokenRefreshLeaseMock = vi.fn();
 const updateCalendarConnectionStatusMock = vi.fn();
+const setCalendarConnectionTokenExpiresAtMock = vi.fn();
 
 vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/scheduling/repository")>();
@@ -26,6 +27,7 @@ vi.mock("@/modules/scheduling/repository", async (importOriginal) => {
     claimCalendarTokenRefreshLease: (...args: unknown[]) => claimCalendarTokenRefreshLeaseMock(...args),
     releaseCalendarTokenRefreshLease: (...args: unknown[]) => releaseCalendarTokenRefreshLeaseMock(...args),
     updateCalendarConnectionStatus: (...args: unknown[]) => updateCalendarConnectionStatusMock(...args),
+    setCalendarConnectionTokenExpiresAt: (...args: unknown[]) => setCalendarConnectionTokenExpiresAtMock(...args),
   };
 });
 
@@ -74,6 +76,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   releaseCalendarTokenRefreshLeaseMock.mockResolvedValue({ ok: true, value: undefined });
   updateCalendarConnectionStatusMock.mockResolvedValue({ ok: true, value: undefined });
+  setCalendarConnectionTokenExpiresAtMock.mockResolvedValue({ ok: true, value: undefined });
 });
 
 describe("getValidCalendarSecret: 期限マージン (§8.3 手順1)", () => {
@@ -249,5 +252,49 @@ describe("forceRefreshCalendarSecret: margin を無視して強制的に refresh
 
     expect(result.access_token).toBe("access-forced");
     expect(adapter.refreshTokens).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("doRefresh: 成功時に meta.token_expires_at を新しい期限へ更新する (§8.3 手順3)", () => {
+  it("refresh 成功後、setCalendarConnectionTokenExpiresAt(provider, refreshed.expires_at) を呼ぶ", async () => {
+    vaultReadSecretMock.mockResolvedValue({ ok: true, value: secretJson({ expires_at: "2000-01-01T00:00:00.000Z" }) });
+    claimCalendarTokenRefreshLeaseMock.mockResolvedValue({ ok: true, value: true });
+    vaultUpsertSecretMock.mockResolvedValue({ ok: true, value: undefined });
+    const refreshed: CalendarVaultSecret = { access_token: "access-new", refresh_token: "refresh-new", expires_at: "2026-09-06T12:00:00.000Z" };
+    const adapter = makeAdapter({ refreshTokens: vi.fn().mockResolvedValue(refreshed) });
+
+    const result = await getValidCalendarSecret(FAKE_CLIENT, "google", adapter, ENV);
+
+    expect(result).toEqual(refreshed);
+    expect(setCalendarConnectionTokenExpiresAtMock).toHaveBeenCalledWith(FAKE_CLIENT, "google", "2026-09-06T12:00:00.000Z");
+    // Vault 保存 (正) の後に meta を更新する (Vault 保存に失敗したら meta を進めない)
+    const vaultOrder = vaultUpsertSecretMock.mock.invocationCallOrder[0] ?? Infinity;
+    const metaOrder = setCalendarConnectionTokenExpiresAtMock.mock.invocationCallOrder[0] ?? 0;
+    expect(vaultOrder).toBeLessThan(metaOrder);
+  });
+
+  it("meta 更新の失敗は refresh 自体を失敗にしない (Vault が正。ログのみ)", async () => {
+    vaultReadSecretMock.mockResolvedValue({ ok: true, value: secretJson({ expires_at: "2000-01-01T00:00:00.000Z" }) });
+    claimCalendarTokenRefreshLeaseMock.mockResolvedValue({ ok: true, value: true });
+    vaultUpsertSecretMock.mockResolvedValue({ ok: true, value: undefined });
+    setCalendarConnectionTokenExpiresAtMock.mockResolvedValue({ ok: false, code: "KMB-E901", detail: "rpc failed" });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const refreshed: CalendarVaultSecret = { access_token: "access-new", refresh_token: "refresh-new", expires_at: "2026-09-06T12:00:00.000Z" };
+    const adapter = makeAdapter({ refreshTokens: vi.fn().mockResolvedValue(refreshed) });
+
+    const result = await forceRefreshCalendarSecret(FAKE_CLIENT, "microsoft", adapter, ENV);
+
+    expect(result).toEqual(refreshed);
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("refresh が確定失敗 (invalid_grant) のときは meta.token_expires_at を更新しない", async () => {
+    vaultReadSecretMock.mockResolvedValue({ ok: true, value: secretJson({ expires_at: "2000-01-01T00:00:00.000Z" }) });
+    claimCalendarTokenRefreshLeaseMock.mockResolvedValue({ ok: true, value: true });
+    const adapter = makeAdapter({ refreshTokens: vi.fn().mockRejectedValue(new OAuthTokenError("invalid_grant", 400, "invalid_grant")) });
+
+    await expect(getValidCalendarSecret(FAKE_CLIENT, "google", adapter, ENV)).rejects.toBeInstanceOf(TokenExpiredError);
+    expect(setCalendarConnectionTokenExpiresAtMock).not.toHaveBeenCalled();
   });
 });

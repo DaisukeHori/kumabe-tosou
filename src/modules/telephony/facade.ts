@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getEnv, isTelephonyConfigured } from "@/lib/env";
+import { normalizeSiteBaseUrl } from "@/lib/site-base-url";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getSessionAndClient } from "@/lib/supabase/session";
@@ -160,8 +161,9 @@ async function resolveDbClient(ctx: ExecutionContext): Promise<Result<SupabaseCl
   return { ok: true, value: await createSupabaseServerClient() };
 }
 
+/** TwiML の callback URL 用ベース URL。末尾スラッシュは除去する (webhook route の署名検証 URL と同じ正規化 — src/lib/site-base-url.ts)。 */
 function baseUrl(): string {
-  return getEnv().NEXT_PUBLIC_SITE_URL;
+  return normalizeSiteBaseUrl(getEnv().NEXT_PUBLIC_SITE_URL);
 }
 
 /** business_hours / telephony の 2 キーを service ctx で読み、未設定は既定値へ degrade する (§6.1 手順 3)。 */
@@ -406,15 +408,30 @@ export const telephonyFacade: TelephonyFacade = {
     }
 
     const isTerminal = TERMINAL_CALL_STATUSES.has(input.CallStatus);
+
+    if (!isTerminal) {
+      // 非終端イベント (initiated/ringing/in-progress 等 — statusCallbackEvent の設定次第で届く)。
+      // 旧実装はここでも duration_seconds/ended_at/cost を上書きしていたため、終端 completed の
+      // 後に遅延到達した in-progress が duration/cost を 0 に巻き戻す事故が起きた。
+      // 非終端は twilio_status のみ更新し、既に終了確定済み (ended_at 設定済み) の通話には
+      // 一切書き込まない (順序逆転した遅延イベントの無視)。
+      if (call.ended_at !== null) return { ok: true, value: undefined };
+      const statusOnlyResult = await updateCallOnStatusCallback(supabase, call.id, {
+        twilio_status: input.CallStatus,
+      });
+      if (!statusOnlyResult.ok) return statusOnlyResult;
+      return { ok: true, value: undefined };
+    }
+
     // handling: null のまま終了 → 'missed'。既に確定済み (forwarded/voicemail/after_hours_voicemail)
     // はそのまま (録音有無は問わない — §6.3 手順 3)。
-    const nextHandling = call.handling === null && isTerminal ? ("missed" as const) : undefined;
+    const nextHandling = call.handling === null ? ("missed" as const) : undefined;
     const effectiveHandling = nextHandling ?? call.handling;
 
     const patch: CallStatusCallbackPatch = {
       twilio_status: input.CallStatus,
       duration_seconds: input.CallDuration,
-      ended_at: isTerminal ? new Date().toISOString() : call.ended_at,
+      ended_at: call.ended_at ?? new Date().toISOString(),
       twilio_cost_estimate_micro_usd: estimateTwilioCostMicroUsd(input.CallDuration ?? 0, effectiveHandling),
     };
     if (nextHandling) {
@@ -468,6 +485,15 @@ export const telephonyFacade: TelephonyFacade = {
 
     // source: 2ch='dial' (転送録音) / 1ch='voicemail' (§6.4 手順 2)
     const source: CallRecordingSource = channels === 2 ? "dial" : "voicemail";
+
+    // 1ch 録音 (<Record> 留守電) が届いた = 留守電が成立した確証。dial_result 不成立フォールバックでは
+    // handling を確定させない (発信者が録音前に切る可能性があるため — handleDialResult 参照) ので、
+    // ここで未確定 (null) または status callback が先着して 'missed' に倒していた場合に 'voicemail' へ
+    // 確定する。forwarded / after_hours_voicemail など確定済みの値は上書きしない。
+    if (source === "voicemail" && (call.handling === null || call.handling === "missed")) {
+      const handlingResult = await updateCallHandling(supabase, call.id, "voicemail");
+      if (!handlingResult.ok) return handlingResult;
+    }
 
     const recordingResult = await insertRecordingOnConflictDoNothing(supabase, {
       call_id: call.id,
@@ -584,10 +610,21 @@ export const telephonyFacade: TelephonyFacade = {
       return { ok: true, value: { twiml: buildHangupTwiml() } };
     }
 
-    // 不成立 (busy/no-answer/failed/canceled) → 留守電フォールバック (§6.2-c。同意アナウンスなし)
-    const handlingResult = await updateCallHandling(supabase, call.id, "voicemail");
-    if (!handlingResult.ok) return handlingResult;
+    // 不成立 (busy/no-answer/failed/canceled)。
+    // 転送呼び出し中に**発信者側**が切った場合も Dial は不成立 (canceled 等) として action へ届くが、
+    // 親通話の CallStatus が 'completed' なら発信者は既にいない — 返した TwiML は再生されず留守電にも
+    // ならないので、ここで 'missed' を確定する (旧実装は無条件に 'voicemail' を書いていた)。
+    if (input.CallStatus === "completed") {
+      const missedResult = await updateCallHandling(supabase, call.id, "missed");
+      if (!missedResult.ok) return missedResult;
+      return { ok: true, value: { twiml: buildHangupTwiml() } };
+    }
 
+    // 発信者がまだ通話中 → 留守電フォールバック (§6.2-c。同意アナウンスなし)。
+    // handling はここでは確定させない: 発信者が録音前 (案内文の途中) に切ると留守電は成立せず、
+    // status callback が handling=null を見て 'missed' にする (§6.3 手順 3)。'voicemail' は
+    // ?step=recorded 到達 (handleRecorded) または 1ch 録音の recording-status (registerRecording)
+    // で初めて確定する。
     const telephonyResult = await settingsFacade.get("telephony", ctx);
     const telephonySettings = telephonyResult.ok ? telephonyResult.value : DEFAULT_TELEPHONY_SETTINGS;
 
@@ -606,7 +643,25 @@ export const telephonyFacade: TelephonyFacade = {
     };
   },
 
-  async handleRecorded() {
+  async handleRecorded(input, ctx) {
+    // <Record action> 到達 = 留守電の録音が終わった (発信者が最後まで残した) 確証。dial_result
+    // フォールバック経路では handling を未確定のまま留守電 TwiML を返しているため、ここで
+    // 'voicemail' を確定する (root の転送先なし/時間外経路は既に確定済みなので上書きしない)。
+    // 通話が見つからない場合も TwiML 応答自体は成立させる (E804 は記録のみ — 発信者に失礼のない終話を優先)。
+    const clientResult = await resolveDbClient(ctx);
+    if (!clientResult.ok) return clientResult;
+    const supabase = clientResult.value;
+
+    const callResult = await findCallByCallSid(supabase, input.CallSid);
+    if (!callResult.ok) return callResult;
+    const call = callResult.value;
+    if (!call) {
+      console.error(`KMB-E804: /api/telephony/voice?step=recorded で対象の通話が見つかりません (CallSid=${input.CallSid})`);
+    } else if (call.handling === null || call.handling === "missed") {
+      const handlingResult = await updateCallHandling(supabase, call.id, "voicemail");
+      if (!handlingResult.ok) return handlingResult;
+    }
+
     return { ok: true, value: { twiml: buildRecordedAckTwiml() } };
   },
 

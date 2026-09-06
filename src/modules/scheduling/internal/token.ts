@@ -78,6 +78,15 @@ async function doRefresh(
   try {
     const refreshed = await adapter.refreshTokens(currentSecret, env);
     await storeSecret(serviceClient, secretName, refreshed);
+    // §8.3 手順 3: meta.token_expires_at (非秘匿コピー — UI 表示用) を新しい期限へ更新する。
+    // Vault 保存 (正) は完了済みなので、ここでの失敗は refresh 自体を失敗扱いにせずログのみ
+    // (表示が古いだけで同期には影響しない)。
+    const metaResult = await repo.setCalendarConnectionTokenExpiresAt(serviceClient, provider, refreshed.expires_at);
+    if (!metaResult.ok) {
+      console.error(
+        `[scheduling] token.ts: meta.token_expires_at の更新に失敗しました (provider=${provider}): ${metaResult.code} ${metaResult.detail ?? ""}`,
+      );
+    }
     return refreshed;
   } catch (err) {
     if (err instanceof OAuthTokenError) {

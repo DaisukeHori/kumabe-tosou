@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isAllowedLoginNext } from "@/app/admin/login/next-path";
+import { isAllowedLoginNext, loginReasonMessage } from "@/app/admin/login/next-path";
 
 /**
  * canonical: docs/design/visual-media-editor.md §5.3 (MINOR-v1.4)。
@@ -41,5 +41,24 @@ describe("isAllowedLoginNext", () => {
 
   it("javascript: スキーム等は拒否される", () => {
     expect(isAllowedLoginNext("javascript:alert(1)")).toBe(false);
+  });
+});
+
+/**
+ * requireAdminPage (src/app/admin/_lib/require-admin-page.ts) が KMB-E202 を `reason=forbidden`
+ * として /admin/login に送る経路の説明文言。ログインし直しても解決しないことを利用者に伝える。
+ */
+describe("loginReasonMessage", () => {
+  it("forbidden は「管理者として登録されていない」旨の文言を返す", () => {
+    const msg = loginReasonMessage("forbidden");
+    expect(msg).not.toBeNull();
+    expect(msg).toContain("管理者として登録されていません");
+  });
+
+  it("reason なし / 未知の reason は null (何も表示しない)", () => {
+    expect(loginReasonMessage(undefined)).toBeNull();
+    expect(loginReasonMessage(null)).toBeNull();
+    expect(loginReasonMessage("")).toBeNull();
+    expect(loginReasonMessage("expired")).toBeNull();
   });
 });

@@ -549,3 +549,22 @@ describe("decodeGoogleIdTokenEmail: 署名検証なしの payload デコード",
     expect(decodeGoogleIdTokenEmail("")).toBeNull();
   });
 });
+
+describe("pullChanges: recurringEventId (繰り返しシリーズのインスタンス) を ExternalEventChange に載せる", () => {
+  it("recurringEventId を持つインスタンスは recurringEventId に親 id、無い単発イベントは null", async () => {
+    fetchMock.mockImplementation(async () =>
+      jsonResponse(200, {
+        items: [
+          { id: "master_20260719T000000Z", recurringEventId: "master", status: "confirmed", start: { dateTime: "2026-07-19T09:00:00+09:00" }, end: { dateTime: "2026-07-19T12:00:00+09:00" } },
+          { id: "single", status: "confirmed", start: { dateTime: "2026-07-19T09:00:00+09:00" }, end: { dateTime: "2026-07-19T12:00:00+09:00" } },
+        ],
+        nextSyncToken: "t1",
+      }),
+    );
+
+    const page = await googleCalendarAdapter.pullChanges(CALENDAR_ID, null, null, null, SECRET);
+
+    expect(page.changes[0].recurringEventId).toBe("master");
+    expect(page.changes[1].recurringEventId).toBeNull();
+  });
+});

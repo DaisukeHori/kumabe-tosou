@@ -4,14 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 
 import type { Result } from "@/modules/platform/contracts";
 import { platformFacade } from "@/modules/platform/facade";
-import {
-  zPriceGradeInput,
-  zPriceMatrixCellInput,
-  zPriceOptionInput,
-  zPriceSizeClassInput,
-  zQuantityTierInput,
-  type PriceTable,
-} from "@/modules/pricing/contracts";
+import { zPricingReplaceInput, type PriceTable } from "@/modules/pricing/contracts";
 import { createPricingFacade } from "@/modules/pricing/facade";
 
 /**
@@ -57,10 +50,6 @@ export type PricingDraftPayload = {
   options: AdminOptionRow[];
 };
 
-function issuesToDetail(issues: { message: string }[]): string {
-  return issues.map((i) => i.message).join(", ");
-}
-
 export async function loadFullPriceTableAction(): Promise<Result<PriceTable>> {
   const admin = await platformFacade.requireAdmin();
   if (!admin.ok) return admin;
@@ -69,78 +58,71 @@ export async function loadFullPriceTableAction(): Promise<Result<PriceTable>> {
   return facade.getFullPriceTable();
 }
 
+const SECTION_LABELS: Record<string, string> = {
+  grades: "グレード",
+  sizes: "サイズ帯",
+  matrix: "価格行列",
+  tiers: "数量値引き",
+  options: "オプション",
+};
+
+/** zod issue の path 先頭 (セクション名) を日本語ラベルに変換した detail 文字列を組み立てる。 */
+function replaceIssuesToDetail(issues: { path: PropertyKey[]; message: string }[]): string {
+  return issues
+    .map((i) => {
+      const section = typeof i.path[0] === "string" ? SECTION_LABELS[i.path[0]] : undefined;
+      const index = typeof i.path[1] === "number" ? ` #${i.path[1] + 1}` : "";
+      return section ? `${section}${index}: ${i.message}` : i.message;
+    })
+    .join(", ");
+}
+
+/**
+ * 価格表の一括保存。5 テーブル (grades/sizes/matrix/tiers/options) を facade.replaceAllPricing
+ * (→ pricing_replace_all RPC、単一トランザクション) に 1 回で渡す。
+ * 旧実装はテーブルごとに別々の facade メソッドを順に呼んでいたため、途中失敗で部分書き込みが
+ * 残り、かつキャッシュ失効もされずに /shop に旧表が焼き付いた (レビュー指摘)。
+ * RPC は原子的だが、DB 側で何が確定したかを Server Action からは断定できないため、
+ * 失敗時も revalidateTag("prices") / revalidatePath("/shop") を必ず呼んで再取得させる。
+ */
 export async function savePricingAction(payload: PricingDraftPayload): Promise<Result<void>> {
   const admin = await platformFacade.requireAdmin();
   if (!admin.ok) return admin;
 
+  const parsed = zPricingReplaceInput.safeParse({
+    grades: payload.grades.map((g) => ({
+      id: g.id,
+      expected_updated_at: g.expected_updated_at,
+      key: g.key,
+      label: g.label,
+      description: g.description,
+      sort_order: g.sort_order,
+      is_active: g.is_active,
+    })),
+    sizes: payload.sizes,
+    matrix: payload.matrix,
+    tiers: payload.tiers,
+    options: payload.options.map((o) => ({
+      id: o.id,
+      key: o.key,
+      label: o.label,
+      kind: o.kind,
+      value: o.value,
+      sort_order: o.sort_order,
+      is_active: o.is_active,
+    })),
+  });
+  if (!parsed.success) {
+    return { ok: false, code: "KMB-E101", detail: replaceIssuesToDetail(parsed.error.issues) };
+  }
+
   const facade = createPricingFacade();
-
-  // grades: 1 件ずつ楽観排他 (id + expected_updated_at) を伴って保存する。
-  for (const grade of payload.grades) {
-    const parsed = zPriceGradeInput.safeParse({
-      key: grade.key,
-      label: grade.label,
-      description: grade.description,
-      sort_order: grade.sort_order,
-      is_active: grade.is_active,
-    });
-    if (!parsed.success) {
-      return {
-        ok: false,
-        code: "KMB-E101",
-        detail: `グレード (${grade.key}): ${issuesToDetail(parsed.error.issues)}`,
-      };
-    }
-    const saved = await facade.savePriceGrade(parsed.data, grade.id, grade.expected_updated_at);
-    if (!saved.ok) return saved;
+  try {
+    return await facade.replaceAllPricing(parsed.data);
+  } finally {
+    // 成否に関わらずキャッシュを失効させる (失敗時に旧表が焼き付く事故の防止)。
+    revalidateTag("prices");
+    revalidatePath("/shop");
+    revalidatePath("/admin/prices");
   }
-
-  // sizes / matrix / tiers: updated_at を持たないため全置換 upsert で可 (task 仕様通り)。
-  const sizesParsed = zPriceSizeClassInput.array().safeParse(payload.sizes);
-  if (!sizesParsed.success) {
-    return { ok: false, code: "KMB-E101", detail: `サイズ帯: ${issuesToDetail(sizesParsed.error.issues)}` };
-  }
-  const sizesSaved = await facade.replacePriceSizeClasses(sizesParsed.data);
-  if (!sizesSaved.ok) return sizesSaved;
-
-  const matrixParsed = zPriceMatrixCellInput.array().safeParse(payload.matrix);
-  if (!matrixParsed.success) {
-    return { ok: false, code: "KMB-E101", detail: `価格行列: ${issuesToDetail(matrixParsed.error.issues)}` };
-  }
-  const matrixSaved = await facade.replacePriceMatrix(matrixParsed.data);
-  if (!matrixSaved.ok) return matrixSaved;
-
-  const tiersParsed = zQuantityTierInput.array().safeParse(payload.tiers);
-  if (!tiersParsed.success) {
-    return { ok: false, code: "KMB-E101", detail: `数量値引き: ${issuesToDetail(tiersParsed.error.issues)}` };
-  }
-  const tiersSaved = await facade.replacePriceQuantityTiers(tiersParsed.data);
-  if (!tiersSaved.ok) return tiersSaved;
-
-  // options: 現状は key の存在有無で upsert (grades と異なり明示的な楽観排他は課さない仕様)。
-  for (const option of payload.options) {
-    const parsed = zPriceOptionInput.safeParse({
-      key: option.key,
-      label: option.label,
-      kind: option.kind,
-      value: option.value,
-      sort_order: option.sort_order,
-      is_active: option.is_active,
-    });
-    if (!parsed.success) {
-      return {
-        ok: false,
-        code: "KMB-E101",
-        detail: `オプション (${option.key}): ${issuesToDetail(parsed.error.issues)}`,
-      };
-    }
-    const saved = await facade.savePriceOption(parsed.data, option.id);
-    if (!saved.ok) return saved;
-  }
-
-  revalidateTag("prices");
-  revalidatePath("/shop");
-  revalidatePath("/admin/prices");
-
-  return { ok: true, value: undefined };
 }

@@ -1,22 +1,16 @@
 import "server-only";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import type {
   PriceGrade,
-  PriceGradeInput,
   PriceMatrixCell,
-  PriceMatrixCellInput,
   PriceOption,
-  PriceOptionInput,
   PriceSizeClass,
-  PriceSizeClassInput,
   PriceTable,
+  PricingReplaceInput,
   QuantityTier,
-  QuantityTierInput,
 } from "./contracts";
 
 /**
@@ -41,8 +35,8 @@ import type {
  *    anon RLS では見えず public.is_admin() ポリシー越しにのみ読めるため、cookie セッションを
  *    伴う createSupabaseServerClient が必須。admin は実リクエスト文脈なので cookies() は正常。
  *
- * 書き込み (upsert 系 / replace 系) は admin 専用で is_admin() ポリシーが必要なため引き続き
- * createSupabaseServerClient (cookie セッション) を使う。
+ * 書き込み (replacePricingAll → pricing_replace_all RPC) は admin 専用で is_admin() ガードが必要なため
+ * 引き続き createSupabaseServerClient (cookie セッション) を使う。
  */
 
 const GRADE_COLUMNS = "id, key, label, description, sort_order, is_active, updated_at";
@@ -103,171 +97,37 @@ export async function getPriceTable(opts: { activeOnly: boolean }): Promise<Pric
   };
 }
 
-/** 楽観排他 (KMB-E103) 検知時に投げる印。facade 層で判定してエラーコードへ変換する。 */
-export class OptimisticLockError extends Error {
-  constructor() {
-    super("CONFLICT");
+/**
+ * pricing_replace_all RPC (migration 20260906000010) が `raise exception 'KMB-Exxx: ...'` で返した
+ * エラーを facade 層で Result のコードに変換するための印。RPC 内で判定する楽観排他 (E103) と
+ * 入力不備 (E101) はここ経由で伝播し、それ以外の DB エラーは通常の Error (→ E901) のまま。
+ */
+export class PricingRpcError extends Error {
+  constructor(
+    readonly code: "KMB-E101" | "KMB-E103" | "KMB-E202",
+    message: string,
+  ) {
+    super(message);
   }
 }
 
-export async function upsertGrade(
-  input: PriceGradeInput,
-  id: string | null,
-  expectedUpdatedAt: string | null,
-): Promise<{ id: string; updated_at: string }> {
+/**
+ * /admin/prices の一括保存: 5 テーブル (grades/sizes/matrix/tiers/options) の置換を
+ * security definer RPC pricing_replace_all(jsonb) に 1 回で委ね、単一トランザクションで確定する。
+ * 従来の「テーブルごとに別々の PostgREST 呼び出し」は途中失敗で部分書き込みが残る非原子構造
+ * だったため廃止した (レビュー指摘)。is_admin() ガードは RPC 側にあり、cookie セッション付き
+ * server client (authenticated ロール) で呼ぶ。
+ */
+export async function replacePricingAll(input: PricingReplaceInput): Promise<void> {
   const supabase = await createSupabaseServerClient();
-  const row = {
-    key: input.key,
-    label: input.label,
-    description: input.description,
-    sort_order: input.sort_order,
-    is_active: input.is_active,
-  };
+  const { error } = await supabase.rpc("pricing_replace_all", { p_payload: input });
+  if (!error) return;
 
-  if (id) {
-    let query = supabase.from("price_grades").update(row).eq("id", id);
-    if (expectedUpdatedAt) query = query.eq("updated_at", expectedUpdatedAt);
-    const { data, error } = await query.select("id, updated_at").maybeSingle();
-    if (error) throw new Error(`price_grades 更新に失敗しました: ${error.message}`);
-    if (!data) throw new OptimisticLockError();
-    return data;
+  const kmb = /KMB-E(\d{3})/.exec(error.message ?? "");
+  if (kmb?.[1] === "103") throw new PricingRpcError("KMB-E103", error.message);
+  if (kmb?.[1] === "101") throw new PricingRpcError("KMB-E101", error.message);
+  if (error.code === "42501" || /permission denied/i.test(error.message ?? "")) {
+    throw new PricingRpcError("KMB-E202", error.message);
   }
-
-  const { data, error } = await supabase
-    .from("price_grades")
-    .insert(row)
-    .select("id, updated_at")
-    .single();
-  if (error || !data) {
-    throw new Error(`price_grades 作成に失敗しました: ${error?.message}`);
-  }
-  return data;
-}
-
-export async function upsertOption(
-  input: PriceOptionInput,
-  id: string | null,
-): Promise<{ id: string }> {
-  const supabase = await createSupabaseServerClient();
-  const row = {
-    key: input.key,
-    label: input.label,
-    kind: input.kind,
-    value: input.value,
-    sort_order: input.sort_order,
-    is_active: input.is_active,
-  };
-
-  if (id) {
-    const { data, error } = await supabase
-      .from("price_options")
-      .update(row)
-      .eq("id", id)
-      .select("id")
-      .maybeSingle();
-    if (error) throw new Error(`price_options 更新に失敗しました: ${error.message}`);
-    if (!data) throw new Error("price_options 更新対象が見つかりません");
-    return data;
-  }
-
-  const { data, error } = await supabase
-    .from("price_options")
-    .insert(row)
-    .select("id")
-    .single();
-  if (error || !data) {
-    throw new Error(`price_options 作成に失敗しました: ${error?.message}`);
-  }
-  return data;
-}
-
-async function deleteRemoved<T>(
-  supabase: SupabaseClient,
-  table: string,
-  column: string,
-  existing: T[],
-  keep: Set<T>,
-) {
-  const toDelete = existing.filter((v) => !keep.has(v));
-  if (toDelete.length === 0) return;
-  const { error } = await supabase.from(table).delete().in(column, toDelete as (string | number)[]);
-  if (error) throw new Error(`${table} の削除に失敗しました: ${error.message}`);
-}
-
-export async function replaceSizeClasses(input: PriceSizeClassInput[]): Promise<void> {
-  const supabase = await createSupabaseServerClient();
-  const { data: existing, error: selectError } = await supabase
-    .from("price_size_classes")
-    .select("key");
-  if (selectError) {
-    throw new Error(`price_size_classes 取得に失敗しました: ${selectError.message}`);
-  }
-
-  await deleteRemoved(
-    supabase,
-    "price_size_classes",
-    "key",
-    (existing ?? []).map((r) => r.key as string),
-    new Set(input.map((s) => s.key)),
-  );
-
-  if (input.length > 0) {
-    const { error } = await supabase.from("price_size_classes").upsert(input, { onConflict: "key" });
-    if (error) throw new Error(`price_size_classes 保存に失敗しました: ${error.message}`);
-  }
-}
-
-export async function replaceMatrix(input: PriceMatrixCellInput[]): Promise<void> {
-  const supabase = await createSupabaseServerClient();
-  const { data: existing, error: selectError } = await supabase
-    .from("price_matrix")
-    .select("grade_key, size_key");
-  if (selectError) {
-    throw new Error(`price_matrix 取得に失敗しました: ${selectError.message}`);
-  }
-
-  const newKeySet = new Set(input.map((c) => `${c.grade_key}::${c.size_key}`));
-  const toDelete = (existing ?? []).filter(
-    (r) => !newKeySet.has(`${r.grade_key}::${r.size_key}`),
-  );
-  for (const row of toDelete) {
-    const { error } = await supabase
-      .from("price_matrix")
-      .delete()
-      .eq("grade_key", row.grade_key)
-      .eq("size_key", row.size_key);
-    if (error) throw new Error(`price_matrix の削除に失敗しました: ${error.message}`);
-  }
-
-  if (input.length > 0) {
-    const { error } = await supabase
-      .from("price_matrix")
-      .upsert(input, { onConflict: "grade_key,size_key" });
-    if (error) throw new Error(`price_matrix 保存に失敗しました: ${error.message}`);
-  }
-}
-
-export async function replaceQuantityTiers(input: QuantityTierInput[]): Promise<void> {
-  const supabase = await createSupabaseServerClient();
-  const { data: existing, error: selectError } = await supabase
-    .from("price_quantity_tiers")
-    .select("min_qty");
-  if (selectError) {
-    throw new Error(`price_quantity_tiers 取得に失敗しました: ${selectError.message}`);
-  }
-
-  await deleteRemoved(
-    supabase,
-    "price_quantity_tiers",
-    "min_qty",
-    (existing ?? []).map((r) => r.min_qty as number),
-    new Set(input.map((t) => t.min_qty)),
-  );
-
-  if (input.length > 0) {
-    const { error } = await supabase
-      .from("price_quantity_tiers")
-      .upsert(input, { onConflict: "min_qty" });
-    if (error) throw new Error(`price_quantity_tiers 保存に失敗しました: ${error.message}`);
-  }
+  throw new Error(`価格表の保存 (pricing_replace_all) に失敗しました: ${error.message}`);
 }

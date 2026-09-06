@@ -7,7 +7,11 @@ import { describe, expect, it } from "vitest";
  * capture.ts (puppeteer-core / @sparticuz/chromium / sharp を import する側) は経由しない。
  */
 
-import { isAllowedSubresource, isSameOriginAsSite } from "@/lib/screenshot/subresource-policy";
+import {
+  decideMainFrameDocumentRequest,
+  isAllowedSubresource,
+  isSameOriginAsSite,
+} from "@/lib/screenshot/subresource-policy";
 
 const OPTIONS = {
   siteOrigin: "https://yamagishi-tosou.example.com",
@@ -101,5 +105,43 @@ describe("isSameOriginAsSite: リダイレクト検証 (§11「リダイレク�
 
   it("パース不能な URL は fail-closed で false", () => {
     expect(isSameOriginAsSite("not a url", siteOrigin)).toBe(false);
+  });
+});
+
+describe("decideMainFrameDocumentRequest: リダイレクトの各ホップを自オリジンに限定する (§11)", () => {
+  const siteOrigin = OPTIONS.siteOrigin;
+
+  it("最初のナビゲーション (redirectChain 長 0) は URL を問わず continue (route-key.ts で検証済み)", () => {
+    expect(decideMainFrameDocumentRequest("https://yamagishi-tosou.example.com/works", 0, siteOrigin)).toBe("continue");
+  });
+
+  it("自オリジンへのリダイレクトホップは continue", () => {
+    expect(decideMainFrameDocumentRequest("https://yamagishi-tosou.example.com/works/new-slug", 1, siteOrigin)).toBe(
+      "continue",
+    );
+  });
+
+  it("別オリジンへのリダイレクトホップは abort (リダイレクト先へのリクエスト自体を発生させない)", () => {
+    expect(decideMainFrameDocumentRequest("https://evil.example/collect", 1, siteOrigin)).toBe("abort");
+  });
+
+  it("内部メタデータサーバー等へのリダイレクトも abort", () => {
+    expect(decideMainFrameDocumentRequest("http://169.254.169.254/latest/meta-data/", 1, siteOrigin)).toBe("abort");
+  });
+
+  it("スキーム / ポート違いは別オリジンとして abort", () => {
+    expect(decideMainFrameDocumentRequest("http://yamagishi-tosou.example.com/works", 1, siteOrigin)).toBe("abort");
+    expect(decideMainFrameDocumentRequest("https://yamagishi-tosou.example.com:8443/works", 2, siteOrigin)).toBe(
+      "abort",
+    );
+  });
+
+  it("多段リダイレクト (長 2 以上) でも各ホップごとに同じ判定を適用する", () => {
+    expect(decideMainFrameDocumentRequest("https://yamagishi-tosou.example.com/a", 3, siteOrigin)).toBe("continue");
+    expect(decideMainFrameDocumentRequest("https://cdn.yamagishi-tosou.example.com/a", 3, siteOrigin)).toBe("abort");
+  });
+
+  it("パース不能な URL のホップは fail-closed で abort", () => {
+    expect(decideMainFrameDocumentRequest("not a url", 1, siteOrigin)).toBe("abort");
   });
 });

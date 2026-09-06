@@ -1,5 +1,6 @@
 -- =========================================================
 -- telephony (#57): call_job_acquire_lease / call_job_commit_stage / call_job_retry
+-- (2026-09-06 migration 20260906000050: acquire は lease_token を返し、commit は p_lease_token 一致を CAS 条件に含む)
 --                   の RLS/CAS 結合検証 (再現可能アーティファクト — 未実行)
 --
 -- canonical:
@@ -119,8 +120,11 @@ begin
     returning id into v_rec_id;
   insert into call_jobs (call_id, recording_id, status) values (v_call_id, v_rec_id, 'pending')
     returning id into v_job_id;
+  -- lease_token は migration 20260906000050 で commit の CAS 条件に加わったため、acquire を経由しない
+  -- 本フィクスチャでは固定値 (⑤ で同じ値を渡す) を直接セットする
   update call_jobs
-    set status = 'downloading', stage_attempts = 1, lease_expires_at = now() + interval '90 seconds'
+    set status = 'downloading', stage_attempts = 1, lease_expires_at = now() + interval '90 seconds',
+        lease_token = '00000000-0000-4000-8000-0000000000c5'::uuid
     where id = v_job_id;
   insert into telephony_job_rpc_fixture(key, id) values ('job_commit_cas', v_job_id);
 
@@ -268,10 +272,11 @@ begin
   select id into v_job_id from telephony_job_rpc_fixture where key = 'job_pending';
   select * into v_row from public.call_job_acquire_lease(v_job_id);
   if v_row.result_kind = 'acquired' and v_row.status = 'downloading' and v_row.stage_attempts = 1
-     and v_row.lease_expires_at is not null and v_row.lease_expires_at > now() then
+     and v_row.lease_expires_at is not null and v_row.lease_expires_at > now()
+     and v_row.lease_token is not null then
     insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
       values ('③acquire成功',
-              'admin: pending job を acquire → result_kind=acquired、status=downloading (bootstrap)、attempts=1、lease>now()',
+              'admin: pending job を acquire → result_kind=acquired、status=downloading (bootstrap)、attempts=1、lease>now()、lease_token 発行',
               true, format('OK: lease_expires_at=%s', v_row.lease_expires_at));
   else
     insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
@@ -282,10 +287,10 @@ begin
 
   -- held: 直前に acquire したばかりの job_pending を lease 失効前に再 acquire
   select * into v_row from public.call_job_acquire_lease(v_job_id);
-  if v_row.result_kind = 'held' and v_row.stage_attempts = 1 then
+  if v_row.result_kind = 'held' and v_row.stage_attempts = 1 and v_row.lease_token is null then
     insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
       values ('③acquire成功',
-              'admin: lease 保持中 (90秒以内) の job を再 acquire → result_kind=held、attempts は増えない',
+              'admin: lease 保持中 (90秒以内) の job を再 acquire → result_kind=held、attempts は増えない、他者の lease_token は返さない (null)',
               true, 'OK');
   else
     insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
@@ -350,7 +355,7 @@ begin
   execute 'set local role anon';
   perform set_config('request.jwt.claims', '{"role":"anon"}', true);
   begin
-    perform public.call_job_commit_stage(v_job_id, 'downloading', 'transcribing');
+    perform public.call_job_commit_stage(v_job_id, null::uuid, 'downloading', 'transcribing');
     insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
       values ('④commit拒否', 'anon: call_job_commit_stage は permission denied を期待', false,
               'FAIL: anon が実行できてしまった');
@@ -370,7 +375,7 @@ begin
   perform set_config('request.jwt.claims',
     format('{"role":"authenticated","sub":"%s"}', gen_random_uuid()::text), true);
   begin
-    perform public.call_job_commit_stage(v_job_id, 'downloading', 'transcribing');
+    perform public.call_job_commit_stage(v_job_id, null::uuid, 'downloading', 'transcribing');
     insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
       values ('④commit拒否', 'authenticated(非admin): call_job_commit_stage は internal permission denied を期待',
               false, 'FAIL: 非admin authenticated が実行できてしまった');
@@ -417,26 +422,48 @@ begin
 
   select id into v_job_id from telephony_job_rpc_fixture where key = 'job_commit_cas';
   -- 前提確認: job_commit_cas は ①フィクスチャで status='downloading', stage_attempts=1,
-  -- lease_expires_at=now()+90s に設定済み (acquire を経由していない直接セットアップ)
+  -- lease_expires_at=now()+90s, lease_token=...00c5 に設定済み (acquire を経由していない直接セットアップ)
 
   execute 'set local role authenticated';
   perform set_config('request.jwt.claims', format('{"role":"authenticated","sub":"%s"}', v_admin_id::text), true);
 
   -- CAS 一致: expected_status='downloading' (現在値と一致) → 前進 + transcript UPSERT +
   -- ai_cost_micro_usd 加算 + attempts=0 リセット + lease 解放
+  -- lease_token 不一致 (status は一致): 失効後に別プロセスが再取得した想定。no-op で現在値を返し、
+  -- status/attempts/成果物のいずれも変化しない (migration 20260906000050 §3)
   select public.call_job_commit_stage(
-    v_job_id, 'downloading', 'transcribing',
+    v_job_id, gen_random_uuid(), 'downloading', 'transcribing',
+    p_transcript => '{"text":"他保持者の書込は無効"}'::jsonb
+  ) into v_status;
+
+  select * into v_row from call_jobs where id = v_job_id;
+  if v_status = 'downloading' and v_row.status = 'downloading' and v_row.stage_attempts = 1
+     and v_row.transcript is null and v_row.lease_token = '00000000-0000-4000-8000-0000000000c5'::uuid then
+    insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
+      values ('⑤commit成功',
+              'admin: lease_token 不一致 (status は一致) → 冪等no-op、status/attempts/transcript/lease_token 不変',
+              true, 'OK');
+  else
+    insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
+      values ('⑤commit成功', 'admin: lease_token 不一致 no-op の検証', false,
+              format('FAIL: 返り値=%s status=%s attempts=%s transcript=%s lease_token=%s',
+                v_status, v_row.status, v_row.stage_attempts, v_row.transcript, v_row.lease_token));
+  end if;
+
+  select public.call_job_commit_stage(
+    v_job_id, '00000000-0000-4000-8000-0000000000c5'::uuid, 'downloading', 'transcribing',
     p_transcript => '{"text":"テスト文字起こし"}'::jsonb,
     p_ai_cost_delta_micro_usd => 1500
   ) into v_status;
 
   select * into v_row from call_jobs where id = v_job_id;
   if v_status = 'transcribing' and v_row.status = 'transcribing' and v_row.stage_attempts = 0
-     and v_row.lease_expires_at is null and v_row.transcript = '{"text":"テスト文字起こし"}'::jsonb
+     and v_row.lease_expires_at is null and v_row.lease_token is null
+     and v_row.transcript = '{"text":"テスト文字起こし"}'::jsonb
      and v_row.ai_cost_micro_usd = 1500 then
     insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
       values ('⑤commit成功',
-              'admin: CAS一致 (downloading→transcribing) → 前進+transcript UPSERT+ai_cost加算+attempts=0+lease解放',
+              'admin: CAS一致 (downloading→transcribing, lease_token 一致) → 前進+transcript UPSERT+ai_cost加算+attempts=0+lease/lease_token解放',
               true, 'OK');
   else
     insert into telephony_job_rpc_test_log(section, check_name, passed, detail)
@@ -449,9 +476,12 @@ begin
   -- CAS 不一致 (= 二重commit冪等): 既に 'transcribing' に前進済みなのに expected_status='downloading'
   -- (古い値) で再度 commit を試みる → no-op で現在値 'transcribing' を返すのみ。attempts は
   -- 0 のまま変化しない (0019 Codex BLOCKER の教訓: no-op 分岐では絶対に触らない)
-  update call_jobs set stage_attempts = 2 where id = v_job_id; -- no-op でも触られないことを検証するため意図的に非0にしておく
+  -- (lease_token は commit 成功で解放済みのため、再度 lease 保持者として直接セットしてから試す)
+  update call_jobs set stage_attempts = 2, lease_token = '00000000-0000-4000-8000-0000000000c5'::uuid
+    where id = v_job_id; -- no-op でも触られないことを検証するため意図的に非0にしておく
   select public.call_job_commit_stage(
-    v_job_id, 'downloading', 'transcribing', -- 古い expected_status (CAS不一致を意図的に起こす)
+    v_job_id, '00000000-0000-4000-8000-0000000000c5'::uuid,
+    'downloading', 'transcribing', -- 古い expected_status (CAS不一致を意図的に起こす)
     p_transcript => '{"text":"上書きされてはいけない"}'::jsonb
   ) into v_status;
 
@@ -472,8 +502,8 @@ begin
 
   -- 正しい expected_status での commit → 前進し attempts=0 リセット (二重commit冪等の後半:
   -- 同じ 'transcribing→analyzing' commit を 2 回連続で送っても 2 回目は no-op になることを確認)
-  select public.call_job_commit_stage(v_job_id, 'transcribing', 'analyzing') into v_status;
-  select public.call_job_commit_stage(v_job_id, 'transcribing', 'analyzing') into v_status; -- 2回目 (CAS不一致=no-op)
+  select public.call_job_commit_stage(v_job_id, '00000000-0000-4000-8000-0000000000c5'::uuid, 'transcribing', 'analyzing') into v_status;
+  select public.call_job_commit_stage(v_job_id, '00000000-0000-4000-8000-0000000000c5'::uuid, 'transcribing', 'analyzing') into v_status; -- 2回目 (CAS不一致 + lease_token 解放済み = no-op)
 
   select * into v_row from call_jobs where id = v_job_id;
   if v_status = 'analyzing' and v_row.status = 'analyzing' and v_row.stage_attempts = 0 then

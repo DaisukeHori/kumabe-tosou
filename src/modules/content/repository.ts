@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { ilikeContainsFilter } from "@/lib/postgrest-filter";
 import type { Result } from "@/modules/platform/contracts";
 import type { KmbErrorCode } from "@/modules/platform/errors";
 
@@ -92,15 +93,15 @@ const SEARCH_COLUMNS: Record<Table, string[]> = {
   voices: ["customer_initial", "region", "body"],
 };
 
-function escapeIlike(value: string): string {
-  // PostgREST の ilike パターン内でワイルドカード解釈されないようエスケープする
-  return value.replace(/[%_\\]/g, (c) => `\\${c}`);
-}
-
 export type ListFilter = {
   status?: string;
   kind?: string; // posts のみ
   search?: string;
+  /**
+   * 公開一覧用: `published_at <= この時刻` を課す (予約公開 = 未来の published_at を除外)。
+   * admin 一覧では指定しない (status='published' で絞っても予約中の行を見せる必要があるため)。
+   */
+  publishedAtBefore?: string;
   cursor: string | null;
   limit: number;
 };
@@ -122,9 +123,13 @@ async function listRows<Row extends { id: string; created_at: string }>(
   if (filter.status) query = query.eq("status", filter.status);
   if (filter.kind) query = query.eq("kind", filter.kind);
   if (filter.search) {
-    const escaped = escapeIlike(filter.search);
-    const orExpr = SEARCH_COLUMNS[table].map((col) => `${col}.ilike.%${escaped}%`).join(",");
-    query = query.or(orExpr);
+    // 検索語に `,` `(` `)` が含まれると .or() のフィルタ構文が壊れる (PGRST100) ため、
+    // 値を二重引用符で囲む共通ヘルパ (ilikeContainsFilter) で 1 項ずつ組み立てる。
+    const q = filter.search;
+    query = query.or(SEARCH_COLUMNS[table].map((col) => ilikeContainsFilter(col, q)).join(","));
+  }
+  if (filter.status === "published" && filter.publishedAtBefore) {
+    query = query.lte("published_at", filter.publishedAtBefore);
   }
   const cursor = decodeCursor(filter.cursor);
   if (cursor) {
@@ -165,7 +170,11 @@ export async function listVoicesAdmin(
   return listRows<VoiceRow>(client, "voices", filter);
 }
 
-/** 公開一覧 (site-public も使う read)。status='published' and published_at<=now() は RLS が保証する */
+/**
+ * 公開一覧 (site-public も使う read)。status='published' and published_at<=now() を
+ * クエリ側でも明示する (anon の RLS も同条件だが、admin セッションの server client で呼ばれた
+ * 場合は RLS が全行を返すため、予約公開 (未来の published_at) が漏れないよう二重に絞る)。
+ */
 export async function listPublishedRows<Row extends { id: string; created_at: string }>(
   client: SupabaseClient,
   table: Table,
@@ -175,6 +184,7 @@ export async function listPublishedRows<Row extends { id: string; created_at: st
   return listRows<Row>(client, table, {
     status: "published",
     kind: kind ?? undefined,
+    publishedAtBefore: new Date().toISOString(),
     cursor: pagination.cursor,
     limit: pagination.limit,
   });
@@ -229,26 +239,24 @@ export async function listWorkImages(
 }
 
 /**
- * work_images を丸ごと入れ替える (削除→挿入)。admin セッションの server client で完結する
- * (migration 20260708000012 で is_admin() に insert/update/delete ポリシーを開放済み)。
+ * work_images を丸ごと入れ替える。migration 20260906000061 の work_images_replace RPC
+ * (security definer + is_admin() ガード、delete + insert を単一トランザクションで実行) を呼ぶ。
+ * 旧実装 (PostgREST の delete → insert の 2 呼び出し) は insert 失敗時に delete だけが残り
+ * ギャラリーが空になる非原子性があったため RPC に置換した。sort_order は配列順 (0 始まり)。
+ *
+ * エラー写像: RPC が raise する 'KMB-E1xx: ...' は先頭コードを採用し、それ以外は
+ * pgErrorToResult (23503 → KMB-E101 / 42501 → KMB-E202 / その他 → KMB-E901)。
  */
 export async function replaceWorkImages(
   client: SupabaseClient,
   workId: string,
   mediaIds: string[],
 ): Promise<Result<void>> {
-  const { error: delError } = await client.from("work_images").delete().eq("work_id", workId);
-  if (delError) return pgErrorToResult(delError);
-
-  if (mediaIds.length === 0) return { ok: true, value: undefined };
-
-  const rows: WorkImageRow[] = mediaIds.map((mediaId, index) => ({
-    work_id: workId,
-    media_id: mediaId,
-    sort_order: index,
-  }));
-  const { error: insError } = await client.from("work_images").insert(rows);
-  if (insError) return pgErrorToResult(insError);
+  const { error } = await client.rpc("work_images_replace", {
+    p_work_id: workId,
+    p_media_ids: mediaIds,
+  });
+  if (error) return mapRpcExceptionToResult(error);
   return { ok: true, value: undefined };
 }
 
@@ -413,14 +421,16 @@ async function updateWithOptimisticLock<Row extends { updated_at: string }>(
 const KMB_ERROR_CODE_RE = /KMB-E\d+/;
 
 /**
- * RPC (replace_work_image) が投げる例外メッセージ先頭の `KMB-E1xx` を parse して
- * Result の code に写像する。parse 不能な例外は KMB-E901 (§6.1 の実装メモ通り)。
+ * RPC (replace_work_image / work_images_replace) が投げる例外メッセージ先頭の `KMB-E1xx` を
+ * parse して Result の code に写像する。KMB コードを含まない例外は SQLSTATE ベースの
+ * pgErrorToResult に委ねる (23503 → KMB-E101 / 42501 → KMB-E202 / それ以外 → KMB-E901。
+ * §6.1 の実装メモ「parse 不能は KMB-E901」を包含する)。
  */
 function mapRpcExceptionToResult(error: PgError): { ok: false; code: KmbErrorCode; detail: string } {
   const match = KMB_ERROR_CODE_RE.exec(error.message);
   const code = match?.[0] as KmbErrorCode | undefined;
   if (code) return { ok: false, code, detail: error.message };
-  return { ok: false, code: "KMB-E901", detail: error.message };
+  return pgErrorToResult(error);
 }
 
 /**

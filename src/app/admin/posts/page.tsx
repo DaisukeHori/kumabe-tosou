@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { requireAdminPage } from "@/app/admin/_lib/require-admin-page";
 import { PageHeader, PillToggle, SiteSecondaryTabs, type PillItem } from "@/app/admin/_ui";
 import { contentFacade } from "@/modules/content/facade";
 import type { ContentStatus, PostKind } from "@/modules/content/contracts";
@@ -33,6 +34,16 @@ export default async function PostsListPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  // 契約書 §3.5: page 先頭でも requireAdmin (E201/E202 は /admin/login へ redirect)
+  const auth = await requireAdminPage("/admin/posts");
+  if (!auth.ok) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-destructive">認可の確認に失敗しました ({auth.code}): {auth.detail}</p>
+      </div>
+    );
+  }
+
   const params = await searchParams;
   const kind: PostKind = isPostKind(params.kind) ? params.kind : "reading";
   const status = (params.status || undefined) as ContentStatus | undefined;

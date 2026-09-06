@@ -31,6 +31,7 @@ export const zGoogleEvent = z.object({
   iCalUID: z.string().optional(),
   updated: z.string().optional(),
   summary: z.string().optional(),
+  recurringEventId: z.string().optional(), // 繰り返しシリーズのインスタンスなら親 id (§8.5 重複掃除の除外判定)
   start: z.object({ dateTime: z.string().optional(), date: z.string().optional() }).optional(),
   end: z.object({ dateTime: z.string().optional(), date: z.string().optional() }).optional(),
   extendedProperties: z
@@ -165,6 +166,7 @@ function toExternalEventChange(event: z.infer<typeof zGoogleEvent>): ExternalEve
     isAllDay,
     appLinkId: priv.kumabe_link_id ?? null,
     appBlockId: priv.kumabe_block_id ?? null,
+    recurringEventId: event.recurringEventId ?? null,
   };
 }
 

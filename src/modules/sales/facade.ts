@@ -1744,6 +1744,22 @@ export function createSalesFacade(
           };
         }
 
+        // quote で valid_until が未指定 (null) の場合は issueDocument (手順3) と同じく
+        // issue_date + quote_valid_days で補完する。補完しないと訂正版の見積だけ有効期限が
+        // null になり、期限切れ判定 (markExpiredQuotes) と印字から抜け落ちる。
+        let validUntil = parsed.data.valid_until;
+        if (doc.doc_type === "quote" && validUntil === null) {
+          const issuerSettings = await settingsFacade.get("invoice_issuer", ctx);
+          if (!issuerSettings.ok) {
+            return {
+              ok: false,
+              code: "KMB-E626",
+              detail: "請求書発行者の設定 (invoice_issuer) が見つかりません。",
+            };
+          }
+          validUntil = addDaysToDateOnly(parsed.data.issue_date, issuerSettings.value.quote_valid_days);
+        }
+
         const taxRounding = doc.tax_rounding as TaxRounding;
         const totals = computeDocumentTotals(parsed.data.lines, taxRounding);
         const taxGuard = validateIssueTaxGuard(doc.doc_type as DocType, totals);
@@ -1762,7 +1778,7 @@ export function createSalesFacade(
         const header = {
           issue_date: parsed.data.issue_date,
           transaction_date: parsed.data.transaction_date,
-          valid_until: parsed.data.valid_until,
+          valid_until: validUntil,
           billing_name: parsed.data.billing_name,
           billing_suffix: parsed.data.billing_suffix,
           billing_address: parsed.data.billing_address,
@@ -1805,7 +1821,7 @@ export function createSalesFacade(
           version,
           issueDate: parsed.data.issue_date,
           transactionDate,
-          validUntil: parsed.data.valid_until,
+          validUntil,
           billingName: parsed.data.billing_name,
           billingSuffix: parsed.data.billing_suffix,
           billingAddress: parsed.data.billing_address,

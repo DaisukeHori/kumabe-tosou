@@ -4,27 +4,10 @@ import { unstable_cache } from "next/cache";
 
 import type { Result } from "@/modules/platform/contracts";
 
-import type {
-  EstimateInput,
-  EstimateResult,
-  PriceGradeInput,
-  PriceMatrixCellInput,
-  PriceOptionInput,
-  PriceSizeClassInput,
-  PriceTable,
-  QuantityTierInput,
-} from "./contracts";
-import { zEstimateInput } from "./contracts";
+import type { EstimateInput, EstimateResult, PriceTable, PricingReplaceInput } from "./contracts";
+import { zEstimateInput, zPricingReplaceInput } from "./contracts";
 import { computeEstimate } from "./estimate";
-import {
-  OptimisticLockError,
-  getPriceTable,
-  replaceMatrix,
-  replaceQuantityTiers,
-  replaceSizeClasses,
-  upsertGrade,
-  upsertOption,
-} from "./repository";
+import { PricingRpcError, getPriceTable, replacePricingAll } from "./repository";
 
 /**
  * pricing モジュールの公開 facade (契約書 §5)。
@@ -35,8 +18,10 @@ import {
  * かつ ESLint (no-restricted-imports, docs/module-contracts.md §2 の機械的強制) が
  * repository.ts への他モジュール外 import を一律禁止しているため、admin Server Action は
  * facade 経由でしか書き込めない。そのため本実装は契約書 §5 の 2 メソッドはそのまま維持しつつ、
- * admin 専用の書き込みメソッド (getFullPriceTable / savePriceGrade / savePriceOption /
- * replacePriceSizeClasses / replacePriceMatrix / replacePriceQuantityTiers) を追補した。
+ * admin 専用のメソッド (getFullPriceTable / replaceAllPricing) を追補した。
+ * 旧 5 メソッド (savePriceGrade / savePriceOption / replacePriceSizeClasses / replacePriceMatrix /
+ * replacePriceQuantityTiers) はテーブルごとの個別書き込みで非原子だったため、単一 RPC
+ * (pricing_replace_all — migration 20260906000010) を呼ぶ replaceAllPricing に統合した。
  * 契約書 §5 を更新するかは今後の判断だが、本実装は追補分を含めてこのファイルを正とする。
  *
  * `estimate(input): Result<EstimateResult>` は契約書のシグネチャ通り table 引数を取らない
@@ -60,15 +45,11 @@ export interface PricingFacade {
 
   // ---- admin 専用 (契約書 §5 からの拡張。上記コメント参照) ----
   getFullPriceTable(): Promise<Result<PriceTable>>;
-  savePriceGrade(
-    input: PriceGradeInput,
-    id: string | null,
-    expectedUpdatedAt: string | null,
-  ): Promise<Result<{ id: string }>>;
-  savePriceOption(input: PriceOptionInput, id: string | null): Promise<Result<{ id: string }>>;
-  replacePriceSizeClasses(input: PriceSizeClassInput[]): Promise<Result<void>>;
-  replacePriceMatrix(input: PriceMatrixCellInput[]): Promise<Result<void>>;
-  replacePriceQuantityTiers(input: QuantityTierInput[]): Promise<Result<void>>;
+  /**
+   * 価格表 5 テーブルの一括置換 (単一トランザクション)。
+   * エラー: E101 (zod / RPC 入力不備) / E103 (grades の楽観排他) / E202 (非 admin) / E901。
+   */
+  replaceAllPricing(input: PricingReplaceInput): Promise<Result<void>>;
 }
 
 /**
@@ -135,50 +116,19 @@ export function createPricingFacade(): PricingFacade {
       }
     },
 
-    async savePriceGrade(input, id, expectedUpdatedAt) {
+    async replaceAllPricing(input) {
+      // 「入力は Zod が唯一の正」— Server Action 側で検証済みでも facade 境界で再検証する。
+      const parsed = zPricingReplaceInput.safeParse(input);
+      if (!parsed.success) {
+        return { ok: false, code: "KMB-E101", detail: parsed.error.message };
+      }
       try {
-        const saved = await upsertGrade(input, id, expectedUpdatedAt);
-        return { ok: true, value: { id: saved.id } };
+        await replacePricingAll(parsed.data);
+        return { ok: true, value: undefined };
       } catch (err) {
-        if (err instanceof OptimisticLockError) {
-          return { ok: false, code: "KMB-E103", detail: "他の変更と競合しました" };
+        if (err instanceof PricingRpcError) {
+          return { ok: false, code: err.code, detail: err.message };
         }
-        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
-      }
-    },
-
-    async savePriceOption(input, id) {
-      try {
-        const saved = await upsertOption(input, id);
-        return { ok: true, value: { id: saved.id } };
-      } catch (err) {
-        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
-      }
-    },
-
-    async replacePriceSizeClasses(input) {
-      try {
-        await replaceSizeClasses(input);
-        return { ok: true, value: undefined };
-      } catch (err) {
-        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
-      }
-    },
-
-    async replacePriceMatrix(input) {
-      try {
-        await replaceMatrix(input);
-        return { ok: true, value: undefined };
-      } catch (err) {
-        return { ok: false, code: "KMB-E901", detail: errMessage(err) };
-      }
-    },
-
-    async replacePriceQuantityTiers(input) {
-      try {
-        await replaceQuantityTiers(input);
-        return { ok: true, value: undefined };
-      } catch (err) {
         return { ok: false, code: "KMB-E901", detail: errMessage(err) };
       }
     },

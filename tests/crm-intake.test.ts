@@ -400,6 +400,28 @@ describe("runIntakeSequence — 新規取込 (マーカーなし)", () => {
 });
 
 describe("runIntakeSequence — dealless (§12.1「deal なし取込」, opts.createDeal=false)", () => {
+  it("単一一致が手動 archived なら lifecycle を customer に戻す (lead に戻さない — 過去完了案件を見込みとして復活させない)", async () => {
+    const archivedId = randomUUID();
+    db.tables.customers.push({
+      id: archivedId,
+      name: "田中太郎",
+      email: "taro@example.com",
+      lifecycle: "archived",
+      merged_into_customer_id: null,
+      source: "form",
+      kind: "person",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    const result = await runIntakeSequence(client, formInput(), { createDeal: false });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.customer_id).toBe(archivedId);
+    expect(result.value.deal_id).toBeNull();
+    expect(db.tables.customers).toHaveLength(1);
+    expect(db.tables.customers[0].lifecycle).toBe("customer");
+    expect(db.tables.deals).toHaveLength(0);
+  });
+
   it("customer のみ作成 (lifecycle=customer)。deal も折り返しタスクも作らない", async () => {
     const input = formInput();
     const result = await runIntakeSequence(client, input, { createDeal: false });

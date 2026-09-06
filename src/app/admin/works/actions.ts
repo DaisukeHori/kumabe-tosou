@@ -8,17 +8,20 @@ import {
   type WorkInput,
 } from "@/modules/content/contracts";
 import type { Result } from "@/modules/platform/contracts";
+import { platformFacade } from "@/modules/platform/facade";
 
 /**
  * /admin/works の Server Actions。
- * 契約書 §3.5「全 Action の先頭で requireAdmin() + Zod parse を必須とする」のうち、
- * requireAdmin() は platform モジュール (Wave1-A 担当) の実装待ちのため未接続。
- * 認可は (1) admin layout の middleware 認証ゲート (Wave1-A) と
- * (2) works テーブル RLS (works_admin_insert/update、is_admin()) の 2 層で担保する
- * (未認証・非 admin の書込は RLS が KMB-E202 相当で拒否する)。要 platform 実装後の追認。
+ * 契約書 §3.5「全 Action の先頭で requireAdmin() + Zod parse を必須とする」に従い、
+ * 各 Action の先頭で platformFacade.requireAdmin() を呼ぶ (visual/actions.ts と同じパターン)。
+ * 未認証は KMB-E201、認証済みでも admin (profiles) でなければ KMB-E202 をそのまま返す。
+ * RLS (works_admin_insert/update、is_admin()) は最終防衛線として引き続き有効。
  */
 
 export async function createWorkAction(input: WorkInput): Promise<Result<{ id: string }>> {
+  const admin = await platformFacade.requireAdmin();
+  if (!admin.ok) return admin;
+
   const parsed = zWorkInput.safeParse(input);
   if (!parsed.success) {
     return {
@@ -35,6 +38,9 @@ export async function updateWorkAction(
   input: WorkInput,
   expectedUpdatedAt: string,
 ): Promise<Result<{ updated_at: string }>> {
+  const admin = await platformFacade.requireAdmin();
+  if (!admin.ok) return admin;
+
   const parsed = zWorkInput.safeParse(input);
   if (!parsed.success) {
     return {
@@ -51,6 +57,9 @@ export async function transitionWorkAction(
   transition: StatusTransition,
   expectedUpdatedAt: string,
 ): Promise<Result<{ updated_at: string }>> {
+  const admin = await platformFacade.requireAdmin();
+  if (!admin.ok) return admin;
+
   const parsed = zStatusTransition.safeParse(transition);
   if (!parsed.success) {
     return {

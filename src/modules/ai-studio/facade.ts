@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getSessionAndClient } from "@/lib/supabase/session";
 import { aiProvidersFacade } from "@/modules/ai-providers/facade";
 import { mediaFacade } from "@/modules/media/facade";
 import { settingsFacade } from "@/modules/settings/facade";
-import type { Channel, KmbErrorCode, Result } from "@/modules/platform/contracts";
+import type { Channel, ExecutionContext, KmbErrorCode, Result } from "@/modules/platform/contracts";
 import { zCreateUploadUrlReq, type CreateUploadUrlInput } from "@/modules/platform/contracts";
 
 import {
@@ -95,8 +96,13 @@ export interface AiStudioFacade {
   editDraft(draftId: string, content: unknown): Promise<Result<{ revision: number }>>;
   approveDraft(draftId: string): Promise<Result<void>>;
   rejectDraft(draftId: string): Promise<Result<void>>;
-  /** distribution 専用。approved 以外は拒否 */
-  getApprovedDraft(draftId: string): Promise<Result<ApprovedDraft>>;
+  /**
+   * distribution 専用。approved 以外は拒否。
+   * ctx: 省略時 = cookie セッション (admin の schedulePosts 等)。`{ mode: "service" }` は
+   * pg_cron 起動の publish worker (cookie を持たないため、従来は常に KMB-E101 になっていた)。
+   * ai-providers / crm の resolveExecutionClient と同じ流儀 (module-contracts.md §3 の 1 の形)。
+   */
+  getApprovedDraft(draftId: string, ctx?: ExecutionContext): Promise<Result<ApprovedDraft>>;
 }
 
 /**
@@ -187,21 +193,24 @@ async function runOneStage(
     research_notes: unknown;
     style_profiles: unknown;
   },
+  /** acquire で発行された lease_token (migration 20260906000042)。commit / 解放の CAS 条件に含める */
+  leaseToken: string,
 ): Promise<AdvanceOutcome> {
   if (stage === "extracting") {
     const source = await getSource(supabase, row.source_id);
     if (!source?.cleaned_text) {
-      await releaseLeaseAfterFailure(supabase, runId, "KMB-E101");
+      await releaseLeaseAfterFailure(supabase, runId, "KMB-E101", leaseToken);
       return { kind: "error", code: "KMB-E101", detail: "cleaned_text が未確定です" };
     }
     const result = await extractBrief(source.cleaned_text);
     if (!result.ok) {
-      await releaseLeaseAfterFailure(supabase, runId, result.code);
+      await releaseLeaseAfterFailure(supabase, runId, result.code, leaseToken);
       return { kind: "error", code: result.code, detail: result.detail };
     }
     const nextStatus = nextStatusAfterStage("extracting", row.research_enabled);
     const status = await commitStage(supabase, {
       runId,
+      leaseToken,
       expectedStatus: "extracting",
       nextStatus,
       brief: result.value.data,
@@ -214,12 +223,13 @@ async function runOneStage(
     const brief = zBrief.parse(row.brief);
     const result = await researchBrief(brief);
     if (!result.ok) {
-      await releaseLeaseAfterFailure(supabase, runId, result.code);
+      await releaseLeaseAfterFailure(supabase, runId, result.code, leaseToken);
       return { kind: "error", code: result.code, detail: result.detail };
     }
     const nextStatus = nextStatusAfterStage("researching", row.research_enabled);
     const status = await commitStage(supabase, {
       runId,
+      leaseToken,
       expectedStatus: "researching",
       nextStatus,
       researchNotes: result.value.data,
@@ -241,7 +251,7 @@ async function runOneStage(
     );
     const firstFailure = results.find((r) => !r.ok);
     if (firstFailure && !firstFailure.ok) {
-      await releaseLeaseAfterFailure(supabase, runId, firstFailure.code);
+      await releaseLeaseAfterFailure(supabase, runId, firstFailure.code, leaseToken);
       return { kind: "error", code: firstFailure.code, detail: firstFailure.detail };
     }
 
@@ -260,6 +270,7 @@ async function runOneStage(
     const nextStatus = nextStatusAfterStage("drafting", row.research_enabled, row.target_channels);
     const status = await commitStage(supabase, {
       runId,
+      leaseToken,
       expectedStatus: "drafting",
       nextStatus,
       channelDrafts,
@@ -277,6 +288,7 @@ async function runOneStage(
     // 防御的に candidates=[] のまま前進させる。
     const status = await commitImageStage(supabase, {
       runId,
+      leaseToken,
       expectedStatus: "image_generation",
       nextStatus: nextStatusAfterStage("image_generation", row.research_enabled),
       imageCandidates: [],
@@ -344,6 +356,7 @@ async function runOneStage(
   const nextStatus = nextStatusAfterStage("image_generation", row.research_enabled);
   const status = await commitImageStage(supabase, {
     runId,
+    leaseToken,
     expectedStatus: "image_generation",
     nextStatus,
     imageCandidates: candidates,
@@ -472,15 +485,21 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
       }
 
       const row = outcome.row;
+      const leaseToken = row.lease_token;
+      if (!leaseToken) {
+        // migration 20260906000042 適用後は acquired 行に必ず lease_token が付く。無ければ
+        // migration 未適用の環境なので、所有者不明の lease で stage を実行せず明示的に失敗させる。
+        return { kind: "error", code: "KMB-E901", detail: "lease_token が発行されていません (migration 未適用)" };
+      }
       heartbeatTimer = setInterval(() => {
-        heartbeatLease(supabase, runId).catch(() => {
+        heartbeatLease(supabase, runId, leaseToken).catch(() => {
           // heartbeat 失敗はベストエフォート。lease が自然失効しても
           // クラッシュ再開 (§7.6) の仕組みで次の advance が回収する。
         });
       }, HEARTBEAT_INTERVAL_MS);
 
       const stage = row.status as RunStage;
-      return await runOneStage(supabase, runId, stage, row);
+      return await runOneStage(supabase, runId, stage, row, leaseToken);
     } catch (err) {
       return { kind: "error", code: "KMB-E901", detail: err instanceof Error ? err.message : String(err) };
     } finally {
@@ -539,9 +558,12 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
     }
   },
 
-  async getApprovedDraft(draftId) {
+  async getApprovedDraft(draftId, ctx) {
     try {
-      const supabase = await createSupabaseServerClient();
+      // service 文脈 (publish worker) では cookie 依存の createSupabaseServerClient() を呼ばず、
+      // 注入された client (省略時は service client) で channel_drafts を読む。
+      const supabase =
+        ctx?.mode === "service" ? (ctx.client ?? createSupabaseServiceClient()) : await createSupabaseServerClient();
       const draft = await getDraft(supabase, draftId);
       if (!draft) return { ok: false, code: "KMB-E101", detail: "draft が見つかりません" };
       if (draft.status !== "approved") {
@@ -551,6 +573,7 @@ export const aiStudioFacade: AiStudioFacadeExtended = {
         ok: true,
         value: {
           draft_id: draft.id,
+          run_id: draft.run_id,
           channel: draft.channel,
           content: draft.content as ApprovedDraft["content"],
           approved_at: draft.reviewed_at ?? new Date().toISOString(),

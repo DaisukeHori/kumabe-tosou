@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  commitCallJobStage,
   countAmbiguousCalls,
+  heartbeatCallJobLease,
+  updateCallJobTaskIdsCheckpoint,
+  updateCallJobTranscriptPartial,
   countFailedCallJobs,
   countStaleCallJobs,
   linkCallToCustomerRow,
@@ -942,5 +946,105 @@ describe("countFailedCallJobs / countAmbiguousCalls / countStaleCallJobs (#59 �
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("KMB-E901");
+  });
+});
+
+/**
+ * lease 保持者検証 (migration 20260906000050 `call_jobs.lease_token`)。
+ * heartbeat / transcript_partial / task_ids_checkpoint の直接 UPDATE は `id` と `lease_expires_at is not null`
+ * に加えて **`lease_token` 一致**を WHERE に含めなければならない (旧実装は id のみで絞っていたため、
+ * 失効後に別プロセスが再取得した行を旧保持者が延長・上書きできた)。commit RPC には p_lease_token を渡す。
+ */
+describe("lease_token による lease 保持者検証 (heartbeat / checkpoint / commit)", () => {
+  type UpdResult = { data: unknown; error: unknown };
+
+  class LeaseUpdateChain implements PromiseLike<UpdResult> {
+    updatePayload: Record<string, unknown> | null = null;
+    readonly calls: Array<{ method: string; args: unknown[] }> = [];
+    constructor(private readonly result: UpdResult) {}
+    private record(method: string, args: unknown[]): this {
+      this.calls.push({ method, args });
+      return this;
+    }
+    update(payload: Record<string, unknown>): this {
+      this.updatePayload = payload;
+      return this.record("update", [payload]);
+    }
+    eq(...a: unknown[]): this {
+      return this.record("eq", a);
+    }
+    not(...a: unknown[]): this {
+      return this.record("not", a);
+    }
+    then<T1 = UpdResult, T2 = never>(
+      onfulfilled?: ((value: UpdResult) => T1 | PromiseLike<T1>) | null,
+      onrejected?: ((reason: unknown) => T2 | PromiseLike<T2>) | null,
+    ): PromiseLike<T1 | T2> {
+      return Promise.resolve(this.result).then(onfulfilled, onrejected);
+    }
+  }
+
+  function buildLeaseClient(chain: LeaseUpdateChain) {
+    return { from: vi.fn(() => chain) } as unknown as SupabaseClient;
+  }
+
+  const LEASE_TOKEN = "55555555-5555-5555-5555-555555555555";
+
+  it("heartbeatCallJobLease: id / lease_token 一致 / lease_expires_at is not null の 3 条件で絞り、lease_expires_at のみ更新する", async () => {
+    const chain = new LeaseUpdateChain({ data: null, error: null });
+    const result = await heartbeatCallJobLease(buildLeaseClient(chain), JOB_ID, LEASE_TOKEN);
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(Object.keys(chain.updatePayload ?? {})).toEqual(["lease_expires_at"]);
+    expect(chain.calls).toContainEqual({ method: "eq", args: ["id", JOB_ID] });
+    expect(chain.calls).toContainEqual({ method: "eq", args: ["lease_token", LEASE_TOKEN] });
+    expect(chain.calls).toContainEqual({ method: "not", args: ["lease_expires_at", "is", null] });
+  });
+
+  it("updateCallJobTranscriptPartial: lease_token 一致を WHERE に含める", async () => {
+    const chain = new LeaseUpdateChain({ data: null, error: null });
+    const checkpoint = { segments: [{ channel: 0, index: 0, text: "x" }] };
+    const result = await updateCallJobTranscriptPartial(buildLeaseClient(chain), JOB_ID, checkpoint, LEASE_TOKEN);
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(chain.updatePayload).toEqual({ transcript_partial: checkpoint });
+    expect(chain.calls).toContainEqual({ method: "eq", args: ["lease_token", LEASE_TOKEN] });
+    expect(chain.calls).toContainEqual({ method: "not", args: ["lease_expires_at", "is", null] });
+  });
+
+  it("updateCallJobTaskIdsCheckpoint: task_ids_checkpoint に配列を書き、lease_token 一致を WHERE に含める", async () => {
+    const chain = new LeaseUpdateChain({ data: null, error: null });
+    const result = await updateCallJobTaskIdsCheckpoint(buildLeaseClient(chain), JOB_ID, ["t1", "t2"], LEASE_TOKEN);
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(chain.updatePayload).toEqual({ task_ids_checkpoint: ["t1", "t2"] });
+    expect(chain.calls).toContainEqual({ method: "eq", args: ["id", JOB_ID] });
+    expect(chain.calls).toContainEqual({ method: "eq", args: ["lease_token", LEASE_TOKEN] });
+  });
+
+  it("heartbeat / checkpoint の DB エラーは握り潰さず伝播する", async () => {
+    const failing = () => new LeaseUpdateChain({ data: null, error: { message: "connection reset" } });
+    const hb = await heartbeatCallJobLease(buildLeaseClient(failing()), JOB_ID, LEASE_TOKEN);
+    const cp = await updateCallJobTaskIdsCheckpoint(buildLeaseClient(failing()), JOB_ID, [], LEASE_TOKEN);
+    expect(hb.ok).toBe(false);
+    expect(cp.ok).toBe(false);
+  });
+
+  it("commitCallJobStage: call_job_commit_stage RPC に p_lease_token を渡す", async () => {
+    const rpc = vi.fn(async () => ({ data: "transcribing", error: null }));
+    const client = { rpc } as unknown as SupabaseClient;
+
+    const result = await commitCallJobStage(client, {
+      jobId: JOB_ID,
+      leaseToken: LEASE_TOKEN,
+      expectedStatus: "downloading",
+      nextStatus: "transcribing",
+    });
+
+    expect(result).toEqual({ ok: true, value: "transcribing" });
+    expect(rpc).toHaveBeenCalledWith(
+      "call_job_commit_stage",
+      expect.objectContaining({ p_job_id: JOB_ID, p_lease_token: LEASE_TOKEN, p_expected_status: "downloading", p_next_status: "transcribing" }),
+    );
   });
 });

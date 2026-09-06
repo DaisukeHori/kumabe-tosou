@@ -193,6 +193,17 @@ async function schedulePosts(entries: ScheduleEntry[]): Promise<Result<{ post_id
   };
   const prepared: Prepared[] = [];
 
+  // 同一 draft の重複予約 (entries 内の重複) は DB の partial unique index
+  // (migration 20260906000040: channel_posts(draft_id) where status in active 集合) と同じ
+  // KMB-E102 で事前に拒否する (途中まで insert してから 23505 で止まる半端な状態を作らない)。
+  const seenDraftIds = new Set<string>();
+  for (const entry of entries) {
+    if (seenDraftIds.has(entry.draft_id)) {
+      return { ok: false, code: "KMB-E102", detail: `同じ draft が複数回指定されています (${entry.draft_id})` };
+    }
+    seenDraftIds.add(entry.draft_id);
+  }
+
   for (const entry of entries) {
     const draftResult = await aiStudio.getApprovedDraft(entry.draft_id);
     if (!draftResult.ok) return draftResult;
@@ -228,6 +239,22 @@ async function schedulePosts(entries: ScheduleEntry[]): Promise<Result<{ post_id
   const totalNewXCents = prepared.filter((p) => p.channel === "x").reduce((acc, p) => acc + p.costCents, 0);
   const serviceClient = createSupabaseServiceClient();
 
+  // 既に active (scheduled/publishing/published/manual_required) な予約がある draft は重複予約として拒否
+  // (最終防衛線は同 migration の unique index → 23505 → pgErrorToResult が KMB-E102 に変換)。
+  const activeResult = await repo.listActiveChannelPostsByDraftIds(
+    serviceClient,
+    prepared.map((p) => p.entry.draft_id),
+  );
+  if (!activeResult.ok) return activeResult;
+  if (activeResult.value.length > 0) {
+    const dup = activeResult.value[0];
+    return {
+      ok: false,
+      code: "KMB-E102",
+      detail: `この draft には既に有効な予約があります (draft_id=${dup.draft_id}, status=${dup.status})`,
+    };
+  }
+
   if (totalNewXCents > 0) {
     // worker.ts (distribution/internal/ops-limits.ts) と同一の共通 helper で service client
     // 直読に統一する (敵対レビュー MAJOR#2)。従来は settingsFacade.get() が失敗すると
@@ -245,10 +272,17 @@ async function schedulePosts(entries: ScheduleEntry[]): Promise<Result<{ post_id
     }
     const range = currentJstMonthRangeUtc();
     const sumResult = await repo.getMonthlyXCostCentsSum(serviceClient, range);
-    const currentSum = sumResult.ok ? sumResult.value : 0;
+    if (!sumResult.ok) {
+      // 合算が読めないのに 0 とみなすと上限ガードが無効化される (fail-open)。fail-closed にする。
+      return {
+        ok: false,
+        code: "KMB-E901",
+        detail: `当月の X コスト合算が読めないため予約できません: ${sumResult.detail ?? sumResult.code}`,
+      };
+    }
     if (
       exceedsMonthlyBillingGuard({
-        currentMonthCentsSum: currentSum,
+        currentMonthCentsSum: sumResult.value,
         additionalCents: totalNewXCents,
         limitCents: opsLimitsResult.limits.x_monthly_post_limit,
       })
@@ -656,22 +690,21 @@ async function createNoteDraft(
   // 呼んでいたため、並列呼び出しが両方とも下書き一覧照合 [reconcile] に失敗した場合、
   // 同じ post の下書きを二重作成しうる不具合があった)。
   //
-  // 影響行数 0 (claim 失敗) は「既に他プロセスが creating に遷移済み」を意味する。これは
-  // post.note_draft_status が (この関数に入ってきた時点で既に) 'creating' だった場合を含む —
-  // 別プロセスが今まさに作成中か、前回プロセスがクラッシュし成否未確定のいずれかであり、
-  // どちらであっても外部 API を呼ばずここで早期リターンする (二重作成しない)。
+  // 影響行数 0 (claim 失敗) は「既に他プロセスが creating に遷移済み (10 分以内)」を意味する。
+  // 別プロセスが今まさに作成中のため、外部 API を呼ばずここで早期リターンする (二重作成しない)。
+  // creating のまま 10 分超経過した行 (前回プロセスのクラッシュ等で終端遷移に到達できなかった
+  // 固着。migration 20260906000041 の note_draft_claimed_at で判定) は CAS の遷移元に含まれ、
+  // 回収した側が下書き一覧との照合 (reconcile) を経て再作成する。
   const claimResult = await repo.claimNoteDraftCreating(serviceClient, postId);
   if (!claimResult.ok) return claimResult;
   if (!claimResult.value) {
     return { ok: true, value: { status: "creating", url: null } };
   }
 
-  // CAS で creating を勝ち取った側のみ reconcile する。前回 unknown (タイムアウト/応答不明)
-  // だった場合、新規作成の前にまず下書き一覧と照合する (§8 MAJOR-3: 重複下書きの防止)。
-  // 照合自体が失敗してもベストエフォートで通常フローへ進む。
-  // ('creating' からの CAS 遷移は上で常に失敗し早期リターンするため、ここに来る時点で
-  // post.note_draft_status は 'none' | 'failed' | 'unknown' のいずれかであることが保証される。)
-  if (post.note_draft_status === "unknown") {
+  // CAS で creating を勝ち取った側のみ reconcile する。前回 unknown (タイムアウト/応答不明) または
+  // 固着 creating (成否未確定) だった場合、新規作成の前にまず下書き一覧と照合する
+  // (§8 MAJOR-3: 重複下書きの防止)。照合自体が失敗してもベストエフォートで通常フローへ進む。
+  if (post.note_draft_status === "unknown" || post.note_draft_status === "creating") {
     try {
       const found = await reconcileNoteDraftByTitle(cookie, content.title);
       if (found) {

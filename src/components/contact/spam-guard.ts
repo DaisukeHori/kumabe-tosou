@@ -50,12 +50,17 @@ export function hashIp(ip: string, salt: string): string {
   return createHash("sha256").update(`${salt}:${ip}`).digest("hex");
 }
 
-/** x-forwarded-for / x-real-ip ヘッダからクライアント IP を取り出す */
+/**
+ * x-real-ip / x-forwarded-for ヘッダからクライアント IP を取り出す。
+ * x-real-ip を優先する: 前段プロキシ (Vercel / Cloudflare 等) が接続元から確定的に設定する
+ * 単一値で、クライアントが x-forwarded-for に任意の値を前置して詐称する余地がない。
+ * x-real-ip が無い環境でのみ x-forwarded-for の先頭を使う。どちらも無ければ "unknown"。
+ */
 export function extractClientIp(forwardedFor: string | null, realIp: string | null): string {
+  if (realIp && realIp.trim().length > 0) return realIp.trim();
   if (forwardedFor) {
     const first = forwardedFor.split(",")[0]?.trim();
     if (first) return first;
   }
-  if (realIp && realIp.trim().length > 0) return realIp.trim();
   return "unknown";
 }

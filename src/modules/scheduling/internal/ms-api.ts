@@ -50,6 +50,7 @@ export const zGraphEvent = z.object({
   lastModifiedDateTime: z.string().optional(),
   subject: z.string().optional(),
   isAllDay: z.boolean().optional(), // 終日化検知 (P31 — §8.5)
+  seriesMasterId: z.string().optional(), // 繰り返しシリーズのインスタンス (occurrence/exception) なら親 id (§8.5)
   start: z.object({ dateTime: z.string(), timeZone: z.string() }).optional(),
   end: z.object({ dateTime: z.string(), timeZone: z.string() }).optional(),
 });
@@ -221,6 +222,7 @@ function toExternalEventChange(event: z.infer<typeof zGraphEvent>): ExternalEven
     // 出所マーキングからの復元は Google のみ確実 (§8.1 の appLinkId/appBlockId 注記)。
     appLinkId: null,
     appBlockId: null,
+    recurringEventId: event.seriesMasterId ?? null,
   };
 }
 

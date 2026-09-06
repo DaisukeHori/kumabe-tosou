@@ -5,7 +5,8 @@ import { revalidateTag } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Paged, Pagination, Result } from "@/modules/platform/contracts";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import type { ExecutionContext, Paged, Pagination, Result } from "@/modules/platform/contracts";
 
 import type {
   AdminListParams,
@@ -35,8 +36,13 @@ import type { PostRow, Table, VoiceRow, WorkRow } from "./repository";
  * 要 module-contracts.md 追認)。
  */
 export interface ContentFacade {
+  /**
+   * ctx: 省略時 = cookie セッション。`{ mode: "service" }` は publish worker (pg_cron 起動、
+   * cookie なし) からの site_blog 配信用 (注入 client、省略時は service client)。
+   */
   createBlogPostFromDraft(
     input: BlogPostContent & { source_run_id: string },
+    ctx?: ExecutionContext,
   ): Promise<Result<{ post_id: string; slug: string }>>;
   publish(kind: PostKind | "work" | "voice", id: string, publishedAt?: Date): Promise<Result<void>>;
   listPublished<K extends ContentKind>(
@@ -244,8 +250,10 @@ async function attachWorkImages(
 
 async function createBlogPostFromDraft(
   input: BlogPostContent & { source_run_id: string },
+  ctx?: ExecutionContext,
 ): Promise<Result<{ post_id: string; slug: string }>> {
-  const client = await createSupabaseServerClient();
+  const client =
+    ctx?.mode === "service" ? (ctx.client ?? createSupabaseServiceClient()) : await createSupabaseServerClient();
   let slug = input.suggested_slug;
   let insertResult = await repo.insertPublishedBlogPost(client, {
     slug,

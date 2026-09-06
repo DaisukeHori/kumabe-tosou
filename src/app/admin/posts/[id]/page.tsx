@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { requireAdminPage } from "@/app/admin/_lib/require-admin-page";
 import { PageHeader } from "@/app/admin/_ui";
 import { contentFacade } from "@/modules/content/facade";
 import { ensureMediaItems, listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
@@ -10,6 +11,16 @@ export const dynamic = "force-dynamic";
 
 export default async function EditPostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // 契約書 §3.5: page 先頭でも requireAdmin (E201/E202 は /admin/login へ redirect)
+  const auth = await requireAdminPage(`/admin/posts/${id}`);
+  if (!auth.ok) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-destructive">認可の確認に失敗しました ({auth.code}): {auth.detail}</p>
+      </div>
+    );
+  }
+
   const [result, mediaList] = await Promise.all([contentFacade.getPostAdmin(id), listMediaForPicker()]);
 
   if (!result.ok) {

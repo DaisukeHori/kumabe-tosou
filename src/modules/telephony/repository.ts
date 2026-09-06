@@ -181,10 +181,11 @@ export async function updateCallHandling(
 
 export type CallStatusCallbackPatch = {
   twilio_status: string;
-  duration_seconds: number | null;
-  ended_at: string | null;
+  /** 終端イベント時のみ渡す (非終端イベント — ringing/in-progress 等 — では省略し、既存値を巻き戻さない)。 */
+  duration_seconds?: number | null;
+  ended_at?: string;
   handling?: CallHandling; // handling が null のまま終了した場合のみ 'missed' を渡す (§5.2(b))
-  twilio_cost_estimate_micro_usd: number;
+  twilio_cost_estimate_micro_usd?: number;
 };
 
 /**
@@ -281,6 +282,13 @@ export type CallJobRow = {
   ai_cost_micro_usd: number;
   stage_attempts: number;
   lease_expires_at: string | null;
+  /** lease 保持者トークン (migration 20260906000050)。null = 未取得/解放済み。 */
+  lease_token: string | null;
+  /** linking のタスク起票チェックポイント (migration 20260906000051)。起票済み task_id を
+   *  analysis.tasks の順に保持し、commit 前クラッシュ再入時の二重起票を防ぐ (ambiguous/no_number
+   *  経路は source_activity_id が null のため DB 側の (source_activity_id, title) 一意 index が
+   *  効かない)。null = 未着手。 */
+  task_ids_checkpoint: string[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -342,15 +350,22 @@ export async function acquireCallJobLease(
 
 /**
  * heartbeat (§2.3 末尾: lease 延長は RPC 化せず worker が直接 UPDATE する設計)。
- * `lease_expires_at is not null` の行にのみ効く単純 CAS — lease が既に解放/失効している行を
- * 誤って再取得済みにしてしまうことはない。worker が 20 秒毎に呼ぶ (ベストエフォート)。
+ * `lease_expires_at is not null` かつ **`lease_token` が acquire 時に発行された自分のトークンと
+ * 一致する**行にのみ効く単純 CAS (migration 20260906000050)。旧実装は id のみで絞っていたため、
+ * lease 失効後に別プロセスが再取得した行を旧保持者の heartbeat が延長し続ける (= 2 プロセスが
+ * 同一 lease を共有する) 穴があった。worker が 20 秒毎に呼ぶ (ベストエフォート)。
  */
-export async function heartbeatCallJobLease(client: SupabaseClient, jobId: string): Promise<Result<void>> {
+export async function heartbeatCallJobLease(
+  client: SupabaseClient,
+  jobId: string,
+  leaseToken: string,
+): Promise<Result<void>> {
   const leaseExpiresAt = new Date(Date.now() + CALL_JOB_LEASE_TTL_MS).toISOString();
   const { error } = await client
     .from("call_jobs")
     .update({ lease_expires_at: leaseExpiresAt })
     .eq("id", jobId)
+    .eq("lease_token", leaseToken)
     .not("lease_expires_at", "is", null);
   if (error) return pgErrorToResult(error);
   return { ok: true, value: undefined };
@@ -358,6 +373,8 @@ export async function heartbeatCallJobLease(client: SupabaseClient, jobId: strin
 
 export type CommitCallJobStageInput = {
   jobId: string;
+  /** acquire で発行された lease 保持者トークン。RPC 側の CAS WHERE に含まれ、不一致なら no-op (現在値を返す)。 */
+  leaseToken: string;
   expectedStatus: CallJobStatus;
   nextStatus: CallJobStatus;
   transcript?: CallTranscript | null;
@@ -379,6 +396,7 @@ export async function commitCallJobStage(
 ): Promise<Result<CallJobStatus>> {
   const { data, error } = await client.rpc("call_job_commit_stage", {
     p_job_id: input.jobId,
+    p_lease_token: input.leaseToken,
     p_expected_status: input.expectedStatus,
     p_next_status: input.nextStatus,
     p_transcript: input.transcript ?? null,
@@ -535,11 +553,37 @@ export async function updateCallJobTranscriptPartial(
   client: SupabaseClient,
   jobId: string,
   checkpoint: CallTranscriptCheckpoint,
+  leaseToken: string,
 ): Promise<Result<void>> {
+  // heartbeat と同じく lease_token 一致を WHERE に含める (migration 20260906000050): 失効後に
+  // 他プロセスが再取得した行へ旧保持者の古いチェックポイントを上書きしない。
   const { error } = await client
     .from("call_jobs")
     .update({ transcript_partial: checkpoint })
     .eq("id", jobId)
+    .eq("lease_token", leaseToken)
+    .not("lease_expires_at", "is", null);
+  if (error) return pgErrorToResult(error);
+  return { ok: true, value: undefined };
+}
+
+/**
+ * linking のタスク起票チェックポイント (migration 20260906000051 `call_jobs.task_ids_checkpoint`)。
+ * createTask 1 件成功ごとに起票済み task_id 配列を書き込む (transcript_partial と同型の
+ * lease 保持中 service 直接 UPDATE — commit RPC は使わない)。再入時は worker がこの配列を
+ * 読み、既に起票済みの分は createTask を呼ばずに再利用する。lease_token 一致を WHERE に含める。
+ */
+export async function updateCallJobTaskIdsCheckpoint(
+  client: SupabaseClient,
+  jobId: string,
+  taskIds: readonly string[],
+  leaseToken: string,
+): Promise<Result<void>> {
+  const { error } = await client
+    .from("call_jobs")
+    .update({ task_ids_checkpoint: [...taskIds] })
+    .eq("id", jobId)
+    .eq("lease_token", leaseToken)
     .not("lease_expires_at", "is", null);
   if (error) return pgErrorToResult(error);
   return { ok: true, value: undefined };

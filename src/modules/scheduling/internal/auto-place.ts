@@ -105,7 +105,10 @@ export function proposePlacements(input: AutoPlaceInput): PlacementProposal[] {
   const results: PlacementProposal[] = [];
 
   for (const target of input.targets) {
-    const durationMs = Math.round(target.planned_hours * HOUR_MS);
+    // planned_hours=0 (工数未定のブロック) でも長さ 0 の提案は作らない — starts_at===ends_at は
+    // zPlaceBlockInput の refine (ends_at > starts_at) で KMB-E701 になり配置できない。最小でも
+    // 1 スナップ幅 (30 分) を確保する。
+    const durationMs = Math.max(SNAP_MS, Math.round(target.planned_hours * HOUR_MS));
 
     if (!target.consumes_capacity) {
       const startJst = cursorJst;

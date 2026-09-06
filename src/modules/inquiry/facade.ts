@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { getSessionAndClient } from "@/lib/supabase/session";
 import type { Pagination, Paged, Result } from "@/modules/platform/contracts";
 
@@ -33,6 +35,20 @@ export interface InquiryFacadeExtended extends InquiryFacade {
   countByStatus(status: InquiryStatus): Promise<Result<number>>;
 }
 
+/**
+ * 通知メールの fire-and-forget。after() が使えるリクエストスコープ内では応答後に実行を予約し、
+ * リクエストスコープ外 (Vitest / スクリプト) で after() が同期 throw する場合は従来どおり
+ * void 呼び出しにフォールバックする。notifyInquiryReceived 自体は例外を外へ漏らさない。
+ */
+function scheduleInquiryNotification(input: InquiryInput, inquiryId: string): void {
+  const run = () => notifyInquiryReceived(input, inquiryId);
+  try {
+    after(run);
+  } catch {
+    void run();
+  }
+}
+
 export const inquiryFacade: InquiryFacadeExtended = {
   async submit(rawInput) {
     const parsed = zInquiryInput.safeParse(rawInput);
@@ -43,8 +59,10 @@ export const inquiryFacade: InquiryFacadeExtended = {
     const inserted = await insertContactInquiry(parsed.data);
     if (!inserted.ok) return inserted;
 
-    // ベストエフォート通知 (失敗しても submit 自体は成功のまま — 設計書 §6.3 / KMB-E902)
-    void notifyInquiryReceived(parsed.data, inserted.value.id);
+    // ベストエフォート通知 (失敗しても submit 自体は成功のまま — 設計書 §6.3 / KMB-E902)。
+    // Vercel では応答返却後に関数が凍結され fire-and-forget の Promise が打ち切られ得るため、
+    // next/server の after() でリクエスト完了後の実行を予約する。
+    scheduleInquiryNotification(parsed.data, inserted.value.id);
 
     return inserted;
   },

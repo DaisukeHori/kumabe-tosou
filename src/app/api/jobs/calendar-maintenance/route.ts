@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 
 import { isJobsSecretConfigured } from "@/lib/env";
+import { secretEquals } from "@/lib/secret-compare";
 import { createSchedulingFacade } from "@/modules/scheduling/facade";
 
 /**
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   const provided = request.headers.get("x-jobs-secret");
-  if (!provided || provided !== process.env.JOBS_SECRET) {
+  if (!secretEquals(provided, process.env.JOBS_SECRET)) {
     return NextResponse.json({ code: "KMB-E201", message: "認証に失敗しました" }, { status: 401 });
   }
 

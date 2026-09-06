@@ -28,7 +28,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const step = url.searchParams.get("step");
 
   if (step === "dial_result") {
-    const picked = pickWithNullFill(params, ["CallSid", "DialCallStatus", "DialCallDuration"]);
+    const picked = pickWithNullFill(params, ["CallSid", "DialCallStatus", "DialCallDuration", "CallStatus"]);
     const parsed = zDialResultWebhook.safeParse(picked);
     if (!parsed.success) {
       console.error(

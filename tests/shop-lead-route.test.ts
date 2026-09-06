@@ -293,7 +293,7 @@ describe("POST /api/shop/lead — rate limit (route引数 'shop_lead' + 429 KMB-
     );
   });
 
-  it("超過時は 429 + KMB-E105 を返し、以降 (strict parse 含む) は実行されない", async () => {
+  it("超過時は 429 + KMB-E105 を返し、以降 (inquiry 保存) は実行されない", async () => {
     checkAndRecordRateLimitMock.mockResolvedValueOnce({
       ok: false,
       code: "KMB-E105",
@@ -304,6 +304,20 @@ describe("POST /api/shop/lead — rate limit (route引数 'shop_lead' + 429 KMB-
 
     expect(res.status).toBe(429);
     expect(await readJson(res)).toMatchObject({ ok: false, code: "KMB-E105" });
+    expect(inquirySubmitMock).not.toHaveBeenCalled();
+  });
+
+  it("strict 契約違反 (400) の送信は rate limit にカウントされない (zod → rate limit の順)", async () => {
+    const res = await POST(
+      makeJsonRequest({
+        ...validPayload(),
+        contact: { name: "山田太郎" }, // email 欠落
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(await readJson(res)).toMatchObject({ ok: false, code: "KMB-E101" });
+    expect(checkAndRecordRateLimitMock).not.toHaveBeenCalled();
     expect(inquirySubmitMock).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,11 @@ import { isServiceRoleConfigured } from "@/lib/env";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type { Result } from "@/modules/platform/contracts";
 
-import { CONTACT_FORM_RATE_LIMIT_ROUTE, computeWindowStart, isRateLimited } from "./spam-guard";
+import {
+  CONTACT_FORM_RATE_LIMIT_ROUTE,
+  computeWindowStart,
+  RATE_LIMIT_MAX_PER_HOUR,
+} from "./spam-guard";
 
 /**
  * contact フォームの rate limit 記録・判定 (cms-ai-pipeline.md §3.3)。
@@ -44,44 +48,31 @@ export async function checkAndRecordRateLimit(
   const client = createSupabaseServiceClient();
   const windowStart = computeWindowStart(now).toISOString();
 
-  const { data: existing, error: selectError } = await client
-    .from("rate_limits")
-    .select("count")
-    .eq("ip_hash", ipHash)
-    .eq("route", route)
-    .eq("window_start", windowStart)
-    .maybeSingle<{ count: number }>();
-
-  if (selectError) {
-    // fail-open: rate limit チェック自体の障害でフォーム送信全体を止めない。
-    console.error("[contact] rate_limits 確認に失敗しました (fail-open で許可します):", selectError);
-    return { ok: true, value: undefined };
-  }
-
-  if (existing) {
-    if (isRateLimited(existing.count)) {
-      return { ok: false, code: "KMB-E105", detail: "rate_limit_exceeded" };
-    }
-    const { error: updateError } = await client
-      .from("rate_limits")
-      .update({ count: existing.count + 1 })
-      .eq("ip_hash", ipHash)
-      .eq("route", route)
-      .eq("window_start", windowStart);
-    if (updateError) {
-      console.error("[contact] rate_limits 更新に失敗しました:", updateError);
-    }
-    return { ok: true, value: undefined };
-  }
-
-  const { error: insertError } = await client.from("rate_limits").insert({
-    ip_hash: ipHash,
-    route,
-    window_start: windowStart,
-    count: 1,
+  // 原子カウント: insert ... on conflict do update ... returning count を RPC 1 回で行う
+  // (migration 20260906000001_rate_limits_atomic_increment.sql)。従来の select → update/insert は
+  // 同一 IP の並列送信で count を取りこぼす (lost update) ため置き換えた。
+  const { data, error } = await client.rpc("rate_limit_increment", {
+    p_ip_hash: ipHash,
+    p_route: route,
+    p_window_start: windowStart,
+    p_limit: RATE_LIMIT_MAX_PER_HOUR,
   });
-  if (insertError) {
-    console.error("[contact] rate_limits 作成に失敗しました:", insertError);
+
+  if (error) {
+    // fail-open: rate limit チェック自体の障害でフォーム送信全体を止めない。
+    console.error("[contact] rate_limit_increment に失敗しました (fail-open で許可します):", error);
+    return { ok: true, value: undefined };
+  }
+
+  const count = typeof data === "number" ? data : Number(data);
+  if (!Number.isFinite(count)) {
+    console.error("[contact] rate_limit_increment の戻り値が数値ではありません (fail-open で許可します):", data);
+    return { ok: true, value: undefined };
+  }
+
+  // 今回の送信を含めた件数が上限を超えたら拒否 (上限ちょうどまでは許可 = 1 時間に 5 件)。
+  if (count > RATE_LIMIT_MAX_PER_HOUR) {
+    return { ok: false, code: "KMB-E105", detail: "rate_limit_exceeded" };
   }
   return { ok: true, value: undefined };
 }

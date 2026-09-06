@@ -752,7 +752,8 @@ describe("listDocumentsPage (keyset ページング)", () => {
       { cursor: null, limit: 50 },
     );
     const orCall = chain.calls.find((c) => c.method === "or");
-    expect(orCall?.args[0]).toBe("doc_no.ilike.%田中建設%,billing_name.ilike.%田中建設%");
+    // 値は PostgREST の quoted value (二重引用符囲み) で渡す (src/lib/postgrest-filter.ts)
+    expect(orCall?.args[0]).toBe('doc_no.ilike."%田中建設%",billing_name.ilike."%田中建設%"');
   });
 
   it("q に % (ILIKE ワイルドカード) を含む場合はエスケープしてから OR 条件に渡す", async () => {
@@ -764,7 +765,37 @@ describe("listDocumentsPage (keyset ページング)", () => {
       { cursor: null, limit: 50 },
     );
     const orCall = chain.calls.find((c) => c.method === "or");
-    expect(orCall?.args[0]).toBe("doc_no.ilike.%100\\%%,billing_name.ilike.%100\\%%");
+    // LIKE エスケープ (`\%`) の後に引用符囲みで `\` 自体も `\\` にエスケープされる 2 段構成
+    expect(orCall?.args[0]).toBe('doc_no.ilike."%100\\\\%%",billing_name.ilike."%100\\\\%%"');
+  });
+
+  it("q にカンマを含む場合も引用符で囲まれ、or フィルタの区切りとして解釈されない", async () => {
+    const chain = new FakeChain({ data: [], error: null });
+    const { client } = buildClient({ fromQueue: [chain] });
+    await listDocumentsPage(
+      client,
+      { doc_type: null, status: null, deal_id: null, q: "田中,建設" },
+      { cursor: null, limit: 50 },
+    );
+    const orCall = chain.calls.find((c) => c.method === "or");
+    expect(orCall?.args[0]).toBe('doc_no.ilike."%田中,建設%",billing_name.ilike."%田中,建設%"');
+    // 二重引用符の外側に現れるカンマは 2 条件の区切り 1 つだけ
+    const outsideQuotes = String(orCall?.args[0]).replace(/"[^"]*"/g, "");
+    expect(outsideQuotes.split(",")).toHaveLength(2);
+  });
+
+  it("q に括弧・二重引用符を含む場合もエスケープされて 1 つの値として渡る", async () => {
+    const chain = new FakeChain({ data: [], error: null });
+    const { client } = buildClient({ fromQueue: [chain] });
+    await listDocumentsPage(
+      client,
+      { doc_type: null, status: null, deal_id: null, q: '(株)"田中"' },
+      { cursor: null, limit: 50 },
+    );
+    const orCall = chain.calls.find((c) => c.method === "or");
+    expect(orCall?.args[0]).toBe(
+      'doc_no.ilike."%(株)\\"田中\\"%",billing_name.ilike."%(株)\\"田中\\"%"',
+    );
   });
 });
 

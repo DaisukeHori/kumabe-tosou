@@ -9,7 +9,16 @@
  * 全て入力を受け取って XML 文字列を返す純関数 (DB/env に触れない — 単体テスト対象)。
  */
 
+import { normalizeSiteBaseUrl } from "@/lib/site-base-url";
+
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8"?>';
+
+/**
+ * <Say> の音声。Twilio の既定 (英語音声 "alice"/"man") で日本語文言を読ませると不自然になるため、
+ * 全 <Say> に日本語の Amazon Polly 音声を明示する (language="ja-JP" とセット)。
+ */
+export const SAY_VOICE = "Polly.Mizuki";
+
 
 /** XML エスケープ (設定文言に `<>&"'` が含まれる場合の対策 — 単体テスト対象)。 */
 export function escapeXml(input: string): string {
@@ -37,19 +46,19 @@ export type ForwardTwimlParams = {
   consentEnabled: boolean;
   consentText: string | null; // null → DEFAULT_CONSENT_TEXT
   forwardToE164: string;
-  baseUrl: string; // NEXT_PUBLIC_SITE_URL (末尾スラッシュなし想定)
+  baseUrl: string; // NEXT_PUBLIC_SITE_URL (末尾スラッシュは normalizeSiteBaseUrl で除去される)
 };
 
 /** (a) 営業時間内 + 転送先あり (§6.2-a)。 */
 export function buildForwardTwiml(params: ForwardTwimlParams): string {
   const consentSay = params.consentEnabled
-    ? `<Say language="ja-JP">${escapeXml(GREETING_PREFIX + (params.consentText ?? DEFAULT_CONSENT_TEXT))}</Say>`
+    ? `<Say voice="${SAY_VOICE}" language="ja-JP">${escapeXml(GREETING_PREFIX + (params.consentText ?? DEFAULT_CONSENT_TEXT))}</Say>`
     : "";
   return (
     XML_HEADER +
     "<Response>" +
     consentSay +
-    `<Dial record="record-from-answer-dual" recordingStatusCallback="${escapeXml(params.baseUrl)}/api/telephony/recording-status" recordingStatusCallbackEvent="completed" timeout="20" action="${escapeXml(params.baseUrl)}/api/telephony/voice?step=dial_result" method="POST">` +
+    `<Dial record="record-from-answer-dual" recordingStatusCallback="${escapeXml(normalizeSiteBaseUrl(params.baseUrl))}/api/telephony/recording-status" recordingStatusCallbackEvent="completed" timeout="20" action="${escapeXml(normalizeSiteBaseUrl(params.baseUrl))}/api/telephony/voice?step=dial_result" method="POST">` +
     `<Number>${escapeXml(params.forwardToE164)}</Number>` +
     "</Dial>" +
     "</Response>"
@@ -60,9 +69,9 @@ function renderRecordFlow(sayText: string, voicemailMaxSeconds: number, baseUrl:
   return (
     XML_HEADER +
     "<Response>" +
-    `<Say language="ja-JP">${escapeXml(sayText)}</Say>` +
-    `<Record maxLength="${voicemailMaxSeconds}" playBeep="true" finishOnKey="#" recordingStatusCallback="${escapeXml(baseUrl)}/api/telephony/recording-status" recordingStatusCallbackEvent="completed" action="${escapeXml(baseUrl)}/api/telephony/voice?step=recorded" method="POST"/>` +
-    `<Say language="ja-JP">${escapeXml(RECORD_FAILURE_TEXT)}</Say>` +
+    `<Say voice="${SAY_VOICE}" language="ja-JP">${escapeXml(sayText)}</Say>` +
+    `<Record maxLength="${voicemailMaxSeconds}" playBeep="true" finishOnKey="#" recordingStatusCallback="${escapeXml(normalizeSiteBaseUrl(baseUrl))}/api/telephony/recording-status" recordingStatusCallbackEvent="completed" action="${escapeXml(normalizeSiteBaseUrl(baseUrl))}/api/telephony/voice?step=recorded" method="POST"/>` +
+    `<Say voice="${SAY_VOICE}" language="ja-JP">${escapeXml(RECORD_FAILURE_TEXT)}</Say>` +
     "</Response>"
   );
 }
@@ -111,7 +120,7 @@ export function buildHangupTwiml(): string {
 
 /** step=recorded の応答 (§6.1 表)。 */
 export function buildRecordedAckTwiml(): string {
-  return `${XML_HEADER}<Response><Say language="ja-JP">${escapeXml(RECORDED_ACK_TEXT)}</Say><Hangup/></Response>`;
+  return `${XML_HEADER}<Response><Say voice="${SAY_VOICE}" language="ja-JP">${escapeXml(RECORDED_ACK_TEXT)}</Say><Hangup/></Response>`;
 }
 
 /** status callback の応答 (常に 200・空 TwiML — §7.3)。 */

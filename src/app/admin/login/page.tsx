@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { isAllowedLoginNext } from "./next-path";
+import { isAllowedLoginNext, loginReasonMessage } from "./next-path";
 
 import { LoginForm } from "./login-form";
 
@@ -11,8 +11,13 @@ export const metadata: Metadata = {
 export default async function AdminLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; reason?: string }>;
 }) {
-  const { next } = await searchParams;
-  return <LoginForm next={next && isAllowedLoginNext(next) ? next : "/admin"} />;
+  const { next, reason } = await searchParams;
+  return (
+    <LoginForm
+      next={next && isAllowedLoginNext(next) ? next : "/admin"}
+      notice={loginReasonMessage(reason)}
+    />
+  );
 }

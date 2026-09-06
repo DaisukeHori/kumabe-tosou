@@ -58,6 +58,11 @@ class FakeUpdateQuery {
     this.eqCalls.push([col, values]);
     return this;
   }
+  /** PostgREST の or フィルタ (claimNoteDraftCreating が遷移元条件に使用) */
+  or(filter: string): this {
+    this.eqCalls.push(["or", filter]);
+    return this;
+  }
   select(): this {
     return this;
   }
@@ -126,8 +131,8 @@ describe("retryFailedToScheduled: CAS 条件 (failed → scheduled)", () => {
   });
 });
 
-describe("claimNoteDraftCreating: CAS 条件 (none/failed/unknown → creating のみ許可。§8 MAJOR-3 実装レビューで発見・修正)", () => {
-  it("id と note_draft_status in (none,failed,unknown) の両方を条件に含め、成功時は note_draft_status='creating'/note_draft_url=null へ更新する", async () => {
+describe("claimNoteDraftCreating: CAS 条件 (none/failed/unknown + 固着 creating → creating のみ許可。§8 MAJOR-3 実装レビューで発見・修正)", () => {
+  it("id と note_draft_status の遷移元条件 (or フィルタ) の両方を含め、成功時は note_draft_status='creating'/note_draft_url=null/note_draft_claimed_at=now へ更新する", async () => {
     const recordedEq: EqCall[] = [];
     let updatePayload: Record<string, unknown> | undefined;
     const client = {
@@ -143,11 +148,20 @@ describe("claimNoteDraftCreating: CAS 条件 (none/failed/unknown → creating �
       },
     } as unknown as SupabaseClient;
 
-    const result = await claimNoteDraftCreating(client, "post-1");
+    const now = new Date("2026-09-06T00:20:00.000Z");
+    const result = await claimNoteDraftCreating(client, "post-1", now);
     expect(result).toEqual({ ok: true, value: true });
     expect(recordedEq).toContainEqual(["id", "post-1"]);
-    expect(recordedEq).toContainEqual(["note_draft_status", ["none", "failed", "unknown"]]);
-    expect(updatePayload).toEqual({ note_draft_status: "creating", note_draft_url: null });
+    // 遷移元は none/failed/unknown に加え、固着 creating (claimed_at が 10 分超前 or null) を or で許可
+    // (migration 20260906000041 / tests/distribution-note-draft-stale-claim.test.ts に詳細)
+    const orFilter = recordedEq.find(([col]) => col === "or")?.[1];
+    expect(orFilter).toContain("note_draft_status.in.(none,failed,unknown)");
+    expect(orFilter).toContain("note_draft_status.eq.creating");
+    expect(updatePayload).toEqual({
+      note_draft_status: "creating",
+      note_draft_url: null,
+      note_draft_claimed_at: now.toISOString(),
+    });
   });
 
   it("対象が既に他プロセスに creating を先取りされていた場合 (0 行更新) は value=false を返し、外部 API 呼び出し側が早期リターンできるようにする (二重作成防止)", async () => {
