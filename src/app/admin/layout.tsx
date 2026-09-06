@@ -112,7 +112,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-sm font-extrabold text-sidebar-accent-foreground"
             aria-hidden="true"
           >
-            隈
+            山
           </div>
           <div className="leading-tight">
             <p className="text-sm font-extrabold">山岸塗装</p>

@@ -24,7 +24,7 @@ export function LoginForm({ next, notice = null }: { next: string; notice?: stri
             className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-base font-extrabold text-sidebar-accent-foreground"
             aria-hidden="true"
           >
-            隈
+            山
           </div>
           <div className="leading-tight">
             <CardTitle className="text-[15px] font-extrabold">山岸塗装 しごと管理</CardTitle>
