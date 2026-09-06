@@ -639,6 +639,11 @@ export const zWorkTemplateInput = z.object({
   }).strict()).min(1).max(30),
 }).strict();
 
+// ペア refine はフィールド単位の検証が全て通った時だけ実行する (Zod v4 は前段に issue があっても
+// .refine を続行するため、形式違反入力で new Date() 比較が走ると結果が実行環境の TZ に依存する)。
+// フィールド違反 = path 付き issue、順序違反 (E701) = root-level issue、という区別を環境非依存に保つ。
+const onlyWhenFieldsValid = (payload: { issues: unknown[] }): boolean => payload.issues.length === 0;
+
 export const zWorkBlockStatus = z.enum(["backlog", "scheduled", "in_progress", "done", "cancelled"]);
 
 export const zWorkBlockInput = z.object({
@@ -651,11 +656,11 @@ export const zWorkBlockInput = z.object({
   memo: z.string().max(1000).nullable(),
 }).strict().refine(
   (v) => (v.starts_at === null) === (v.ends_at === null),
-  "開始と終了は同時に指定するか、どちらも空にしてください (KMB-E701)",
+  { message: "開始と終了は同時に指定するか、どちらも空にしてください (KMB-E701)", when: onlyWhenFieldsValid },
 ).refine(
   (v) => v.starts_at === null || v.ends_at === null
     || new Date(v.starts_at).getTime() < new Date(v.ends_at).getTime(),
-  "開始は終了より前である必要があります (KMB-E701)",
+  { message: "開始は終了より前である必要があります (KMB-E701)", when: onlyWhenFieldsValid },
 );
   // ペア制約 + 順序の refine は 07-contracts-delta v1.2 で canonical に追加済み — 写しを追随
 
@@ -729,7 +734,7 @@ export const zPlaceBlockInput = z.object({
   ends_at: zIsoDatetime,
 }).strict().refine(
   (v) => new Date(v.starts_at).getTime() < new Date(v.ends_at).getTime(),
-  "開始は終了より前である必要があります (KMB-E701)",
+  { message: "開始は終了より前である必要があります (KMB-E701)", when: onlyWhenFieldsValid },
 );
 
 /** ブロック編集 (updateBlock)。配置・状態・実績は専用メソッド経由のためここに含めない */
@@ -753,7 +758,7 @@ export const zCalendarRangeQuery = z.object({
     const ms = new Date(v.to).getTime() - new Date(v.from).getTime();
     return ms > 0 && ms < 62 * 24 * 60 * 60 * 1000; // Graph getSchedule の「62 日未満」制約 (ext-calendar §4)。62 日丁度は不可 (<)
   },
-  "範囲は 62 日未満で指定してください",
+  { message: "範囲は 62 日未満で指定してください", when: onlyWhenFieldsValid },
 );
 
 /** 外部削除 (deleted_externally) の解決アクション (§9.2 resolveExternalDeletionAction) */

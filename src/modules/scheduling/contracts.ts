@@ -35,6 +35,16 @@ export const zWorkTemplateInput = z.object({
   }).strict()).min(1).max(30),
 }).strict();
 
+/**
+ * ペア refine の実行条件: フィールド単位の検証 (zIsoDatetime 等) が全て通った時だけ走らせる。
+ * Zod v4 は前段に issue があっても .refine を続行するため、これが無いと
+ * オフセット無し文字列のような形式違反入力でも new Date() 比較が実行され、
+ * その結果は実行環境のタイムゾーンに依存する (JST では通り UTC では root-level issue が
+ * 追加される)。フィールド違反は path 付き issue として返し、順序違反 (KMB-E701) の
+ * root-level issue はフィールドが正しい時だけ出す、という契約を環境非依存に保つ。
+ */
+const onlyWhenFieldsValid = (payload: { issues: unknown[] }): boolean => payload.issues.length === 0;
+
 export const zWorkBlockStatus = z.enum(["backlog", "scheduled", "in_progress", "done", "cancelled"]);
 
 export const zWorkBlockInput = z.object({
@@ -47,11 +57,11 @@ export const zWorkBlockInput = z.object({
   memo: z.string().max(1000).nullable(),
 }).strict().refine(
   (v) => (v.starts_at === null) === (v.ends_at === null),
-  "開始と終了は同時に指定するか、どちらも空にしてください (KMB-E701)",
+  { message: "開始と終了は同時に指定するか、どちらも空にしてください (KMB-E701)", when: onlyWhenFieldsValid },
 ).refine(
   (v) => v.starts_at === null || v.ends_at === null
     || new Date(v.starts_at).getTime() < new Date(v.ends_at).getTime(),
-  "開始は終了より前である必要があります (KMB-E701)",
+  { message: "開始は終了より前である必要があります (KMB-E701)", when: onlyWhenFieldsValid },
 );
   // v1.2: ペア制約 + 順序の refine を追加 — zPlaceBlockInput (03-scheduling §3.2) と同型の
   // 「DB check + Zod refine の二重検証」(03 §5 一般原則) を createBlock 入力にも適用
@@ -132,7 +142,7 @@ export const zPlaceBlockInput = z.object({
   ends_at: zIsoDatetime,
 }).strict().refine(
   (v) => new Date(v.starts_at).getTime() < new Date(v.ends_at).getTime(),
-  "開始は終了より前である必要があります (KMB-E701)",
+  { message: "開始は終了より前である必要があります (KMB-E701)", when: onlyWhenFieldsValid },
 );
 
 /** ブロック編集 (updateBlock)。配置・状態・実績は専用メソッド経由のためここに含めない */
@@ -156,7 +166,7 @@ export const zCalendarRangeQuery = z.object({
     const ms = new Date(v.to).getTime() - new Date(v.from).getTime();
     return ms > 0 && ms < 62 * 24 * 60 * 60 * 1000; // Graph getSchedule の「62 日未満」制約 (ext-calendar §4)
   },
-  "範囲は 62 日未満で指定してください",
+  { message: "範囲は 62 日未満で指定してください", when: onlyWhenFieldsValid },
 );
 
 /** 自動提案配置の要求 (§7.4)。対象は backlog ブロック集合 */
