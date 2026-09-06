@@ -105,6 +105,7 @@ export function getEnv(): Env {
 }
 
 /** 通知メール (Resend) が設定済みかどうか。未設定時は呼び出し側が KMB-E902 相当でログのみに倒す */
+/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
 export function isResendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
 }
@@ -141,17 +142,28 @@ export function isAiStudioConfigured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY) && Boolean(process.env.OPENAI_API_KEY);
 }
 
-/** OAuth 接続機能全体のスイッチ (Preview 環境では無効化する運用。設計書 §7.7) */
+/**
+ * OAuth 接続機能全体のスイッチ (設計書 §7.7)。
+ * 認証情報自体は管理画面 (integration_credentials + Vault — src/lib/integration-credentials.ts) から
+ * 設定できるようになったため、env の OAUTH_ENABLED は「明示的に "false" で止める」用途だけに縮退した。
+ * 有効条件: OAUTH_ENABLED が "false" ではない ∧ OAUTH_STATE_SECRET (cookie 暗号鍵) が設定済み
+ *           ∧ Vercel の Preview 環境ではない (Preview では redirect URI が一致しないため常に無効)。
+ */
 export function isOAuthEnabled(): boolean {
-  return process.env.OAUTH_ENABLED === "true" && Boolean(process.env.OAUTH_STATE_SECRET);
+  if (process.env.OAUTH_ENABLED === "false") return false;
+  if (!process.env.OAUTH_STATE_SECRET) return false;
+  if (process.env.VERCEL_ENV === "preview") return false;
+  return true;
 }
 
 /** X (Twitter) OAuth 2.0 PKCE 接続に必要な env が揃っているか */
+/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
 export function isXOAuthConfigured(): boolean {
   return isOAuthEnabled() && Boolean(process.env.X_CLIENT_ID);
 }
 
 /** Meta (Instagram) OAuth 接続に必要な env が揃っているか */
+/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
 export function isMetaOAuthConfigured(): boolean {
   return isOAuthEnabled() && Boolean(process.env.META_APP_ID) && Boolean(process.env.META_APP_SECRET);
 }
@@ -162,6 +174,7 @@ export function isMetaOAuthConfigured(): boolean {
  * /admin/calendar/connections が「未設定」バナー + 接続ボタン無効化を表示する
  * (docs/design/crm-suite/03-scheduling.md §8.2 / §10.4)。
  */
+/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
 export function isGoogleCalendarConfigured(): boolean {
   return (
     isOAuthEnabled() &&
@@ -175,6 +188,7 @@ export function isGoogleCalendarConfigured(): boolean {
  * 同型 — #55)。未設定時は /api/oauth/ms-calendar/{start,callback} が 503 (KMB-E901) で degrade する
  * (docs/design/crm-suite/03-scheduling.md §8.2 / §10.4)。
  */
+/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
 export function isMsCalendarConfigured(): boolean {
   return (
     isOAuthEnabled() &&
@@ -188,6 +202,7 @@ export function isMsCalendarConfigured(): boolean {
  * (voice/status/recording-status) が 503 (KMB-E802) で degrade する
  * (docs/design/crm-suite/04-telephony.md §6.1 手順 1 / §4.6)。
  */
+/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
 export function isTelephonyConfigured(): boolean {
   return Boolean(process.env.TWILIO_ACCOUNT_SID) && Boolean(process.env.TWILIO_AUTH_TOKEN);
 }
