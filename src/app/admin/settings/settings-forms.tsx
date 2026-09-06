@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import type { IntegrationStatus } from "@/lib/integration-credentials";
 import type { AiKeyMeta } from "@/modules/ai-providers/contracts";
 import type { SettingsKey, SettingsValue } from "@/modules/settings/contracts";
 
@@ -30,8 +31,10 @@ import {
   updateSeoDefaultsAction,
   updateWorkCapacityAction,
 } from "./actions";
+import { AccountTab } from "./account-tab";
 import { AiSettingsTab } from "./ai-tab";
 import { SETTINGS_FORM_INITIAL_STATE, type SettingsFormState } from "./form-state";
+import { IntegrationsTab } from "./integrations-tab";
 import { InvoiceIssuerForm } from "./invoice-issuer-forms";
 import { BusinessHoursForm, TelephonyForm, type TelephonySetupStatus } from "./telephony-forms";
 
@@ -59,7 +62,8 @@ export type SettingsTabsData = {
 };
 
 /**
- * "ai" は site_settings の SettingsKey ではなく ai-providers 由来のタブのため、別ユニオンで扱う。
+ * "ai" / "integrations" / "account" は site_settings の SettingsKey ではないタブ (ai-providers /
+ * integration_credentials / Supabase Auth 由来) のため、別ユニオンで扱う。
  * #45 (07-contracts-delta §D5) で SettingsKey は 11 キーに拡張され、本管理画面はそのうち
  * 従来の 5 キー + work_capacity (#53) + telephony/business_hours (#59) + invoice_issuer (#51) +
  * analytics/branding (#47) の計 11 キー全てをタブとして描画する。SettingsKey をそのまま使うと
@@ -80,7 +84,12 @@ type TabKey =
       | "business_hours"
       | "invoice_issuer"
     >
-  | "ai";
+  | "ai"
+  | "integrations"
+  | "account";
+
+/** 単一の Cmd+S 対象フォームを持たないタブ (複数フォーム or 独自の送信ボタンのみ) */
+const NON_FORM_TABS = new Set<TabKey>(["ai", "integrations", "account"]);
 
 const TAB_LABELS: Record<TabKey, string> = {
   company: "会社情報",
@@ -95,6 +104,8 @@ const TAB_LABELS: Record<TabKey, string> = {
   business_hours: "営業時間",
   invoice_issuer: "請求書発行者",
   ai: "AI",
+  integrations: "外部連携",
+  account: "アカウント",
 };
 
 /** フォーム共通のフィードバック処理 (成功トースト/エラー表示) */
@@ -135,6 +146,9 @@ export function SettingsTabs({
   data,
   initialTab,
   aiKeys,
+  integrationStatuses,
+  oauthEnabled,
+  accountEmail,
   telephonySetupStatus,
   siteUrl,
   sealPreviewUrl,
@@ -146,6 +160,12 @@ export function SettingsTabs({
    *  それ以外 (未指定・未知値) は従来どおり "company" にフォールバックする (#92)。 */
   initialTab?: string;
   aiKeys: AiKeyMeta[];
+  /** 「外部連携」タブ: 6 サービスの認証情報の状態 (secret は含まない) */
+  integrationStatuses: IntegrationStatus[];
+  /** OAuth 接続機能のスイッチ (Preview 環境 / 管理者停止で false)。外部連携タブの注記表示に使う */
+  oauthEnabled: boolean;
+  /** 「アカウント」タブ: ログイン中ユーザーのメールアドレス */
+  accountEmail: string | null;
   telephonySetupStatus: TelephonySetupStatus | null;
   siteUrl: string;
   /** 角印画像の署名 URL (TTL 5 分)。page.tsx が Server Component 内で解決済み。null = 未設定/解決失敗。 */
@@ -163,17 +183,17 @@ export function SettingsTabs({
       ? (initialTab as TabKey)
       : "company",
   );
-  // "ai" タブは複数の独立したフォーム (キー追加/予算) を持つため単一の Cmd+S 対象を持たない
-  // (キーを設定しない = そのタブでは Cmd+S が何もしない、という割り切り)。
+  // "ai" タブは複数の独立したフォーム (キー追加/予算) を持ち、"integrations" / "account" も同様に
+  // 単一の Cmd+S 対象を持たない (NON_FORM_TABS。そのタブでは Cmd+S が何もしない、という割り切り)。
   const formRefs = useRef<Partial<Record<SettingsKey, HTMLFormElement | null>>>({});
 
   useEffect(() => {
     function handleKeydown(e: KeyboardEvent) {
       const isSave = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s";
       if (!isSave) return;
-      if (active === "ai") return;
+      if (NON_FORM_TABS.has(active)) return;
       e.preventDefault();
-      formRefs.current[active]?.requestSubmit();
+      formRefs.current[active as SettingsKey]?.requestSubmit();
     }
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
@@ -297,6 +317,12 @@ export function SettingsTabs({
       </TabsContent>
       <TabsContent value="ai" className="mt-6">
         <AiSettingsTab keys={aiKeys} opsLimits={data.ops_limits} />
+      </TabsContent>
+      <TabsContent value="integrations" className="mt-6">
+        <IntegrationsTab statuses={integrationStatuses} siteUrl={siteUrl} oauthEnabled={oauthEnabled} />
+      </TabsContent>
+      <TabsContent value="account" className="mt-6">
+        <AccountTab email={accountEmail} />
       </TabsContent>
     </Tabs>
   );

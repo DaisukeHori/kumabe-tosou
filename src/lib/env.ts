@@ -104,12 +104,6 @@ export function getEnv(): Env {
   return cachedEnv;
 }
 
-/** 通知メール (Resend) が設定済みかどうか。未設定時は呼び出し側が KMB-E902 相当でログのみに倒す */
-/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
-export function isResendConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY);
-}
-
 /** service_role key が設定済みかどうか。未設定時は呼び出し側が KMB-E9xx 相当で機能を無効化する */
 export function isServiceRoleConfigured(): boolean {
   return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -154,57 +148,6 @@ export function isOAuthEnabled(): boolean {
   if (!process.env.OAUTH_STATE_SECRET) return false;
   if (process.env.VERCEL_ENV === "preview") return false;
   return true;
-}
-
-/** X (Twitter) OAuth 2.0 PKCE 接続に必要な env が揃っているか */
-/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
-export function isXOAuthConfigured(): boolean {
-  return isOAuthEnabled() && Boolean(process.env.X_CLIENT_ID);
-}
-
-/** Meta (Instagram) OAuth 接続に必要な env が揃っているか */
-/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
-export function isMetaOAuthConfigured(): boolean {
-  return isOAuthEnabled() && Boolean(process.env.META_APP_ID) && Boolean(process.env.META_APP_SECRET);
-}
-
-/**
- * Google カレンダー OAuth 接続に必要な env が揃っているか (isXOAuthConfigured と同型)。
- * 未設定時は /api/oauth/google-calendar/{start,callback} が 503 (KMB-E901) で degrade し、
- * /admin/calendar/connections が「未設定」バナー + 接続ボタン無効化を表示する
- * (docs/design/crm-suite/03-scheduling.md §8.2 / §10.4)。
- */
-/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
-export function isGoogleCalendarConfigured(): boolean {
-  return (
-    isOAuthEnabled() &&
-    Boolean(process.env.GOOGLE_CALENDAR_CLIENT_ID) &&
-    Boolean(process.env.GOOGLE_CALENDAR_CLIENT_SECRET)
-  );
-}
-
-/**
- * Microsoft カレンダー (Graph) OAuth 接続に必要な env が揃っているか (isGoogleCalendarConfigured と
- * 同型 — #55)。未設定時は /api/oauth/ms-calendar/{start,callback} が 503 (KMB-E901) で degrade する
- * (docs/design/crm-suite/03-scheduling.md §8.2 / §10.4)。
- */
-/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
-export function isMsCalendarConfigured(): boolean {
-  return (
-    isOAuthEnabled() &&
-    Boolean(process.env.MS_CALENDAR_CLIENT_ID) &&
-    Boolean(process.env.MS_CALENDAR_CLIENT_SECRET)
-  );
-}
-
-/**
- * 電話連携 (Twilio) の env が両方設定済みかどうか。未設定時は telephony の 3 webhook
- * (voice/status/recording-status) が 503 (KMB-E802) で degrade する
- * (docs/design/crm-suite/04-telephony.md §6.1 手順 1 / §4.6)。
- */
-/** @deprecated env のみを見る同期判定。管理画面で設定した値を含めるには src/lib/integration-credentials.ts の isIntegrationConfigured() を使うこと */
-export function isTelephonyConfigured(): boolean {
-  return Boolean(process.env.TWILIO_ACCOUNT_SID) && Boolean(process.env.TWILIO_AUTH_TOKEN);
 }
 
 /**

@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 
 import { PageHeader, Surface } from "@/app/admin/_ui";
 import { ensureMediaItems, listMediaForPicker } from "@/app/admin/_ui/media-picker-data";
-import { getEnv } from "@/lib/env";
+import { getEnv, isOAuthEnabled } from "@/lib/env";
+import { listIntegrationStatuses } from "@/lib/integration-credentials";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { aiProvidersFacade } from "@/modules/ai-providers/facade";
 import { settingsFacade } from "@/modules/settings/facade";
@@ -37,6 +39,19 @@ async function resolveSealPreviewUrl(storagePath: string | null): Promise<string
   }
 }
 
+/** 「アカウント」タブ表示用。取得失敗時は null (表示が "-" になるだけで機能に影響しない)。 */
+async function resolveAccountEmail(): Promise<string | null> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function AdminSettingsPage({
   searchParams,
 }: {
@@ -58,6 +73,8 @@ export default async function AdminSettingsPage({
     aiKeys,
     setupStatus,
     mediaList,
+    integrationStatuses,
+    accountEmail,
   ] = await Promise.all([
     settingsFacade.getWithMeta("company"),
     settingsFacade.getWithMeta("hero"),
@@ -73,6 +90,8 @@ export default async function AdminSettingsPage({
     aiProvidersFacade.listKeys(),
     telephonyFacade.getTelephonySetupStatus(),
     listMediaForPicker(),
+    listIntegrationStatuses(),
+    resolveAccountEmail(),
   ]);
 
   const seoValue = seoDefaults.ok ? seoDefaults.value.value : null;
@@ -106,13 +125,16 @@ export default async function AdminSettingsPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="サイト設定"
-        description="会社情報・ヒーロー・SEO既定値・計測・ブランディング・運用上限・通知設定・電話・営業時間・請求書発行者・AI プロバイダを編集します (保存は楽観的排他)。"
+        description="会社情報・ヒーロー・SEO既定値・計測・ブランディング・運用上限・通知設定・電話・営業時間・請求書発行者・AI プロバイダ・外部連携・アカウントを編集します (保存は楽観的排他)。"
       />
       <Surface className="p-6">
         <SettingsTabs
           data={data}
           initialTab={params.tab}
           aiKeys={aiKeys.ok ? aiKeys.value : []}
+          integrationStatuses={integrationStatuses}
+          oauthEnabled={isOAuthEnabled()}
+          accountEmail={accountEmail}
           telephonySetupStatus={setupStatus.ok ? setupStatus.value : null}
           siteUrl={getEnv().NEXT_PUBLIC_SITE_URL}
           sealPreviewUrl={sealPreviewUrl}
