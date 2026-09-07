@@ -5,6 +5,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { cn } from "@/lib/utils";
 import type { PlacementProposal, WorkBlockView } from "@/modules/scheduling/contracts";
 
+import { clientToGridPosition, snapMinutes as snapMinutesToRow } from "./_ui/grid-geometry";
 import {
   addDaysJst,
   formatDateOnlyLabel,
@@ -155,8 +156,9 @@ function proposalSegmentsForWeek(
   return segments;
 }
 
+/** グリッド共通のスナップ (実体は _ui/grid-geometry.ts の純関数)。 */
 function snapMinutes(minutes: number): number {
-  return Math.min(DAY_TOTAL_MIN - ROW_MINUTES, Math.max(0, Math.round(minutes / ROW_MINUTES) * ROW_MINUTES));
+  return snapMinutesToRow(minutes, ROW_MINUTES);
 }
 
 /**
@@ -234,6 +236,42 @@ export function shouldIgnoreBlockPointerUp(drag: DragKind, blockId: string): boo
   return drag.kind !== "move" || drag.block.id !== blockId;
 }
 
+/** ドラッグ確定時に「何を 1 回だけ実行すべきか」を表す指示 (resolveDragCommit の戻り値)。 */
+export type DragCommit =
+  | { kind: "none" }
+  | { kind: "create"; date: DateOnly; startMinutes: number; durationMinutes: number }
+  | { kind: "place"; blockId: string; startsAt: string; endsAt: string; expectedUpdatedAt: string };
+
+/**
+ * pointerup 時点の dragState から、呼び出すべき副作用 (onCreateRange / onPlaceBlock) を
+ * 「データ」として決める純関数。
+ *
+ * 【地雷】この計算を setState の updater の中に書いてはならない。updater はレンダー中に呼ばれ、
+ * React 18 の Strict Mode では純粋性検査のため意図的に 2 回呼ばれる。副作用まで updater に
+ * 同居していると Server Action が二重送信され、2 回目が楽観ロック (expected_updated_at) に
+ * 弾かれて毎回「他の変更と競合しました」(KMB-E103) の失敗トーストが出る。判断はこの純関数に、
+ * 実行はイベントハンドラ本体に分離すること。
+ */
+export function resolveDragCommit(dragState: DragState | null, weekStart: DateOnly, moved: boolean): DragCommit {
+  if (!dragState || !dragState.preview) return { kind: "none" };
+  const { preview } = dragState;
+  const dayDate = addDaysJst(weekStart, preview.dayOffset);
+  if (dragState.drag.kind === "create") {
+    // click-vs-drag 判定 (4px 閾値) は呼び出し側で行い moved として渡す。canceled (Esc 済み) の
+    // 場合は shouldCommitCreate が moved に関わらず false を返す (#95 敵対的レビュー2件目)。
+    if (!shouldCommitCreate(dragState.canceled, moved)) return { kind: "none" };
+    return { kind: "create", date: dayDate, startMinutes: preview.startMinutes, durationMinutes: preview.durationMinutes };
+  }
+  const startsAt = isoPlusMinutes(jstDateTimeToIso(dayDate, 0, 0), preview.startMinutes);
+  return {
+    kind: "place",
+    blockId: dragState.drag.block.id,
+    startsAt,
+    endsAt: isoPlusMinutes(startsAt, preview.durationMinutes),
+    expectedUpdatedAt: dragState.drag.block.updated_at,
+  };
+}
+
 export const CalendarGrid = forwardRef<CalendarGridHandle, {
   weekStart: DateOnly;
   blocks: WorkBlockView[];
@@ -253,6 +291,26 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
   const columnsRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  /**
+   * dragState の同期ミラー。ドラッグ確定 (commitDrag) は「最新の preview を読む」必要があるが、
+   * その読み取りに setDragState(updater) を使うと updater の中が副作用の実行場所になってしまう。
+   *
+   * 【地雷】setState の updater は React の **レンダー中** に呼ばれる純関数でなければならない。
+   * ここで onPlaceBlock / onCreateRange (= 親 CalendarBoard の state 更新や Server Action 送信) を
+   * 呼ぶと、(1) React 18 の Strict Mode が純粋性検査のため updater を 2 回呼ぶので Server Action が
+   * 二重送信され、2 回目が楽観ロック (expected_updated_at) に弾かれて「他の変更と競合しました」の
+   * 失敗トーストが毎回出る、(2)「Cannot update a component (CalendarBoard) while rendering a
+   * different component (CalendarGrid)」警告が出る。よって dragState の読み取りはこの ref から
+   * 行い、副作用はイベントハンドラ本体 (updater の外) で 1 回だけ実行すること。
+   */
+  const dragStateRef = useRef<DragState | null>(null);
+
+  /** dragState の唯一の更新経路。ref を同期的に更新してから state を更新する (直接 setDragState を呼ばないこと)。 */
+  function setDrag(next: DragState | null | ((prev: DragState | null) => DragState | null)) {
+    const value = typeof next === "function" ? next(dragStateRef.current) : next;
+    dragStateRef.current = value;
+    setDragState(value);
+  }
 
   // 初期スクロール位置を 07:00 に合わせる (§10.2「07:00〜21:00 表示・全日スクロール」)
   useEffect(() => {
@@ -261,20 +319,30 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     }
   }, []);
 
+  /**
+   * ポインタ座標 → グリッド位置。計算は _ui/grid-geometry.ts の純関数へ委譲する。
+   *
+   * 【地雷】columnsRef はスクロールコンテナ (bodyRef, overflow-y:auto) の **中身** に付いており、
+   * その getBoundingClientRect().top はスクロール量だけ上へ動く。つまり `clientY - rect.top` に
+   * 既にスクロールが反映されているため、ここで bodyRef.scrollTop を足してはならない
+   * (足すと二重加算になり、初期スクロール 07:00 の分だけ常に約 7 時間下がった位置が選択される)。
+   */
   function clientToPosition(clientX: number, clientY: number): { dayOffset: number; minutes: number; rawMinutes: number } | null {
     const rect = columnsRef.current?.getBoundingClientRect();
     if (!rect) return null;
-    const dayWidth = (rect.width - GUTTER_PX) / 7;
-    const dayOffset = Math.min(6, Math.max(0, Math.floor((clientX - rect.left - GUTTER_PX) / dayWidth)));
-    const scrollTop = bodyRef.current?.scrollTop ?? 0;
-    const yWithinTrack = clientY - rect.top + scrollTop;
-    const rawMinutes = (yWithinTrack / ROW_HEIGHT_PX) * ROW_MINUTES;
-    const minutes = snapMinutes(rawMinutes);
-    return { dayOffset, minutes, rawMinutes };
+    return clientToGridPosition({
+      clientX,
+      clientY,
+      trackRect: { left: rect.left, top: rect.top, width: rect.width },
+      gutterPx: GUTTER_PX,
+      rowHeightPx: ROW_HEIGHT_PX,
+      rowMinutes: ROW_MINUTES,
+      dayCount: 7,
+    });
   }
 
   function updatePreview(clientX: number, clientY: number) {
-    setDragState((prev) => {
+    setDrag((prev) => {
       if (!prev || !prev.preview) return prev;
       const pos = clientToPosition(clientX, clientY);
       if (!pos) return prev;
@@ -293,29 +361,30 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     });
   }
 
+  /**
+   * ドラッグ確定 (pointerup / pointercancel)。
+   *
+   * 【地雷】副作用 (onCreateRange / onPlaceBlock) を setDragState/setDrag の updater の中で
+   * 呼んではならない (dragStateRef の宣言箇所のコメント参照)。updater はレンダー中に、しかも
+   * Strict Mode では 2 回呼ばれるため、Server Action が二重送信されて 2 回目が必ず
+   * 「他の変更と競合しました」(KMB-E103) で失敗する。最新の dragState は dragStateRef から読み、
+   * 何をするかの判断は純関数 resolveDragCommit に委ね、state を null に戻してから副作用を
+   * 1 回だけ実行すること。
+   */
   function commitDrag(clientX: number, clientY: number) {
-    setDragState((prev) => {
-      if (!prev || !prev.preview) return null;
-      if (prev.drag.kind === "create") {
-        // click-vs-drag 判定 (既存 4px 閾値と同一) — 誤クリックでモーダルが開く事故を防止する
-        // (クリック単発での作成は v1 非対応。Issue #95 リスク欄の判断)。canceled (Esc 済み) の
-        // 場合は shouldCommitCreate が moved に関わらず false を返すため、ここで何も作成せず
-        // dragState を null に戻すだけで終わる (#95 敵対的レビュー2件目の修正)。
-        const start = pointerStartRef.current;
-        pointerStartRef.current = null;
-        const moved = start && (Math.abs(clientX - start.x) > 4 || Math.abs(clientY - start.y) > 4);
-        if (!shouldCommitCreate(prev.canceled, moved)) return null;
-        const dayDate = addDaysJst(weekStart, prev.preview.dayOffset);
-        onCreateRange(dayDate, prev.preview.startMinutes, prev.preview.durationMinutes);
-        return null;
-      }
-      const dayDate = addDaysJst(weekStart, prev.preview.dayOffset);
-      const startsAt = jstDateTimeToIso(dayDate, 0, 0);
-      const startsAtWithMinutes = isoPlusMinutes(startsAt, prev.preview.startMinutes);
-      const endsAt = isoPlusMinutes(startsAtWithMinutes, prev.preview.durationMinutes);
-      onPlaceBlock(prev.drag.block.id, startsAtWithMinutes, endsAt, prev.drag.block.updated_at);
-      return null;
-    });
+    const prev = dragStateRef.current;
+    const start = pointerStartRef.current;
+    // click-vs-drag 判定 (既存 4px 閾値と同一) — 誤クリックでモーダルが開く事故を防止する
+    // (クリック単発での作成は v1 非対応。Issue #95 リスク欄の判断)。
+    const moved = Boolean(start && (Math.abs(clientX - start.x) > 4 || Math.abs(clientY - start.y) > 4));
+    pointerStartRef.current = null;
+    const commit = resolveDragCommit(prev, weekStart, moved);
+    setDrag(null);
+    if (commit.kind === "create") {
+      onCreateRange(commit.date, commit.startMinutes, commit.durationMinutes);
+    } else if (commit.kind === "place") {
+      onPlaceBlock(commit.blockId, commit.startsAt, commit.endsAt, commit.expectedUpdatedAt);
+    }
   }
 
   useEffect(() => {
@@ -331,7 +400,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     function handleKeyDown(e: KeyboardEvent) {
       // Esc = create (空白ドラッグ新規作成) のプレビューのみ閉じる。判定は shouldCancelDragOnEscape
       // (このファイル冒頭で定義・export、tests/calendar-grid-selection.test.ts で単体検証済み) に委譲する。
-      // 【地雷】ここで setDragState(null) してはならない (#95 敵対的レビュー2件目)。dragState を
+      // 【地雷】ここで setDrag(null) してはならない (#95 敵対的レビュー2件目)。dragState を
       // 直接 null にすると、対応する pointerup より前に再レンダーが走り、handleBlockPointerUp が
       // 「dragState が無い = 単純クリック」分岐に落ちて無関係なブロックの詳細が誤って開く。
       // applyEscapeCancel は dragState を canceled フラグ付きの truthy な値のまま保つ
@@ -339,7 +408,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
       if (e.key !== "Escape") return;
       if (!dragState || !shouldCancelDragOnEscape(dragState.drag.kind)) return;
       pointerStartRef.current = null;
-      setDragState((prev) => applyEscapeCancel(prev));
+      setDrag((prev) => applyEscapeCancel(prev));
     }
     document.addEventListener("pointermove", handleMove);
     document.addEventListener("pointerup", handleUp);
@@ -357,7 +426,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
   useImperativeHandle(ref, () => ({
     beginExternalDrag(block, pointerId, clientX, clientY) {
       const pos = clientToPosition(clientX, clientY) ?? { dayOffset: 0, minutes: 9 * 60 };
-      setDragState({
+      setDrag({
         drag: { kind: "tray", block },
         pointerId,
         grabOffsetMinutes: 0,
@@ -373,7 +442,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     const grabOffsetMinutes = pos ? pos.minutes - startMinutes : 0;
     pointerStartRef.current = { x: e.clientX, y: e.clientY };
     onSelectBlock(block.id);
-    setDragState({
+    setDrag({
       drag: { kind: "move", block },
       pointerId: e.pointerId,
       grabOffsetMinutes,
@@ -390,7 +459,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     if (!block.starts_at || !block.ends_at) return;
     const startMinutes = jstMinutesOfDay(block.starts_at);
     const endMinutes = jstMinutesOfDay(block.ends_at);
-    setDragState({
+    setDrag({
       drag: { kind: "resize", block },
       pointerId: e.pointerId,
       grabOffsetMinutes: 0,
@@ -414,7 +483,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     const pos = clientToPosition(e.clientX, e.clientY);
     const anchor = snapDownToHalfHour(Math.max(0, Math.min(DAY_TOTAL_MIN - ROW_MINUTES, pos ? pos.rawMinutes : 0)));
     pointerStartRef.current = { x: e.clientX, y: e.clientY };
-    setDragState({
+    setDrag({
       drag: { kind: "create", anchorMinutes: anchor },
       pointerId: e.pointerId,
       grabOffsetMinutes: 0,
@@ -434,7 +503,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     // (4) 空白ドラッグ作成中 (kind='create'。Esc キャンセル済み = canceled:true でも dragState
     // 自体は truthy のまま — #95 敵対的レビュー2件目) に別のブロックの <button> の上でポインタを
     // 離した場合や、(3) リサイズ中に自分自身の <button> の上で離した場合にも、このハンドラが
-    // 「無関係な block」引数で呼ばれ得る。click-vs-drag 判定 (setDragState(null) による確定前
+    // 「無関係な block」引数で呼ばれ得る。click-vs-drag 判定 (setDrag(null) による確定前
     // キャンセル) は「今まさに move 中の対象ブロックそのもの」の pointerup でのみ行う。それ以外は
     // 何もせず、document 側の pointerup リスナー (commitDrag) に確定処理を完全に委ねる —
     // 誤って他ブロックの詳細を開いたりトレイ配置/リサイズ/作成の結果を握り潰したりしないための安全策。
@@ -444,7 +513,7 @@ export const CalendarGrid = forwardRef<CalendarGridHandle, {
     pointerStartRef.current = null;
     const moved = start && (Math.abs(e.clientX - start.x) > 4 || Math.abs(e.clientY - start.y) > 4);
     if (!moved) {
-      setDragState(null);
+      setDrag(null);
       onSelectBlock(block.id);
       onOpenDetail(block.id);
     }
