@@ -53,7 +53,11 @@ import {
 //
 // 屋号変更 (山岸塗装) に伴い、フッターの写真クレジット注記 common.footer.creditNote を
 // 廃止 (掲載写真がイメージ素材である旨の但し書きはユーザー指示で削除)。合計 1069 → 1068。
-const EXPECTED_COUNT = 1068;
+//
+// contact フォームの「無反応」修正: Server Action の呼び出しが例外になったとき用の
+// contact.form.error.network と、送信中のボタン文言 contact.form.button.submitting を
+// 新設 (contact 73 → 75)。合計 1068 → 1070。
+const EXPECTED_COUNT = 1070;
 
 const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "shared.cta.consult": "相談する",
@@ -1053,6 +1057,8 @@ const FROZEN_DEFAULT_TEXT: Readonly<Record<string, string>> = {
   "contact.form.error.invalid": "入力内容をご確認ください。",
   "contact.form.error.rateLimited": "送信回数の上限に達しました。しばらく時間をおいてから再度お試しください。",
   "contact.form.error.generic": "送信に失敗しました。しばらくしてから再度お試しください。",
+  "contact.form.error.network": "送信に失敗しました。ページを再読み込みしてから、もう一度お試しください。",
+  "contact.form.button.submitting": "送信中…",
 
   "works.hero.heading": "3Dプリントを、\n量産品の顔に。",
   "works.hero.lead": "車両パーツからスマホカバー、小物、エアブラシ作品まで。素材や用途ごとに下地の作り方は変わりますが、狙う仕上がりはいつも「積層痕が消えて、量産品と見分けがつかない表面」です。",

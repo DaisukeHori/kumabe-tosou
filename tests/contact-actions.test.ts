@@ -25,6 +25,7 @@ vi.mock("@/modules/inquiry/facade", () => ({
 
 import { submitContactFormAction } from "@/components/contact/actions";
 import type { ContactFormPayload } from "@/components/contact/actions";
+import { buildFormRenderedAt } from "@/components/contact/form-timing";
 
 function validPayload(overrides: Partial<ContactFormPayload> = {}): ContactFormPayload {
   return {
@@ -143,5 +144,46 @@ describe("submitContactFormAction — ガード順序 (honeypot/最小時間 →
     inquirySubmitMock.mockResolvedValueOnce({ ok: false, code: "KMB-E901", detail: "db down" });
     const res = await submitContactFormAction(validPayload());
     expect(res).toEqual({ status: "error" });
+  });
+});
+
+describe("submitContactFormAction — クライアント時計ずれ (stealth discard 回帰防止)", () => {
+  it("クライアント時計が +10 秒進んでいても、formRenderedAt がサーバー基準なら保存される", async () => {
+    // 実際にはサーバーが 10 秒前にページを描画し、利用者は十分に時間をかけて入力している。
+    const serverRenderedAt = Date.now() - 10_000;
+
+    const res = await submitContactFormAction(
+      validPayload({ formRenderedAt: buildFormRenderedAt({ serverRenderedAt }) }),
+    );
+
+    expect(res).toEqual({ status: "success" });
+    // 「成功したふり」ではなく、実際に保存まで到達していることを確認する。
+    expect(inquirySubmitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("(回帰) 旧実装のようにずれたクライアント時刻を渡すと stealth discard になる", async () => {
+    // 本番不具合の再現: 利用者の PC の時計が 10 秒進んでいると、クライアントの
+    // Date.now() をそのまま送る旧実装では差分が負値になり、黙って捨てられていた。
+    const skewedClientNow = Date.now() + 10_000;
+
+    const res = await submitContactFormAction(validPayload({ formRenderedAt: skewedClientNow }));
+
+    expect(res).toEqual({ status: "success" });
+    expect(inquirySubmitMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitContactFormAction — 想定外の例外", () => {
+  it("facade.submit が throw しても例外を外に出さず error を返す", async () => {
+    inquirySubmitMock.mockRejectedValueOnce(new Error("boom"));
+    await expect(submitContactFormAction(validPayload())).resolves.toEqual({ status: "error" });
+  });
+
+  it("headers() 由来の例外 (リクエストコンテキスト喪失等) も error に丸める", async () => {
+    headersGetMock.mockImplementationOnce(() => {
+      throw new Error("headers unavailable");
+    });
+    await expect(submitContactFormAction(validPayload())).resolves.toEqual({ status: "error" });
+    expect(inquirySubmitMock).not.toHaveBeenCalled();
   });
 });

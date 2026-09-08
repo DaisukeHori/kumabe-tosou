@@ -72,6 +72,20 @@ const INVALID_MESSAGE = "入力内容をご確認ください。";
 export async function submitContactFormAction(
   rawPayload: ContactFormPayload,
 ): Promise<SubmitContactResult> {
+  // 最外周の catch: 想定外の例外 (headers() / DB クライアント生成 / facade 内部の throw 等) を
+  // Server Action の境界の外へ出さない。例外がクライアントへ伝播すると呼び出しが reject し、
+  // 画面が「何も起きない」状態になるため、必ず {status:"error"} という値で返す。
+  try {
+    return await submitContactFormActionInner(rawPayload);
+  } catch (error) {
+    console.error("[contact] Server Action で想定外の例外が発生しました:", error);
+    return { status: "error" };
+  }
+}
+
+async function submitContactFormActionInner(
+  rawPayload: ContactFormPayload,
+): Promise<SubmitContactResult> {
   // 0) payload の形検証 (欠落・型不正は TypeError にせず invalid で返す)。
   const parsedPayload = zContactFormPayload.safeParse(rawPayload);
   if (!parsedPayload.success) {
@@ -87,9 +101,16 @@ export async function submitContactFormAction(
 
   // 2) 送信最小時間: 表示から 3 秒未満の送信は bot とみなし、同様に stealth 扱いにする。
   //    submittedAt はサーバ側の時刻を使う (クライアント時刻は詐称され得るため)。
+  //    formRenderedAt もサーバ基準 (page.tsx が渡した serverRenderedAt + 経過分) である
+  //    ことが前提 — 詳細は contact-form.tsx の buildFormRenderedAt を参照。
+  //    stealth discard は利用者に見えないため、運用者がログで気づけるよう経過 ms を出す。
   const submittedAt = Date.now();
   if (isSubmittedTooFast({ formRenderedAt: payload.formRenderedAt, submittedAt })) {
-    console.warn("[contact] 表示から3秒未満の送信のため無視しました (spam 扱い)");
+    console.warn(
+      `[contact] 表示から3秒未満の送信のため無視しました (spam 扱い): elapsedMs=${
+        submittedAt - payload.formRenderedAt
+      } formRenderedAt=${payload.formRenderedAt} submittedAt=${submittedAt}`,
+    );
     return { status: "success" };
   }
 

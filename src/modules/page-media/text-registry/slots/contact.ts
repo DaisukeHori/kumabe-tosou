@@ -684,4 +684,25 @@ export const CONTACT_TEXT_SLOTS: readonly PageTextSlot[] = [
     maxLen: 50,
     defaultText: "送信に失敗しました。しばらくしてから再度お試しください。",
   },
+  {
+    // Server Action の呼び出し自体が例外になったとき (通信断 / 500 /
+    // デプロイ跨ぎで Action ID が見つからない) の文言。汎用失敗 (.generic) と違い、
+    // 「ページを再読み込みしてから」が復旧手順として必須なので専用スロットにする。
+    key: "contact.form.error.network",
+    page: "contact",
+    route: "/contact",
+    label: "相談する / エラー文言 (送信時の通信エラー・再読み込み案内)",
+    kind: "text",
+    maxLen: 60,
+    defaultText: "送信に失敗しました。ページを再読み込みしてから、もう一度お試しください。",
+  },
+  {
+    key: "contact.form.button.submitting",
+    page: "contact",
+    route: "/contact",
+    label: "相談する / 送信ボタン (送信中の文言)",
+    kind: "text",
+    maxLen: 20,
+    defaultText: "送信中…",
+  },
 ];

@@ -18,10 +18,20 @@ export const metadata: Metadata = {
 };
 
 export default async function ContactPage() {
+  // フォームの送信最小時間 (3秒) 判定をサーバー時刻基準に揃えるため、描画時刻を渡す
+  // (クライアントの時計ずれで正当な送信が黙って捨てられるのを防ぐ。contact-form.tsx 参照)。
+  const serverRenderedAt = Date.now();
   const slotsResult = await pageMediaFacade.resolveAll();
   const slots = slotsResult.ok ? slotsResult.value : {};
   const textsResult = await pageMediaFacade.resolveAllTexts();
   const texts = textsResult.ok ? textsResult.value : {};
 
-  return <ContactPageBody slots={slots} texts={texts} editMode={false} />;
+  return (
+    <ContactPageBody
+      slots={slots}
+      texts={texts}
+      editMode={false}
+      serverRenderedAt={serverRenderedAt}
+    />
+  );
 }

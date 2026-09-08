@@ -23,10 +23,17 @@ export function ContactPageBody({
   slots,
   texts,
   editMode,
+  serverRenderedAt = Date.now(),
 }: {
   slots: ResolvedSlots;
   texts: ResolvedTexts;
   editMode: boolean;
+  /**
+   * このページをサーバーが描画した時刻 (epoch ms)。ContactForm の送信最小時間判定を
+   * クライアント時計から切り離すために使う (contact-form.tsx の buildFormRenderedAt 参照)。
+   * 省略時は描画時の Date.now() — エディタプレビュー (page-map.tsx) 用のフォールバック。
+   */
+  serverRenderedAt?: number;
 }) {
   return (
     <>
@@ -159,7 +166,7 @@ export function ContactPageBody({
           />
         </SecLead>
         <Reveal as="div" className="mt-10">
-          <ContactForm texts={texts} editMode={editMode} />
+          <ContactForm texts={texts} editMode={editMode} serverRenderedAt={serverRenderedAt} />
         </Reveal>
       </Section>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,6 +27,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 import { submitContactFormAction } from "@/components/contact/actions";
+import { shouldToggleConsentFromLabelClick } from "@/components/contact/consent-label";
+import { buildFormRenderedAt } from "@/components/contact/form-timing";
+import { resolveSubmitOutcome } from "@/components/contact/submit-outcome";
 import { textEditableAttrs } from "@/components/site/editable-attrs";
 import { renderRichInline } from "@/components/site/rich-text";
 import type { ResolvedTexts } from "@/modules/page-media/contracts";
@@ -62,7 +65,9 @@ type ContactFormValues = {
   message: string;
   agree: boolean;
   // honeypot: 人間には見えない隠しフィールド。bot がここに値を入れると spam 扱いにする。
-  website: string;
+  // ブラウザ / パスワードマネージャの自動入力を誘発しない名前にする ("website" は
+  // 自動入力候補になりやすく、実在の利用者の送信が spam 判定される事故につながる)。
+  contact_extra_note: string;
 };
 
 const DEFAULT_VALUES: ContactFormValues = {
@@ -73,20 +78,36 @@ const DEFAULT_VALUES: ContactFormValues = {
   targetItem: "",
   message: "",
   agree: false,
-  website: "",
+  contact_extra_note: "",
 };
 
 export function ContactForm({
   texts,
   editMode,
+  serverRenderedAt,
 }: {
   texts: ResolvedTexts;
   editMode: boolean;
+  /** サーバー (page.tsx) がこのページを描画した時刻 (epoch ms)。送信最小時間の基準 */
+  serverRenderedAt: number;
 }) {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  // フォームが描画された時刻。送信最小時間 (3秒) の判定に使う (spam-guard.ts)。
-  const formRenderedAtRef = useRef<number>(Date.now());
+  // 結果 (成功 / エラー) の表示位置。送信後にここへスクロールして「無反応」に見せない。
+  const errorRef = useRef<HTMLParagraphElement | null>(null);
+  const successRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (submitted) {
+      successRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [submitted]);
+
+  useEffect(() => {
+    if (submitError) {
+      errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [submitError]);
 
   const inquiryTypeItems = useMemo(
     () =>
@@ -124,7 +145,7 @@ export function ContactForm({
           message: texts["contact.form.error.agree"].text,
         }),
         // honeypot: 人間には見えない隠しフィールド。bot がここに値を入れると spam 扱いにする。
-        website: z.string().trim(),
+        contact_extra_note: z.string().trim(),
       }),
     [texts],
   );
@@ -143,7 +164,12 @@ export function ContactForm({
 
   async function onSubmit(values: ContactFormValues) {
     setSubmitError(null);
-    const result = await submitContactFormAction({
+
+    // Server Action の呼び出しは必ず try/catch で包む。500 / デプロイ跨ぎの Action ID
+    // 不一致 / 通信断のとき、この await は reject する。catch が無いと react-hook-form 側で
+    // 例外が飲み込まれ、画面には何のフィードバックも出ない (=「押しても無反応」) ため、
+    // 例外も戻り値も同じ resolveSubmitOutcome (純関数) に集約して必ず表示へつなげる。
+    const attempt = await submitContactFormAction({
       name: values.name,
       email: values.email,
       phone: values.phone,
@@ -151,36 +177,37 @@ export function ContactForm({
       targetItem: values.targetItem,
       message: values.message,
       agree: values.agree,
-      honeypot: values.website,
-      formRenderedAt: formRenderedAtRef.current,
-    });
+      honeypot: values.contact_extra_note,
+      // クライアントの Date.now() ではなくサーバー描画時刻を渡す (時計ずれ対策)。
+      formRenderedAt: buildFormRenderedAt({ serverRenderedAt }),
+    }).then(
+      (result) => ({ ok: true as const, result }),
+      (thrown: unknown) => {
+        console.error("[contact] 送信に失敗しました (Server Action 呼び出しが例外):", thrown);
+        return { ok: false as const, thrown };
+      },
+    );
 
-    if (result.status === "success") {
+    const outcome = resolveSubmitOutcome(attempt);
+
+    if (outcome.kind === "success") {
       setSubmitted(true);
       reset(DEFAULT_VALUES);
       return;
     }
 
-    if (result.status === "rate_limited") {
-      setSubmitError(texts["contact.form.error.rateLimited"].text);
-      return;
-    }
-
-    if (result.status === "invalid") {
+    if (outcome.rootMessage !== undefined) {
       // 表示文言はサーバの生文字列ではなく registry (contact.form.error.invalid) から
       // 取得する (site-public は inquiryFacade 以外の他モジュール facade を import できない
       // 制約があるため、actions.ts 側は元の文字列のまま維持し、表示側だけ registry を参照する)。
-      setError("root", { message: result.message });
-      setSubmitError(texts["contact.form.error.invalid"].text);
-      return;
+      setError("root", { message: outcome.rootMessage });
     }
-
-    setSubmitError(texts["contact.form.error.generic"].text);
+    setSubmitError(texts[outcome.textKey].text);
   }
 
   if (submitted) {
     return (
-      <div className="border border-hair bg-paper p-8 sm:p-10">
+      <div ref={successRef} className="border border-hair bg-paper p-8 sm:p-10">
         <span
           className="font-mono text-[11px] tracking-[0.22em] text-soul"
           {...textEditableAttrs("contact.form.badge.received", editMode)}
@@ -232,13 +259,14 @@ export function ContactForm({
           aria-hidden="true"
           className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden"
         >
-          <label htmlFor="contact-website">ウェブサイト</label>
+          <label htmlFor="contact-extra-note">ウェブサイト</label>
           <input
-            id="contact-website"
+            id="contact-extra-note"
             type="text"
             tabIndex={-1}
             autoComplete="off"
-            {...register("website")}
+            aria-hidden="true"
+            {...register("contact_extra_note")}
           />
         </div>
 
@@ -388,9 +416,26 @@ export function ContactForm({
                 aria-invalid={fieldState.invalid}
               />
               <FieldContent>
-                <FieldLabel htmlFor="contact-agree">
+                <FieldLabel
+                  htmlFor="contact-agree"
+                  // ラベル文字クリックでチェックを切り替える。base-ui の Checkbox の実体は
+                  // aria-hidden の <input> で、label の既定動作 (htmlFor 先の活性化) では
+                  // トグルされないため明示的に処理する。文中のリンク上のクリックだけは
+                  // 除外し、別タブでプライバシーポリシーを開く動作を優先する
+                  // (リンク側でも stopPropagation 済み。二重防御)。判定は純関数に切り出し、
+                  // tests/contact-consent-label.test.ts で両方向を固定している。
+                  onClick={(event) => {
+                    if (!shouldToggleConsentFromLabelClick(event.target)) return;
+                    event.preventDefault();
+                    field.onChange(!field.value);
+                  }}
+                >
                   <span {...textEditableAttrs("contact.form.consent.text", editMode)}>
-                    {renderRichInline(texts["contact.form.consent.text"].text)}
+                    {/* label 内のリンクは別タブで開き、クリックを checkbox へ伝播させない
+                        (同一タブ遷移で入力内容が消えるのを防ぐ) */}
+                    {renderRichInline(texts["contact.form.consent.text"].text, {
+                      openLinksInNewTab: true,
+                    })}
                   </span>{" "}
                   <span className="text-destructive">*</span>
                 </FieldLabel>
@@ -404,17 +449,31 @@ export function ContactForm({
       </FieldGroup>
 
       {submitError ? (
-        <p className="mt-6 text-sm text-destructive">{submitError}</p>
+        <p
+          ref={errorRef}
+          role="alert"
+          aria-live="assertive"
+          className="mt-6 text-sm text-destructive"
+        >
+          {submitError}
+        </p>
       ) : null}
 
       <Button
         type="submit"
         disabled={isSubmitting}
+        aria-busy={isSubmitting}
         className="mt-8 h-11 rounded-none bg-carbon px-8 tracking-[0.12em] text-paper hover:bg-carbon/85"
       >
-        <span {...textEditableAttrs("contact.form.button.submit", editMode)}>
-          {texts["contact.form.button.submit"].text}
-        </span>
+        {isSubmitting ? (
+          <span {...textEditableAttrs("contact.form.button.submitting", editMode)}>
+            {texts["contact.form.button.submitting"].text}
+          </span>
+        ) : (
+          <span {...textEditableAttrs("contact.form.button.submit", editMode)}>
+            {texts["contact.form.button.submit"].text}
+          </span>
+        )}
       </Button>
     </form>
   );
